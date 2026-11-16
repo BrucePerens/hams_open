@@ -1079,7 +1079,7 @@ class HelpdeskTicket(models.Model):
                     with self.env.cr.savepoint():
                         ticket._triage_release_notification()
                     released += 1
-                except Exception:  # per-ticket isolation; logged with the traceback, the ticket stays held for the next run
+                except Exception:  # audit-ignore-catch-all: one failing ticket must not hold back the rest; logged, stays held; Tested by [@ANCHOR: hams_helpdesk:cron_release_held_notifications]
                     _logger.exception("Releasing the held notification of helpdesk ticket %s failed; it stays held.", ticket.id)
             return released
         return 0
