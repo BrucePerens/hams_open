@@ -62,6 +62,9 @@ def resolve_redis_host(host):
     return host
 
 
+MAX_QUEUED_ANOMALIES = 10000
+
+
 # [@ANCHOR: pager_duty:log_analyzer_push_anomaly]
 def push_anomaly(r_client, payload, retry_seconds=5):
     """Queue one anomaly for the monitor on the Redis list `pager_log_anomalies`, waiting out a Redis outage.
@@ -72,6 +75,8 @@ def push_anomaly(r_client, payload, retry_seconds=5):
     while True:
         try:
             r_client.lpush("pager_log_anomalies", json.dumps(payload))
+            # The monitor drains this list; while it is down a noisy log would grow it (and Redis) without bound. Newest first.
+            r_client.ltrim("pager_log_anomalies", 0, MAX_QUEUED_ANOMALIES - 1)
             return
         except redis.RedisError as e:
             logger.error(f"Could not queue a log anomaly in Redis, retrying: {e}")
