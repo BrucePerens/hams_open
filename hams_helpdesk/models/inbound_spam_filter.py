@@ -429,6 +429,20 @@ def mail_signals(message):
     return signals
 
 
+# [@ANCHOR: hams_helpdesk:inbound_failed_sender_authentication]
+def failed_sender_authentication(signals):
+    """Why the From line of an inbound message cannot be believed, or '' when it can: SES recorded a DMARC failure, or an SPF
+    failure that no DMARC-consistent DKIM pass rescues (a forwarder breaks SPF but keeps DKIM). The same rule as ses_webhook's
+    _failed_sender_check, read from the Authentication-Results header that mail_signals() parsed, for mail that reaches
+    ingest_inbound_email() without the SNS receipt."""
+    signals = signals or {}
+    if signals.get("dmarc") == "fail":
+        return "SES recorded a DMARC failure for the sender"
+    if signals.get("spf") == "fail" and not (signals.get("dkim") == "pass" and signals.get("dmarc") != "fail"):
+        return "SES recorded an SPF failure with no passing DKIM signature"
+    return ""
+
+
 # [@ANCHOR: hams_helpdesk:inbound_own_authenticated_sender]
 def own_authenticated_sender(signals):
     """True when the message claims one of OWN_SENDER_DOMAINS in its From line AND SES recorded a DKIM or DMARC pass.

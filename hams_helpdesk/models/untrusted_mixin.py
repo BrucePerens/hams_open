@@ -10,12 +10,14 @@ docs/security/TICKET_PROMPT_INJECTION.md for the policy.
 
 import json
 import logging
+from email.utils import parseaddr
 
 from markupsafe import Markup
 
 from odoo import api, fields, models
 
 from . import untrusted_text as ut
+from .inbound_spam_filter import failed_sender_authentication
 from .mail_thread_untrusted import stash_for
 from odoo.addons.zero_sudo import public_rpc
 
@@ -208,6 +210,12 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
         # header allow-list, text/plain against text/html, attachment names, archives.
         message_id = kwargs.get("message_id")
         parked = stash_for(self.env).pop(message_id, None) if message_id else None
+        if parked and self._name == "hams_helpdesk.ticket" and len(self) == 1 and not parked.get("new_ticket"):
+            held = self._inbound_reply_hold_reason(kwargs.get("email_from"), kwargs.get("author_id"), parked.get("mail_signals"))
+            if held:
+                kwargs.pop("subtype_id", None)
+                kwargs.update(subtype_xmlid="mail.mt_note", author_id=False)
+                kwargs["body"] = Markup("<p><strong>Held email reply</strong> (not posted in anyone's name): %s.</p>%s") % (held, Markup(kwargs.get("body") or ""))
         message = super().message_post(**kwargs)
         if (results or parked) and self:
             findings, removed, score = self._untrusted_summary(results)
@@ -218,6 +226,29 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
             for ticket in self:
                 ticket._untrusted_record(findings, removed, score, raw, "message")
         return message
+
+    # [@ANCHOR: hams_helpdesk:inbound_reply_hold_reason]
+    def _inbound_reply_hold_reason(self, email_from, author_id, signals):
+        """Why an inbound email reply onto this ticket must land as an internal note not posted in the sender's name, or ''.
+        Two reasons: the From line fails SES authentication (a spoofed From would post as the member or staff it names), or the
+        sender is neither a participant of the ticket (its customer, a follower, or an address that wrote on it before) nor a
+        user. The admin@/support@ alias accepts any sender, so a stranger who knew a Message-ID would otherwise post a customer-
+        visible message that mails the customer."""
+        reason = failed_sender_authentication(signals)
+        if reason:
+            return reason
+        if author_id and self.env["hams_helpdesk.ticket"]._inbound_sender_is_member(author_id):
+            return ""
+        hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
+        ticket = self.with_env(hd_env)
+        known = (ticket.partner_id | ticket.message_partner_ids).mapped("email")
+        known += [m.email_from for m in ticket.message_ids if m.message_type == "email"]
+        wanted = parseaddr(email_from or "")[1].lower()
+        if wanted and wanted in {parseaddr(k or "")[1].lower() for k in known if k}:
+            return ""
+        if author_id and author_id in (ticket.partner_id | ticket.message_partner_ids).ids:
+            return ""
+        return "the sender is not a participant of this ticket"
 
     # [@ANCHOR: hams_helpdesk:untrusted_attachment_count]
     def _untrusted_attachment_count(self):

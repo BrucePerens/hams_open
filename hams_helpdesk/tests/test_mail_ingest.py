@@ -4,6 +4,7 @@
 # -*- coding: utf-8 -*-
 import ast
 import base64
+import hashlib
 
 from odoo.exceptions import AccessError
 from odoo.tests.common import tagged
@@ -503,3 +504,49 @@ class TestMailIngest(HamsTransactionCase):
         }
         self.assertEqual(notified, {"batch real one"})
         self.assertEqual(len(watch.bus), 1, "one toast, for the real ticket")
+
+    def _member_ticket_and_original_id(self, login, subject):
+        member = self.env["res.users"].create({"name": login, "login": login, "email": f"{login}@example.org"})
+        self._ingest(raw_message("support@hams.com", subject, from_addr=f"{login}@example.org", html=False))
+        ticket = self.env["hams_helpdesk.ticket"].search([("name", "=", subject)], order="id desc", limit=1)
+        original_id = ticket.message_ids.filtered(lambda m: m.message_id).sorted("id")[-1].message_id
+        return member, ticket, original_id
+
+    def _reply_message(self, ticket, from_addr, original_id, auth):
+        message_id = "<reply-%s@example.org>" % hashlib.sha256(f"{from_addr}|{auth}".encode()).hexdigest()[:12]
+        self._ingest(
+            raw_message(
+                "support@hams.com",
+                "Re: " + ticket.name,
+                from_addr=from_addr,
+                html=False,
+                message_id=message_id,
+                headers=auth + f"In-Reply-To: {original_id}\r\nReferences: {original_id}\r\n",
+            )
+        )
+        return ticket.message_ids.filtered(lambda m: m.message_id == message_id)
+
+    def test_17_a_spoofed_reply_lands_as_a_note_not_in_the_members_name(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_failed_sender_authentication]
+        # Tests [@ANCHOR: hams_helpdesk:inbound_reply_hold_reason]
+        member, ticket, original_id = self._member_ticket_and_original_id("spoof_victim", "Spoofable ticket")
+        control = self._reply_message(ticket, "spoof_victim@example.org", original_id, SES_PASS_HEADERS)
+        self.assertEqual(control.author_id, member.partner_id, "control: an authenticated reply posts as the member")
+        self.assertEqual(control.subtype_id, self.env.ref("mail.mt_comment"))
+        spoofed = self._reply_message(
+            ticket,
+            "spoof_victim@example.org",
+            original_id,
+            "Authentication-Results: amazonses.com; spf=fail smtp.mailfrom=evil.example.net; dkim=none; dmarc=fail header.from=example.org\r\n",
+        )
+        self.assertTrue(spoofed, "the reply is kept for staff, never dropped")
+        self.assertFalse(spoofed.author_id, "a failed SPF/DMARC check never posts in the member's name")
+        self.assertEqual(spoofed.subtype_id, self.env.ref("mail.mt_note"))
+        self.assertIn("Held email reply", spoofed.body)
+
+    def test_18_a_reply_from_a_stranger_lands_as_a_note(self):
+        _member, ticket, original_id = self._member_ticket_and_original_id("stranger_target", "Stranger ticket")
+        reply = self._reply_message(ticket, "nobody@elsewhere.example.net", original_id, SES_PASS_HEADERS)
+        self.assertEqual(reply.subtype_id, self.env.ref("mail.mt_note"), "an address that is no participant cannot post a visible message")
+        self.assertFalse(reply.author_id)
+        self.assertIn("not a participant", reply.body)
