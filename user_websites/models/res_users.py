@@ -373,6 +373,28 @@ class ResUsers(models.Model):
             return False
         return record is None or not site_slug.current_slug(self.env, record)
 
+    # [@ANCHOR: user_websites:res_users_unlink_runs_cleanup]
+    # Verified by [@ANCHOR: user_websites:test_user_delete_runs_page_and_post_cleanup]
+    def unlink(self):
+        """Deleting a user outright cascades their pages, blog posts and blogs inside Postgres, which skips
+        their unlink() (Cloudflare purge, cache invalidation). So they are unlinked through the ORM first, as the
+        user-websites service account: posts, then pages, then blogs (a blog owns posts). Each record is isolated in a
+        savepoint: one that fails is logged and left to the cascade, so it never blocks the delete."""
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("user_websites.user_websites_service_account")
+        env = self.with_user(svc_uid).env
+        posts, pages, blogs = (
+            env[model].with_context(active_test=False).search([("owner_user_id", "in", self.ids)])
+            for model in ("blog.post", "website.page", "blog.blog")
+        )
+        for model, owned in (("blog.post", posts), ("website.page", pages), ("blog.blog", blogs)):
+            for record in owned:
+                try:
+                    with self.env.cr.savepoint():
+                        record.unlink()
+                except Exception as e:  # audit-ignore-catch-all: one failing cleanup must not block the user delete; logged below.
+                    _logger.error("user_websites: cleanup of %s id %s failed while deleting its owner: %s", model, record.id, e)
+        return super().unlink()
+
     # [@ANCHOR: user_websites:COMM_res_users_write]
     def write(self, vals):
         # Cheap test first: res.users.write runs on every login, and only these keys can matter.
