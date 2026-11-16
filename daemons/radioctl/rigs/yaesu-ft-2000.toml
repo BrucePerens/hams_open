@@ -3,9 +3,9 @@
 # Written from Yaesu's published Yaesu 'FT-2000 Series CAT Operation Reference Book' (document, PDF page and sha256 in each fact), with Hamlib 4.6.2 as a cross-check.
 # Hamlib lists: serial 4800..38400 baud, 8N2, ctrl=CTS; receive 0.03 to 60 MHz in 2 ranges; transmit 1.8 to 54 MHz in 40 ranges; RIT range -9.999kHz/+9.999kHz.
 # Frequency fields are 8 digits (`yaesu.frequency_digits`); the IF answer is 27 characters with the semicolon.
-# Gaps and open questions: The FT-2000D answers ID 0252 and is not told apart. No split (FT here selects the main or sub band transmitter), no read-power, and no levels (MG and PC are 000-255 here, the engine's ranges are 0-100 and 5-100). Details: crates/radioctl-protocols/src/yaesu.rs.
+# Gaps and open questions: The FT-2000D answers ID 0252 and is not told apart. No split (FT here selects the main or sub band transmitter), no read-power; levels (MG and PC are 000-255 here, the engine's ranges are 0-100 and 5-100). Details: crates/radioctl-protocols/src/yaesu.rs.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "rit-xit", "identify", "receivers"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "rit-xit", "levels", "identify", "receivers"]
 
 [rig]
 id = "yaesu-ft-2000"
@@ -16,6 +16,7 @@ family = "yaesu-newcat"
 model_id = 251
 frequency_digits = 8
 tx_band = true
+levels = { mic-gain = [0, 255], rf-power = [0, 255] }
 
 [timing]
 timeout_ms = 2000
@@ -109,4 +110,9 @@ verified = { state = "unverified" }
 [[facts]]
 key = "yaesu.tx_band"
 provenance = { kind = "manual", reference = "Yaesu 'FT-2000 Series CAT Operation Reference Book' (Copyright 2008), file FT-2000_CAT_MANUAL_ENG_EH025H124.pdf, sha256 06c2e20aa285ca30a51f2607b09b6acc204b564cde26280250ec720712eb2655: FT FUNCTION TX, PDF p. 10 (set FT P1: 2 TX band is the Main (VFO-A) band, 3 the Sub (VFO-B) band; read FT; answer FT P2: 0 Main, 1 Sub)", note = "FT picks the transmitting band on this dual-receiver model, so `SetTxReceiver` sends FT2 or FT3 and `GetTxReceiver` reads FT. It is not split (no `split` capability). Unverified." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu.levels"
+provenance = { kind = "manual", reference = "Yaesu 'FT-2000 Series CAT Operation Reference Book' (Copyright 2008), file FT-2000_CAT_MANUAL_ENG_EH025H124.pdf, https://www.yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FT-2000_CAT_MANUAL_ENG_EH025H124.pdf, sha256 06c2e20aa285ca30a51f2607b09b6acc204b564cde26280250ec720712eb2655: AG p. 5, KS p. 11, MG p. 12, PC p. 14, RG p. 15", note = "AG and RG 000-255 (P1 0 Main, 1 Sub), MG 000-255, PC 000-255, KS 004-060 WPM; MG and PC differ from the engine's default ranges. Where this block is silent the engine's default range applies." }
 verified = { state = "unverified" }
