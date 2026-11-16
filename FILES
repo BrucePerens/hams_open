@@ -307,7 +307,6 @@ pager_duty/tests/test_pager_security.py
 pager_duty/tests/test_controllers.py
 pager_duty/tests/test_incident.py
 pager_duty/tests/test_log_analyzer.py
-pager_duty/views/board_templates.xml
 pager_duty/views/schedule_views.xml
 pager_duty/views/incident_views.xml
 pager_duty/views/log_analyzer_views.xml
