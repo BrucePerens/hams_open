@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+"""Host bot-compliance check (forward-confirmed reverse DNS of this host's public IP).
+
+Not converted to check_target.py, deliberately: it scans no directory or files, it probes the host. It already fails (exit 1) when
+the public IP cannot be found, so an unanswered probe is never a pass.
+"""
+
+import socket
+import urllib.request
+import json
+import sys
+
+
+def get_public_ip():
+    try:
+        req = urllib.request.Request(
+            "https://api.ipify.org?format=json", headers={"User-Agent": "HamsComSyncDaemon/1.0 (+https://crawler.hams.com)"}
+        )
+        response = urllib.request.urlopen(req, timeout=5).read()
+        return json.loads(response)["ip"]
+    except (urllib.error.URLError, json.JSONDecodeError, OSError, KeyError) as e:
+        # KeyError added 2026-09-10: a valid-JSON response missing the "ip" key -- e.g. a
+        # CDN/edge challenge or rate-limit page fronting api.ipify.org, returned with a 200
+        # status and a JSON body of a different shape -- previously crashed this function
+        # uncaught instead of being reported the same way a network/parse failure already is.
+        # Real, not hypothetical, for this exact script: its whole purpose is diagnosing a
+        # host that a CDN is blocking/challenging, so a challenge page reaching this exact
+        # code path is the realistic case, not an edge case.
+        print(f"Error fetching public IP: {e}")
+        return None
+
+
+def check_fcrdns(ip):
+    try:
+        # 1. Reverse lookup
+        host, aliases, ips = socket.gethostbyaddr(ip)
+        print(f"Reverse DNS (PTR) check passed for IP {ip}.")
+        print(f"Resolved hostname: {host}")
+
+        # 2. Forward lookup
+        try:
+            forward_ip = socket.gethostbyname(host)
+            if forward_ip == ip:
+                print(
+                    f"Forward DNS (A) check passed. Hostname {host} resolves back to {ip}."
+                )
+                return True
+            else:
+                print(
+                    f"Forward DNS (A) check failed. Hostname {host} resolves to {forward_ip}, not {ip}."
+                )
+                return False
+        except socket.gaierror as e:
+            print(f"Forward DNS (A) check failed for hostname {host}: {e}")
+            return False
+
+    except socket.herror as e:
+        print(f"Reverse DNS (PTR) check failed for IP {ip}: {e}")
+        return False
+    except OSError as e:
+        print(f"Error checking Reverse DNS for IP {ip}: {e}")
+        return False
+
+
+def main():
+    print("Checking host bot compliance...")
+
+    # 1. Forward-Confirmed Reverse DNS Check
+    ip = get_public_ip()
+    if not ip:
+        print("Cannot verify reverse DNS without public IP.")
+        sys.exit(1)
+
+    print(f"Public IP detected: {ip}")
+    has_fcrdns = check_fcrdns(ip)
+
+    if not has_fcrdns:
+        print(
+            "\nWARNING: This host lacks a valid Forward-Confirmed Reverse DNS (FCrDNS) setup."
+        )
+        print(
+            "Without FCrDNS, Cloudflare, Akamai, and other CDNs may block automated requests."
+        )
+        print(
+            "Please configure a PTR record with your hosting provider and ensure it points back to this IP."
+        )
+        sys.exit(1)
+
+    print("\nSUCCESS: Basic host compliance checks passed.")
+
+
+if __name__ == "__main__":
+    main()

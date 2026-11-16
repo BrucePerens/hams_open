@@ -1,0 +1,5347 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+"""
+Unified Pure-Python Odoo Test Runner for Hams.com
+Combines test execution, integration modes, and real-time failure extraction.
+Strictly prohibits Bash wrapper scripts and CPU polling loops.
+
+AI DIRECTIVE: If UI Tours are failing with [watchdog alarm] or timeouts,
+you MUST read `hams_shared/docs/adrs/0081_ui_testability_and_tour_friendly_design.md`. The environment is heavily constrained
+and prone to race conditions if native macros are ignored.
+
+AI DIRECTIVE: two environment gotchas that cost real time diagnosing, relevant
+whenever you invoke odoo by hand (e.g. `sudo -n -u odoo env ... odoo ...`) outside this runner --
+this module's own run_cmd() above is already unaffected (it captures stdout via subprocess.PIPE,
+never `--logfile`):
+1. `odoo --logfile=<path>` run under `sudo -n -u odoo ...` silently produces NO log file at all,
+   even though the process runs and does real work (confirmed via `ps`/CPU time advancing). Use a
+   plain stdout redirect (`>> file.log 2>&1`) instead of `--logfile`.
+2. `kill -0 <pid>` against a process owned by a different user (e.g. checking on an `odoo`-owned
+   PID from a `bruce` shell) returns EPERM, not "no such process" -- a wait loop written as
+   `while kill -0 $PID 2>/dev/null; do sleep N; done` misreads that EPERM as "process exited" and
+   returns immediately even though the process is still running. Use `[ -d /proc/$PID ]` instead,
+   which only checks existence and needs no permission.
+
+AI DIRECTIVE: any ad-hoc scoped-test database you create by hand (e.g.
+`sudo -u postgres createdb <name>` for a one-off `odoo --test-tags ...` run outside this runner)
+MUST be named with a `tmp_` prefix (e.g. `tmp_night_verify8`), not a free-form name. Once
+87 leaked scoped-test databases had accumulated from interrupted runs (a killed tool
+call, a crashed process, an abandoned session all skip the manual `dropdb` cleanup step),
+consuming several GB of a nearly-full /var partition. `hams_shared/tools/
+reap_stale_test_databases.py` runs on a systemd timer every 2 hours and automatically drops any
+`tmp_`-prefixed database that is both closed (no active connection) and older than 6 hours --
+but it only ever considers databases carrying that prefix, by design, so a database you create
+without it will never be auto-cleaned and will leak exactly like the 87 did. Still `dropdb` it
+yourself when your test run finishes if you can -- the reaper is the safety net for when you
+can't, not a replacement for cleaning up after yourself.
+"""
+
+import builtins
+import sys
+
+if "--mcp" in sys.argv:
+    _orig_print = builtins.print
+    def _mcp_print(*args, **kwargs):
+        if kwargs.get("file") is None:
+            kwargs["file"] = sys.stderr
+        _orig_print(*args, **kwargs)
+    builtins.print = _mcp_print
+
+import host_requirements
+import infrastructure
+import bisect_modules
+import check_burn_list
+import gate_snapshot
+import hang_guard
+import known_red
+import lock_queue
+import odoo_test_batch
+import offline_browser_ns
+import runner_cleanup
+import runner_slots
+import ram_dirs
+
+import argparse
+import atexit
+import ctypes
+import fcntl
+import glob
+import logging
+import math
+import os
+import pwd
+import importlib.metadata
+import queue
+import re
+import shutil
+# `resource` (used only inside preexec_odoo()'s post-fork preexec_fn, plus
+# the --internal-ns-init in-namespace init path below) is imported here at
+# module top rather than locally, same as `ctypes` above: both used to be
+# local imports inside preexec_fn callbacks that run in the CHILD process
+# after os.fork() but before exec(). Importing a not-yet-loaded module
+# there is a real, documented CPython hazard, not just a style nit --
+# CPython's import system acquires a per-module lock during import, and if
+# another thread held that lock at the moment of fork() (plausible in this
+# multi-threaded test runner -- see test_test.py's own fork()
+# DeprecationWarning), the forked child inherits a lock that can never be
+# released, since the thread that would release it doesn't exist in the
+# child: a silent, hard-to-reproduce hang. Importing both modules here,
+# unconditionally, at parent-process startup (well before any fork()) means
+# they're already fully loaded and present in sys.modules by the time any
+# preexec_fn runs, so referencing `ctypes.CDLL(...)` / `resource.setrlimit(...)`
+# post-fork is a plain global name lookup, not a real import.
+import resource
+import signal
+import stat
+import socket
+import subprocess
+
+import threading
+import time
+import functools
+import multiprocessing
+import psutil
+
+
+
+# Headless Chrome in the test runs must never leave an HTTP, media or code cache on disk: a profile that is not
+# deleted (or a headless run with no profile, whose cache lands in ~/.cache/google-chrome-headless) once held about
+# 100,000 useless files. Pointing the disk cache at /dev/null makes Chrome fall back to its in-memory cache.
+CHROME_NO_CACHE_ARGS = "--disk-cache-dir=/dev/null --disk-cache-size=1 --media-cache-size=1 --disable-gpu-shader-disk-cache"
+
+def measure_process_tree_memory(runner_pid, exclude_pid):
+    """Sums resident memory across every descendant of runner_pid, except
+    exclude_pid (the watchdog itself, when called from OOMWatchdog.run()).
+
+    Uses PSS (proportional set size) rather than plain RSS. RSS
+    double-counts memory shared across a process tree -- e.g. a
+    browser-tour test's renderer/GPU/zygote subprocesses sharing one large
+    mapping each report the full mapping as their own RSS, inflating the
+    total by roughly N-per-mapping and producing false OOM kills on an
+    otherwise-idle box. PSS apportions shared pages across the processes
+    that map them, so the sum matches real host memory consumed. Falls back
+    to plain RSS per-process if PSS is unavailable (permission denied, or a
+    platform without smaps-based accounting) rather than dropping the
+    process from the total -- an over-cautious watchdog is safer than a
+    blind one.
+
+    Extracted as a standalone, importable function (rather than left
+    inline in OOMWatchdog.run()'s infinite loop) so it can be exercised
+    directly by test_test_oom_watchdog.py without needing to spawn and
+    kill a real multiprocessing.Process.
+    """
+    runner = psutil.Process(runner_pid)
+    procs = runner.children(recursive=True)
+    total = 0
+    for p in procs:
+        if p.pid == exclude_pid:
+            continue
+        try:
+            try:
+                total += p.memory_full_info().pss
+            except (psutil.AccessDenied, AttributeError):
+                total += p.memory_info().rss
+        except psutil.NoSuchProcess as e:
+            _logger.debug("measure_process_tree_memory: process %s exited before its memory could be measured, skipping: %s", p.pid, e)
+    return total
+
+
+# [@ANCHOR: test:test_oomwatchdog_class]
+class OOMWatchdog(multiprocessing.Process):
+    def __init__(self, target_pid, runner_pid, rss_limit_gb=8.0):
+        super().__init__(daemon=True)
+        self.target_pid = target_pid
+        self.runner_pid = runner_pid
+        self.rss_limit_gb = rss_limit_gb
+        self.fired = multiprocessing.Event()  # set just before the watchdog kills the run
+
+    def run(self):
+        try:
+            with open("/proc/self/oom_score_adj", "w") as f:
+                f.write("-1000\n")
+        except Exception as e: # audit-ignore-catch-all
+            _logger.warning("OOMWatchdog: could not lower oom_score_adj (needs root/CAP_SYS_RESOURCE), continuing without it: %s", e)
+        try:
+            os.nice(-20)
+        except Exception as e: # audit-ignore-catch-all
+            _logger.warning("OOMWatchdog: could not raise scheduling priority (needs root/CAP_SYS_NICE), continuing without it: %s", e)
+        try:
+            libc = ctypes.CDLL("libc.so.6", use_errno=True)
+            libc.mlockall(3)
+        except Exception as e: # audit-ignore-catch-all
+            _logger.warning("OOMWatchdog: could not mlockall() (needs root/CAP_IPC_LOCK), continuing without it: %s", e)
+        while True:
+            try:
+                total_rss = measure_process_tree_memory(
+                    self.runner_pid, exclude_pid=os.getpid()
+                )
+
+                total_rss_gb = total_rss / (1024**3)
+
+                # Also check host system available memory
+                mem_avail_mb = 10000
+                try:
+                    with open("/proc/meminfo", "r") as f:
+                        for line in f:
+                            if line.startswith("MemAvailable:"):
+                                mem_avail_mb = int(line.split()[1]) // 1024
+                                break
+                except Exception as e: # audit-ignore-catch-all
+                    # A real gap if it fires: mem_avail_mb silently stays at its
+                    # optimistic 10000MB default, disabling the host-memory half
+                    # of this watchdog's own OOM check without any trace.
+                    _logger.warning("OOMWatchdog: could not read /proc/meminfo, host-memory check disabled for this cycle: %s", e)
+
+                if total_rss_gb > self.rss_limit_gb or mem_avail_mb < 512:
+                    reason = (
+                        f"Total RSS: {total_rss_gb:.2f}GB > {self.rss_limit_gb}GB"
+                        if total_rss_gb > self.rss_limit_gb
+                        else f"Host available memory ({mem_avail_mb}MB) is critically low (< 512MB)"
+                    )
+                    self.fired.set()
+                    print(
+                        f"\n[🚨 OOM WATCHDOG] Aggregate memory exceeded limits! ({reason}). Terminating children...\n",
+                        flush=True,
+                    )
+                    try:
+                        runner = psutil.Process(self.runner_pid)
+                        procs = runner.children(recursive=True)
+                    except psutil.NoSuchProcess:
+                        procs = []
+                    for p in procs:
+                        if p.pid == os.getpid():
+                            continue
+                        try:
+                            p.kill()
+                        except psutil.NoSuchProcess as e:
+                            _logger.debug("OOMWatchdog: pid %s already exited before it could be killed: %s", p.pid, e)
+                    try:
+                        psutil.Process(self.target_pid).kill()
+                    except psutil.NoSuchProcess as e:
+                        _logger.debug("OOMWatchdog: target pid %s already exited before it could be killed: %s", self.target_pid, e)
+                    break
+            except psutil.NoSuchProcess:
+                break
+            except Exception as e: # audit-ignore-catch-all
+                # This is the watchdog's own top-level loop: an unexpected,
+                # recurring failure here would otherwise be completely
+                # invisible, silently defeating the whole point of running a
+                # watchdog. Warn and keep looping rather than dying quietly.
+                _logger.warning("OOMWatchdog: unexpected error in monitoring loop, continuing: %s", e)
+            time.sleep(2.0)
+
+
+# Force all print statements to flush immediately to prevent
+# inter-process pipe buffering from chronologically reordering log lines
+# relative to the unbuffered child test process output.
+print = functools.partial(print, flush=True)
+
+
+# NOTE: `micro_privilege` used to be duplicated here byte-for-byte from `infrastructure.py`
+# (imported above) but was never called under its bare name anywhere in this file, so the copy
+# was removed. Use `infrastructure.micro_privilege` (the canonical copy -- see
+# hams_com/docs/bug_hunt_claims/hams_shared/tools/claims/micro_privilege.md for its
+# supplementary-groups handling).
+
+
+# Local modules resolve natively without sys.path hacks.
+
+_logger = logging.getLogger(__name__)
+
+# Odoo's own real pass/fail verdict, e.g. "odoo.tests.result: 0 failed, 0 error(s) of 77 tests
+# when loading database 'hams_test'" -- FailureExtractor.process_line() matches this
+# unconditionally (see its own comment) so finish_and_write() can report it as authoritative,
+# instead of the "N issue(s) detected" headline that used to come from a raw ERROR-log-line
+# count with no relation to whether the suite actually passed.
+_ODOO_RESULT_PATTERN = re.compile(
+    r"odoo\.tests\.result:\s*(?P<failed>\d+) failed, (?P<errors>\d+) error\(s\) of (?P<total>\d+) tests"
+)
+
+
+# [@ANCHOR: test:test__post_fork_safe_log_class]
+class _PostForkSafeLog:
+    """Fork-safe stand-in for _logger, for use ONLY inside a subprocess.Popen
+    preexec_fn (preexec_child/preexec_redis/preexec_rmq/preexec_odoo below).
+
+    Python's logging module takes an internal lock (and each Handler its
+    own) that may be held by some OTHER thread in this multi-threaded
+    process (ResourceMonitorThread, VirtualClockThread) at the instant
+    os.fork() runs. The child copy of that lock is frozen in whatever state
+    it was in -- if it was held, no thread in this now-single-threaded
+    child will ever release it, so a real _logger call here can deadlock
+    the child before it ever reaches exec(). os.write() on a raw fd takes
+    no such lock, so this is genuinely safe where _logger is not."""
+
+    @staticmethod
+    def warning(msg):
+        os.write(2, (msg + "\n").encode())
+
+
+_postfork_log = _PostForkSafeLog()
+
+
+# [@ANCHOR: test:test_virtual_clock_thread_class]
+class VirtualClockThread(threading.Thread):
+    """
+    A CPU-time equivalent clock that suppresses massive jumps in wall-clock time
+    caused by the VM being suspended or heavily timeshared.
+    """
+
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.vtime = 0.0
+        self.last_real = time.monotonic()
+        self._lock = threading.Lock()
+
+    def run(self):
+        # Every consumer (wait_for_port/wait_for_socket) computes an elapsed-time timeout as
+        # `global_vclock.time() - start_time < timeout`. If this loop's body ever raised (it
+        # didn't guard against anything before), the thread would die silently -- vtime freezes
+        # forever, that elapsed-time expression is permanently 0 < timeout, and every future
+        # caller hangs indefinitely instead of timing out. Never let one bad iteration end the
+        # thread.
+        while True:
+            time.sleep(0.1)
+            try:
+                # time.monotonic(), not time.time(): wall-clock time can also step *backward*
+                # (NTP correction), which would make `delta` negative and `vtime` regress --
+                # exactly the kind of clock instability this thread exists to insulate callers
+                # from. CLOCK_MONOTONIC never goes backward.
+                now = time.monotonic()
+                delta = now - self.last_real
+                self.last_real = now
+                with self._lock:
+                    self.vtime += min(delta, 0.5)
+            except Exception as e:  # audit-ignore-catch-all -- see run()'s own comment above
+                _logger.warning("VirtualClockThread iteration failed, continuing: %s", e)
+
+    def time(self):
+        with self._lock:
+            return self.vtime
+
+
+global_vclock = VirtualClockThread()
+global_vclock.start()
+
+
+# A test browser is identified by the switches Odoo's own ChromeBrowser always
+# passes, not by the word "chrome" appearing somewhere in a command line. See
+# ResourceMonitorThread.get_chrome_count()'s docstring for why the difference
+# matters on a box with a desktop session.
+TEST_BROWSER_SWITCHES = ("--remote-debugging-port", "--headless")
+
+
+def count_test_browser_processes(proc_root="/proc"):
+    """Number of live browser processes that belong to an Odoo test run."""
+    count = 0
+    try:
+        entries = os.listdir(proc_root)
+    except OSError as e:
+        _logger.debug("Ignored OSError listing %s: %s", proc_root, e)
+        return 0
+    for entry in entries:
+        if not entry.isdigit():
+            continue
+        try:
+            with open(
+                os.path.join(proc_root, entry, "cmdline"),
+                "r",
+                encoding="utf-8",
+                errors="replace",
+            ) as fh:
+                # /proc cmdline is NUL-separated; a space join is enough to
+                # substring-match switches and keeps them from running together.
+                raw = fh.read()
+        except OSError as e:
+            # Exited between the listing and the read. Normal on a busy box.
+            _logger.debug("Ignored OSError reading cmdline for %s: %s", entry, e)
+            continue
+        # /proc cmdline is NUL-separated -- EXCEPT that Chromium rewrites its
+        # own argv in place to set the process title, collapsing the whole
+        # command line into argv[0] with spaces. Measured against a
+        # real headless chromium on this box: every one of its processes had
+        # exactly ONE NUL-separated element, several hundred characters long.
+        # An earlier draft of this function split on NUL and took element zero
+        # as the executable, which for those processes was the tail of a
+        # `--user-data-dir` path -- so it counted a live headless browser as
+        # zero. That draft's unit tests all passed, because they built their
+        # fixtures the way /proc is documented to work rather than the way
+        # Chromium actually writes it; only running a real browser found it.
+        text = raw.replace("\0", " ").strip()
+        if not text:
+            continue  # a kernel thread
+        # The BINARY must be a browser, not merely some process whose command
+        # line happens to mention one. Matching anywhere in the text would
+        # count `python3 -c "...chrom... --headless..."` -- including a script
+        # that is itself checking for browsers -- which is the self-matching
+        # trap `pgrep -f` has sprung on this repository three times, wearing a
+        # different hat. Both real `bash -c` wrappers around the measurement
+        # above were rejected by exactly this check.
+        executable = text.split()[0]
+        if "chrom" not in os.path.basename(executable).lower():
+            continue
+        arguments = text[len(executable) :]
+        if any(switch in arguments for switch in TEST_BROWSER_SWITCHES):
+            count += 1
+    return count
+
+
+# [@ANCHOR: test:test_resource_monitor_thread_class]
+class ResourceMonitorThread(threading.Thread):
+    def __init__(self):
+        super().__init__(daemon=True)
+
+    def get_available_memory_mb(self):
+        try:
+            with open("/proc/meminfo", "r") as f:
+                for line in f:
+                    if line.startswith("MemAvailable:"):
+                        return int(line.split()[1]) // 1024
+        except Exception as e: # audit-ignore-catch-all
+            _logger.warning("ResourceMonitorThread: could not read /proc/meminfo, memory alerts disabled for this cycle: %s", e)
+        return None
+
+    def get_chrome_count(self):
+        """Count the browsers THIS test run is responsible for.
+
+        This used to be `pgrep -c -f chrom`, a box-wide substring match, and on
+        a developer box with a desktop session that is wrong in both
+        directions. Measured with no test running at all: 27
+        matching processes, of which 17 were Bruce's own interactive Google
+        Chrome and 8 were the Claude desktop application's Electron shell --
+        both Chromium, neither anything a test leaked. A real run then tipped
+        the count past the threshold and printed "POSSIBLE BROWSER LEAK: 42
+        active Chromium processes detected!" three times, about a browser
+        nobody had leaked. Equally, and worse, a genuine leak of twenty
+        headless test browsers would have hidden inside that same number on a
+        day the desktop count happened to be low.
+
+        An alert that fires when nothing is wrong trains every session to
+        ignore it, which costs more than having no alert at all.
+
+        Odoo's own ChromeBrowser._chrome_start() always passes
+        `--remote-debugging-port` (it drives the browser over the DevTools
+        protocol) and adds `--headless` unless watch mode is on, so requiring
+        either one separates a test's browser from a human's with no
+        dependence on which user launched it. Reads /proc directly rather than
+        shelling out, for the same reason the continuous-integration load gate
+        does: a `pgrep -f` whose pattern appears in some other session's own
+        command line matches that instead, and this repository has been bitten
+        by that three times.
+        """
+        try:
+            return count_test_browser_processes()
+        except Exception as e:  # audit-ignore-catch-all
+            _logger.warning(
+                "ResourceMonitorThread: could not count test browser processes, "
+                "browser-leak alerts disabled for this cycle: %s",
+                e,
+            )
+        return 0
+
+    def run(self):
+        # get_available_memory_mb()/get_chrome_count() already guard their own bodies, but the
+        # alert-building and print() below were not guarded. A print() failure here is not
+        # hypothetical -- this thread's output interleaves with a piped subprocess's stdout that
+        # run_cmd() actively reads via a background thread, so a BrokenPipeError (the reader side
+        # going away, or the pipe closing during shutdown) is a realistic way for print() to
+        # raise. An uncaught exception here would kill this `while True` loop's thread silently:
+        # no more memory/chrome-leak alerts for the rest of the run, with nothing surfacing that
+        # the monitor itself died.
+        while True:
+            time.sleep(10)
+            try:
+                mem_mb = self.get_available_memory_mb()
+                chrome_count = self.get_chrome_count()
+
+                alerts = []
+                if mem_mb is not None and mem_mb < 512:
+                    alerts.append(f"CRITICAL MEMORY: Only {mem_mb} MB available!")
+                elif mem_mb is not None and mem_mb < 2048:
+                    alerts.append(f"LOW MEMORY: {mem_mb} MB available.")
+
+                if chrome_count > 40:
+                    alerts.append(
+                        f"POSSIBLE BROWSER LEAK: {chrome_count} live test-browser "
+                        f"processes detected (Chromium with --headless or "
+                        f"--remote-debugging-port; a desktop browser is not counted)!"
+                    )
+
+                if alerts:
+                    msg = f"\n\x1b[91m{'!' * 60}\n[!] RESOURCE MONITOR ALERT:\n"
+                    for a in alerts:
+                        msg += f"  - {a}\n"
+                    msg += f"{'!' * 60}\x1b[0m\n"
+                    print(msg, flush=True)
+            except Exception as e:  # audit-ignore-catch-all -- see run()'s own comment above
+                _logger.warning("ResourceMonitorThread iteration failed, continuing: %s", e)
+
+
+global_resource_monitor = ResourceMonitorThread()
+global_resource_monitor.start()
+
+
+def load_ignore_file(filepath):
+    patterns = []
+    if os.path.exists(filepath):
+        with open(filepath, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    patterns.append(re.compile(line))
+    return patterns
+
+
+def is_ignored(path, patterns):
+    for pat in patterns:
+        if re.search(pat, path):
+            return True
+    return False
+
+
+# [@ANCHOR: test:test_failure_extractor_class]
+class FailureExtractor:
+    """
+    State machine that processes log lines in real-time, buffering and extracting
+    Tracebacks and error blocks for writing to a filtered log file.
+    """
+    # Set by run_cmd when the Odoo process died of the CPU-time limit: the run is then not a test verdict.
+    cpu_limit_line = None
+    # Set by run_cmd when the Odoo process was killed by a signal (signal_exit_verdict): the line printed in the summary.
+    signal_line = None
+    # Set by run_cmd to the exit status it returns for the Odoo process (None until a process ran).
+    child_exit_status = None
+
+
+    # [@ANCHOR: test:FailureExtractor_init]
+    def __init__(self, log_dir, disable_atexit=False, mcp_mode=False, slot=1):
+        base_dir = os.environ.get("HAMS_REAL_LOG_DIRECTORY") or os.path.abspath(
+            os.path.expanduser(log_dir)
+        )
+        self.mcp_mode = mcp_mode
+        # A run in a slot above 1 writes its own files (runner_slots.slot_file_name): slot 1 and every
+        # run without slots keep the original names.
+        report_name = runner_slots.slot_file_name("filtered_test.txt", slot)
+        progress_name = runner_slots.slot_file_name("test_progress.txt", slot)
+        self.display_path = os.path.join(base_dir, report_name)
+
+        # HAMS_ISOLATED_NS=="1" alone does NOT prove /mnt/real_tmp is a real, bind-mounted
+        # directory pointing back to the host's real log dir. It only means that when this
+        # process descends from setup_namespace_and_run_tests() (which creates the bind mount
+        # before setting this variable). The standing convention for running tests as the odoo
+        # user (hams-odoo-test-runner-sudo-and-polkit) also sets this variable by hand on a
+        # *direct* `test.py` invocation (`sudo -u odoo HAMS_ISOLATED_NS=1 test.py ...`) purely
+        # to skip rebuild_db()'s polkit-triggering `systemctl start` calls, with none of
+        # setup_namespace_and_run_tests()'s mount namespace/overlay/bind-mount machinery
+        # having run. There `/mnt/real_tmp` does not exist (it lives only inside the private
+        # mount namespace `unshare -m` creates), so trusting the bare env var would misdirect
+        # both the extracted-failures log and the live progress file to a location that
+        # `finish_and_write()`'s `display_path` (what gets printed to the user) never points
+        # at, or crash at exit in `os.makedirs()` under root-owned `/mnt`. Checking that the
+        # bind-mounted directory actually exists, instead of the overloaded env var, handles
+        # the direct-invocation case and leaves the real isolated pipeline unchanged (there
+        # the directory is always present by the time this constructor runs).
+        if os.environ.get("HAMS_ISOLATED_NS") == "1" and os.path.isdir("/mnt/real_tmp"):
+            self.output_path = os.path.join("/mnt/real_tmp", report_name)
+        else:
+            self.output_path = self.display_path
+            os.makedirs(base_dir, exist_ok=True)
+            try:
+                os.chmod(base_dir, 0o777)
+            except OSError as e:
+                _logger.debug("Ignored OSError: %s", e)
+
+        try:
+            if os.path.exists(self.output_path):
+                os.remove(self.output_path)
+        except OSError as os_err:
+            _logger.warning(
+                "Could not remove log natively, attempting fallback: %s", os_err
+            )
+            try:
+                subprocess.run(["rm", "-f", self.output_path], check=False)
+            except Exception as cleanup_e:  # audit-ignore-catch-all
+                _logger.warning("Ignored Exception removing log: %s", cleanup_e)
+
+        self.log_prefix_pattern = re.compile(
+            r"^(?:\s*)?\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}"
+        )
+        self.safe_log_levels = re.compile(r"\b(INFO|WARNING|DEBUG)\b")
+        self.test_start_pattern = re.compile(r"Starting Test|^test_.*?\s\.\.\.")
+
+        self.current_context = "Global / Module Loading"
+        self.capturing = False
+        self.captured_blocks = []
+        self.current_block = []
+        self._written = False
+        self.aborted = False
+        # The closing headline must not report `len(grouped_blocks)` -- a count of captured
+        # ERROR-level log-line blocks -- as "issues detected", with no relation to whether the
+        # suite actually passed. A test that deliberately provokes an ERROR-level log line on a
+        # path it then asserts correctly raises (a very normal thing for a test to do) produced a
+        # false "N issue(s) detected" on a run Odoo's own `odoo.tests.result:` line reported as
+        # fully green. Odoo's own line is captured here (matched, not blocked, wherever it
+        # appears in the stream -- there can be more than one on a multi-module `-u a,b` run) so
+        # `finish_and_write()` can report it as the authoritative pass/fail signal instead.
+        self.odoo_result_lines = []
+        # Failing and started tests as named in the log, and the verdict of the known-red/flake policy
+        # (ADR 0118, known_red.py); None until main() applied it.
+        self.observation = known_red.RunObservation()
+        self.policy_outcome = None
+
+        if not disable_atexit:
+            atexit.register(self.finish_and_write)
+
+        # Same real-vs-assumed /mnt/real_tmp distinction as self.output_path above -- see that
+        # comment for the reasoning. This is the more dangerous of the two: update_progress()
+        # wraps every write in a bare `except Exception: pass`, so under a direct
+        # `HAMS_ISOLATED_NS=1` invocation (no real bind mount) the live progress tracking
+        # would silently do nothing, with no signal to the user.
+        if os.environ.get("HAMS_ISOLATED_NS") == "1" and os.path.isdir("/mnt/real_tmp"):
+            self.progress_path = os.path.join("/mnt/real_tmp", progress_name)
+        else:
+            self.progress_path = os.path.join(os.path.expanduser("~/tmp"), progress_name)
+            os.makedirs(os.path.dirname(self.progress_path), exist_ok=True)
+        self.passed_tests = 0
+        self.failed_tests = 0
+        self.current_test = "Initializing..."
+        self.update_progress()
+
+    def update_progress(self):
+        try:
+            with open(self.progress_path, "w") as f:
+                f.write(f"Currently Running: {self.current_test}\n")
+                f.write(f"Passed: {self.passed_tests}\n")
+                f.write(f"Failed: {self.failed_tests}\n")
+                f.flush()
+        except Exception as e: # audit-ignore-catch-all
+            # See this method's own call-site comment above: silently swallowing this
+            # write failure used to no-op the entire live progress-tracking feature
+            # with zero signal to the user -- still surfaced now, not just documented.
+            _logger.warning("Failed to write live progress to %s: %s", self.progress_path, e)
+
+    def set_context(self, context_name):
+        if self.capturing and self.current_block:
+            self.captured_blocks.append((self.current_context, self.current_block))
+            if len(self.captured_blocks) > 50:
+                self.captured_blocks = self.captured_blocks[-50:]
+            self.capturing = False
+            self.current_block = []
+
+        if "Starting " in context_name:
+            test_name = context_name.split("Starting ")[-1].strip()
+            # No try/except around this attribute: __init__ unconditionally sets
+            # self.current_test = "Initializing..." before returning, and the only
+            # attribute this instance ever exposes to outside code before __init__
+            # finishes is via atexit.register(self.finish_and_write) -- which never reads
+            # current_test at all (confirmed by reading its full body). set_context() is
+            # only ever called (via process_line()) on a fully-constructed instance, so
+            # self.current_test always exists here, and a catch-all would only mask an
+            # AttributeError that can never occur.
+            curr = self.current_test
+            if (
+                curr
+                and curr != test_name
+            ):
+                failed = any(
+                    self.current_test in ctx for ctx, _ in self.captured_blocks
+                )
+                if failed:
+                    self.failed_tests += 1
+                else:
+                    self.passed_tests += 1
+            self.current_test = test_name
+            self.update_progress()
+
+        self.current_context = context_name
+
+    def append_diagnostic(self, text):
+        """Record runner-authored diagnostic text so it reaches the failure log.
+
+        Callers must use this instead of poking ``capturing``/``current_block``
+        directly: leaving ``capturing`` False with a non-empty ``current_block``
+        breaks the invariant ``finish_and_write`` relies on, and the text was
+        silently dropped. If a block is already being captured the text joins
+        it (its normal flush still applies); otherwise it becomes its own
+        captured block under the current context.
+        """
+        if self.capturing:
+            self.current_block.append(text)
+            return
+        self.captured_blocks.append((self.current_context, [text]))
+        if len(self.captured_blocks) > 50:
+            self.captured_blocks = self.captured_blocks[-50:]
+
+    # [@ANCHOR: test:FailureExtractor_process_line]
+    def process_line(self, line):
+        line_clean = re.sub(r"\x1b\[[0-9;]*m", "", line)
+        self.observation.feed(line_clean)
+        if self.test_start_pattern.search(line_clean):
+            self.set_context(line_clean.strip())
+
+        is_log_line = self.log_prefix_pattern.match(line_clean)
+        line_lower = line_clean.lower()
+
+        # See __init__'s own comment on self.odoo_result_lines: capture Odoo's own real
+        # pass/fail verdict regardless of the "safe log level" classification below (it's
+        # always an INFO line already, so this is redundant with `is_safe` today, but the
+        # extraction must not depend on that classification never changing).
+        odoo_result_match = _ODOO_RESULT_PATTERN.search(line_clean)
+        if odoo_result_match:
+            self.odoo_result_lines.append(
+                {
+                    "failed": int(odoo_result_match.group("failed")),
+                    "errors": int(odoo_result_match.group("errors")),
+                    "total": int(odoo_result_match.group("total")),
+                    "raw": line_clean.strip(),
+                }
+            )
+
+        if "odoo.schema: column \"name\" does not exist" in line_clean:
+            return
+        is_test_failure_content = (
+            (
+                "======================================================================"
+                in line_clean
+            )
+            or ("Traceback (most recent call last):" in line_clean)
+            or ("FAIL: " in line_clean)
+            or ("ERROR: " in line_clean)
+            or ("AssertionError" in line_clean)
+            or ("FATAL:" in line_clean)
+            or ("[watchdog alarm]" in line_lower)
+        )
+
+        # Ignore Python GC Exceptions on Chrome headless termination
+        if "ChromeBrowser._chrome_start" in "".join(self.current_block):
+            is_test_failure_content = False
+
+        if is_log_line:
+            is_safe = (
+                self.safe_log_levels.search(line_clean)
+                or "pika.adapters" in line_clean
+                or "AMQPConnector" in line_clean
+                or "Cloudflare URL purge API failed" in line_clean
+                or "Cloudflare Tag purge API failed" in line_clean
+                or "[BACKUP_WORKER]" in line_clean
+                or "[LOG_ANALYZER]" in line_clean
+                or "odoo.tests.result:" in line_clean
+                or "discuss_channel_member" in "\n".join(self.current_block)
+            )
+
+            # Override 'safe' log levels (like INFO) if the test runner actually logged a failure
+            if is_test_failure_content:
+                is_safe = False
+
+            if is_safe:
+                if self.capturing:
+                    self.captured_blocks.append(
+                        (self.current_context, self.current_block)
+                    )
+                    if len(self.captured_blocks) > 50:
+                        self.captured_blocks = self.captured_blocks[-50:]
+                    self.current_block = []
+                    self.capturing = False
+            else:
+                if not self.capturing:
+                    self.capturing = True
+                if len(self.current_block) < 5000:
+                    capped = line[:4096] + "\n" if len(line) > 4096 else line
+                    self.current_block.append(capped)
+                elif len(self.current_block) == 5000:
+                    self.current_block.append(
+                        "[!] TRUNCATED: Block exceeded 5000 lines (possible log spam)."
+                    )
+        else:
+            if is_test_failure_content:
+                if not self.capturing:
+                    self.capturing = True
+
+                # AI Guidance Injection for Tour Failures
+                if "[watchdog alarm]" in line_lower or "timeout" in line_lower:
+                    ai_diagnostic = (
+                        "\n[!] DIAGNOSTIC FOR AI (UI TOUR FAILURE):\n"
+                        "    The browser headless runner has timed out or triggered a watchdog alarm.\n"
+                        "    This almost always means your JS tour step array caused a race condition.\n"
+                        "    MANDATORY ACTIONS:\n"
+                        "    1. Did you click a 'save' button manually? You MUST use `.concat(TourUtils.safeSave())` instead.\n"
+                        "    2. Did you use the `edit` helper for a format-validated input? `edit` simulates typing and causes validation races. Use raw JS event dispatching instead (see ADR-0081).\n"
+                        "    3. Did you fail to insert a neutral `trigger: '.o_form_sheet', run: 'click'` step before clicking save to allow the DOM to blur?\n"
+                        "    4. Read `hams_shared/docs/adrs/0081_ui_testability_and_tour_friendly_design.md` (ADR 0081) for exact syntax.\n\n"
+                    )
+                    self.current_block.append(ai_diagnostic)
+
+            if self.capturing:
+                if len(self.current_block) < 5000:
+                    capped = line[:4096] + "\n" if len(line) > 4096 else line
+                    self.current_block.append(capped)
+                elif len(self.current_block) == 5000:
+                    self.current_block.append(
+                        "[!] TRUNCATED: Block exceeded 5000 lines (possible log spam)."
+                    )
+
+    def _extract_failed_modules(self):
+        modules = set()
+        addon_pattern = re.compile(r"odoo\.addons\.([a-zA-Z0-9_]+)")
+        filepath_pattern = re.compile(
+            r"\/([a-zA-Z0-9_]+)\/(?:models|controllers|tests|wizard|tools)\/.*?\.py"
+        )
+        daemon_pattern = re.compile(r"\/daemons\/([a-zA-Z0-9_]+)\/.*?\.py")
+
+        for context, block in self.captured_blocks:
+            for match in addon_pattern.findall(context):
+                modules.add(match)
+            for match in filepath_pattern.findall(context):
+                modules.add(match)
+            for match in daemon_pattern.findall(context):
+                modules.add(f"daemons/{match}")
+
+            for line in block:
+                for match in addon_pattern.findall(line):
+                    modules.add(match)
+        return modules
+
+    # [@ANCHOR: test:FailureExtractor_finish_and_write]
+    def finish_and_write(self):
+        # No try/except here: self._written = False is set unconditionally in __init__
+        # before atexit.register(self.finish_and_write) ever runs, so this method can never
+        # see an instance without it, and a catch-all would only mask an AttributeError that
+        # can never occur.
+        w = self._written
+        if w:
+            return
+        self._written = True
+
+        if self.capturing and self.current_block:
+            self.captured_blocks.append((self.current_context, self.current_block))
+            self.capturing = False
+            self.current_block = []
+
+        filtered_blocks = []
+        for context, block in self.captured_blocks:
+            block_text = "".join(block)
+            if (
+                "ChromeBrowser._chrome_start" in block_text
+                and "psutil.NoSuchProcess" in block_text
+            ):
+                continue
+            filtered_blocks.append((context, block))
+        self.captured_blocks = filtered_blocks
+
+        grouped_blocks = {}
+        for context, block in self.captured_blocks:
+            if context not in grouped_blocks:
+                grouped_blocks[context] = []
+            grouped_blocks[context].extend(block)
+
+        if os.path.dirname(self.output_path):
+            os.makedirs(os.path.dirname(self.output_path), exist_ok=True)
+
+        num_failures = len(grouped_blocks)
+
+        try:
+            with open(self.output_path, "a", encoding="utf-8") as out:
+                out.write(
+                    f"\n=== EXTRACTED TEST FAILURES & ERRORS (Captured {num_failures} blocks) ===\n"
+                )
+                if num_failures == 0:
+                    out.write("\nNo errors or failures detected in the log.\n")
+                else:
+                    failed_modules = self._extract_failed_modules()
+                    out.write("\n" + "*" * 80 + "\n")
+                    out.write(
+                        "The following log contains extracted test failures, tracebacks, and CRITICAL errors from the Odoo test suite.\n"
+                    )
+
+                    if failed_modules:
+                        out.write(
+                            "\nBased on the tracebacks, these modules are implicated in the failure(s):\n"
+                        )
+                        for mod in failed_modules:
+                            out.write(f"  - {mod}\n")
+
+                    out.write("*" * 80 + "\n")
+
+                    for context, block in grouped_blocks.items():
+                        if not block:
+                            continue
+                        out.write("\n" + "=" * 80 + "\n")
+                        out.write(f"CONTEXT: {context}\n")
+                        out.write("-" * 80 + "\n")
+                        for b_line in block:
+                            out.write(b_line)
+                        out.write("\n")
+
+                out.flush()
+
+        except PermissionError as e:
+            print(
+                f"\n❌ [ERROR] FailureExtractor could not write to {self.output_path} due to permission denied: {e}"
+            )
+            print(
+                "To resolve this, delete the file manually: sudo rm -f "
+                + self.output_path
+                + "\n"
+            )
+            return
+
+        print("\n==========================================================")
+        # No try/except here: self.aborted = False is set unconditionally in __init__ before
+        # this method can ever run (see finish_and_write's own comment above for the full
+        # atexit-ordering argument), so a catch-all would only mask an AttributeError that
+        # can never occur.
+        a = self.aborted
+
+        # See __init__'s own comment on self.odoo_result_lines: the headline used to be
+        # `num_failures` (a raw ERROR-log-line-block count) alone, which false-positives on
+        # any suite that deliberately provokes and correctly asserts on an ERROR-level log
+        # line -- e.g. daemon_key_manager's own test_write_secure_env_file_* tests. When
+        # Odoo's own `odoo.tests.result:` line(s) were captured this run, report THOSE counts
+        # as the authoritative pass/fail signal -- `num_failures`'s captured
+        # blocks are still surfaced, but as context, never as a contradiction of Odoo's own
+        # verdict in the same log.
+        odoo_total_failed = sum(r["failed"] for r in self.odoo_result_lines)
+        odoo_total_errors = sum(r["errors"] for r in self.odoo_result_lines)
+        odoo_total_tests = sum(r["total"] for r in self.odoo_result_lines)
+        odoo_ran = len(self.odoo_result_lines) > 0
+
+        # Under HAMS_ISOLATED_NS=1,
+        # self.output_path (where the file actually gets written, see __init__) is
+        # /mnt/real_tmp/filtered_test.txt -- a private-mount-namespace path this process
+        # will tear down on exit -- while self.display_path (what got printed here) is built
+        # from the outside-visible base directory and is NOT guaranteed to still hold this
+        # run's content by the time a session outside the namespace goes looking for it.
+        # Say so plainly instead of asserting a path that may not resolve to anything.
+        path_note = self.display_path
+        if self.output_path != self.display_path:
+            path_note = (
+                f"{self.display_path} (best-effort outside-namespace path -- this run wrote "
+                f"to {self.output_path}, inside a private mount namespace this process tears "
+                "down on exit; if that path is empty or missing, the extracted blocks below "
+                "are the only copy)"
+            )
+
+        if self.cpu_limit_line:
+            print(self.cpu_limit_line)
+            print("🛑 TEST RUN INCOMPLETE: the Odoo process hit the CPU-time limit; the counts below cover only the tests that ran.")
+        elif self.signal_line:
+            print(self.signal_line)
+        if a:
+            print(
+                "🛑 TEST RUN ABORTED: Did not complete due to pre-flight linter errors."
+            )
+        elif odoo_ran and (odoo_total_failed or odoo_total_errors) and self.policy_outcome and self.policy_outcome.run_green:
+            print(
+                f"✅ TEST RUN COMPLETE: Odoo reports {odoo_total_failed} failed, {odoo_total_errors} error(s) of "
+                f"{odoo_total_tests} tests; every failure is known red or a flake (listed below), none is new."
+            )
+        elif odoo_ran and (odoo_total_failed or odoo_total_errors):
+            print(
+                f"🚨 TEST RUN COMPLETE: Odoo reports {odoo_total_failed} failed, "
+                f"{odoo_total_errors} error(s) of {odoo_total_tests} tests."
+            )
+            if num_failures:
+                print(
+                    f"📄 {num_failures} captured ERROR-level log block(s) for context -- "
+                    f"saved to: {path_note}"
+                )
+        elif odoo_ran:
+            print(
+                f"🎉 TEST RUN COMPLETE: Odoo reports 0 failed, 0 error(s) of "
+                f"{odoo_total_tests} tests -- the suite passed."
+            )
+            if num_failures:
+                print(
+                    f"ℹ️  {num_failures} ERROR-level log block(s) were captured during this "
+                    "run (e.g. a test deliberately asserting on an error path) but did not "
+                    f"affect the pass/fail result above -- saved to: {path_note}"
+                )
+        elif num_failures == 0:
+            # No `odoo.tests.result:` line means no test ran to a verdict: Odoo died before the tests
+            # (port already in use, database authentication failed, an import error) or was never started.
+            # "No failures" is then not a pass; the exit status says the same (exit_status_for_run).
+            print(
+                "🚨 TEST RUN FAILED: no tests ran -- Odoo printed no odoo.tests.result line, so there is no "
+                f"verdict (Odoo's exit status: {self.child_exit_status}). Read the start of the output above "
+                "for the cause (for example 'Address already in use' or a database authentication error)."
+            )
+        else:
+            print(
+                f"🚨 TEST RUN COMPLETE: {num_failures} issue(s) detected (test failures or "
+                "system crashes)! No odoo.tests.result line was found in this run's log to "
+                "cross-check against -- this count is from captured ERROR-level log blocks "
+                "only."
+            )
+            print(f"📄 Failure details extracted and saved to: {path_note}")
+        if self.policy_outcome:
+            for policy_line in self.policy_outcome.summary_lines():
+                print(policy_line)
+        policy_green = bool(self.policy_outcome and self.policy_outcome.run_green)
+        if self.child_exit_status not in (None, 0) and not (a or self.cpu_limit_line or self.signal_line or policy_green):
+            print(f"🛑 Odoo exited with status {self.child_exit_status}: this run is a failure.")
+        print("==========================================================\n")
+
+
+def _process_reaped(pid):
+    """True if `pid` is gone entirely, or has already exited but not yet been wait()ed on by its
+    parent (a zombie) -- the two cases in which sending it another signal accomplishes nothing.
+
+    Deliberately uses psutil's /proc-based status lookup rather than a raw `os.kill(pid, 0)`
+    probe: reading a process's status doesn't require permission to signal it, whereas kill(2)
+    does. A bare `except OSError` around `os.kill(pid, 0)` cannot distinguish "no such process"
+    (ESRCH) from "exists, but I lack permission to signal it" (EPERM, e.g. `pid` re-exec'd via
+    `sudo -u odoo` into a different uid than this reaper's own) -- the exact EPERM/ESRCH
+    conflation this file's own top-of-module AI DIRECTIVE already documents for the shell
+    equivalent (`kill -0`). It also cannot distinguish "alive" from "zombie": a zombie still
+    answers `os.kill(pid, 0)` successfully (it is a real, if inert, process-table entry), so that
+    check would spin for the full 30-second window against a process that has already exited.
+
+    Scope note: this assumes `/proc` is mounted without `hidepid` (confirmed on this box via
+    `grep hidepid /proc/mounts` returning nothing). Under `hidepid=2`, another uid's `/proc/<pid>`
+    entry is invisible even to read, so `psutil.Process(pid)` would raise `NoSuchProcess` for a
+    live, merely cross-uid process -- reproducing the same false-"dead" outcome as the original
+    `os.kill(pid, 0)`/EPERM bug this function replaces, just via a different exception. Not fixed
+    here (no such mount exists in this project's actual environment today); noted so a future
+    change to how this runner's processes are namespaced doesn't silently reopen this.
+    """
+    try:
+        return psutil.Process(pid).status() == psutil.STATUS_ZOMBIE
+    except psutil.NoSuchProcess:
+        return True
+    except psutil.AccessDenied:
+        # Can't confirm either way -- assume still alive rather than reporting a false "dead".
+        return False
+
+
+# The `pkill -f` pattern that finds this run's headless Chrome. With one slot, or inside the private
+# process table of the full pipeline, every `_chrome_odoo` process is this run's. Only a run on the host
+# that shares it with other slots narrows it to the Chrome profiles under its own TMPDIR (main() sets it
+# from runner_slots.slot_resources); otherwise a hang recovery in one slot would kill the others' browsers.
+_CHROME_KILL_PATTERN = runner_slots.DEFAULT_CHROME_PATTERN
+_CHROME_PROFILE_GLOBS = runner_slots.DEFAULT_CHROME_GLOBS
+
+
+# [@ANCHOR: test:_profile_directory_of]
+def _profile_directory_of(cmdline):
+    """The `--user-data-dir=` path of a Chrome command line, or None."""
+    for argument in cmdline:
+        if str(argument).startswith("--user-data-dir="):
+            return str(argument).split("=", 1)[1]
+    return None
+
+
+# [@ANCHOR: test:chrome_processes_of_this_run]
+def chrome_processes_of_this_run(pattern, uid=None, own_pids=None, processes=None):
+    """The Chrome processes that belong to THIS run and match `pattern`, as psutil.Process objects.
+
+    A process counts when its effective uid is `uid` (default: the `odoo` account; none if there is no such account),
+    its command line matches the regular expression `pattern` (`_CHROME_KILL_PATTERN`) and it is this run's own: a
+    descendant of this process (`own_pids`, default: `psutil.Process().children(recursive=True)`), or an orphan whose
+    `--user-data-dir` is a directory that exists in this process's own view of the filesystem. The second rule finds the
+    leftovers of a Chrome whose parent died, and is why another run's browsers do not count: a run in its own PID and
+    mount namespace is seen from the host's process table, but its profile directories are in a private overlay, and a
+    flat run's profile directories are not visible from inside a namespace at all. `pkill -u odoo -f` used instead killed
+    the browsers of every other run on the machine whose profile path matched. `processes` is a test seam (default
+    `psutil.process_iter`). Full entry: tools/README.md."""
+    if uid is None:
+        try:
+            uid = pwd.getpwnam("odoo").pw_uid
+        except KeyError:  # burn-ignore-os-account-probe
+            return []
+    if own_pids is None:
+        own_pids = {child.pid for child in psutil.Process().children(recursive=True)}
+    matcher = re.compile(pattern)
+    found = []
+    for process in (processes or psutil.process_iter)(["pid", "uids", "cmdline"]):
+        try:
+            uids = process.info.get("uids")
+            cmdline = process.info.get("cmdline") or []
+            if uids is None or uids.effective != uid or not matcher.search(" ".join(cmdline)):
+                continue
+            profile = _profile_directory_of(cmdline)
+            if process.info["pid"] in own_pids or (profile and os.path.isdir(profile)):
+                found.append(process)
+        except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess, KeyError) as e:
+            _logger.debug("Ignored %s while looking for this run's Chrome", e)
+    return found
+
+
+def remove_chrome_profiles(globs):
+    """Remove every directory that matches one of the glob patterns `globs` (the Chrome profile directories of the run).
+
+    No shell is involved: a TMPDIR with a space or a shell character in it is matched as the one path it is. A symbolic link is
+    removed as a link and never followed; a directory that cannot be removed is skipped. Returns the number of paths removed."""
+    removed = 0
+    for pattern in globs:
+        for path in glob.glob(pattern):
+            if os.path.islink(path):
+                os.unlink(path)
+            else:
+                shutil.rmtree(path, ignore_errors=True)
+            removed += not os.path.lexists(path)
+    return removed
+
+
+def kill_process_group_if_private(pid):
+    """SIGKILL the process group of child `pid` unless that group is this process's own; True when it was signalled.
+
+    A child started without its own group (Redis in the namespace's root phase) is in the group of the process that started
+    it: signalling it would end that process too. Raises OSError as os.getpgid and os.killpg do."""
+    pgid = os.getpgid(pid)
+    if pgid == os.getpgrp():
+        return False
+    os.killpg(pgid, signal.SIGKILL)
+    return True
+
+
+# [@ANCHOR: test:kill_test_chrome]
+def kill_test_chrome(signal_name):
+    """Send `signal_name` ('TERM' or 'KILL') to this run's headless Chrome processes (the odoo user's); see
+    chrome_processes_of_this_run for which those are. A process that is already gone is ignored."""
+    sig = getattr(signal, "SIG" + signal_name)
+    for process in chrome_processes_of_this_run(_CHROME_KILL_PATTERN):
+        try:
+            process.send_signal(sig)
+        except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
+            _logger.debug("Ignored %s signalling Chrome pid %s", e, process.pid)
+
+
+def _group_has_live_members(pgid):
+    """True if any non-zombie process is still in process group `pgid` (children that outlived, or ignored SIGTERM sent to, the leader)."""
+    for process in psutil.process_iter():
+        try:
+            if process.status() != psutil.STATUS_ZOMBIE and os.getpgid(process.pid) == pgid:
+                return True
+        except (psutil.NoSuchProcess, ProcessLookupError):
+            continue
+    return False
+
+
+# [@ANCHOR: test:robust_reap]
+def robust_reap(pid):
+    """
+    Process reaper that targets the process group with SIGTERM,
+    waits using a 30-second poll-and-half-second-sleep, and escalates to SIGKILL.
+    """
+    print(f"\n[*] [REAPER] Initiating robust reaper for PID {pid}...")
+    try:
+        kill_test_chrome("TERM")
+        # Chromium is caught by the _chrome_odoo filter above.
+
+        pgid = os.getpgid(pid)
+        print(f"[*] [REAPER] Sending SIGTERM to Process Group {pgid}")
+        try:
+            os.killpg(pgid, signal.SIGTERM)
+        except OSError as e:
+            # Don't let a partial-permission failure (e.g. the group's leader now runs as a
+            # different uid than this reaper) abort the whole escalation -- keep polling and
+            # still attempt SIGKILL below; the pkill fallbacks reach chrome by name regardless.
+            print(
+                f"[*] [REAPER] SIGTERM to Process Group {pgid} failed ({e}); continuing to poll/escalate anyway."
+            )
+
+        # time.monotonic(), not time.time(): a backward wall-clock step (NTP correction) here
+        # would silently extend or shorten this 30s deadline, the same clock-instability class
+        # this review's own VirtualClockThread fix addresses (see virtual_clock_thread.md).
+        start_time = time.monotonic()
+        while time.monotonic() - start_time < 30.0:
+            if _process_reaped(pid) and not _group_has_live_members(pgid):
+                print(f"[*] [REAPER] Process {pid} confirmed dead.")
+                return
+            time.sleep(0.5)
+
+        print(
+            f"[*] [REAPER] Process {pid} did not exit after SIGTERM. Sending SIGKILL to Process Group {pgid}"
+        )
+        try:
+            os.killpg(pgid, signal.SIGKILL)
+        except OSError as e:
+            print(f"[*] [REAPER] SIGKILL to Process Group {pgid} failed: {e}")
+        kill_test_chrome("KILL")
+        # Chromium is caught by the _chrome_odoo filter above.
+    except OSError as e:
+        print(f"[*] [REAPER] Error during reap: {e}")
+
+
+# Module-level (not a local inside run_cmd) so a test can monkeypatch it to
+# a small value instead of waiting through several real 60-second no-output
+# windows to exercise the bound.
+RUN_CMD_MAX_HANG_RECOVERY_ATTEMPTS = 5
+# Lifetime (never reset by intervening real output) cap for the same loop --
+# see the comment on total_hang_recovery_attempts inside run_cmd for why this
+# exists alongside the consecutive-only cap above.
+RUN_CMD_MAX_TOTAL_HANG_RECOVERY_ATTEMPTS = 10
+# Wall-clock cap of one Odoo test run, however steadily it prints (Bruce, 2026-11-09): HAMS_TEST_RUN_CAP seconds, default 4 hours (the
+# whole-system run of 66 modules takes about 2). Past it a hang report (hang_guard) is written, then the run is reaped and fails.
+RUN_CMD_WALL_CAP_SECONDS = 4 * 3600
+
+
+# Where the Odoo test process (and the headless Chrome profiles it creates) keeps its temporary files. /tmp on the development box is a
+# separate 2.7 GB partition that leftovers from other jobs fill; the `caching` LRU-eviction tour writes hundreds of megabytes into its
+# Chrome profile and fails deterministically ("Cache.put: Unexpected internal error") when /tmp is nearly full. The same run with
+# TMPDIR on the roomy disk passes.
+DEFAULT_TEST_TMPDIR = "/var/lib/odoo/tmp"
+
+
+# The CPU-time backstop for the Odoo test process (RLIMIT_CPU, whole process, all threads; Chrome is separate processes).
+# It was (1200, 1200): 20 CPU-minutes with soft == hard, so a full combined run was SIGKILLed by the kernel mid-module after
+# 1.5-2.5 h of wall time (seen with bpftrace: SIGKILL code SI_KERNEL in Odoo's own thread) and the remaining
+# tests silently gave no verdict. Now a backstop no real suite reaches, with the soft limit first so SIGXCPU (which
+# test.py recognises and reports) precedes the hard SIGKILL. Hung runs are still caught by run_cmd's hang recovery.
+ODOO_CPU_LIMIT_SOFT_SECONDS = 6 * 3600
+ODOO_CPU_LIMIT_HARD_SECONDS = ODOO_CPU_LIMIT_SOFT_SECONDS + 300
+
+
+def children_cpu_seconds(before, after):
+    """CPU seconds (user + system) of the children reaped between two resource.getrusage(RUSAGE_CHILDREN) readings."""
+    return (after.ru_utime - before.ru_utime) + (after.ru_stime - before.ru_stime)
+
+
+def cpu_limit_verdict(returncode, cpu_seconds, soft_limit=ODOO_CPU_LIMIT_SOFT_SECONDS):
+    """The line test.py prints when the Odoo process died of the CPU-time limit rather than of a test outcome, or None.
+    SIGXCPU is the soft limit itself; a SIGKILL counts when the consumed CPU is at (95% of) the soft limit or beyond."""
+    if returncode == -signal.SIGXCPU or (returncode == -signal.SIGKILL and cpu_seconds >= 0.95 * soft_limit):
+        return (
+            f"🛑 CPU-time limit reached after {cpu_seconds:.0f} s of CPU (limit {soft_limit} s, "
+            f"signal {-returncode}): this run is NOT a test verdict -- the tests after that point never ran."
+        )
+    return None
+
+
+# [@ANCHOR: test:signal_exit_verdict]
+def signal_exit_verdict(returncode, watchdog_fired, odoo_result_lines):
+    """(exit status, summary line) for an Odoo process that a signal killed, or (returncode, None) when none did. Full entry: tools/README.md.
+
+    `subprocess` reports a signal as a negative return code and `sys.exit(-9)` shows up in a shell as 247, which reads like a test
+    failure code; the shell's own convention, 128 + signal, is returned instead. The line says which signal, whether this runner's OOM
+    watchdog sent it, and, when Odoo had already printed `odoo.tests.result:`, what that verdict was (the run still fails)."""
+    if returncode >= 0:
+        return returncode, None
+    number = -returncode
+    try:
+        name = signal.Signals(number).name
+    except ValueError:
+        name = f"signal {number}"
+    line = f"🛑 Odoo was killed by {name} (signal {number}; OOM watchdog: {'yes' if watchdog_fired else 'no'}): exit status {128 + number}."
+    if odoo_result_lines:
+        failed = sum(r["failed"] for r in odoo_result_lines)
+        errors = sum(r["errors"] for r in odoo_result_lines)
+        total = sum(r["total"] for r in odoo_result_lines)
+        line += (f" Before the kill Odoo had printed odoo.tests.result: {failed} failed, {errors} error(s) of {total} tests;"
+                 " the run is still a failure because the process did not exit normally.")
+    else:
+        line += " Odoo had printed no odoo.tests.result line, so no test verdict exists."
+    return 128 + number, line
+
+
+# The shell that runs RabbitMQ in its own process group and stops the group on SIGTERM (PDEATHSIG or clean-up). The trap
+# first IGNORES TERM in this shell, then signals the group and exits 0: `kill -TERM 0` also reaches this shell, and with
+# the trap still set it re-entered itself until bash overflowed its stack and segfaulted, at the end of every run (seen
+# in the kernel log: `bash[...]: segfault ... error 6` about 1 s after each run's Odoo exited). Resetting
+# the trap to the default instead would kill the shell with TERM before `exit 0`.
+RABBITMQ_WRAPPER_SCRIPT = "trap \"trap '' TERM; kill -TERM 0 2>/dev/null; exit 0\" TERM; {server} & wait $!"
+
+
+def rabbitmq_wrapper_script(server):
+    """The `bash -c` script that runs `server` (rabbitmq-server; tests pass a stand-in) under the TERM trap above."""
+    return RABBITMQ_WRAPPER_SCRIPT.format(server=server)
+
+ODOO_LAUNCHER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "odoo_test_launcher.py")
+
+
+def apply_default_test_tmpdir(environ, directory=DEFAULT_TEST_TMPDIR):
+    """Point TMPDIR at `directory` unless the caller already chose one or the directory is unusable. Returns the TMPDIR in force
+    (None if none is set)."""
+    if not environ.get("TMPDIR") and os.path.isdir(directory) and os.access(directory, os.W_OK):
+        environ["TMPDIR"] = directory
+    return environ.get("TMPDIR")
+
+
+# [@ANCHOR: test:default_test_tmpdir]
+def default_test_tmpdir(environ, directory=DEFAULT_TEST_TMPDIR, create=True):
+    """`apply_default_test_tmpdir`, preferring RAM for a run on the shared host. Returns the TMPDIR in force (None if none).
+
+    When the caller chose no TMPDIR and `ram_dirs.test_tmp_base` offers `/dev/shm/hams-test-tmp` (enough free memory, not the
+    full pipeline's private namespace, whose /var is already a memory overlay), that directory becomes TMPDIR: Odoo's temporary
+    files and every headless Chrome profile of the run then cost no SSD writes, and `ram_dirs.sweep` first removes what dead jobs left in
+    `/dev/shm`. Otherwise the disk directory, as before.
+    A refusal because /dev/shm is short of room prints a warning (ram_dirs). Full entry: tools/README.md."""
+    if not environ.get("TMPDIR"):
+        ram = ram_dirs.test_tmp_base(environ, create=create)
+        if ram:
+            ram_dirs.sweep(environ=environ)  # crashed jobs' directories and stale Chrome profiles free their memory first
+            environ["TMPDIR"] = ram
+    return apply_default_test_tmpdir(environ, directory)
+
+
+# [@ANCHOR: test:ram_chrome_profile_globs]
+def ram_chrome_profile_globs(resources, tmpdir):
+    """The Chrome profile globs to remove at the end of a run: `resources.chrome_profile_globs`, plus `<tmpdir>/*_chrome_odoo` when
+    the run is not slot-scoped and its TMPDIR is in RAM (a scoped run's globs already name its own TMPDIR). Returns a tuple.
+    A profile left in RAM by a killed Chrome would otherwise stay until `ram_dirs.sweep` ages it out. Full entry: tools/README.md."""
+    globs = tuple(resources.chrome_profile_globs)
+    if tmpdir and not resources.scoped and ram_dirs.under_ram_root(tmpdir):
+        globs += (f"{tmpdir.rstrip('/')}/*_chrome_odoo",)
+    return globs
+
+
+# Operational switch read by ham_init (Website._hams_serve_google_fonts_at_install): do not download Google's fonts while a module is
+# installed. Every test database build installs ham_init, and that download needs the network. This is a flag the runner sets for the
+# processes it starts, not a probe of Odoo's test_enable (banned): production never has it set, so it downloads there. A caller that
+# has chosen a value (for example "0" to exercise the download) keeps it.
+SKIP_GOOGLE_FONTS_DOWNLOAD_ENV = "HAMS_SKIP_GOOGLE_FONTS_DOWNLOAD"
+
+
+def apply_skip_google_fonts_download(environ):
+    """Default the switch on for the processes the runner starts, unless the caller already chose a value."""
+    environ.setdefault(SKIP_GOOGLE_FONTS_DOWNLOAD_ENV, "1")
+    return environ[SKIP_GOOGLE_FONTS_DOWNLOAD_ENV]
+
+
+# Operational switch read by ham_shack's PSK Reporter transports: refuse to touch the real PSK Reporter host. Set for every process
+# the runner starts so a test that forgets to replace a transport fails loudly. Not a probe of Odoo's test_enable (banned);
+# production never has it set. A caller that has chosen a value keeps it.
+BLOCK_PSK_TRANSPORT_ENV = "HAMS_PSK_BLOCK_TRANSPORT"
+
+
+def apply_block_psk_transport(environ):
+    """Default the switch on for the processes the runner starts, unless the caller already chose a value."""
+    environ.setdefault(BLOCK_PSK_TRANSPORT_ENV, "1")
+    return environ[BLOCK_PSK_TRANSPORT_ENV]
+
+
+# [@ANCHOR: test:run_cmd]
+def run_cmd(cmd, extractor=None, cwd=None, env=None):
+    if env is None:
+        env = dict(os.environ)
+
+    # This only reaches processes that do not run Odoo's init_logger (daemons the tests spawn): Odoo's own
+    # `simplefilter('default', DeprecationWarning)` outranks it inside the Odoo process, where the same
+    # warning is handled by odoo_warning_policy.py via ODOO_LAUNCHER.
+    existing_warnings = env.get("PYTHONWARNINGS", "")
+    new_warning = "ignore::DeprecationWarning:pyasn1.codec.ber.encoder"
+    env["PYTHONWARNINGS"] = f"{existing_warnings},{new_warning}" if existing_warnings else new_warning
+
+    env.setdefault("RABBITMQ_HOST", "localhost")
+    env.setdefault("RMQ_HOST", "localhost")
+    env.setdefault("REDIS_HOST", "localhost")
+    env.setdefault("RMQ_USER", "guest")
+    env.setdefault("RMQ_PASS", "guest")
+    host_tmp_dir = (
+        os.path.expanduser("~/tmp")
+        if os.environ.get("HAMS_ISOLATED_NS") == "1"
+        else os.environ.get("HAMS_REAL_LOG_DIRECTORY", os.path.expanduser("~/tmp"))
+    )
+    if os.environ.get("HAMS_ISOLATED_NS") != "1":
+        os.makedirs(host_tmp_dir, exist_ok=True)
+        try:
+            os.chmod(host_tmp_dir, 0o777)
+        except OSError as e:
+            _logger.debug("Ignored OSError: %s", e)
+    env.setdefault(
+        "ODOO_TEST_CHROME_ARGS",
+        "--headless=new --ignore-certificate-errors --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-extensions --disable-background-networking --disable-default-apps --disable-sync --disable-translate --mute-audio --use-fake-device-for-media-stream --use-fake-ui-for-media-stream --no-first-run " + CHROME_NO_CACHE_ARGS + " --hide-scrollbars --metrics-recording-only --safebrowsing-disable-auto-update --disable-features=ServiceWorker,SharedWorker,DialMediaRouteProvider,dbus,OptimizationGuideModelDownloading",
+    )
+    env.setdefault("DBUS_SESSION_BUS_ADDRESS", "autolaunch:")
+
+    def preexec_child():
+        os.setsid()
+        try:
+            libc = ctypes.CDLL("libc.so.6")
+            PR_SET_PDEATHSIG = 1
+            libc.prctl(PR_SET_PDEATHSIG, signal.SIGTERM)
+        except Exception as e:  # audit-ignore-catch-all
+            # We are post-fork in preexec_fn; _logger is unsafe here (see
+            # _PostForkSafeLog's own docstring) -- use the fork-safe stand-in.
+            _postfork_log.warning(f"preexec_child: could not set PR_SET_PDEATHSIG: {e}")
+
+    rusage_before = resource.getrusage(resource.RUSAGE_CHILDREN)
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+        preexec_fn=preexec_child,
+        cwd=cwd,
+        env=env,
+    )
+
+    print(
+        f"\n[*] [DEBUG-RUNNER] Subprocess spawned: PID {process.pid}, PGID {os.getpgid(process.pid)}"
+    )
+    print(f"[*] [DEBUG-RUNNER] Executing command: {' '.join(cmd)}")
+
+    watchdog = OOMWatchdog(process.pid, os.getpid())
+    watchdog.start()
+
+    force_killed = False
+    # The loop used to kill the whole process on the first 60s stall (robust_reap() +
+    # force_killed = True + break). Commit e24ff25 replaced that with kill-chrome-and-keep-
+    # waiting, so a tour can recover from a merely-stuck browser without failing the whole
+    # run. Recovery has to be bounded: `force_killed` is never set True again in this
+    # function (so the `if force_killed:` branch near the return is dead), and a test
+    # process that stays stuck even with chrome dead (a hang unrelated to the browser) would
+    # re-trigger this 60s idle branch forever, so `run_cmd` -- and the whole `test.py`
+    # invocation -- would never terminate.
+    # `RUN_CMD_MAX_HANG_RECOVERY_ATTEMPTS` (module-level, above) bounds that: after this many
+    # consecutive un-hang attempts with no real output in between, the process is reaped and
+    # failure reported instead of retrying indefinitely. A separate lifetime counter
+    # (`total_hang_recovery_attempts`, never reset) covers the case where killing chrome
+    # itself provokes a line or two of real output (a websocket/CDP error, a tour-teardown
+    # message) each time: that would reset the consecutive counter forever while the run is
+    # still stuck in the same hang/kill/hang cycle. No logged "[!] TEST TIMEOUT" ->
+    # resumed-output sequence has been observed, so this is defense-in-depth against an
+    # assumption the consecutive-only counter would silently depend on.
+    hang_recovery_attempts = 0
+    total_hang_recovery_attempts = 0
+    q = queue.Queue()
+    last_output_time = time.time()
+    run_started = time.monotonic()
+    wall_cap = hang_guard.number(os.environ, "HAMS_TEST_RUN_CAP", RUN_CMD_WALL_CAP_SECONDS)
+
+    def reader():
+        print(f"[*] [DEBUG-RUNNER] IO Reader thread started for PID {process.pid}")
+        try:
+            for line in process.stdout:
+                q.put(line)
+        except Exception as e:  # audit-ignore-catch-all
+            _logger.error("Reader exception: %s", e)
+            print(f"[*] [DEBUG-RUNNER] IO Reader thread exception: {e}")
+        q.put(None)
+        print(f"[*] [DEBUG-RUNNER] IO Reader thread concluded for PID {process.pid}")
+
+    t = threading.Thread(target=reader, daemon=True)
+    t.start()
+
+    try:
+        while True:
+            if time.monotonic() - run_started > wall_cap:
+                report = hang_guard.write_hang_report(process.pid, "odoo test run", f"wall-clock cap of {wall_cap:.0f} s reached")
+                print(f"\n[!] TEST TIMEOUT: the run is over its wall-clock cap of {wall_cap:.0f} s (HAMS_TEST_RUN_CAP). Hang report: {report}. Killing the test process...\n")
+                robust_reap(process.pid)
+                force_killed = True
+                break
+            try:
+                # Short blocking wait allows us to check if the primary process died while a child kept stdout open
+                line = q.get(timeout=1.0)
+                if line is None:
+                    print(
+                        "[*] [DEBUG-RUNNER] Received EOF sentinel from IO Reader thread."
+                    )
+                    break
+
+                last_output_time = time.time()
+                hang_recovery_attempts = 0
+
+                if "@t-esc" in line and "deprecated" in line.lower():
+                    continue
+
+                sys.stdout.write(line)
+                sys.stdout.flush()
+
+                if extractor:
+                    extractor.process_line(line)
+
+                line_lower = line.lower()
+
+                if "[watchdog alarm]" in line_lower:
+                    print(
+                        "\n[!] FATAL JS WATCHDOG ALARM DETECTED in JS! Allowing Odoo framework to process the dump and continue...\n"
+                    )
+            except queue.Empty:
+                if process.poll() is not None:
+                    sys.stdout.write(
+                        f"[*] [DEBUG-RUNNER] Process {process.pid} exited with {process.poll()}, but stdout pipe remains open. Breaking loop.\n"
+                    )
+                    sys.stdout.flush()
+                    # The test process died but something (like a Postgres background worker) is holding the pipe open
+                    break
+
+                if (
+                    not (extractor and extractor.mcp_mode)
+                    and not os.environ.get("HAMS_PAUSE_ON_FAIL")
+                    and (time.time() - last_output_time > 60.0)
+                ):
+                    hang_recovery_attempts += 1
+                    total_hang_recovery_attempts += 1
+
+                    if (
+                        hang_recovery_attempts > RUN_CMD_MAX_HANG_RECOVERY_ATTEMPTS
+                        or total_hang_recovery_attempts
+                        > RUN_CMD_MAX_TOTAL_HANG_RECOVERY_ATTEMPTS
+                    ):
+                        # Un-hang-by-killing-chrome has already been tried too many times:
+                        # either RUN_CMD_MAX_HANG_RECOVERY_ATTEMPTS times in a row with no
+                        # real output in between (whatever is stuck is not, or is no longer,
+                        # a hung chrome tab), or RUN_CMD_MAX_TOTAL_HANG_RECOVERY_ATTEMPTS
+                        # times in total across this run even with occasional output
+                        # resetting the consecutive count (a repeating
+                        # hang/kill-chrome/brief-output/hang cycle is not healthy just
+                        # because the consecutive threshold was never hit). Terminate the
+                        # test process and report failure instead of retrying indefinitely.
+                        print(
+                            f"\n[!] TEST TIMEOUT: still no sustained output after "
+                            f"{total_hang_recovery_attempts} total un-hang attempt(s) "
+                            "this run (killing chrome did not help). Force-killing "
+                            "the test process...\n"
+                        )
+                        if extractor:
+                            extractor.append_diagnostic(
+                                "\n[!] DIAGNOSTIC FOR AI (HARD TIMEOUT, UNRECOVERABLE):\n"
+                                "    The test runner timed out repeatedly and killing headless "
+                                "chrome did not un-stick it -- the process is force-killed and "
+                                "this run is reported as a failure.\n\n"
+                            )
+                        report = hang_guard.write_hang_report(process.pid, "odoo test run", "no output; un-hang attempts exhausted")
+                        print(f"[!] Hang report: {report}", flush=True)
+                        robust_reap(process.pid)
+                        force_killed = True
+                        break
+
+                    print(
+                        "\n[!] TEST TIMEOUT: No output received for 60 seconds. Tour or test likely hung. Terminating...\n"
+                    )
+
+                    if extractor:
+                        extractor.append_diagnostic(
+                            "\n[!] DIAGNOSTIC FOR AI (HARD TIMEOUT):\n"
+                            "    The test runner timed out because the framework stopped producing output for 60 seconds.\n"
+                            "    If this occurred during a UI tour, it means a `trigger:` selector failed to match any element in the DOM.\n"
+                            "    Review your frontend JavaScript selectors, specifically avoiding pseudo-selectors like `:contains`.\n\n"
+                        )
+
+                    print(
+                        "[*] [DEBUG-RUNNER] Killing headless chrome to un-hang the test framework..."
+                    )
+                    kill_test_chrome("TERM")
+                    last_output_time = time.time()
+    except KeyboardInterrupt:
+        print("\n[!] CTRL-C detected! Forcefully terminating the test process...")
+        robust_reap(process.pid)
+        process.wait()
+        sys.exit(1)
+    finally:
+        # Always reap stray processes like headless chrome to prevent zombie exhaustion
+        print(
+            f"[*] [DEBUG-RUNNER] Ensuring all child processes are reaped for PID {process.pid}..."
+        )
+        try:
+            kill_test_chrome("TERM")
+            # Chromium is caught by the _chrome_odoo filter above.
+            process.terminate()
+        except OSError as e:
+            _logger.debug("Ignored OSError terminating process %s during cleanup: %s", process.pid, e)
+
+    print(
+        f"[*] [DEBUG-RUNNER] Waiting for process {process.pid} to cleanly terminate...",
+        flush=True,
+    )
+    try:
+        process.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        print(
+            f"[*] [DEBUG-RUNNER] Process {process.pid} hung during shutdown. Escalating to SIGKILL.",
+            flush=True,
+        )
+        try:
+            process.kill()
+            process.wait(timeout=5)
+        except OSError as e:
+            _logger.debug("Ignored OSError SIGKILLing process %s during cleanup: %s", process.pid, e)
+    print(
+        f"[*] [DEBUG-RUNNER] Process {process.pid} terminated with return code {process.returncode}."
+    )
+    cpu_limit_line = cpu_limit_verdict(
+        process.returncode, children_cpu_seconds(rusage_before, resource.getrusage(resource.RUSAGE_CHILDREN))
+    )
+    if cpu_limit_line:
+        print(cpu_limit_line, flush=True)
+        _logger.error(cpu_limit_line)
+        if extractor is not None:
+            extractor.cpu_limit_line = cpu_limit_line
+
+    # Reap the OOMWatchdog process to prevent orphan leak
+    try:
+        watchdog.terminate()
+        watchdog.join(timeout=2)
+    except Exception as e:  # audit-ignore-catch-all
+        _logger.warning("Failed to reap watchdog: %s", e)
+
+    if force_killed:
+        # A force-kill only happens after RUN_CMD_MAX_HANG_RECOVERY_ATTEMPTS
+        # un-hang attempts produced no real output -- the run never
+        # completed, so it is always a failure regardless of whether any
+        # error text happened to be captured before the process was
+        # killed (a hang with no captured error text is not evidence the
+        # test would have passed, it is evidence nothing about it could be
+        # observed).
+        force_kill_line = (
+            "🛑 Odoo was force-killed after repeated hangs: this run is NOT a test verdict -- the tests after that point never ran."
+        )
+        print(force_kill_line, flush=True)
+        if extractor is not None:
+            # The same field a kill by a signal sets: the known-red policy never turns such a run green.
+            extractor.signal_line = force_kill_line
+        return 1
+
+    exit_status, signal_line = signal_exit_verdict(
+        process.returncode, watchdog.fired.is_set(), getattr(extractor, "odoo_result_lines", None)
+    )
+    if signal_line and not cpu_limit_line:
+        print(signal_line, flush=True)
+        _logger.error(signal_line)
+        if extractor is not None:
+            extractor.signal_line = signal_line
+    if extractor is not None:
+        extractor.child_exit_status = exit_status
+    return exit_status
+
+
+# [@ANCHOR: test:exit_status_for_run]
+def exit_status_for_run(returncode, extractor, results_before=0):
+    """The exit status of one Odoo test process: `returncode` if it is not 0, else 1 when Odoo printed no
+    `odoo.tests.result:` line (no test ran to a verdict), else 0. Full entry: tools/README.md.
+
+    A child that dies before the tests (port 8075 in use, a failed database login) exits non-zero and is
+    reported as that; a child that exits 0 without a verdict is a failure too, never a pass.
+    `results_before`: how many verdict lines the extractor held before this process (individual mode runs
+    one process per module and the extractor keeps them all)."""
+    if returncode != 0:
+        return returncode
+    if len(getattr(extractor, "odoo_result_lines", ())) > results_before:
+        return 0
+    print("🛑 Odoo exited 0 but printed no odoo.tests.result line: no test ran, so this run is a failure.")
+    return 1
+
+
+# [@ANCHOR: test:apply_failure_policy]
+def apply_failure_policy(args, extractor, rc_odoo, rerun, base_dir, target_modules, slot):
+    """The exit status of a standard-mode run once the known-red baseline and the flake rerun (ADR 0118) were
+    applied to Odoo's run. Full entry: tools/README.md.
+
+    Returns 0 only when Odoo printed a verdict, exited 1 because of counted test failures, and every failure is
+    baselined or a flake; otherwise `rc_odoo`. Called only for a failing run (a passing run writes nothing); writes test_results.json beside the report.
+    `--raw-failures` skips the policy (every failure stays red) but still writes the file."""
+    observation = extractor.observation
+    commit = known_red.git_head(base_dir)
+    if args.raw_failures:
+        outcome = known_red.raw_outcome(observation)
+    else:
+        try:
+            baseline = known_red.load_baseline(known_red.baseline_paths(base_dir))
+            threshold = known_red.flake_threshold()
+            flake_path = os.environ.get(known_red.FLAKE_FILE_ENV) or os.path.join(
+                os.path.dirname(extractor.output_path), known_red.FLAKE_FILE_NAME
+            )
+            outcome = known_red.decide(
+                observation, baseline, rerun, flake_path, commit, threshold, modules=set(target_modules)
+            )
+        except known_red.BaselineError as error:
+            print(f"❌ ERROR: {error}")
+            return rc_odoo
+    from_odoo_failures = (
+        rc_odoo == 1 and observation.counted() > 0 and not extractor.cpu_limit_line and not extractor.signal_line
+    )
+    status = 0 if (rc_odoo == 0 or (outcome.run_green and from_odoo_failures)) else rc_odoo
+    outcome.run_green = status == 0
+    if not args.raw_failures and rc_odoo != 0:
+        extractor.policy_outcome = outcome
+    results_path = os.path.join(
+        os.path.dirname(extractor.output_path), runner_slots.slot_file_name("test_results.json", slot)
+    )
+    try:
+        known_red.write_results(results_path, outcome, commit, observation)
+    except OSError as error:
+        print(f"[!] Could not write {results_path}: {error}")
+    return status
+
+
+def is_git_checkout_root(path):
+    """True if `path` is the root of a git working tree.
+
+    Handles both a plain checkout (`.git` is a directory) and a linked git
+    worktree (`.git` is a file containing a `gitdir: <path>` pointer, as
+    created by `git worktree add`).
+    """
+    git_path = os.path.join(path, ".git")
+    if os.path.isdir(git_path):
+        return True
+    if os.path.isfile(git_path):
+        try:
+            with open(git_path, "r") as f:
+                return f.readline().strip().startswith("gitdir:")
+        except OSError:
+            return False
+    return False
+
+
+def resolve_repo_layout(base_dir):
+    """Resolve where to look for a sibling hams_open/hams_com checkout.
+
+    Returns (parent_dir, repo_root):
+      - parent_dir: the directory to scan for a sibling checkout.
+      - repo_root: this repo's own root, to exclude as "self" from that scan.
+
+    For a plain clone, parent_dir is just base_dir's own parent and repo_root
+    is base_dir. For a linked git worktree (base_dir/.git is a file), the
+    worktree normally lives under <repo>/.claude/worktrees/<name>, whose
+    parent has no sibling checkout -- so resolve the main checkout via
+    `git rev-parse --git-common-dir` and scan its parent instead.
+    """
+    parent_dir = os.path.abspath(os.path.join(base_dir, ".."))
+    repo_root = base_dir
+    git_file = os.path.join(base_dir, ".git")
+    if os.path.isfile(git_file):
+        try:
+            result = subprocess.run(
+                # A linked worktree's `.git` is a FILE, not a directory, and git's
+                # ownership-safety check treats that differently from a plain repo: without
+                # this override the call fails with "detected dubious ownership" for every
+                # worktree run as `odoo` (whose global git config has no safe.directory
+                # entries), is silently caught by the except below and falls through to the
+                # plain-clone path, which is wrong for a worktree. `-c safe.directory=<base_dir>`
+                # scopes the exception to just this one subprocess call, with no standing
+                # config mutation on the `odoo` account.
+                ["git", "-c", f"safe.directory={base_dir}", "-C", base_dir, "rev-parse", "--git-common-dir"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            common_dir = os.path.abspath(
+                os.path.join(base_dir, result.stdout.strip())
+            )
+            main_repo_root = os.path.dirname(common_dir)
+            if os.path.isdir(main_repo_root):
+                repo_root = main_repo_root
+                parent_dir = os.path.abspath(os.path.join(main_repo_root, ".."))
+        except (subprocess.CalledProcessError, OSError) as e:
+            # A real behavior change if it fires, not just a cosmetic
+            # cleanup race: repo_root/parent_dir silently stay at their
+            # plain-clone defaults, so a linked worktree's sibling-checkout
+            # scan looks in the wrong place with no other signal why.
+            _logger.warning("resolve_repo_layout: could not resolve the main repo root for worktree %s, falling back to %s: %s", base_dir, repo_root, e)
+    return parent_dir, repo_root
+
+
+def get_local_modules(base_dir, ignore_patterns):
+    mods = []
+    for item in os.listdir(base_dir):
+        if item in ("hams_open", "hams_com"):
+            continue
+        mod_path = os.path.join(base_dir, item)
+        if is_ignored(mod_path, ignore_patterns):
+            continue
+        if os.path.isdir(mod_path) and os.path.isfile(
+            os.path.join(mod_path, "__manifest__.py")
+        ):
+            mods.append(item)
+    return sorted(mods)
+
+
+def warn_if_sibling_checkout_is_behind(path):
+    """Warn when the sibling checkout picked as the other repo is behind its origin/main.
+
+    The sibling scan takes the first directory under the parent whose name starts with hams_open (or
+    hams_com), so a stale ~/workspace/hams_open can silently supply the test harness (zero_sudo's
+    HamsHttpCase) and every shared module. That is how hoot suites kept answering 404 for
+    /web/tests after the harness fix had merged: the fix was in origin/main, not in the checkout
+    the run used. Local refs only, no fetch (no network from a test run); silent when it cannot tell.
+    """
+    try:
+        res = subprocess.run(
+            ["git", "-c", f"safe.directory={path}", "-C", path, "rev-list", "--count", "HEAD..origin/main"],
+            capture_output=True, text=True, timeout=10,
+        )
+        behind = int(res.stdout.strip()) if res.returncode == 0 else 0
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return
+    if behind > 0:
+        print(
+            f"⚠️  WARNING: the sibling checkout {path} is {behind} commit(s) behind origin/main. "
+            "Tests run against ITS code (harness and shared modules), so a fix already merged may be "
+            "missing. Update it, or point at a current tree with HAMS_OPEN_TREE=<path>.",
+            file=sys.stderr,
+        )
+
+
+# [@ANCHOR: test:warn_if_sibling_is_not_beside_the_tree]
+def warn_if_sibling_is_not_beside_the_tree(base_dir, repo_root, chosen):
+    """Say loudly when the sibling checkout chosen without HAMS_OPEN_TREE is not the one beside BASE_DIR.
+
+    A linked worktree scans the MAIN checkout's parent, so it silently ran the main checkout's
+    hams_open instead of the worktree's own sibling tree. Silent when BASE_DIR is the main checkout."""
+    beside = os.path.abspath(os.path.join(base_dir, "..", os.path.basename(chosen)))
+    if repo_root == base_dir and beside == chosen:
+        return
+    note = f"a sibling tree exists beside this one at {beside}" if os.path.isdir(beside) and beside != chosen else "this tree is a linked worktree"
+    print(
+        f"⚠️  WARNING: HAMS_OPEN_TREE is not set, so the run uses {chosen} ({note}). "
+        f"Set HAMS_OPEN_TREE=<tree> to choose the sibling checkout explicitly.",
+        file=sys.stderr,
+    )
+
+
+# [@ANCHOR: test:anchor_scan_sibling_dir]
+def anchor_scan_sibling_dir(base_dir, other_repo_name, environ=None):
+    """The other repository's checkout for the pre-flight anchor scan, or None. Full entry: tools/README.md.
+
+    Order: <OTHER>_TREE (e.g. HAMS_OPEN_TREE), then <other> beside base_dir, then <other> beside the MAIN
+    checkout of a linked worktree (resolve_repo_layout, as get_addons_path uses). The last step is what a
+    batch tree (~/workspace/tmp/batch_*/hams_com) needs: nothing sits beside it."""
+    environ = os.environ if environ is None else environ
+    tree = environ.get(f"{other_repo_name.upper()}_TREE", "").strip()
+    if tree and os.path.isdir(tree):
+        return os.path.abspath(tree)
+    beside = os.path.abspath(os.path.join(base_dir, "..", other_repo_name))
+    if os.path.isdir(beside):
+        return beside
+    parent_dir, _repo_root = resolve_repo_layout(base_dir)
+    beside_main = os.path.join(parent_dir, other_repo_name)
+    if os.path.isdir(beside_main):
+        return beside_main
+    return None
+
+
+def burn_list_target(base_dir, module):
+    """The directory the burn-list scan of MODULE covers: its directory in base_dir, else the same-named
+    directory in the sibling hams_open/hams_com checkout (a hams_com run names hams_open modules), else
+    the base_dir path, which check_burn_list.py then reports as missing instead of passing."""
+    own = os.path.join(base_dir, module)
+    if os.path.isdir(own):
+        return own
+    for other_repo_name in ("hams_open", "hams_com"):
+        sibling_dir = anchor_scan_sibling_dir(base_dir, other_repo_name)
+        if sibling_dir and os.path.isdir(os.path.join(sibling_dir, module)):
+            return os.path.join(sibling_dir, module)
+    return own
+
+
+def has_lintable_js(directory):
+    """True when DIRECTORY holds a non-minified .js file that check_js_syntax.py would read (it skips hidden folders,
+    node_modules, radae, __pycache__ and static/lib); that checker refuses a directory with none."""
+    for root, dirs, files in os.walk(directory):
+        dirs[:] = [
+            d for d in dirs
+            if not d.startswith(".") and d not in ("radae", "node_modules", "__pycache__")
+            and not (d == "lib" and os.path.basename(root) == "static")
+        ]
+        if any(f.endswith(".js") and ".min." not in f for f in files):
+            return True
+    return False
+
+
+def get_addons_path(base_dir):
+    paths = ["/usr/lib/python3/dist-packages/odoo/addons", base_dir]
+
+    found_community = False
+
+    parent_dir, repo_root = resolve_repo_layout(base_dir)
+    exclude_paths = {base_dir, repo_root}
+    # Explicit override: HAMS_OPEN_TREE names the sibling checkout to use instead of scanning.
+    override = os.environ.get("HAMS_OPEN_TREE", "").strip()
+    if override:
+        override = os.path.abspath(override)
+        if not os.path.isdir(override):
+            print(f"🛑 HAMS_OPEN_TREE={override} is not a directory.", file=sys.stderr)
+            sys.exit(2)
+        paths.append(override)
+        found_community = True
+    try:
+        # The first match wins, so look in a fixed order: the plain `hams_open` first, then the rest by name.
+        for item in sorted(os.listdir(parent_dir), key=lambda name: (name != "hams_open", name)):
+            item_path = os.path.join(parent_dir, item)
+            if os.path.isdir(item_path):
+                if item.startswith("hams_open") or item.startswith("hams_com"):
+                    if (
+                        item_path not in exclude_paths
+                        and item_path not in paths
+                        and not found_community
+                    ):
+                        paths.append(item_path)
+                        found_community = True
+    except OSError as e:
+        _logger.debug("Ignored OSError: %s", e)
+
+    if not found_community:
+        community_dir = os.path.join(parent_dir, "hams_open")
+        primary_dir = os.path.join(parent_dir, "hams_com")
+        nested_community = os.path.abspath(os.path.join(base_dir, "hams_open"))
+        root_community = "/hams_open"
+
+        app_community = "/app/hams_open"
+        for d in [
+            community_dir,
+            primary_dir,
+            nested_community,
+            root_community,
+            app_community,
+        ]:
+            if os.path.isdir(d) and d not in paths and d not in exclude_paths:
+                paths.append(d)
+                found_community = True
+                break
+
+    if found_community and paths[-1] not in (base_dir, repo_root) and not override:
+        warn_if_sibling_checkout_is_behind(paths[-1])
+        warn_if_sibling_is_not_beside_the_tree(base_dir, repo_root, paths[-1])
+    return ",".join(paths)
+
+
+def halt_preflight(extractor, summary, next_action):
+    """End a run that failed a pre-flight check, with the cause and the next action as the LAST lines.
+
+    The findings print above, often hundreds of lines; a reader (or an agent) that only looks at the
+    end of the output must still learn what stopped the run and what to do about it."""
+    if extractor:
+        extractor.aborted = True
+    print(f"\n❌ PRE-FLIGHT FAILED: {summary}\n   NEXT: {next_action}", flush=True)
+    sys.exit(1)
+
+
+def check_linters(
+    python_exec, base_dir, ignore_filepath, extractor=None, target_modules=None
+):
+    shared_dir = os.path.abspath(os.path.join(base_dir, "hams_shared"))
+    print("[*] Running Manifest Dependency Graph Linter...")
+    res_manifest = subprocess.run(
+        [
+            python_exec,
+            os.path.join(shared_dir, "tools", "check_manifest_dependencies.py"),
+            base_dir,
+        ]
+    )
+    if res_manifest.returncode != 0:
+        print("🛑 Halting due to manifest load-order violations.")
+        halt_preflight(
+            extractor,
+            "manifest dependency / load-order violations (listed above).",
+            "fix the manifest `depends`/`data` order named above, then rerun.",
+        )
+
+    print("[*] Running AST Burn List Linter...")
+    burn_script = os.path.join(shared_dir, "tools", "check_burn_list.py")
+    # --scan-daemons-and-tools applies the existing generic burn-list rules to
+    # daemons/tools/hams_local_relay/hams_community too (see LINTER_POLICY_REVISIT.md). Without
+    # the flag that whole category of Python source goes untriaged by the routine burn-list pass
+    # every multi-module test.py run and CI job exercises. A whole-repo scan with this flag
+    # reports 0 errors; do not remove this flag to "fix" a future daemons/tools finding without
+    # first fixing the finding itself.
+    #
+    # Scan scope: a run naming ONE OR MORE specific modules scans only those modules' own
+    # directories -- a multi-module run behaves the same way regardless of how many modules are
+    # named, and is not blocked by a burn-list issue in a module nobody asked to test, or by
+    # another session's unrelated in-progress work elsewhere in a shared checkout. Only a run
+    # naming ZERO modules (an explicit "test everything" request) scans the whole repository,
+    # since testing everything naturally implies linting everything too.
+    # check_burn_list.py's own `directory` argument takes exactly one path, so a multi-module
+    # run scans each named module in its own subprocess call and aggregates the results, rather
+    # than trying to pass several paths at once.
+    burn_targets = (
+        [burn_list_target(base_dir, module) for module in target_modules]
+        if target_modules
+        else [base_dir]
+    )
+
+    res_burn_returncode = 0
+    res_burn_stdout_parts = []
+    res_burn_stderr_parts = []
+    for burn_target in burn_targets:
+        res_burn_one = subprocess.run(
+            [
+                python_exec,
+                burn_script,
+                burn_target,
+                "--ignore-file",
+                ignore_filepath,
+                *check_burn_list.MODULE_SCAN_FLAGS,
+            ],
+            capture_output=True,
+            text=True,
+        )
+        res_burn_stdout_parts.append(res_burn_one.stdout)
+        if res_burn_one.stderr:
+            res_burn_stderr_parts.append(res_burn_one.stderr)
+        if res_burn_one.returncode != 0:
+            res_burn_returncode = res_burn_one.returncode
+
+    # [@ANCHOR: test:test__aggregated_burn_result_class]
+    class _AggregatedBurnResult:
+        def __init__(self, returncode, stdout, stderr):
+            self.returncode = returncode
+            self.stdout = stdout
+            self.stderr = stderr
+
+    res_burn = _AggregatedBurnResult(
+        res_burn_returncode,
+        "\n".join(res_burn_stdout_parts),
+        "\n".join(res_burn_stderr_parts),
+    )
+    if res_burn.returncode != 0:
+        print(res_burn.stdout)
+        print(res_burn.stderr)
+        if os.environ.get("HAMS_SKIP_BURN_LIST") == "1":
+            # Narrow, explicit escape hatch: this linter must stay enforced (it had once been
+            # commented out here, which let a real, dangerous bug -- a _sql_constraints usage
+            # that is silently non-functional in this Odoo version -- go uncaught), and it
+            # blocks on the existing backlog rather than silently staying disabled, matching
+            # the anchor-scan gate's own accepted default of "enforce and block on the existing
+            # backlog". This opt-out is for verifying a specific, unrelated change without
+            # being blocked by that backlog, not a default and must never be set in CI.
+            print(
+                "🛑 Burn list violations found (HAMS_SKIP_BURN_LIST=1 -- "
+                "explicit opt-out, not a default; see this block's own comment)."
+            )
+        else:
+            print("🛑 Halting due to burn list violations.")
+            halt_preflight(
+                extractor,
+                "burn-list (AST lint) violations (listed above).",
+                "fix each file:line named above and rerun. To check something unrelated to "
+                "the lint, `HAMS_SKIP_BURN_LIST=1` skips only this check.",
+            )
+    else:
+        print(res_burn.stdout)
+
+    print("[*] Running Init Imports Linter...")
+    res_init = subprocess.run(
+        [
+            python_exec,
+            os.path.join(shared_dir, "tools", "check_init_imports.py"),
+            base_dir,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if res_init.returncode != 0:
+        print(res_init.stdout)
+        print(res_init.stderr)
+        # This branch must halt on the checker's findings (a test_*.py file missing from its
+        # package's __init__.py, so its tests silently never execute), not print them and then
+        # run the suite anyway: that is the "phantom coverage" risk this gate exists to catch.
+        # Halt like the burn-list gate above, not skip like the anchor-scan gate below -- this
+        # checker has no baseline/ratchet mechanism to grandfather a pre-existing backlog into,
+        # and none currently exists (both real repos are clean).
+        print("🛑 Halting due to init-imports violations.")
+        halt_preflight(
+            extractor,
+            "a test_*.py file is missing from its package __init__.py (listed above).",
+            "add the import named above to that package's tests/__init__.py, then rerun.",
+        )
+    else:
+        print(res_init.stdout)
+
+    print("[*] Scanning for Semantic Anchors...")
+    # Which repository this is comes from verify_anchors.repo_identity (directory name, then
+    # HAMS_ANCHOR_REPO, then the git origin), so a worktree with any name still gets its
+    # sibling scanned. The sibling is looked up as ../hams_com or
+    # ../hams_open next to the checkout, or at HAMS_OPEN_TREE / HAMS_COM_TREE when set (a worktree
+    # placed anywhere needs that).
+    import importlib.util
+
+    _va_spec = importlib.util.spec_from_file_location(
+        "verify_anchors_identity", os.path.join(os.path.dirname(os.path.abspath(__file__)), "verify_anchors.py")
+    )
+    _va = importlib.util.module_from_spec(_va_spec)
+    _va_spec.loader.exec_module(_va)
+    other_repo_name = {"hams_open": "hams_com", "hams_com": "hams_open"}.get(
+        _va.repo_identity(base_dir) or ""
+    )
+    anchor_scan_dirs = [base_dir]
+    if other_repo_name:
+        sibling_dir = anchor_scan_sibling_dir(base_dir, other_repo_name)
+        if sibling_dir:
+            anchor_scan_dirs.append(sibling_dir)
+    # Files the user running this (the odoo user, under sudo) may not read: name them before the scan, not as a
+    # traceback inside it and a "violations" verdict that is not true.
+    unreadable = _va.unreadable_tracked_files(anchor_scan_dirs)
+    if unreadable:
+        user = _va.current_user_name()
+        for path in unreadable:
+            print(_va.unreadable_message(path, user))
+        print("🛑 Halting: tracked files this user cannot read.")
+        halt_preflight(
+            extractor,
+            f"{len(unreadable)} git-tracked file(s) cannot be read by user '{user}' (listed above).",
+            "chmod 644 each file named above (a Write-tool file is created mode 600 and a fast-forward does not "
+            "rewrite it), then rerun.",
+        )
+    res_anchor = subprocess.run(
+        [python_exec, os.path.join(shared_dir, "tools", "verify_anchors.py")] + anchor_scan_dirs,
+        capture_output=True,
+        text=True,
+    )
+    if res_anchor.returncode == _va.UNREADABLE_EXIT_CODE:
+        print(res_anchor.stdout)
+        print(res_anchor.stderr)
+        print("🛑 Halting: files the anchor scan could not read.")
+        halt_preflight(
+            extractor,
+            "the anchor scan could not read some files (listed above); this is not an anchor violation.",
+            "chmod 644 each file named above, then rerun.",
+        )
+    if res_anchor.returncode != 0:
+        print(res_anchor.stdout)
+        print(res_anchor.stderr)
+        print("🛑 Halting due to anchor violations.")
+        halt_preflight(
+            extractor,
+            "semantic-anchor violations (listed above).",
+            "fix the anchors named above (add the missing Tests/doc link). In a git worktree whose "
+            "findings look false, see the NOTE above about the sibling repo: set "
+            "HAMS_COM_TREE=<hams_com checkout> (or HAMS_OPEN_TREE=<hams_open checkout>) and rerun.",
+        )
+    else:
+        print(res_anchor.stdout)
+
+    print("[*] Running JavaScript Syntax Linter...")
+    js_linter = os.path.join(shared_dir, "tools", "check_js_syntax.py")
+    # `target_modules` defaults to None (see this function's own signature);
+    # the burn-list command above already handles that via `if target_modules
+    # and ...`, but this list comprehension previously assumed a non-None
+    # iterable unconditionally -- a `TypeError: 'NoneType' is not iterable`
+    # for any future caller (this function's sole current caller in main()
+    # always passes a real list, so this was latent, not live) that reuses
+    # this function without an explicit module list.
+    target_dirs = [burn_list_target(base_dir, m) for m in (target_modules or [])]
+    # check_js_syntax.py exits 2 on a scan of zero files, so a run of modules that hold no JavaScript skips it.
+    target_dirs = [d for d in target_dirs if not os.path.isdir(d) or has_lintable_js(d)]
+    if target_modules and not target_dirs:
+        print("[*] JavaScript Syntax Linter: no JavaScript in the named modules; skipped.")
+        return
+    cmd_js = [python_exec, js_linter, "--ignore-file", ignore_filepath] + target_dirs
+    res_js = subprocess.run(cmd_js, capture_output=True, text=True)
+    if res_js.returncode != 0:
+        print(res_js.stdout)
+        print(res_js.stderr)
+        print("🛑 Halting due to JavaScript syntax errors.")
+        halt_preflight(
+            extractor,
+            "JavaScript syntax errors (listed above).",
+            "fix the syntax errors named above, then rerun.",
+        )
+    else:
+        print(res_js.stdout)
+
+
+def wait_for_port(port, name, host="127.0.0.1", timeout=60.0):
+    print(f"[*] Waiting for {name} on {host}:{port} to open...")
+    start_time = global_vclock.time()
+    while global_vclock.time() - start_time < timeout:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1.0)
+            if sock.connect_ex((host, port)) == 0:
+                print(f"[*] {name} is ready.")
+                return True
+        time.sleep(0.5)
+    print(f"❌ ERROR: {name} did not open port {port} within {timeout} seconds.")
+    return False
+
+
+def wait_for_socket(sock_path, name, timeout=60.0):
+    print(f"[*] Waiting for {name} unix socket {sock_path} to open...")
+    start_time = global_vclock.time()
+    while global_vclock.time() - start_time < timeout:
+        if os.path.exists(sock_path):
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+                sock.settimeout(1.0)
+                try:
+                    sock.connect(sock_path)
+                    print(f"[*] {name} socket is ready.")
+                    return True
+                except OSError as e:
+                    _logger.debug("Ignored OSError: %s", e)
+        time.sleep(0.5)
+    print(f"❌ ERROR: {name} socket {sock_path} did not open within {timeout} seconds.")
+    return False
+
+
+_SAFE_DB_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\Z")
+
+_HOST_CORE_DAEMONS = ("postgresql", "redis-server", "rabbitmq-server", "pdns")
+
+# This script must never run on the production host (hams1).
+# A `HAMS_ISOLATED_NS=1` run there used production's own Redis and RabbitMQ
+# (rebuild_db's `redis-cli flushdb` wiped production Redis db 0, and production's backup.worker
+# consumed test jobs). Two independent signals, either one is enough:
+#   * deploy_to_production.py writes these files under /opt/hams/src on the production host only;
+#   * the production database name exists on the Postgres this run would use.
+# There is deliberately no override.
+PRODUCTION_HOST_MARKER_FILES = ("/opt/hams/src/DEPLOY_LOG", "/opt/hams/src/DEPLOYED_COMMITS")
+PRODUCTION_DATABASE_NAME = "hams_prod"
+
+
+def production_host_refusal_reasons(marker_files=None, database_names=()):
+    """Returns why this host looks like production (an empty list means it does not)."""
+    if marker_files is None:
+        marker_files = PRODUCTION_HOST_MARKER_FILES
+    reasons = [
+        f"{path} exists (deploy_to_production.py writes it on the production host only)"
+        for path in marker_files
+        if os.path.exists(path)
+    ]
+    if PRODUCTION_DATABASE_NAME in database_names:
+        reasons.append(f"a database named {PRODUCTION_DATABASE_NAME!r} exists on the target PostgreSQL")
+    return reasons
+
+
+def refuse_to_run_on_production_host(marker_files=None, database_names=()):
+    """Exits with status 2 before anything is touched if this is the production host."""
+    reasons = production_host_refusal_reasons(marker_files, database_names)
+    if not reasons:
+        return
+    print(
+        "❌ REFUSING TO RUN: this looks like the PRODUCTION host.\n"
+        + "".join(f"   - {reason}\n" for reason in reasons)
+        + "   test.py flushes Redis and publishes to RabbitMQ on whatever host it runs on; on the\n"
+        "   production host that is production's own data and production's own consumers.\n"
+        "   Bruce's decision (2026-10-02/03): never run test.py on hams1. Run it on the dev box.\n"
+        "   On a dev box, a hams_prod database means a restored production dump: drop or rename it."
+    )
+    sys.exit(2)
+
+
+def list_database_names(psql_cmd, env):
+    """Names of every database on the PostgreSQL that `psql_cmd` reaches with `env`. Exits on failure:
+    rebuild_db() needs that same server a moment later, and the production check must not be skipped."""
+    res = subprocess.run(
+        [psql_cmd, "postgres", "-At", "-c", "SELECT datname FROM pg_database"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    if res.returncode != 0:
+        print(f"❌ ERROR: could not list databases to check for a production host: {res.stderr.strip()}")
+        sys.exit(1)
+    return [line.strip() for line in res.stdout.splitlines() if line.strip()]
+
+
+def core_daemons_to_start(isolated):
+    """Host services rebuild_db() starts with systemctl before testing.
+
+    Not isolated: all four host daemons, including PowerDNS.
+
+    Isolated (HAMS_ISOLATED_NS=1): none. Postgres arrives as the host socket
+    bind-mounted into the namespace, and setup_namespace_and_run_tests()
+    spawns its own Redis and RabbitMQ there. PowerDNS is deliberately NOT
+    provided: nothing starts it in the namespace, and the private network
+    namespace (loopback only) cannot reach a host pdns either. A test that
+    needs a live PowerDNS must start its own throwaway pdns_server on
+    127.0.0.1, as daemons/pdns_sync/test_pdns_sync.py's
+    TestPdnsSyncAgainstRealPowerDns does (hams_com #556); loopback is up
+    inside the namespace, so that works under isolation too.
+    """
+    if isolated:
+        return []
+    return list(_HOST_CORE_DAEMONS)
+
+
+# [@ANCHOR: test:run_psql_script]
+def run_psql_script(psql_cmd, args, sql, what, env=None, preexec_fn=None):
+    """Feed the SQL script `sql` to `psql_cmd` (plus `args`) on standard input and exit 1, printing psql's own output, when it fails.
+
+    `-v ON_ERROR_STOP=1` makes psql stop at the first failing statement and exit 3: without it psql runs the rest of the script
+    and exits 0 (only a connection failure gave a nonzero status), so a failed `CREATE DATABASE` left the old database in place
+    and the run went on against stale state. `-X` keeps a user's psqlrc out of it. `what` names the step in the message."""
+    result = subprocess.run(
+        [psql_cmd, "-X", "-v", "ON_ERROR_STOP=1", *args],
+        input=sql.encode("utf-8"),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env=env,
+        preexec_fn=preexec_fn,
+        check=False,
+    )
+    if result.returncode != 0:
+        output = result.stdout.decode("utf-8", "replace") if isinstance(result.stdout, bytes) else str(result.stdout or "")
+        print(f"❌ ERROR: psql failed (exit status {result.returncode}) while {what}:\n{output.rstrip()}", file=sys.stderr, flush=True)
+        sys.exit(1)
+
+
+# [@ANCHOR: test:role_sql_for_test_user]
+def role_sql_for_test_user(user):
+    """The psql script that creates the `odoo` role and a superuser role for `user` (the invoking account, `SUDO_USER`) when missing.
+    `user` is checked against `^[A-Za-z_][A-Za-z0-9_-]*$` (ValueError otherwise) and written as a quoted identifier, so an odd
+    name can never become SQL. Full entry: tools/README.md."""
+    if not re.match(r"^[A-Za-z_][A-Za-z0-9_-]*\Z", user):
+        raise ValueError(f"the invoking user name {user!r} (SUDO_USER) is not usable as a database role name; refusing to build SQL from it.")
+    return f"""
+    DO $$
+    BEGIN
+        IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'odoo') THEN
+            CREATE ROLE odoo WITH SUPERUSER LOGIN PASSWORD 'odoo';
+        END IF;
+        IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '{user}') THEN
+            CREATE ROLE "{user}" WITH SUPERUSER LOGIN;
+        END IF;
+    END $$;
+    """
+
+
+# [@ANCHOR: test:rebuild_db]
+def rebuild_db(db_name, redis_flush_db=None):
+    # SQL here is built by string interpolation with no parameterization: `db_name` below is
+    # interpolated directly into double-quoted SQL identifiers
+    # (DROP/CREATE DATABASE, \c) -- PostgreSQL has no parameterized-query
+    # placeholder for an *identifier* (only for values), so the standard
+    # defense is a strict allow-list check on the identifier itself before
+    # ever building the SQL string, not an attempt to escape it. `db_name`
+    # comes from this script's own `--db` CLI flag (default "hams_test"),
+    # not from any external/network input, so this is a local-operator
+    # safeguard against a typo'd or copy-pasted `--db` value doing
+    # something other than what was intended (e.g. a stray `"` closing the
+    # identifier early) rather than a defense against a remote attacker.
+    if not _SAFE_DB_NAME_RE.match(db_name):
+        print(
+            f"❌ ERROR: --db {db_name!r} is not a safe database name "
+            "(must match ^[A-Za-z_][A-Za-z0-9_]*$) -- refusing to "
+            "interpolate it into a DROP/CREATE DATABASE statement."
+        )
+        sys.exit(1)
+
+    print(f"[*] Dropping and Rebuilding Database Schema ({db_name})...")
+    env = dict(os.environ)
+
+    daemons = core_daemons_to_start(os.environ.get("HAMS_ISOLATED_NS") == "1")
+    if daemons:
+        print("[*] Starting core daemons before testing...")
+        for svc in daemons:
+            subprocess.run(["systemctl", "start", svc], check=False)
+
+    try:
+        psql_cmd = infrastructure.get_pg_bin("psql")
+    except FileNotFoundError as e:
+        print(f"❌ ERROR: {e}")
+        sys.exit(1)
+
+    # Must stay before the Redis flush below: that flush is what wiped production Redis on hams1.
+    refuse_to_run_on_production_host(database_names=list_database_names(psql_cmd, env))
+
+    print("[*] Flushing persistent daemons (Redis / RabbitMQ)...")
+    # `redis_flush_db` is given only by a run on the host that shares Redis with other slots
+    # (runner_slots.SlotResources.scoped): it flushes the one database its slot uses. Everything else
+    # flushes what it always flushed.
+    redis_db = os.environ.get("REDIS_DB", "0") if redis_flush_db is None else str(redis_flush_db)
+    subprocess.run(["redis-cli", "-n", redis_db, "flushdb"], check=False, env=env)
+
+    # Get the working directory where data is saved
+    subprocess.run(["redis-cli", "CONFIG", "GET", "dir"], check=False, env=env)
+    subprocess.run(["redis-cli", "CONFIG", "GET", "dbfilename"], check=False, env=env)
+
+    # A run in slot mode marks the database it creates (runner_cleanup.database_marker), which is what lets
+    # the end-of-run clean-up and the next run's sweep prove the database is this runner's and not kept.
+    marker_sql = (
+        runner_cleanup.comment_database_sql(db_name, _RUN_CLEANUP["slot"], _RUN_CLEANUP["keep"])
+        if _RUN_CLEANUP
+        else ""
+    )
+    sql_input = f"""
+SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = :'dbname';
+DROP DATABASE IF EXISTS "{db_name}" WITH (FORCE);
+CREATE DATABASE "{db_name}";
+{marker_sql}
+\\c "{db_name}"
+CREATE EXTENSION IF NOT EXISTS vector;
+"""
+    run_psql_script(psql_cmd, ["postgres", "-v", f"dbname={db_name}"], sql_input, f"rebuilding database {db_name}", env=env)
+
+    # See remove_stale_filestore()'s own docstring for the full reasoning -- DROP DATABASE never
+    # touches Odoo's on-disk filestore, so without this every test run against the same db_name
+    # would leak its prior run's now-unreferenced attachment blobs forever. Removing them right
+    # after the fresh CREATE DATABASE above covers this script's own default/per-purpose db
+    # names, distinct from reap_stale_test_databases.py's handling of `tmp_`-prefixed scratch
+    # databases.
+    remove_stale_filestore(db_name)
+
+
+ODOO_FILESTORE_BASE = "/var/lib/odoo/.local/share/Odoo/filestore"
+
+
+def remove_stale_filestore(db_name, filestore_base=ODOO_FILESTORE_BASE):
+    """
+    Removes `filestore_base/db_name` if it exists -- best-effort, never raises.
+
+    `DROP DATABASE` (see `rebuild_db()`, this function's only real caller) has no concept of
+    Odoo's filestore; it only touches Postgres's own storage. Since `rebuild_db()` runs on every
+    single real test run against the SAME db_name (default "hams_test", or a per-purpose variant
+    like "hams_test_relay"), a freshly-recreated, empty database has zero `ir.attachment` rows
+    referencing any of the filestore blobs a PRIOR run's own test fixtures wrote there -- every
+    one of those becomes permanently orphaned garbage that nothing else ever cleans up, since
+    Odoo's own filestore GC only runs as a cron job inside a live instance against that instance's
+    own current DB, which a short-lived test run tears down long before any cron would fire.
+    On the development box `hams_test`'s own filestore had grown to 2.3GB, plus ~470MB more
+    across 8 other orphaned *-suffixed test-db filestores with no database left at all (dropped by
+    a run that used a different `--db` value once), on a /var partition already tight on space
+    (see `hams-devbox-var-partition-small`). `reap_stale_test_databases.py` handles the same leak
+    for `tmp_`-prefixed scratch databases (its `ODOO_FILESTORE_BASE`), but it structurally only
+    ever touches `tmp_`-prefixed names (a deliberate destructive-operation allowlist), so it is
+    blind to this script's own non-`tmp_`-prefixed default db names.
+
+    Best-effort by design: a failure here should never abort an otherwise-working test run, only
+    leave the old blobs in place (the pre-existing, if wasteful, behavior) for the reaper or a
+    manual cleanup to catch instead.
+
+    This runs as whichever OS user invoked test.py -- sometimes `odoo` (already the filestore's
+    owner, per an outer `sudo -u odoo ...` invocation), sometimes `bruce` (who lacks write access
+    to `odoo:odoo`-owned files, confirmed empirically: 775 permissions, `bruce` in neither the
+    owning user nor group). Tries the plain, no-elevation removal first (the common,
+    already-correct case when already running as `odoo`); only escalates via a non-interactive
+    `sudo -n` on a real `PermissionError`, rather than assuming which user this runs as. `-n`
+    matches this codebase's own established convention (e.g.
+    `reap_stale_test_databases.py`'s `sudo -n -u postgres psql`) for "fail fast, never block on an
+    interactive password/polkit prompt" in an unattended script.
+    """
+    # The name becomes a path below `filestore_base` that is removed recursively, with `sudo -n rm -rf` as the fallback: a name
+    # such as `../../x` (a `--db` value in slot mode reaches this before rebuild_db checks it) would remove a directory outside it.
+    if not _SAFE_DB_NAME_RE.match(db_name):
+        print(f"⚠️  WARNING: not removing a filestore for {db_name!r}: it is not a plain database name.")
+        return
+    filestore_dir = os.path.join(filestore_base, db_name)
+    if not os.path.isdir(filestore_dir):
+        return
+    try:
+        shutil.rmtree(filestore_dir)
+        print(f"[*] Removed stale filestore for {db_name!r} ({filestore_dir}).")
+    except PermissionError:
+        result = subprocess.run(
+            ["sudo", "-n", "rm", "-rf", "--", filestore_dir],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0 and not os.path.isdir(filestore_dir):
+            print(f"[*] Removed stale filestore for {db_name!r} ({filestore_dir}) via sudo.")
+        else:
+            print(
+                f"⚠️  WARNING: could not remove stale filestore {filestore_dir} "
+                f"(direct write denied, sudo -n also failed: {result.stderr.strip()})"
+            )
+    except OSError as e:
+        print(f"⚠️  WARNING: could not remove stale filestore {filestore_dir}: {e}")
+
+
+# ---------------------------------------------------------------------------------------------------------
+# Slot-mode clean-up (ADR 0116): what a run in a slot of a multi-slot machine removes when it ends, and what the
+# next run sweeps up after a run that never got to. The rules are in runner_cleanup.py; this is the part that
+# touches PostgreSQL, the disk and the lock files. Full entries: tools/README.md.
+# ---------------------------------------------------------------------------------------------------------
+
+# Set by install_run_cleanup() in the process that runs Odoo, in slot mode only: {"database", "slot", "keep", "tmpdir"}.
+# rebuild_db() reads it to mark the database it creates; run_cleanup_at_exit() reads it at the end.
+_RUN_CLEANUP = None
+_run_cleanup_done = False
+
+
+# [@ANCHOR: test:PostgresAccess]
+class PostgresAccess:
+    """The few PostgreSQL operations slot clean-up needs, through the `psql` client.
+
+    psql_cmd: path of psql. connection_args: extra psql arguments (for example `["-h", "/var/run/postgresql"]`).
+    env: environment for psql (None: this process's). preexec_fn: run in the child before psql starts (the root
+    phase of the full pipeline drops to the `postgres` account with it). Methods return data or True/False and
+    never exit; a psql failure is False or None, so clean-up reports it and carries on. Full entry: tools/README.md."""
+
+    def __init__(self, psql_cmd, connection_args=(), env=None, preexec_fn=None):
+        self.psql_cmd = psql_cmd
+        self.connection_args = list(connection_args)
+        self.env = env
+        self.preexec_fn = preexec_fn
+
+    def run(self, sql, **variables):
+        """Run `sql` in the `postgres` database; returns the CompletedProcess (stdout is the unaligned rows)."""
+        command = [self.psql_cmd, *self.connection_args, "-X", "-q", "-At", "-F", "\t", "-v", "ON_ERROR_STOP=1"]
+        for name, value in variables.items():
+            command += ["-v", f"{name}={value}"]
+        command.append("postgres")
+        return subprocess.run(
+            command,
+            input=sql,
+            capture_output=True,
+            text=True,
+            env=self.env,
+            preexec_fn=self.preexec_fn,
+        )
+
+    def database_rows(self):
+        """``[(name, comment)]`` for every database, or None when the server cannot be asked."""
+        result = self.run("SELECT datname, coalesce(shobj_description(oid, 'pg_database'), '') FROM pg_database;")
+        if result.returncode != 0:
+            return None
+        rows = []
+        for line in result.stdout.splitlines():
+            name, _, comment = line.partition("\t")
+            if name:
+                rows.append((name, comment))
+        return rows
+
+    def database_comment(self, name):
+        """The comment of database `name` ("" if it has none), or None when the database does not exist. Raises
+        `subprocess.SubprocessError` when the server cannot be asked, so a caller never reads "unreachable" as "absent"
+        and removes the run's leftovers on a guess (`finish_run` callers catch it and leave everything alone)."""
+        if not _SAFE_DB_NAME_RE.match(name):
+            return None
+        result = self.run(
+            "SELECT 'x' || coalesce(shobj_description(oid, 'pg_database'), '') FROM pg_database WHERE datname = :'dbname';",
+            dbname=name,
+        )
+        if result.returncode != 0:
+            raise subprocess.SubprocessError(f"psql could not read the comment of {name}: {result.stderr.strip()[:200]}")
+        first = result.stdout.splitlines()[0] if result.stdout.strip() else None
+        return first[1:] if first else None
+
+    def drop_database(self, name):
+        """DROP DATABASE ... WITH (FORCE); True when the database is gone afterwards. Raises ValueError for a name
+        runner_cleanup.is_droppable_name refuses (hams_prod, postgres, templates, anything not a plain identifier)."""
+        statement = runner_cleanup.drop_database_sql(name)
+        if self.run(statement).returncode != 0:
+            return False
+        try:
+            return self.database_comment(name) is None
+        except subprocess.SubprocessError:
+            return False
+
+
+# [@ANCHOR: test:default_postgres_access]
+def default_postgres_access(env=None):
+    """PostgresAccess for a process that has not yet set the runner's PostgreSQL environment (the invoking
+    process, before the lock hand-over): the same server and role `rebuild_db()` reaches later (host
+    `localhost`, role `odoo`, password `odoo` unless the environment says otherwise)."""
+    env = dict(os.environ if env is None else env)
+    env.setdefault("PGHOST", "localhost")
+    env.setdefault("PGUSER", "odoo")
+    env.setdefault("PGPASSWORD", "odoo")
+    return PostgresAccess(infrastructure.get_pg_bin("psql"), env=env)
+
+
+# [@ANCHOR: test:remove_directory_tree]
+def remove_directory_tree(path):
+    """Remove directory `path` and everything in it; True when it is gone. Never raises.
+
+    Plain removal first; on a PermissionError (files left by the `odoo` account, removed by another user) the same
+    non-interactive `sudo -n rm -rf` that `remove_stale_filestore` uses. A symbolic link is never followed: it is
+    refused (returns False). A path that does not exist counts as gone. Full entry: tools/README.md."""
+    if os.path.islink(path):
+        print(f"⚠️  WARNING: refusing to remove {path}: it is a symbolic link.")
+        return False
+    if not os.path.lexists(path):
+        return True
+    try:
+        shutil.rmtree(path)
+    except PermissionError:
+        subprocess.run(["sudo", "-n", "rm", "-rf", "--", path], capture_output=True, text=True)
+    except OSError as e:
+        print(f"⚠️  WARNING: could not remove {path}: {e}")
+    return not os.path.lexists(path)
+
+
+# [@ANCHOR: test:sweep_slot_leftovers]
+def sweep_slot_leftovers(pg, held_slot, lock_base_path, base_tmpdir, filestore_base=ODOO_FILESTORE_BASE, say=print):
+    """Start-up sweep: remove what runs that are gone left in slots this machine can have.
+
+    Called once per run in slot mode, by the process that has just taken slot `held_slot`'s lock (so the sweep
+    runs under a slot lock, before any rebuild). `pg` is a PostgresAccess; `lock_base_path` the base lock path
+    (slot K's lock is `runner_slots.slot_lock_path`); `base_tmpdir` the TMPDIR whose `slot-K` directories are
+    swept; `filestore_base` Odoo's filestore directory. Refuses to run on a production host (exit 2, the
+    `refuse_to_run_on_production_host` message). Returns the `runner_cleanup.sweep` outcome, or None when the
+    server could not be asked (a warning is printed; the run goes on and `rebuild_db` will fail loudly if
+    PostgreSQL is really down). Full entry: tools/README.md."""
+    rows = pg.database_rows()
+    if rows is None:
+        say("⚠️  Sweep skipped: could not list the databases.")
+        return None
+    refuse_to_run_on_production_host(database_names=[name for name, _ in rows])
+    filestores = sorted(os.listdir(filestore_base)) if os.path.isdir(filestore_base) else []
+    # The disk directory earlier versions used for TMPDIR is swept too: slot directories a run left there before TMPDIR moved to RAM.
+    bases = [base_tmpdir] + ([DEFAULT_TEST_TMPDIR] if base_tmpdir and ram_dirs.under_ram_root(base_tmpdir) else [])
+    bases = [base for base in bases if base]
+    slot_dirs = sorted({name for base in bases if os.path.isdir(base) for name in os.listdir(base)})
+    plan = runner_cleanup.leftovers(rows, filestores, slot_dirs)
+    if not plan:
+        return {"removed": [], "skipped": [], "failed": []}
+    queue_dir = lock_queue.queue_dir_for_lock(lock_base_path)
+
+    def claim_slot(slot):
+        if slot == held_slot:
+            return lambda: None
+        if any(holder.get("slot") == slot for holder in lock_queue.read_holders(queue_dir)):
+            return None
+        try:
+            lock_file = _open_lock_file(runner_slots.slot_lock_path(lock_base_path, slot))
+        except OSError:
+            return None
+        if _try_flock_once(lock_file):
+            return lock_file.close
+        lock_file.close()
+        return None
+
+    def remove_filestore(name):
+        remove_stale_filestore(name, filestore_base)
+        return not os.path.isdir(os.path.join(filestore_base, name))
+
+    return runner_cleanup.sweep(
+        plan,
+        runner_cleanup.SweepOperations(
+            claim_slot=claim_slot,
+            drop_database=pg.drop_database,
+            remove_filestore=remove_filestore,
+            remove_slot_tmpdir=lambda slot: all([remove_directory_tree(os.path.join(base, f"slot-{slot}")) for base in bases]),
+            say=say,
+        ),
+    )
+
+
+# The process that installed the SIGTERM/SIGHUP handlers. A fork of it (the out-of-memory watchdog is a multiprocessing child that
+# `run_cmd` ends with `terminate()`) inherits them, and must die by the signal as it always did, not run the run's clean-up.
+_SIGNAL_HANDLER_PID = None
+
+
+# [@ANCHOR: test:_exit_on_signal]
+def _exit_on_signal(signum, _frame):
+    if os.getpid() != _SIGNAL_HANDLER_PID:
+        signal.signal(signum, signal.SIG_DFL)
+        os.kill(os.getpid(), signum)
+        return
+    print(f"[*] Received {signal.Signals(signum).name}: ending the run and cleaning up.", flush=True)
+    sys.exit(128 + signum)
+
+
+# [@ANCHOR: test:_install_exit_signal_handlers]
+def _install_exit_signal_handlers():
+    global _SIGNAL_HANDLER_PID
+    _SIGNAL_HANDLER_PID = os.getpid()
+    signal.signal(signal.SIGTERM, _exit_on_signal)
+    signal.signal(signal.SIGHUP, _exit_on_signal)
+
+
+# [@ANCHOR: test:install_run_cleanup]
+def install_run_cleanup(database, slot, keep, tmpdir):
+    """Arm the end-of-run clean-up of a run in slot mode; called once, by the process that runs Odoo.
+
+    `database`: the run's database (slot-derived). `slot`: its slot. `keep`: --keep-db. `tmpdir`: the slot's own
+    TMPDIR to remove at the end, or None (slot 1, a private namespace, anything not scoped). Registers
+    `run_cleanup_at_exit` with atexit (which runs after a normal end, `sys.exit`, an uncaught exception and a
+    signal turned into `sys.exit`) and installs handlers for SIGTERM and SIGHUP that print a line and `sys.exit(128 +
+    signal)`; SIGINT already raises KeyboardInterrupt. Only the main thread may call it. SIGKILL and a power cut
+    cannot be handled: the next run's sweep (`sweep_slot_leftovers`) removes those leftovers. Registered before the
+    failure extractor, so the clean-up (and the `KEPT` line) comes after the verdict banner."""
+    global _RUN_CLEANUP, _run_cleanup_done
+    _RUN_CLEANUP = {"database": database, "slot": slot, "keep": keep, "tmpdir": tmpdir}
+    _run_cleanup_done = False
+    atexit.register(run_cleanup_at_exit)
+    _install_exit_signal_handlers()
+
+
+# [@ANCHOR: test:run_cleanup_at_exit]
+def run_cleanup_at_exit(pg=None):
+    """Remove (or keep, and name) what the run in slot mode owns; runs once, at exit. Nothing happens unless
+    `install_run_cleanup` armed it, and a second call does nothing.
+
+    Kills this run's remaining Chrome (the pattern is limited to its own TMPDIR on the host, and the process
+    table is private in the namespace), then `runner_cleanup.finish_run`: with `--keep-db` the database name is
+    printed and nothing is removed; otherwise the database is dropped WITH (FORCE) if its marker names this slot and
+    is not kept, then its filestore and the slot's TMPDIR. `pg` defaults to a PostgresAccess built from the
+    runner's environment. Never raises: a failure is a warning line, since the verdict of the run is already
+    decided. Full entry: tools/README.md."""
+    global _run_cleanup_done
+    if not _RUN_CLEANUP or _run_cleanup_done or os.getpid() != _SIGNAL_HANDLER_PID:
+        return None
+    _run_cleanup_done = True
+    state = _RUN_CLEANUP
+    try:
+        kill_test_chrome("KILL")
+        pg = pg or default_postgres_access()
+        tmpdir = state["tmpdir"]
+        return runner_cleanup.finish_run(
+            state["database"],
+            state["slot"],
+            state["keep"],
+            pg.database_comment,
+            pg.drop_database,
+            lambda name: remove_stale_filestore(name) or True,
+            (lambda: remove_directory_tree(tmpdir)) if tmpdir else None,
+            print,
+        )
+    except (OSError, subprocess.SubprocessError, FileNotFoundError) as e:
+        print(f"⚠️  WARNING: end-of-run clean-up of {state['database']} failed: {e}")
+        return "failed"
+
+# [@ANCHOR: test:root_phase_database_cleanup]
+def root_phase_database_cleanup(run_args, slot, pg):
+    """Backstop in the root phase of the full pipeline: drop the run's slot database after the test process ended.
+
+    The final test process drops its own database (`run_cleanup_at_exit`), but it can be killed outright (the
+    out-of-memory watchdog, the CPU limit, SIGKILL), and its database lives on the HOST's PostgreSQL even though
+    its filestore, Redis and RabbitMQ lived in the private overlay and went with it. The root phase outlives it
+    and still holds the slot's lock, so it removes the database once more, as the `postgres` account (`pg`).
+    Only in slot mode (`run_args.slots` above 1), never with `--keep-db`, and only a database whose marker names
+    this slot and is not kept (`runner_cleanup.finish_run`). Returns finish_run's word, or None when it did nothing.
+    Never raises on a bad database name: a name the slot naming rejects was already refused by the test process.
+    Full entry: tools/README.md."""
+    if (run_args.slots or 1) <= 1 or run_args.keep_db:
+        return None
+    try:
+        database = runner_slots.slot_database_name(run_args.db, slot)
+    except runner_slots.SlotConfigError:
+        return None
+    if not _SAFE_DB_NAME_RE.match(database):
+        return None
+    try:
+        return runner_cleanup.finish_run(
+            database, slot, False, pg.database_comment, pg.drop_database, lambda name: True, None, print
+        )
+    except subprocess.SubprocessError as e:
+        print(f"⚠️  WARNING: could not read database {database}: {e}; leaving it alone.")
+        return "failed"
+
+
+# [@ANCHOR: test:reap_orphans_forever]
+def reap_orphans_forever(protected_pids, stop, interval=0.2, min_age=0.3, clock=time.monotonic):
+    """Reap the zombie children that nobody waits for; the loop of the reaper thread of the namespace's init.
+
+    The root phase of the full pipeline is PID 1 of its PID namespace (`unshare -p -f`), so every process orphaned
+    anywhere in the run (Chrome helpers, shell wrappers, the processes of `rabbitmq-server`) is re-parented to it, and
+    a Python init that only waits for its one test process never reaps them: 150 to 170 zombies per run were seen after
+    a few hours, and a multi-hour run could reach the PID limit.
+
+    `protected_pids`: a set of pids this process waits for itself (Redis, RabbitMQ), which are never reaped here because
+    their exit status is wanted. `stop`: a threading.Event; the loop ends when it is set. A zombie child is reaped
+    with `os.waitpid(pid, WNOHANG)` on its own pid only (never `waitpid(-1)`, which would steal the status of the test
+    process that `run_protected` waits for), and only after it has been seen as a zombie for `min_age` seconds, so a
+    child whose parent code is about to wait for it is left to that code. `interval` is the scan period in seconds,
+    `clock` a test seam. The defaults (0.2 s and 0.3 s) are short on purpose: Chrome's `unshare` wrapper of every
+    browser test is a zombie that Odoo waits up to 5 s to see vanish, so the old 1 s and 3 s cost each browser test
+    about 3 s (5.1 s against 2.3 s per test measured). Only a child that is already a zombie is ever reaped: a live
+    process is never touched, and a process of another run is not a child of this namespace's init. Returns the number
+    of zombies reaped. Full entry: tools/README.md."""
+    first_seen = {}
+    reaped = 0
+    while not stop.is_set():
+        now = clock()
+        zombies = set()
+        try:
+            for child in psutil.Process().children():
+                try:
+                    if child.pid not in protected_pids and child.status() == psutil.STATUS_ZOMBIE:
+                        zombies.add(child.pid)
+                except psutil.NoSuchProcess:
+                    continue
+        except psutil.Error as e:
+            _logger.debug("Ignored %s while looking for zombies", e)
+        for pid in list(first_seen):
+            if pid not in zombies:
+                del first_seen[pid]
+        for pid in zombies:
+            started = first_seen.setdefault(pid, now)
+            if now - started >= min_age:
+                try:
+                    if os.waitpid(pid, os.WNOHANG)[0] == pid:
+                        reaped += 1
+                except ChildProcessError:
+                    pass  # something else already waited for it
+                del first_seen[pid]
+        stop.wait(interval)
+    return reaped
+
+
+# [@ANCHOR: test:run_protected]
+def run_protected(cmd, protected_pids, **popen_kwargs):
+    """`subprocess.run(cmd).returncode`, but the child's pid is added to `protected_pids` (the set that
+    `reap_orphans_forever` is given) before this returns control to anything else, so the reaper thread can never take
+    the exit status of the test process even with a very short `min_age`. Like `subprocess.run`, any exception while
+    waiting (a signal turned into `sys.exit`, Ctrl-C) kills the child and waits for it before it propagates.
+    Returns the child's return code. Full entry: tools/README.md."""
+    with subprocess.Popen(cmd, **popen_kwargs) as process:
+        protected_pids.add(process.pid)
+        try:
+            return process.wait()
+        except BaseException:
+            process.kill()
+            raise
+
+
+# [@ANCHOR: test:setup_namespace_and_run_tests]
+def setup_namespace_and_run_tests(real_log_dir, sys_args):
+    """
+    Pure-Python OS-level namespace bootstrapping.
+    Executes entirely without Bash wrappers, leveraging `os.setuid` for micro-privileges.
+    """
+    # The slot this run holds (main() passed `--slot-held` down; absent means slot 1). Everything in
+    # the host log directory that this run writes is named per slot, so concurrent runs share none of it.
+    slot = parse_runner_args(sys_args).slot_held or 1
+    # 1. Ephemeral OverlayFS File System
+    subprocess.run(["mount", "--make-rprivate", "/"], check=True)
+    subprocess.run(["mount", "-t", "tmpfs", "tmpfs", "/mnt"], check=True)
+    for d in [
+        "/mnt/upper",
+        "/mnt/work",
+        "/mnt/host_test_dir",
+        os.path.expanduser("~/tmp"),
+    ]:
+        os.makedirs(d, exist_ok=True)
+    subprocess.run(
+        ["mount", "--bind", os.path.expanduser("~/tmp"), "/mnt/host_test_dir"],
+        check=True,
+    )
+
+    base_dir = os.getcwd()
+
+    def _safe_run(cmd, **kw):
+        return subprocess.run(cmd, check=True, **kw)
+
+    print("[*] Preserving host daemon sockets...")
+    pg_socks = ["/var/run/postgresql", "/run/postgresql"]
+    preserved_socks = []
+    for i, sock in enumerate(pg_socks):
+        if os.path.exists(sock):
+            temp_sock = f"/mnt/pg_sock_{i}"
+            os.makedirs(temp_sock, exist_ok=True)
+            subprocess.run(["mount", "--bind", sock, temp_sock], check=True)
+            preserved_socks.append((temp_sock, sock))
+
+    # Anchor the true host path to an un-overlaid tmpfs directory BEFORE overlaying /home
+    host_tmp_dir = real_log_dir if real_log_dir else os.path.expanduser("~/tmp")
+    os.makedirs(host_tmp_dir, exist_ok=True)
+    try:
+        os.chmod(host_tmp_dir, 0o777)
+    except OSError as e:
+        _logger.debug("Ignored OSError: %s", e)
+    os.makedirs("/mnt/real_tmp", exist_ok=True)
+    subprocess.run(["mount", "--bind", host_tmp_dir, "/mnt/real_tmp"], check=True)
+
+    # Explicitly prepare the host log directory (~/tmp/log) before overlay
+    host_log_dir = os.path.join(host_tmp_dir, runner_slots.slot_file_name("log", slot))
+    os.makedirs(host_log_dir, exist_ok=True)
+    try:
+        os.chown(host_log_dir, 0, 0)
+        os.chmod(host_log_dir, 0o755)
+    except OSError as e:
+        _logger.debug("Ignored OSError setting permissions on host log dir: %s", e)
+    os.makedirs("/mnt/real_log", exist_ok=True)
+    subprocess.run(["mount", "--bind", host_log_dir, "/mnt/real_log"], check=True)
+
+    print("[*] Creating overlay filesystem for isolated testing...")
+    for item in ["etc", "opt", "var", "usr", "home", "tmp", "run"]:
+        if not os.path.exists(f"/{item}"):
+            continue
+        os.makedirs(f"/mnt/upper/{item}", exist_ok=True)
+        os.makedirs(f"/mnt/work/{item}", exist_ok=True)
+        try:
+            subprocess.run(
+                [
+                    "mount",
+                    "-t",
+                    "overlay",
+                    "overlay",
+                    "-o",
+                    f"lowerdir=/{item},upperdir=/mnt/upper/{item},workdir=/mnt/work/{item}",
+                    f"/{item}",
+                ],
+                check=True,
+            )
+        except subprocess.CalledProcessError as e:
+            _logger.debug("Failed to overlay mount /%s: %s", item, e)
+
+    print("[*] Restoring host daemon sockets...")
+    for temp_sock, sock in preserved_socks:
+        os.makedirs(sock, exist_ok=True)
+        subprocess.run(["mount", "--bind", temp_sock, sock], check=True)
+
+    print("[*] Provisioning isolated environment via infrastructure.py...")
+    os.environ["HAMS_ISOLATED_NS"] = "1"
+    orig_user = os.environ.get("SUDO_USER", "odoo")
+
+    # GNUPG isolated home
+    os.makedirs(f"{os.path.expanduser('~/tmp')}/.gnupg", exist_ok=True)
+    try:
+        os.chmod(f"{os.path.expanduser('~/tmp')}/.gnupg", 0o700)
+    except OSError as e:
+        _logger.debug("Failed to set permissions on .gnupg: %s", e)
+
+    os.environ["GNUPGHOME"] = f"{os.path.expanduser('~/tmp')}/.gnupg"
+    env_vars = dict(os.environ)
+    env_vars["REPO_ROOT"] = base_dir
+    run_args = parse_runner_args(sys_args)
+    _targets, run_install_modules = select_modules(
+        run_args, base_dir, load_ignore_file(os.path.join(base_dir, run_args.config))
+    )
+    if not rust_daemon_build_needed(run_args, base_dir, run_install_modules):
+        env_vars["HAMS_SKIP_RUST_DAEMON_BUILD"] = "1"
+
+    infrastructure.provision_environment(_safe_run, env_vars, orig_user, skip_apt=True, is_test=True)
+
+    print("[*] Isolating network namespace for test daemons...")
+    CLONE_NEWNET = 0x40000000
+    try:
+        libc = ctypes.CDLL("libc.so.6", use_errno=True)
+    except OSError:
+        libc = ctypes.CDLL(None, use_errno=True)
+
+    if libc.unshare(CLONE_NEWNET) != 0:
+        print(
+            f"❌ ERROR: Failed to dynamically isolate network namespace: {ctypes.get_errno()}"
+        )
+        sys.exit(1)
+
+    # Bring up the isolated loopback interface now that we are in the new network namespace
+    subprocess.run(["ip", "link", "set", "lo", "up"], check=True)
+
+    # Bind the preserved host directory to the overlay's host tmp dir
+    os.makedirs(os.path.expanduser("~/tmp"), exist_ok=True)
+    subprocess.run(
+        ["mount", "--bind", "/mnt/real_tmp", os.path.expanduser("~/tmp")], check=True
+    )
+
+    # Bind the preserved host log directory to the overlay's /var/log
+    os.makedirs("/var/log", exist_ok=True)
+    subprocess.run(["mount", "--bind", "/mnt/real_log", "/var/log"], check=True)
+
+    if os.path.exists("/var/run/postgresql"):
+        os.makedirs("/var/run/postgresql", exist_ok=True)
+        subprocess.run(
+            ["mount", "--bind", "/var/run/postgresql", "/var/run/postgresql"],
+            check=True,
+        )
+
+    subprocess.run(["mount", "--bind", base_dir, base_dir], check=True)
+    subprocess.run(["mount", "-o", "remount,bind,ro", base_dir], check=True)
+
+    extra_mounts = []
+    parent_dir = os.path.abspath(os.path.join(base_dir, ".."))
+    try:
+        for item in sorted(os.listdir(parent_dir)):
+            if item.startswith("hams_open") or item.startswith("hams_com"):
+                extra_mounts.append(os.path.join(parent_dir, item))
+    except OSError as e:
+        _logger.debug("Ignored OSError: %s", e)
+    extra_mounts.extend(
+        [
+            os.path.join(base_dir, "..", "hams_open"),
+            "/hams_open",
+            "/app/hams_open",
+            os.path.join(base_dir, "hams_open"),
+        ]
+    )
+
+    mounted_dirs = set()
+    for extra_dir in extra_mounts:
+        if os.path.isdir(extra_dir):
+            real_dir = os.path.realpath(extra_dir)
+            if real_dir in mounted_dirs:
+                continue
+            mounted_dirs.add(real_dir)
+            subprocess.run(["mount", "--bind", real_dir, real_dir], check=True)
+            subprocess.run(["mount", "-o", "remount,bind,ro", real_dir], check=True)
+            break
+
+    # 3. PostgreSQL Sandboxing
+    try:
+        psql_cmd = infrastructure.get_pg_bin("psql")
+    except FileNotFoundError as e:
+        print(f"❌ ERROR: {e}")
+        sys.exit(1)
+
+    pg_sock = "/var/run/postgresql"
+    if not os.path.exists(pg_sock):
+        pg_sock = "/tmp"
+
+    try:
+        pg_user = pwd.getpwnam("postgres")
+    except KeyError:  # burn-ignore-os-account-probe
+        pg_user = pwd.getpwnam("root")
+
+    def preexec_pg():
+        os.setresgid(pg_user.pw_gid, pg_user.pw_gid, pg_user.pw_gid)
+        os.setresuid(pg_user.pw_uid, pg_user.pw_uid, pg_user.pw_uid)
+
+    wait_for_socket(f"{pg_sock}/.s.PGSQL.5432", "PostgreSQL")
+
+    try:
+        sql_create_roles = role_sql_for_test_user(orig_user)
+    except ValueError as e:
+        print(f"❌ ERROR: {e}")
+        sys.exit(1)
+    run_psql_script(psql_cmd, ["-h", pg_sock, "-d", "postgres"], sql_create_roles, "creating the odoo and test-user roles", preexec_fn=preexec_pg)
+
+    # 4. Redis Sandboxing
+    # No pkill required: network namespace isolation prevents port collision with host
+    redis_user = pwd.getpwnam("redis")
+
+    redis_dir = "/var/lib/redis"
+    db_filename = "dump.rdb"
+    log_file = "/var/log/redis/redis-server.log"
+    conf_path = "/etc/redis/redis.conf"
+
+    # Dynamically parse the production configuration to find exact paths
+    if os.path.exists(conf_path):
+        with open(conf_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("dir "):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        redis_dir = parts[1].strip("\"'")
+                elif line.startswith("dbfilename "):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        db_filename = parts[1].strip("\"'")
+                elif line.startswith("logfile "):
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        log_file = parts[1].strip("\"'")
+
+    # Explicitly grant the redis user ownership over its dynamic production directories
+    for d in [
+        redis_dir,
+        "/var/log/redis",
+        "/run/redis",
+        "/etc/redis",
+        os.path.dirname(log_file) if log_file and log_file != '""' else "",
+    ]:
+        if d:
+            os.makedirs(d, exist_ok=True)
+            try:
+                os.chown(d, redis_user.pw_uid, redis_user.pw_gid)
+                os.chmod(d, 0o750)
+            except OSError as e:
+                _logger.debug(
+                    "Ignored OSError when setting directory permissions: %s", e
+                )
+
+    if os.path.exists(conf_path):
+        try:
+            os.chown(conf_path, redis_user.pw_uid, redis_user.pw_gid)
+            os.chmod(conf_path, 0o640)
+        except OSError as e:
+            _logger.debug("Ignored OSError when setting redis.conf permissions: %s", e)
+
+    # Ensure the DB snapshot file is writable to prevent BGSAVE failures
+    db_path = os.path.join(redis_dir, db_filename)
+    if os.path.exists(db_path):
+        try:
+            os.chown(db_path, redis_user.pw_uid, redis_user.pw_gid)
+            os.chmod(db_path, 0o660)
+        except OSError as e:
+            _logger.debug("Ignored OSError when setting file permissions: %s", e)
+
+    # Ensure the log file is writable
+    if log_file and log_file != '""' and os.path.exists(log_file):
+        try:
+            os.chown(log_file, redis_user.pw_uid, redis_user.pw_gid)
+            os.chmod(log_file, 0o660)
+        except OSError as e:
+            _logger.debug("Ignored OSError when setting file permissions: %s", e)
+
+    # Run redis-server strictly using its production configuration,
+    # overriding only 'daemonize' so subprocess.Popen can track its lifetime.
+    # Specify the directory to prevent BGSAVE permissions errors (MISCONF).
+    cmd = ["redis-server"]
+    if os.path.exists(conf_path):
+        cmd.append(conf_path)
+    cmd.extend(["--daemonize", "no", "--dir", redis_dir])
+
+    def preexec_redis():
+        os.initgroups("redis", redis_user.pw_gid)
+        os.setresgid(redis_user.pw_gid, redis_user.pw_gid, redis_user.pw_gid)
+        os.setresuid(redis_user.pw_uid, redis_user.pw_uid, redis_user.pw_uid)
+        try:
+            libc = ctypes.CDLL("libc.so.6")
+            libc.prctl(1, 15)  # PR_SET_PDEATHSIG, SIGTERM
+        except Exception as e: # audit-ignore-catch-all
+            # Post-fork in preexec_fn; _logger is unsafe here (see
+            # _PostForkSafeLog's own docstring) -- use the fork-safe stand-in.
+            _postfork_log.warning(f"preexec_redis: could not set PR_SET_PDEATHSIG: {e}")
+
+    redis_proc = subprocess.Popen(cmd, cwd=redis_dir, preexec_fn=preexec_redis)
+    wait_for_port(6379, "Redis")
+
+    # 5. RabbitMQ Sandboxing
+    # No pkill required: network namespace isolation prevents port collision with host
+    rmq_user = pwd.getpwnam("rabbitmq")
+
+    for d in ["/var/lib/rabbitmq", "/var/log/rabbitmq", "/run/rabbitmq"]:
+        os.makedirs(d, exist_ok=True)
+        os.chown(d, rmq_user.pw_uid, rmq_user.pw_gid)
+
+    with open("/var/lib/rabbitmq/.erlang.cookie", "w") as f:
+        f.write("HAMS_TEST_RABBITMQ_COOKIE_12345")
+
+    os.chown("/var/lib/rabbitmq/.erlang.cookie", rmq_user.pw_uid, rmq_user.pw_gid)
+    os.chmod("/var/lib/rabbitmq/.erlang.cookie", 0o400)
+
+    def preexec_rmq():
+        os.setresgid(rmq_user.pw_gid, rmq_user.pw_gid, rmq_user.pw_gid)
+        os.setresuid(rmq_user.pw_uid, rmq_user.pw_uid, rmq_user.pw_uid)
+        os.environ["HOME"] = "/var/lib/rabbitmq"
+        os.setpgid(0, 0)
+        try:
+            libc = ctypes.CDLL("libc.so.6")
+            libc.prctl(1, 15)  # PR_SET_PDEATHSIG, SIGTERM
+        except Exception as e: # audit-ignore-catch-all
+            # Post-fork in preexec_fn -- same logging-deadlock hazard as
+            # preexec_redis() above; use the fork-safe stand-in instead of _logger.
+            _postfork_log.warning(f"preexec_rmq: could not set PR_SET_PDEATHSIG: {e}")
+
+    try:
+        rmq_proc = subprocess.Popen(
+            [
+                "bash",
+                "-c",
+                rabbitmq_wrapper_script("rabbitmq-server"),
+            ],
+            preexec_fn=preexec_rmq,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception as e: # audit-ignore-catch-all
+        # subprocess.Popen()'s own constructor
+        # only ever raises OSError/ValueError (e.g. FileNotFoundError if bash isn't on
+        # PATH) -- never subprocess.CalledProcessError, the only stdlib exception type
+        # that carries .stdout/.stderr, and stdout/stderr are DEVNULL above regardless, so
+        # nothing is ever captured to report even in principle. `out`/`err` would
+        # unconditionally be "" every time this branch could ever run; try/except
+        # blocks and "STDOUT:"/"STDERR:" lines fed from them would add no real
+        # information, so they are not kept as dead code.
+        # print() alone isn't a recognized logging call, and sys.exit(1) below
+        # isn't an AST-visible raise, so this handler's own traceback had no trace anywhere
+        # a log aggregator could see it, only the interactive CLI's own stdout.
+        _logger.error("Failed to start RabbitMQ: %s", e)
+        print(f"❌ ERROR starting RabbitMQ: {e}")
+        sys.exit(1)
+
+    wait_for_port(5672, "RabbitMQ")
+
+    # 6. Execute Inner Odoo Test Suite
+    os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
+    os.environ["PGHOST"] = pg_sock
+
+    # Inside the namespace, host tmp dir is perfectly bound to the real log dir.
+    host_tmp_dir = os.path.expanduser("~/tmp")
+    os.environ["ODOO_TEST_CHROME_ARGS"] = (
+        "--headless=new --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-extensions --disable-background-networking --disable-default-apps --disable-sync --disable-translate --mute-audio --use-fake-device-for-media-stream --use-fake-ui-for-media-stream --no-first-run " + CHROME_NO_CACHE_ARGS + " --hide-scrollbars --metrics-recording-only --safebrowsing-disable-auto-update --disable-features=ServiceWorker,SharedWorker,dbus,OptimizationGuideModelDownloading"
+    )
+    os.environ["HAMS_REAL_LOG_DIRECTORY"] = real_log_dir
+    os.environ["HOME"] = "/var/lib/odoo"
+    os.environ["XDG_DATA_HOME"] = "/var/lib/odoo/.local/share"
+
+    odoo_user = pwd.getpwnam("odoo")
+
+    def preexec_odoo():
+        try:
+            # A backstop only (see ODOO_CPU_LIMIT_SOFT_SECONDS): SIGXCPU at the soft limit, SIGKILL at the hard one.
+            resource.setrlimit(resource.RLIMIT_CPU, (ODOO_CPU_LIMIT_SOFT_SECONDS, ODOO_CPU_LIMIT_HARD_SECONDS))
+        except OSError as e:
+            # Post-fork in preexec_fn -- same logging-deadlock hazard noted at
+            # preexec_redis()/preexec_rmq() above; use the fork-safe stand-in.
+            _postfork_log.warning(f"preexec_odoo: could not set RLIMIT_CPU: {e}")
+        os.initgroups("odoo", odoo_user.pw_gid)
+        os.setresgid(odoo_user.pw_gid, odoo_user.pw_gid, odoo_user.pw_gid)
+        os.setresuid(odoo_user.pw_uid, odoo_user.pw_uid, odoo_user.pw_uid)
+
+    # This process (Process B, per the lock-path comment in main()) already
+    # holds the real single-instance lock for the entire time the subprocess
+    # spawned below runs -- tell that child (Process C) not to attempt its
+    # own, now-redundant-and-otherwise-self-deadlocking acquisition.
+    os.environ["HAMS_TEST_LOCK_HELD"] = "1"
+
+    # OPT-IN ONLY. Without --offline-isolation nothing below runs and the test
+    # process sees exactly the environment it has always seen: one network
+    # namespace, loopback only, browser and werkzeug server side by side.
+    #
+    # With it, the browser is moved into a nested network namespace whose only
+    # route to the Odoo test server can be cut mid-test, so a tour can express
+    # the situation a real offline operator is in (hams.com unreachable, the
+    # local relay on loopback still reachable). See
+    # hams_shared/tools/offline_browser_ns.py and
+    # hams_shared/docs/OFFLINE_BROWSER_NAMESPACE_TESTING.md.
+    offline_ns_cleanup = None
+    if "--offline-isolation" in sys_args:
+        print("[*] Setting up the nested offline browser namespace...")
+        offline_env, offline_ns_cleanup = offline_browser_ns.setup(
+            os.path.join(os.path.expanduser("~/tmp"), runner_slots.slot_file_name("offline_ns", slot)),
+            odoo_user="odoo",
+        )
+        os.environ.update(offline_env)
+        print(
+            f"[*] Offline browser namespace ready (control socket "
+            f"{offline_env['HAMS_OFFLINE_NS_CTL']})."
+        )
+
+    ret = 1
+    # A SIGTERM or SIGHUP (the process above was told to stop) ends this phase through the `finally` below, which
+    # stops Redis and RabbitMQ and drops the slot database. As the first process of its PID namespace this one
+    # would otherwise ignore those signals: the kernel delivers only the ones it has a handler for.
+    _install_exit_signal_handlers()
+    # This process is PID 1 of the run's PID namespace: reap what is orphaned under it (see reap_orphans_forever).
+    reaper_stop = threading.Event()
+    protected_pids = {redis_proc.pid, rmq_proc.pid}
+    threading.Thread(
+        target=reap_orphans_forever, args=(protected_pids, reaper_stop), daemon=True, name="namespace-init-reaper"
+    ).start()
+    try:
+        test_cmd = [sys.executable, os.path.abspath(__file__)] + sys_args
+        ret = run_protected(test_cmd, protected_pids, preexec_fn=preexec_odoo)
+    finally:
+        if offline_ns_cleanup is not None:
+            try:
+                offline_ns_cleanup()
+            except Exception as e:  # audit-ignore-catch-all: teardown must never mask `ret`
+                _logger.warning("Failed to tear down the offline browser namespace: %s", e)
+        # 7. Graceful Ephemeral Teardown — wait and escalate to SIGKILL
+        for proc_name, proc in [
+            ("RabbitMQ", rmq_proc),
+            ("Redis", redis_proc),
+        ]:
+            try:
+                proc.terminate()
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                print(
+                    f"[*] {proc_name} PID {proc.pid}"
+                    " did not exit after SIGTERM."
+                    " Escalating to SIGKILL.",
+                    flush=True,
+                )
+                try:
+                    kill_process_group_if_private(proc.pid)
+                except OSError as e:
+                    _logger.debug("Ignored OSError SIGKILLing %s process group %s during teardown: %s", proc_name, proc.pid, e)
+                try:
+                    proc.kill()
+                    proc.wait(timeout=2)
+                except Exception as e:  # audit-ignore-catch-all
+                    _logger.warning("Failed to fully reap %s (PID %s) during teardown: %s", proc_name, proc.pid, e)
+            except Exception as e:  # audit-ignore-catch-all
+                _logger.warning("Unexpected error tearing down %s (PID %s): %s", proc_name, proc.pid, e)
+        reaper_stop.set()
+        root_phase_database_cleanup(
+            run_args,
+            slot,
+            PostgresAccess(
+                psql_cmd,
+                ["-h", pg_sock],
+                env={k: v for k, v in os.environ.items() if not k.startswith("PG")},
+                preexec_fn=preexec_pg,
+            ),
+        )
+
+    # Explicitly kill Erlang Port Mapper Daemon (epmd) spawned by RabbitMQ
+    subprocess.run(
+        ["epmd", "-kill"],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    try:
+        orig_uid = pwd.getpwnam(orig_user).pw_uid
+    except KeyError:  # burn-ignore-os-account-probe
+        orig_uid = -1
+
+    if orig_uid != -1:
+        for prof in glob.glob(f"{os.path.expanduser('~/tmp')}/*.prof"):
+            os.chown(prof, orig_uid, -1)
+
+    sys.exit(ret)
+
+
+# [@ANCHOR: test:missing_host_apt_packages]
+def missing_host_apt_packages(pkg_specs, os_id, dpkg_installed, pip_installed, have_cargo=False):
+    """Names of the manifest's apt packages that are absent, in manifest order. Full entry: tools/README.md.
+
+    A package listed in infrastructure.PIP_FALLBACK_APT_PACKAGES counts as present when its pip distribution
+    is installed, because that is what provisioning installs on a release with no apt candidate (awscli on
+    Ubuntu 24.04). A Rust toolchain package (infrastructure.APT_RUST_TOOLCHAIN_NAMES) counts as present when
+    `have_cargo`: provisioning never installs it over a cargo already on PATH (rustup)."""
+    missing = []
+    for pkg_spec in pkg_specs:
+        pkg_name = pkg_spec.get("debian_name", pkg_spec["name"]) if os_id == "debian" else pkg_spec["name"]
+        if dpkg_installed(pkg_name):
+            continue
+        if have_cargo and pkg_name in infrastructure.APT_RUST_TOOLCHAIN_NAMES:
+            continue
+        pip_name = infrastructure.PIP_FALLBACK_APT_PACKAGES.get(pkg_name)
+        if pip_name and pip_installed(pip_name):
+            continue
+        missing.append(pkg_name)
+    return missing
+
+
+def _dpkg_installed(pkg_name):
+    res = subprocess.run(
+        ["dpkg-query", "-W", "-f=${Status}", pkg_name],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return "install ok installed" in res.stdout
+
+
+def _pip_distribution_installed(dist_name):
+    try:
+        importlib.metadata.version(dist_name)
+    except importlib.metadata.PackageNotFoundError:
+        return False
+    return True
+
+
+# [@ANCHOR: test:check_host_apt_packages]
+def check_host_apt_packages():
+    """
+    Verifies all required host packages are installed on Debian/Ubuntu systems
+    prior to namespace isolation. Uses the manifest in infrastructure.py. Full entry: tools/README.md.
+    """
+    os_id = infrastructure.get_os_identifier()
+    try:
+        missing = missing_host_apt_packages(
+            infrastructure.MANIFEST.get("apt_packages", []), os_id, _dpkg_installed, _pip_distribution_installed,
+            have_cargo=shutil.which("cargo") is not None,
+        )
+    except FileNotFoundError as e:
+        _logger.debug("Skipping APT package check, dpkg-query not found: %s", e)
+        return
+
+    if missing:
+        print(f"❌ ERROR: Missing required host APT packages: {', '.join(missing)}")
+        print(
+            f"Please install them via: sudo apt-get update && sudo apt-get install -y {' '.join(missing)}"
+        )
+        sys.exit(1)
+
+
+# [@ANCHOR: test:default_worktree_trees]
+def default_worktree_trees(base_dir, environ=None):
+    """Points the sibling-tree variable at the repository next to the checkout under test, unless it is already set.
+
+    Run from a worktree `.../hams_com` (or `hams_open`), HAMS_OPEN_TREE (or HAMS_COM_TREE) defaults to the sibling beside it, not to the
+    shared ~/workspace checkout that resolve_repo_layout() finds through a linked worktree's git directory: a run in a worktree used to
+    test the shared hams_open's code. Returns (com_tree, open_tree) as this run will use them (None when there is none)."""
+    environ = os.environ if environ is None else environ
+    base_dir = os.path.abspath(base_dir)
+    other = {"hams_com": "hams_open", "hams_open": "hams_com"}.get(os.path.basename(base_dir))
+    if other:
+        beside = os.path.join(os.path.dirname(base_dir), other)
+        variable = f"{other.upper()}_TREE"
+        if os.path.isdir(beside) and not environ.get(variable, "").strip():
+            environ[variable] = beside
+    own = {os.path.basename(base_dir): base_dir}
+    return tuple(own.get(name) or environ.get(f"{name.upper()}_TREE", "").strip() or None for name in ("hams_com", "hams_open"))
+
+
+# [@ANCHOR: test:link_missing_cloudflared_ffi]
+def link_missing_cloudflared_ffi(open_tree, home=None, workspace=None):
+    """Copies a libcloudflared.so built for this host into the hams_open tree when it has none (the library is gitignored, so every new
+    worktree lacks it and the cloudflare tests errored). Takes the newest of the lint work trees under ~/.cache, ~/workspace/tmp/gate_*
+    and the shared ~/workspace checkout. Returns the source path, or None when nothing was needed or nothing fits."""
+    if not open_tree:
+        return None
+    ffi_dir = os.path.join(open_tree, "daemons", "cloudflared-ffi")
+    target = os.path.join(ffi_dir, infrastructure.CFFI_LIB_NAME)
+    if not os.path.isfile(os.path.join(ffi_dir, "main.go")) or os.path.exists(target):
+        return None
+    home = home or os.path.expanduser("~")
+    workspace = workspace or os.path.join(home, "workspace")
+    tail = os.path.join("hams_open", "daemons", "cloudflared-ffi", infrastructure.CFFI_LIB_NAME)
+    found = glob.glob(os.path.join(home, ".cache", "hams-lint", "work", "*", tail))
+    found += glob.glob(os.path.join(workspace, "tmp", "gate_*", tail)) + [os.path.join(workspace, tail)]
+    found = [path for path in found if os.path.isfile(path) and infrastructure.cffi_elf_machine(path) == infrastructure.cffi_host_machine()]
+    if not found:
+        return None
+    source = max(found, key=os.path.getmtime)
+    shutil.copy(source, target)
+    return source
+
+
+# [@ANCHOR: test:check_cloudflared_ffi_library]
+def check_cloudflared_ffi_library(addons_path, install_modules):
+    """Reports a missing or wrong-architecture libcloudflared.so up front, with the fix.
+
+    The `cloudflare` module's TestCloudflareTunnelDaemon loads daemons/cloudflared-ffi/
+    libcloudflared.so through ctypes. Without this check a host that lacks the library
+    (compiled per CPU, not committed to git) produces three late test ERRORs instead of one
+    clear message. Runs in both the namespaced and the HAMS_ISOLATED_NS=1 paths. Returns the
+    error text, or None when nothing is wrong (or the cloudflare module is not under test)."""
+    if "cloudflare" not in install_modules:
+        return None
+    for entry in addons_path.split(","):
+        if os.path.isfile(os.path.join(entry, "cloudflare", "__manifest__.py")):
+            ffi_dir = os.path.realpath(os.path.join(entry, "daemons", "cloudflared-ffi"))
+            break
+    else:
+        return None
+    if not os.path.isdir(ffi_dir):
+        return None
+    ok, reason = infrastructure.cffi_library_status(ffi_dir)
+    if ok:
+        return None
+    return (
+        f"Missing libcloudflared.so for this host: {reason}.\n"
+        "The cloudflare module's TestCloudflareTunnelDaemon tests load it. Build it (offline, "
+        "from the in-repo source) with:\n"
+        f"  sudo apt-get install -y {infrastructure.CFFI_APT_PACKAGE} build-essential\n"
+        f"  python3 {os.path.join(os.path.dirname(os.path.realpath(__file__)), 'build_cloudflared_ffi.py')}"
+        f" --ffi-dir {ffi_dir}\n"
+        "or run `provision.py --test`, whose hook_build_cloudflared_ffi step does the same."
+    )
+
+
+def get_default_audio_sink_name(timeout=5.0):
+    """Returns the name of the developer's current default PipeWire audio sink
+    (e.g. "Raptor Lake-P/U/H cAVS Speaker"), or None if `wpctl` isn't available
+    or no default sink is marked -- both treated as "unknown", not "broken",
+    since plenty of test environments (CI, a headless server) have no PipeWire
+    user session at all. Used to guard against a real, previously-observed
+    regression: a test-environment browser or subprocess grabbing the real
+    ALSA device (bypassing PipeWire's shared access) leaves WirePlumber stuck
+    on its silent "Dummy Output" fallback even after the offending process
+    exits, breaking the developer's actual system audio until they notice by
+    ear and someone restarts wireplumber by hand.
+    """
+    try:
+        result = subprocess.run(
+            ["wpctl", "status"], capture_output=True, text=True, timeout=timeout
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    # wpctl's tree-drawing prefix uses box-drawing characters (│, ├, └, ─),
+    # not plain ASCII -- strip those (plus leading whitespace) before matching
+    # section headers/entries, rather than the plain-ASCII `.strip(" │")` a
+    # first draft of this function used, which never matched anything.
+    in_sinks_section = False
+    for line in result.stdout.splitlines():
+        clean = re.sub(r"^[\s│├└─]+", "", line).rstrip()
+        if not in_sinks_section:
+            if clean == "Sinks:":
+                in_sinks_section = True
+            continue
+        if not clean:
+            continue
+        if clean.endswith(":"):
+            break
+        if clean.startswith("*"):
+            # e.g. "*   62. Raptor Lake-P/U/H cAVS Speaker      [vol: 0.41]"
+            name = re.sub(r"^\*\s*\d+\.\s*", "", clean)
+            name = re.sub(r"\s*\[vol:.*\]\s*$", "", name).strip()
+            return name or None
+    return None
+
+
+_single_instance_lock = None
+
+
+def _test_runner_lock_path():
+    """
+    Fixed, HOME-independent path for the single-instance test-runner lock.
+
+    The old os.path.expanduser("~/tmp")-based lock path (see
+    docs/bug_hunt_claims/hams_shared/tools/claims/setup_namespace_and_run_tests.md's "ISOLATION"
+    section) used to be recomputed independently at each of three separate points across
+    one logical test run -- the initial invocation (Process A), the re-exec'd root
+    `--internal-ns-init` process (Process B), and the final odoo-uid test
+    subprocess (Process C) -- under three DIFFERENT values of HOME (Process
+    A's real HOME; Process B's, plausibly /root, since `systemd-run --scope`
+    does not forward HOME by default; and Process C's, /var/lib/odoo, a path
+    INSIDE that run's own private, ephemeral overlay filesystem, making
+    Process C's own lock attempt permanently inert). Real protection depended
+    entirely on Process B's HOME happening to resolve identically across two
+    genuinely separate, concurrent invocations -- plausible, but never
+    actually verified.
+
+    The lock is anchored to ONE fixed, absolute path instead of anything derived from HOME.
+    Honors an explicit override via the HAMS_TEST_LOCK_PATH env var -- which, unlike an open file descriptor,
+    survives os.execvpe/sudo/systemd-run/unshare -- so this can be (and, in
+    main(), is) computed once and passed through explicitly rather than
+    re-derived at each re-exec boundary. NOTE: `systemd-run --scope` does NOT
+    forward arbitrary env vars into the scope it creates (see the
+    HAMS_TEST_LOCK_PATH --setenv handling further down in main() where the
+    systemd-run invocation is built) -- setting os.environ alone is not
+    sufficient across that specific boundary.
+
+    Falls back to a hardcoded /tmp path (deliberately NOT ~/tmp) when no
+    override is set. /tmp is one of the seven trees
+    setup_namespace_and_run_tests() later overlays -- but the lock is always
+    acquired at the very top of main(), before ANY overlay mount ever runs,
+    so every acquirer up to that point still sees the real, shared host
+    /tmp, not the ephemeral per-run copy. This ordering (lock acquisition
+    strictly before the first overlay mount) is load-bearing for this
+    fallback path to mean what it says; if that ordering is ever changed,
+    re-verify this comment's assumption still holds.
+
+    This is deliberately a single SYSTEMWIDE path rather than a per-user one (a path under ~
+    differs per invoking user, so two different real users on one box would never be serialized
+    against each other). That matches this codebase's coarse-lock philosophy: one test at a
+    time, box-wide, fail-fast rather than a fine-grained per-context lock.
+    """
+    return os.environ.get("HAMS_TEST_LOCK_PATH") or "/tmp/hams_odoo_test_runner.lock"
+
+
+def check_offline_isolation_invocation_shape(offline_isolation, isolated_ns_env, lock_held_env):
+    """Decide whether THIS invocation can actually reach offline_browser_ns.setup().
+
+    Pure (takes the three relevant values rather than reading os.environ/argparse
+    itself) so the decision can be tested at its boundary without a real
+    invocation. Returns `(ok, message)`; message is the human-readable failure
+    reason and is empty when ok is True.
+
+    `offline_browser_ns.setup()` must run from a ROOT process already inside
+    test.py's own unshared network namespace (see that module's own docstring):
+    it unshares a further NESTED network namespace and moves a veth end into
+    it, both of which need real CAP_NET_ADMIN, not just a plain process running
+    as the `odoo` user. The only place in this file that is ever true is inside
+    `setup_namespace_and_run_tests()` (Process B of the real
+    unshare/systemd-run escalation pipeline, which itself calls
+    `offline_browser_ns.setup()` -- when `--offline-isolation` was requested --
+    BEFORE spawning Process C, the final unprivileged odoo-uid test subprocess).
+
+    This project's own `HAMS_ISOLATED_NS=1` invocation convention (see the
+    `hams-odoo-test-runner-sudo-and-polkit` memory) exists for ORDINARY runs,
+    where a single flat process running directly as the unprivileged `odoo`
+    user -- no escalation, no namespace creation, nothing root -- is exactly
+    what's wanted. But that convention skips `setup_namespace_and_run_tests()`
+    entirely, so a DIRECT `HAMS_ISOLATED_NS=1` invocation of
+    `--offline-isolation` can never reach the setup it needs: nothing in that
+    invocation shape is ever root, so there is no code position to move the
+    nested-namespace setup into that would make it reachable without granting
+    `odoo` privileges it deliberately does not have (a real security decision,
+    not something to route around here).
+
+    Process C is the one legitimate exception: by the time it runs,
+    `setup_namespace_and_run_tests()` (Process B) has already either set up the
+    nested namespace successfully or raised trying to -- either way, Process C
+    inherits `HAMS_ISOLATED_NS=1` from Process B's own environment (set right
+    before Process C is spawned) purely so it takes the same "already isolated,
+    don't escalate again" branch through main() a second time, not because it
+    is itself unprivileged by design the way a direct shortcut invocation is.
+    It is told apart from a direct shortcut invocation by `HAMS_TEST_LOCK_HELD`
+    (also set, once, immediately before Process C is spawned, for the
+    unrelated reason of exempting it from its own redundant lock acquisition)
+    -- so this check only fires for the case that can truly never work, and
+    lets Process C itself proceed.
+
+    Without this check, a direct `HAMS_ISOLATED_NS=1
+    --offline-isolation` run gets all the way through module install and DB
+    setup before the tour's own self-check catches it and fails with
+    "This test only runs under tools/test.py --offline-isolation...". This
+    check moves that same diagnosis to before any of that work starts.
+    """
+    if offline_isolation and isolated_ns_env == "1" and lock_held_env != "1":
+        return False, (
+            "--offline-isolation needs the real unshare/systemd-run escalation "
+            "path (setup_namespace_and_run_tests()) to create its nested "
+            "browser namespace -- that whole path is skipped whenever "
+            "HAMS_ISOLATED_NS=1 is already set, which this box's own standing "
+            "convention for ORDINARY test runs always does (see the "
+            "hams-odoo-test-runner-sudo-and-polkit memory). Invoke test.py "
+            "for an --offline-isolation run WITHOUT HAMS_ISOLATED_NS=1 set "
+            "instead -- e.g. as the plain sudo-capable user (not `sudo -u "
+            "odoo env HAMS_ISOLATED_NS=1 ...`) -- so the real escalation path "
+            "runs and reaches offline_browser_ns.setup(). This now works: the "
+            "apt package that used to block that path (nginx) has been "
+            "installed on this box since 2026-10-01. See "
+            "hams_shared/docs/OFFLINE_BROWSER_NAMESPACE_TESTING.md."
+        )
+    return True, ""
+
+
+# --------------------------------------------------------------------------
+# Continuous-integration load gate
+# --------------------------------------------------------------------------
+#
+# The development box hosts the `actions.runner.BrucePerens-hams_com.hams-devbox`
+# self-hosted GitHub Actions runner as well as this test suite, and a relay
+# build matrix compiles Hamlib and Rust on every push under
+# `daemons/hams_local_relay/**`. Once three separate `test.py -u
+# ham_shack` runs of identical code failed DIFFERENT `TestShackSwBehaviorTour`
+# tests -- test_01, 01b, 02, 03b, 04 -- each at the ten-second "wait for
+# shack_sw.js's own registration to exist" step, while `rustc` held about 750
+# percent of the processor. A further run, with the load
+# average near 23 on sixteen cores, additionally failed four plain `url_open`
+# tests on the test client's own ten-second read timeout even though the server
+# answered 200, each of them the first request after `Generating routing map`.
+#
+# None of those were code regressions, and each cost a re-run plus the time
+# somebody spent reading it as one. This gate exists so that a run which is
+# going to be starved says so up front instead of producing a plausible-looking
+# false failure half an hour later.
+#
+# Two signals, both read locally -- deliberately NOT `gh run list`, which would
+# put a network round trip and an authentication dependency on the front of
+# every invocation, including offline ones:
+#
+#   1. A live `Runner.Worker` process. The runner's `Runner.Listener` runs
+#      permanently and means nothing; a `Runner.Worker` exists only while a job
+#      is actually executing, which makes it an exact signal rather than a
+#      heuristic.
+#   2. The one-minute load average over a threshold. This is what catches the
+#      case the runner check cannot see at all, and which the to-do's own
+#      second evidence paragraph is explicit about: two peer sessions running
+#      `cargo build` by hand loaded the box just as badly as continuous
+#      integration did, and no runner process was involved.
+#
+# The process scan reads /proc directly rather than shelling out to `pgrep -f`.
+# That is not a style preference: this repository has been bitten three separate
+# times by a `pgrep -f` pattern matching the very shell that ran it, and a
+# `pgrep -f Runner.Worker` inside a script whose own command line mentions
+# Runner.Worker is the same trap one step removed.
+
+CI_LOAD_GATE_RUNNER_COMM = "Runner.Worker"
+
+# Default threshold as a multiple of the processor count. One means "the box is
+# fully committed". Sixteen cores here: the failing runs sat near 23 and a
+# healthy box with a job running sits near 8 to 11, so 16 separates them with
+# room on both sides.
+CI_LOAD_GATE_DEFAULT_LOAD_RATIO = 1.0
+
+# How long to wait for the box to quieten before giving up, in seconds. Bounded
+# on purpose. The systemwide single-instance lock below is fail-fast for the
+# reason its own comment gives -- queueing behind a hung holder just relocates
+# the hang -- and the same reasoning caps this: a session that cannot start
+# within the window is better off being told, so it can do something that does
+# not need the box, than blocked indefinitely.
+CI_LOAD_GATE_DEFAULT_TIMEOUT_SECONDS = 900
+
+CI_LOAD_GATE_POLL_SECONDS = 15
+
+# The gate waits for CPU SATURATION, not for a high load average. The one-minute load average counts every runnable and every
+# uninterruptible task, so a box running hundreds of short-lived Chrome, PostgreSQL and test processes reads 25 to 50 on 32
+# cores while its processors are mostly idle (a load average in the thirties is normal here). What makes
+# tours flaky is processors with no spare time, so the gate measures that: the CPU busy percentage over a short window from
+# /proc/stat and the kernel's pressure-stall figure `some avg10` from /proc/pressure/cpu, and holds only while BOTH are at or
+# above their limits. Environment overrides: HAMS_CI_LOAD_GATE_CPU_BUSY_PERCENT, HAMS_CI_LOAD_GATE_PSI_PERCENT.
+CI_LOAD_GATE_DEFAULT_CPU_BUSY_PERCENT = 92.0
+CI_LOAD_GATE_DEFAULT_PSI_PERCENT = 25.0
+CI_LOAD_GATE_SAMPLE_SECONDS = 1.0
+
+
+def find_runner_worker_processes(proc_root="/proc"):
+    """Return a list of live GitHub Actions job processes, as dicts with
+    `pid`, `comm` and `uid`.
+
+    Reads /proc directly. A process that exits between the listing and the
+    read is skipped rather than raising, which is the normal case on a busy
+    box and not an error worth reporting.
+    """
+    found = []
+    try:
+        entries = os.listdir(proc_root)
+    except OSError as e:
+        # /proc unreadable (an unusual container, or a hardened mount). Report
+        # nothing found rather than failing the run: the load-average signal
+        # below still applies, and refusing to test because a diagnostic is
+        # unavailable would be worse than the problem this gate solves.
+        _logger.debug("CI load gate: could not list %s: %s", proc_root, e)
+        return found
+    for entry in entries:
+        if not entry.isdigit():
+            continue
+        comm_path = os.path.join(proc_root, entry, "comm")
+        try:
+            with open(comm_path, "r", encoding="utf-8", errors="replace") as fh:
+                comm = fh.read().strip()
+        except OSError as e:
+            _logger.debug("Ignored OSError reading %s: %s", comm_path, e)
+            continue
+        if comm != CI_LOAD_GATE_RUNNER_COMM:
+            continue
+        try:
+            uid = os.stat(os.path.join(proc_root, entry)).st_uid
+        except OSError as e:
+            _logger.debug("Ignored OSError stat-ing %s: %s", entry, e)
+            uid = None
+        found.append({"pid": int(entry), "comm": comm, "uid": uid})
+    return found
+
+
+def evaluate_ci_load_gate(runner_workers, load_average_1min, cpu_count, load_ratio):
+    """Decide whether the box is too busy to start an Odoo test run.
+
+    Deliberately pure: it takes the two measurements rather than making them,
+    so the decision can be tested at its boundaries without a loaded machine
+    and without mocking /proc. Returns `(busy, reason)`, where `reason` is the
+    human-readable sentence printed to the operator and is empty when not busy.
+    """
+    threshold = max(1.0, float(cpu_count) * float(load_ratio))
+    if runner_workers:
+        pids = ", ".join(str(p["pid"]) for p in sorted(runner_workers, key=lambda p: p["pid"]))
+        return (
+            True,
+            "a self-hosted continuous-integration job is running "
+            "(%s process%s: pid %s)"
+            % (
+                CI_LOAD_GATE_RUNNER_COMM,
+                "" if len(runner_workers) == 1 else "es",
+                pids,
+            ),
+        )
+    if load_average_1min is not None and load_average_1min > threshold:
+        return (
+            True,
+            "the one-minute load average is %.2f, above the %.2f threshold "
+            "for this %d-processor box" % (load_average_1min, threshold, cpu_count),
+        )
+    return (False, "")
+
+
+# [@ANCHOR: test:read_cpu_counters]
+def read_cpu_counters(proc_root="/proc"):
+    """``(busy, total)`` CPU jiffies summed over all processors from the first line of `proc_root`/stat, or None.
+
+    `busy` is everything but idle and iowait (a processor waiting for the disk has spare time), `total` is every
+    counter on the line except guest times, which the kernel already counts inside user and nice. Returns None when the
+    file cannot be read or parsed. Reads one small file. Full entry: tools/README.md."""
+    try:
+        with open(os.path.join(proc_root, "stat"), "r", encoding="utf-8") as handle:
+            fields = handle.readline().split()
+        values = [int(v) for v in fields[1:9]]
+    except (OSError, ValueError):
+        return None
+    if fields[:1] != ["cpu"] or len(values) < 5:
+        return None
+    total = sum(values)
+    return total - values[3] - values[4], total
+
+
+# [@ANCHOR: test:read_cpu_pressure]
+def read_cpu_pressure(proc_root="/proc"):
+    """The ``some avg10`` percentage of `proc_root`/pressure/cpu (the share of the last ten seconds in which at least one
+    runnable task waited for a processor), or None when the kernel has no pressure-stall information or the file is
+    unreadable. Reads one small file. Full entry: tools/README.md."""
+    try:
+        with open(os.path.join(proc_root, "pressure", "cpu"), "r", encoding="utf-8") as handle:
+            for line in handle:
+                words = line.split()
+                if words[:1] == ["some"]:
+                    for word in words[1:]:
+                        if word.startswith("avg10="):
+                            value = float(word.split("=", 1)[1])
+                            return value if math.isfinite(value) else None
+    except (OSError, ValueError):
+        return None
+    return None
+
+
+# [@ANCHOR: test:evaluate_cpu_saturation_gate]
+def evaluate_cpu_saturation_gate(
+    runner_workers, cpu_busy_percent, psi_some_avg10, busy_limit, psi_limit, load_average_1min=None, cpu_count=1, load_ratio=None
+):
+    """Decide whether the box's processors are saturated, which is what makes tours and url_open tests flaky. Pure.
+
+    Returns ``(busy, reason)``; `reason` is empty when not busy.
+
+    runner_workers: the list `find_runner_worker_processes` returns; any entry makes the box busy (a self-hosted CI job).
+    cpu_busy_percent: CPU busy share over a short window, 0 to 100, or None when it could not be measured.
+    psi_some_avg10: `read_cpu_pressure`, or None. busy_limit, psi_limit: the percentages at or above which each signal
+    counts as saturated.
+    With both signals the box is busy only when BOTH are at or above their limits (high busy time with no task ever waiting is
+    a full but keeping-up box; waiting tasks with idle processors are the many-short-processes case the load average
+    mistakes for load). With one signal missing the other decides alone; with neither the box is not busy.
+    load_average_1min, cpu_count, load_ratio: the legacy rule (`evaluate_ci_load_gate`: load average above cpu_count x
+    load_ratio), applied only when `load_ratio` is not None, which the caller passes when the operator set
+    HAMS_CI_LOAD_GATE_RATIO explicitly."""
+    if runner_workers:
+        pids = ", ".join(str(p["pid"]) for p in sorted(runner_workers, key=lambda p: p["pid"]))
+        return (
+            True,
+            "a self-hosted continuous-integration job is running (%s process%s: pid %s)"
+            % (CI_LOAD_GATE_RUNNER_COMM, "" if len(runner_workers) == 1 else "es", pids),
+        )
+    if load_ratio is not None:
+        busy, reason = evaluate_ci_load_gate([], load_average_1min, cpu_count, load_ratio)
+        if busy:
+            return (True, reason + " (HAMS_CI_LOAD_GATE_RATIO is set)")
+    signals = []
+    if cpu_busy_percent is not None:
+        signals.append((cpu_busy_percent >= busy_limit, "the processors are %.0f%% busy (limit %.0f%%)" % (cpu_busy_percent, busy_limit)))
+    if psi_some_avg10 is not None:
+        signals.append((psi_some_avg10 >= psi_limit, "tasks waited for a processor %.0f%% of the last 10 s (limit %.0f%%)" % (psi_some_avg10, psi_limit)))
+    if signals and all(saturated for saturated, _ in signals):
+        return (True, "the processors are saturated: " + " and ".join(text for _, text in signals))
+    return (False, "")
+
+
+# [@ANCHOR: test:measure_cpu_busy_percent]
+def measure_cpu_busy_percent(sleep_func=time.sleep, window=CI_LOAD_GATE_SAMPLE_SECONDS, read=read_cpu_counters):
+    """The processors' busy percentage (0 to 100) over `window` seconds: two `read_cpu_counters` samples with `sleep_func(window)`
+    between them. Returns None when either sample cannot be read or no time passed on the counters. Blocks for `window`."""
+    first = read()
+    if first is None:
+        return None
+    sleep_func(window)
+    second = read()
+    if second is None or second[1] <= first[1]:
+        return None
+    return 100.0 * (second[0] - first[0]) / (second[1] - first[1])
+
+
+# [@ANCHOR: test:legacy_load_gate_ratio]
+def legacy_load_gate_ratio(environ, ratio, say=print):
+    """The load-average ratio the gate may apply, or None. `HAMS_CI_LOAD_GATE_RATIO` alone is IGNORED: it switches the gate to the
+    legacy rule (one-minute load average above cores x ratio) that Bruce rejected, since a load average in the thirties is normal on
+    the dev box, and it overrides the CPU and pressure rule. The old shortcut `sudo -u odoo env HAMS_ISOLATED_NS=1
+    HAMS_CI_LOAD_GATE_RATIO=3 ...` made runs stall that way. It applies only when `HAMS_CI_LOAD_GATE_LEGACY=1` is also set. `ratio` is
+    the parsed value; `say` prints the warning (loud, when the variable is set without the second one). Returns `ratio` or None."""
+    if not environ.get("HAMS_CI_LOAD_GATE_RATIO"):
+        return None
+    if environ.get("HAMS_CI_LOAD_GATE_LEGACY") == "1":
+        return ratio
+    say(
+        "[!] WARNING: HAMS_CI_LOAD_GATE_RATIO is set and is being IGNORED. It would switch the load gate to the legacy "
+        "load-average rule (load average above cores x ratio) that Bruce rejected: a load average in the thirties is normal here, so "
+        "runs stall for no reason. The gate uses the CPU-busy and CPU-pressure rule. Unset it (an old `sudo -u odoo env "
+        "HAMS_ISOLATED_NS=1 HAMS_CI_LOAD_GATE_RATIO=3 ...` command line carried it); to really want the legacy rule set "
+        "HAMS_CI_LOAD_GATE_LEGACY=1 as well."
+    )
+    return None
+
+
+# [@ANCHOR: test:warn_isolated_ns_with_slots]
+def warn_isolated_ns_with_slots(environ, slots, say=print):
+    """Warns, loudly, when `HAMS_ISOLATED_NS=1` is set on a fresh invocation (not the re-exec'd final phase, `HAMS_TEST_LOCK_HELD=1`)
+    of a machine with more than one slot: the run is pinned to the host namespace, shares the host's network, and above slot 1
+    cannot run modules that mention RabbitMQ while a host RabbitMQ listens (ADR 0116). The normal form, `python3
+    hams_shared/tools/test.py --wait -u <modules>` without it, gives every run a private network namespace. Returns True when it
+    warned."""
+    if environ.get("HAMS_ISOLATED_NS") != "1" or environ.get("HAMS_TEST_LOCK_HELD") == "1" or slots <= 1:
+        return False
+    say(
+        "[!] WARNING: HAMS_ISOLATED_NS=1 with %d test slots: this pins the run to the host's network namespace (single slot "
+        "behaviour; RabbitMQ modules are refused above slot 1). Leave it out: `python3 hams_shared/tools/test.py --wait -u <modules>` "
+        "runs in a private namespace in any slot." % slots
+    )
+    return True
+
+
+def _ci_load_gate_settings():
+    """Read the gate's three environment overrides, ignoring unparseable values.
+
+    A malformed override falls back to the default rather than aborting: this
+    is a guard against a false test failure, and refusing to run because
+    somebody typed a threshold wrong would be a worse failure than the one it
+    prevents. The fallback is logged so it is not silent.
+    """
+    ratio = CI_LOAD_GATE_DEFAULT_LOAD_RATIO
+    raw_ratio = os.environ.get("HAMS_CI_LOAD_GATE_RATIO")
+    if raw_ratio:
+        try:
+            parsed_ratio = float(raw_ratio)
+            if not math.isfinite(parsed_ratio):
+                raise ValueError(raw_ratio)
+            ratio = parsed_ratio
+        except ValueError:
+            # float("nan")/float("inf")/float("-infinity") all parse successfully with no
+            # ValueError -- explicitly re-raising into this same branch is what actually rejects
+            # them, same fallback-and-log treatment as any other unparseable override.
+            print(
+                "[!] HAMS_CI_LOAD_GATE_RATIO=%r is not a number; using the default %.2f"
+                % (raw_ratio, ratio)
+            )
+    timeout = CI_LOAD_GATE_DEFAULT_TIMEOUT_SECONDS
+    raw_timeout = os.environ.get("HAMS_CI_LOAD_GATE_TIMEOUT")
+    if raw_timeout:
+        try:
+            parsed_timeout = float(raw_timeout)
+            if not math.isfinite(parsed_timeout):
+                raise ValueError(raw_timeout)
+            timeout = parsed_timeout
+        except ValueError:
+            print(
+                "[!] HAMS_CI_LOAD_GATE_TIMEOUT=%r is not a number; using the default %d"
+                % (raw_timeout, timeout)
+            )
+    return ratio, timeout
+
+
+# [@ANCHOR: test:_env_percent]
+def _env_percent(name, default):
+    """A finite number from environment variable `name`, else `default` (a malformed value is reported and ignored)."""
+    raw = os.environ.get(name)
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+        if not math.isfinite(value):
+            raise ValueError(raw)
+        return value
+    except ValueError:
+        print("[!] %s=%r is not a number; using the default %.0f" % (name, raw, default))
+        return default
+
+
+# [@ANCHOR: test:wait_for_ci_load_to_subside]
+def wait_for_ci_load_to_subside(sleep_func=None, now_func=None):
+    """Block until the box is quiet enough to test on, or give up.
+
+    Returns True when it is safe to proceed and False when the wait timed out.
+    The caller exits on False; this function does not, so that it stays
+    testable.
+
+    MUST be called BEFORE the systemwide single-instance lock is acquired.
+    Waiting while holding that lock would stop every other session on the box
+    from testing for the whole duration of somebody else's build matrix, which
+    converts a local delay into a box-wide one.
+    """
+    if os.environ.get("HAMS_SKIP_CI_LOAD_GATE") == "1":
+        print(
+            "[*] Skipping the continuous-integration load gate "
+            "(HAMS_SKIP_CI_LOAD_GATE=1 -- tour and url_open timeouts under load are "
+            "on you)."
+        )
+        return True
+
+    # `test.py --help` starts no Odoo and loads nothing, so making somebody wait
+    # out a build matrix to read the usage text would be a pure regression. The
+    # argument parser lives several hundred lines below the lock, so this is
+    # checked against sys.argv directly rather than against parsed arguments.
+    if "-h" in sys.argv[1:] or "--help" in sys.argv[1:]:
+        return True
+
+    sleep_func = sleep_func or time.sleep
+    now_func = now_func or time.monotonic
+    ratio, timeout = _ci_load_gate_settings()
+    cpu_count = os.cpu_count() or 1
+
+    busy_limit = _env_percent("HAMS_CI_LOAD_GATE_CPU_BUSY_PERCENT", CI_LOAD_GATE_DEFAULT_CPU_BUSY_PERCENT)
+    psi_limit = _env_percent("HAMS_CI_LOAD_GATE_PSI_PERCENT", CI_LOAD_GATE_DEFAULT_PSI_PERCENT)
+    # HAMS_CI_LOAD_GATE_RATIO alone is ignored with a warning (legacy_load_gate_ratio); with HAMS_CI_LOAD_GATE_LEGACY=1 the old rule applies too.
+    explicit_ratio = legacy_load_gate_ratio(os.environ, ratio)
+
+    def measure():
+        try:
+            load_1min = os.getloadavg()[0]
+        except OSError as e:  # no /proc/loadavg
+            _logger.debug("Ignored OSError reading load average: %s", e)
+            load_1min = None
+        workers = find_runner_worker_processes()
+        psi = read_cpu_pressure()
+        # Pressure first: when no task has been waiting for a processor, the processors are not saturated and no sampling
+        # window is needed. Without pressure information, or with pressure at the limit, measure the busy percentage.
+        busy_percent = None
+        if psi is None or psi >= psi_limit:
+            busy_percent = measure_cpu_busy_percent(sleep_func)
+        return evaluate_cpu_saturation_gate(
+            workers, busy_percent, psi, busy_limit, psi_limit, load_1min, cpu_count, explicit_ratio
+        )
+
+    busy, reason = measure()
+    if not busy:
+        return True
+
+    deadline = now_func() + timeout
+    print(
+        "[*] Waiting for the box to quieten before starting Odoo: %s.\n"
+        "    Browser tours and url_open tests fail on their own ten-second timeouts "
+        "under this load,\n"
+        "    and those failures read exactly like code regressions. Waiting up to "
+        "%d seconds; set\n"
+        "    HAMS_SKIP_CI_LOAD_GATE=1 to proceed anyway, or HAMS_CI_LOAD_GATE_TIMEOUT "
+        "to change the wait." % (reason, int(timeout))
+    )
+    while now_func() < deadline:
+        sleep_func(CI_LOAD_GATE_POLL_SECONDS)
+        busy, reason = measure()
+        if not busy:
+            print("[*] The box is quiet again; proceeding.")
+            return True
+    print(
+        "🛑 ERROR: the box is still too busy to test on after %d seconds: %s.\n"
+        "    Not starting Odoo, because the run would most likely produce false "
+        "timeout failures.\n"
+        "    Re-run when it is quiet, raise HAMS_CI_LOAD_GATE_TIMEOUT, or set "
+        "HAMS_SKIP_CI_LOAD_GATE=1 to override." % (int(timeout), reason)
+    )
+    return False
+
+
+def _try_flock_once(lock_file):
+    """One non-blocking attempt at the single-instance flock; True if taken."""
+    try:
+        fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except IOError:
+        return False
+
+
+# [@ANCHOR: test:_open_lock_file]
+def _open_lock_file(lock_file_path):
+    """Open (creating if needed) the lock file; the open file object is returned, not yet locked.
+
+    The lock is a single systemwide path, in a world-writable, sticky directory (/tmp) that can be
+    shared across UIDs -- e.g. this file may already be owned by `odoo` from a prior run when `bruce`'s
+    own Process A tries to open it next, or vice versa. Two real risks that creates, both addressed
+    explicitly here rather than left to this box's current sysctl defaults:
+      1. A malicious or stale symlink planted at this path in /tmp could otherwise turn the
+         os.chmod(0o777) below into "chmod 0o777 an arbitrary file elsewhere" when run as root --
+         opened with O_NOFOLLOW so a symlink here is always rejected (independent of this box's
+         fs.protected_symlinks sysctl, which happens to already be 1 -- the safe default -- but this
+         shouldn't depend on that).
+      2. fs.protected_regular (this box: 2, i.e. enforced even for root) rejects opening an existing
+         regular file for writing/creation in a sticky world-writable directory when the opener
+         neither owns the file nor owns the directory -- e.g. `bruce` opening a lock file `odoo`
+         created earlier. The except-fallback below already existed for this before this fix (it's
+         not new), and still works: flock() locks are independent of the fd's own read/write open
+         mode, so a read-only fd is just as capable of holding LOCK_EX.
+    """
+    try:
+        fd = os.open(
+            lock_file_path,
+            os.O_CREAT | os.O_WRONLY | os.O_APPEND | os.O_NOFOLLOW,
+            0o666,
+        )
+        lock_file = os.fdopen(fd, "a")
+        try:
+            os.fchmod(lock_file.fileno(), 0o777)  # the descriptor, not the path: a path swapped for a symlink is never followed
+        except OSError as e:
+            # Not the file's owner (e.g. a prior run by a different user already created it) -- fine,
+            # we only need to flock it, not own or widen its permissions.
+            _logger.debug("Ignored OSError: %s", e)
+        return lock_file
+    except OSError:  # audit-ignore-catch-all
+        fd = os.open(lock_file_path, os.O_RDONLY | os.O_NOFOLLOW)
+        return os.fdopen(fd, "r")
+
+
+# How long a holder record keeps its slot reserved while the slot's flock is free: the exec window of the full pipeline lasts
+# seconds, and a record that old with a free flock belongs to a run that is stuck or gone.
+SLOT_RESERVATION_SECONDS = 120.0
+
+
+# [@ANCHOR: test:try_slot_locks]
+def _try_slot_locks(lock_base_path, slots, only_slot=None, respect_reservations=True):
+    """One non-blocking pass over the slot locks: returns the slot number taken, or None if none is free.
+
+    Slots are tried in order, so a run takes the lowest free one. `only_slot` restricts the pass to that
+    slot (a re-exec'd child taking back the slot its parent held). Without `only_slot`, a slot that a live
+    run's holder record names is skipped even when its flock is free: the invoking process of the full
+    pipeline lets go of its flock when it execs into sudo / systemd-run / unshare, and the child takes the
+    slot back a moment later, and a run that took the slot in that window ended up sharing it. The open,
+    locked file is kept in `_single_instance_lock` for the life of the process; a lock file that was not taken
+    is closed. `respect_reservations=False` skips the holder-record check altogether: the root phase of the full pipeline passes it,
+    because inside its PID namespace the host pids of the records look dead and reading them DELETES them (with one slot the
+    root phase has no `only_slot`, which is how a run's holder record used to vanish when the namespace came up)."""
+    global _single_instance_lock
+    candidates = [only_slot] if only_slot else range(1, slots + 1)
+    reserved = set() if (only_slot or not respect_reservations) else {
+        holder["slot"]
+        for holder in lock_queue.read_holders(lock_queue.queue_dir_for_lock(lock_base_path))
+        if holder.get("pid") != os.getpid() and time.time() - (holder.get("since") or 0) < SLOT_RESERVATION_SECONDS
+    }
+    for slot in candidates:
+        if slot in reserved:
+            continue
+        lock_file = _open_lock_file(runner_slots.slot_lock_path(lock_base_path, slot))
+        if _try_flock_once(lock_file):
+            _single_instance_lock = lock_file
+            return slot
+        lock_file.close()
+    return None
+
+
+TAKE_BACK_SECONDS_ENV = "HAMS_TEST_TAKE_BACK_SECONDS"
+DEFAULT_TAKE_BACK_SECONDS = 30.0
+
+
+# [@ANCHOR: test:take_back_slot_lock]
+def take_back_slot_lock(lock_base_path, slots, only_slot, sleep=time.sleep, clock=time.monotonic, environ=None):
+    """The root phase of the full pipeline takes back the slot its invoking process held; returns the slot, or None.
+
+    The invoking process lets go of its flock when it execs into sudo / systemd-run / unshare, so the flock is free
+    for a moment before this phase starts. Retries `_try_slot_locks(lock_base_path, slots, only_slot)` every 0.2 s for up
+    to HAMS_TEST_TAKE_BACK_SECONDS (default 30; tests set a small value) and returns None if the slot stays taken, which
+    means another run took it (an older test.py has no holder-record reservation): the caller prints
+    `_no_slot_message` and exits 1. Touches no ticket and writes no holder record (see main()). `only_slot` is the
+    `--slot-held` of the command line, or None, in which case any free slot is taken. Full entry: tools/README.md."""
+    environ = os.environ if environ is None else environ
+    try:
+        limit = float(environ.get(TAKE_BACK_SECONDS_ENV, DEFAULT_TAKE_BACK_SECONDS))
+    except ValueError:
+        limit = DEFAULT_TAKE_BACK_SECONDS
+    if not math.isfinite(limit):
+        limit = DEFAULT_TAKE_BACK_SECONDS
+    deadline = clock() + limit
+    while True:
+        slot = _try_slot_locks(lock_base_path, slots, only_slot, respect_reservations=False)
+        if slot is not None or clock() >= deadline:
+            return slot
+        sleep(0.2)
+
+
+# [@ANCHOR: test:_no_slot_message]
+def _no_slot_message(slots, only_slot):
+    if slots == 1 or only_slot:
+        return "🛑 ERROR: Another instance of test.py is already running. Exiting."
+    return (
+        f"🛑 ERROR: All {slots} test.py slots are busy (test.py --queue-status shows them). Exiting."
+    )
+
+
+# The phase a run writes into its holder record when it takes its slot: "preflight" while it still has to run its pre-flight checks
+# inside the slot, "running" when they were done before (the re-exec'd phases carry --preflight-done). main() sets it.
+_HOLDER_PHASE = "running"
+
+
+# [@ANCHOR: test:_record_lock_holder]
+def _record_lock_holder(lock_file_path, slot=None, ticket=None):
+    """Best effort: note who holds the lock so queue lines and --queue-status can name it.
+    Never allowed to affect the test run. `slot` and `ticket` are written in every mode (also on a machine
+    with one slot): the queue tells running runs from waiting ones by them, and a record without the ticket once
+    made a slotted waiter count the running holder as the oldest waiter."""
+    qdir = lock_queue.queue_dir_for_lock(lock_file_path)
+    name = lock_queue.write_holder(
+        qdir, " ".join(["test.py"] + sys.argv[1:])[:200], slot=slot, ticket=ticket, phase=_HOLDER_PHASE
+    )
+    if name:
+        atexit.register(lock_queue.release_ticket, qdir, name)
+        queued_ticket = os.environ.get("HAMS_TEST_QUEUE_TICKET")
+        if queued_ticket:
+            atexit.register(lock_queue.release_ticket, qdir, queued_ticket)
+
+
+# [@ANCHOR: test:acquire_lock_via_queue]
+def _acquire_lock_via_queue(lock_file_path, timeout, slots=1, only_slot=None):
+    """--wait / HAMS_TEST_WAIT=1: queue FIFO for the lock instead of failing fast; returns the slot taken.
+
+    The lock itself is still a flock (one per slot, `_try_slot_locks`); the queue only decides who
+    may try for it (see lock_queue.py). A re-exec'd child (sudo -> systemd-run -> unshare) adopts
+    its parent's ticket from HAMS_TEST_QUEUE_TICKET, which the parent's pid keeps live, and takes
+    back only `only_slot`, the slot its parent held. Full entry: tools/README.md."""
+    qdir = lock_queue.queue_dir_for_lock(lock_file_path)
+    os.environ.setdefault("HAMS_TEST_QUEUE_DIR", qdir)
+    adopted = os.environ.get("HAMS_TEST_QUEUE_TICKET")
+    taken = []
+
+    def try_lock():
+        slot = _try_slot_locks(lock_file_path, slots, only_slot)
+        if slot is None:
+            return False
+        taken.append(slot)
+        return True
+
+    status, ticket = lock_queue.acquire(
+        qdir,
+        try_lock,
+        info=" ".join(["test.py"] + sys.argv[1:])[:200],
+        ticket=adopted,
+        timeout=timeout,
+        on_head=None if adopted else wait_for_ci_load_to_subside,
+        slots=slots,
+    )
+    if status == lock_queue.GATE_FAILED:
+        sys.exit(1)
+    if status == lock_queue.TIMEOUT:
+        print("🛑 ERROR: timed out waiting for the test.py lock. Exiting.")
+        sys.exit(lock_queue.EXIT_WAIT_TIMEOUT)
+    os.environ["HAMS_TEST_QUEUE_TICKET"] = ticket
+    atexit.register(lock_queue.release_ticket, qdir, ticket)
+    _record_lock_holder(lock_file_path, taken[-1], ticket)
+    return taken[-1]
+
+
+def module_arg_for(args):
+    """The comma-separated module list a run covers: -u, else the modules a --test-tags selector names."""
+    if args.module:
+        return args.module
+    if args.test_tags:
+        return ",".join(tag_spec_modules(args.test_tags))
+    return None
+
+
+def select_modules(args, base_dir, ignore_patterns):
+    """(target_modules, install_modules) for a run: what is tested, and what is installed."""
+    module_arg = module_arg_for(args)
+    target_modules = [m.strip().replace("hams_open/", "") for m in module_arg.split(",")] if module_arg else []
+    install_modules = (
+        [m.split(":")[0] for m in target_modules]
+        if module_arg
+        else get_local_modules(base_dir, ignore_patterns)
+    )
+    if not target_modules:
+        target_modules = list(install_modules)
+    if not module_arg and "caching" in target_modules:
+        target_modules.remove("caching")
+    return target_modules, install_modules
+
+
+# [@ANCHOR: test:add_test_companions]
+def add_test_companions(install_modules, target_modules, base_dir, environ=None):
+    """(install_modules plus the test companions of the tested modules, note). Full entry: tools/README.md.
+
+    A module's tests can need a module its manifest does not depend on (ham_communications_consent's service account, or a
+    field another module adds). `devbox_tools/asset_gate.py` in hams_com knows them and the remote runner already installs
+    them; this gives a plain `test.py -u <module>` the same install list. They are installed and not tested: the test tags
+    still name only the target modules. Without a hams_com checkout (or an asset_gate.py in it) nothing is added."""
+    environ = os.environ if environ is None else environ
+    trees = [base_dir]
+    for name in ("hams_com", "hams_open"):
+        sibling = anchor_scan_sibling_dir(base_dir, name, environ)
+        if sibling and sibling not in trees:
+            trees.append(sibling)
+    gate_path = next((os.path.join(t, "devbox_tools", "asset_gate.py") for t in trees
+                      if os.path.isfile(os.path.join(t, "devbox_tools", "asset_gate.py"))), None)
+    if gate_path is None:
+        return list(install_modules), ""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("asset_gate_for_test_py", gate_path)
+    gate = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gate)
+    modules = list(install_modules)
+    added = []
+    for module in [m.split(":")[0] for m in target_modules]:
+        for companion in gate.test_companions(module, trees):
+            if companion not in modules:
+                modules.append(companion)
+                added.append(companion)
+    note = (f"installing {', '.join(added)} without testing them: a tested module's tests need them installed "
+            "(devbox_tools/asset_gate.py test companions)") if added else ""
+    return modules, note
+
+
+def rust_daemon_build_needed(args, base_dir, install_modules):
+    """Whether this run must build the Rust daemons before Odoo starts.
+
+    The build is minutes of cargo output, and it lands in the run's RAM overlay (the namespace
+    mounts tmpfs over /home), so every run starts cold and the result is thrown away. A run of
+    named modules whose files never mention a daemon crate does not use one: skip. A full run (no
+    -u, no --test-tags) and --build-daemons always build."""
+    if args.build_daemons or not module_arg_for(args):
+        return True
+    crates = tuple(infrastructure.RUST_DAEMON_CRATES)
+    for module in install_modules:
+        module_dir = os.path.join(base_dir, module)
+        if not os.path.isdir(module_dir):
+            return True  # not a module directory of this repo: cannot tell, so build
+        for root, dirs, files in os.walk(module_dir):
+            dirs[:] = [d for d in dirs if d not in ("target", "node_modules", "__pycache__", ".git")]
+            for name in files:
+                if not name.endswith((".py", ".js", ".xml", ".rs", ".toml", ".service", ".md", ".sh")):
+                    continue
+                try:
+                    with open(os.path.join(root, name), encoding="utf-8", errors="ignore") as f:
+                        text = f.read()
+                except OSError:
+                    continue
+                if any(crate in text for crate in crates):
+                    return True
+    return False
+
+
+def require_repo_root_cwd():
+    """Exit 1 with the fix unless the current directory is a repository root that has the runner."""
+    cwd = os.getcwd()
+    if is_git_checkout_root(cwd) and (
+        os.path.isfile(os.path.join(cwd, "hams_shared", "tools", "test.py"))
+        or os.path.isfile(os.path.join(cwd, "tools", "test.py"))
+    ):
+        return
+    print(f"❌ test.py: the current directory {cwd} is not a repository root with hams_shared/tools/test.py.")
+    print("   NEXT: `cd` to the root of hams_open, hams_com or hams_shared (in a git worktree of hams_open, run "
+          "`python3 fix_worktree_symlinks.py` there first) and rerun.")
+    sys.exit(1)
+
+
+# [@ANCHOR: test:run_preflight]
+def run_preflight(args):
+    """The lint, init-import, anchor and JavaScript pre-flight, run from the repository root. Runs in
+    the first seconds of the host process, before the lock queue, the namespace and the daemon
+    builds, so a finding is reported at once instead of after a long provisioning phase."""
+    if os.environ.get("HAMS_ISOLATED_NS") == "1":
+        # This invocation skips the provisioning `--test` does; stop at once if the host lacks what that created.
+        host_requirements.require_test_host()
+    base_dir = os.getcwd()
+    ignore_filepath = os.path.join(base_dir, args.config)
+    target_modules, _install = select_modules(args, base_dir, load_ignore_file(ignore_filepath))
+    if not target_modules:
+        print("❌ test.py: no modules found in this directory.\n   NEXT: run it from a repository root that contains Odoo modules.")
+        sys.exit(1)
+    check_linters("/usr/bin/python3", base_dir, ignore_filepath, None, target_modules)
+
+
+# [@ANCHOR: test:test__runner_argument_parser_class]
+class _RunnerArgumentParser(argparse.ArgumentParser):
+    """argparse's default error is a usage block and exit 2; in a long run's output that is lost.
+    End with the cause and the next action as the last lines."""
+
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        print(
+            f"\n❌ test.py: {message}\n"
+            "   NEXT: fix the command line (nothing was started). `test.py --help` lists the options; "
+            "to run one test: `test.py -u MODULE --test-tags /MODULE:Class.test_method`.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
+
+# [@ANCHOR: test:build_arg_parser]
+def build_arg_parser():
+    """The runner's command line. Built once, outside main(), so main() can reject an unknown or
+    malformed option in the first second, before the lock queue, the namespace, the daemon builds
+    or the database."""
+    parser = _RunnerArgumentParser(formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument(
+        "-m",
+        "--mode",
+        choices=["standard", "individual", "xml", "downloads"],
+        default="standard",
+    )
+    parser.add_argument("-d", "--db", default="hams_test")
+    parser.add_argument("-u", "--module")
+    parser.add_argument("-l", "--log-directory", default=os.path.expanduser("~/tmp"))
+    parser.add_argument("-c", "--config", default="ignore_list.txt")
+    parser.add_argument("--profile", action="store_true")
+    parser.add_argument(
+        "--wait",
+        action="store_true",
+        help="Queue FIFO for the box-wide test lock instead of failing fast when another run "
+        "holds it (also HAMS_TEST_WAIT=1). Prints a queue-position line periodically.",
+    )
+    parser.add_argument(
+        "--wait-timeout",
+        type=float,
+        default=None,
+        metavar="SECONDS",
+        help="With --wait: give up after this long (exit status 75). Default: wait indefinitely.",
+    )
+    parser.add_argument(
+        "--queue-status",
+        action="store_true",
+        help="Print the current lock holder and the --wait queue, then exit (read-only).",
+    )
+    parser.add_argument(
+        "--slots",
+        default=None,
+        metavar="N",
+        help="Allow N test.py runs at once on this machine (1..%d), each in its own slot with its own "
+        "database, ports, Redis database and files. Also HAMS_TEST_SLOTS=N, or a one-line "
+        "/opt/hams/etc/test_slots (every run reads the machine's setting, and --slots can only raise it: set "
+        "HAMS_TEST_SLOTS=1 to run with one slot). Default 1: one run per machine, as always. The supported way to "
+        "run slots is the full pipeline, which gives every run its own network namespace, Redis and RabbitMQ; "
+        "do not set HAMS_ISOLATED_NS=1 for normal runs (it shares the host's network and limits slots above 1)."
+        % runner_slots.MAX_SLOTS,
+    )
+    parser.add_argument(
+        "--coverage",
+        action="store_true",
+        help="Wrap the odoo test process(es) in coverage.py (ADR 0090 / "
+        "ANCHOR_COVERAGE_AND_REMEDIATION_PLAN.md Stage 2, Python sub-track). "
+        "Writes coverage_report/coverage.json (repo-relative file paths, "
+        "matching check_function_test_anchors.py's own keying) after the run.",
+    )
+    parser.add_argument(
+        "--mcp",
+        action="store_true",
+        help="Launch the MCP server instead of running tests and shutting down.",
+    )
+    parser.add_argument(
+        "--pause-on-fail",
+        action="store_true",
+        help="Pause the browser indefinitely on tour failure (exposes port 9222).",
+    )
+    parser.add_argument(
+        "--offline-isolation",
+        action="store_true",
+        help=(
+            "Run the browser in a nested network namespace whose route to the Odoo test "
+            "server can be cut mid-test, and run ONLY the tests tagged 'offline_isolation'. "
+            "Lets a tour express a real offline operator's situation: hams.com unreachable, "
+            "the local relay on loopback still reachable. Opt-in; ordinary runs are "
+            "unaffected. See hams_shared/docs/OFFLINE_BROWSER_NAMESPACE_TESTING.md."
+        ),
+    )
+    parser.add_argument(
+        "--test-tags",
+        default=None,
+        metavar="TAGS",
+        help="Pass Odoo's --test-tags selector through, e.g. /my_module:TestClass.test_method, "
+        "for a run of one test or class (seconds, not the 15-25 minutes of a module run). With -u, "
+        "TAGS replaces the default '/<module>' selector; without -u, the modules named after the '/' "
+        "in TAGS are installed and tested. Standard mode only. A run selected this way is for "
+        "iterating and is NOT the pre-merge run: that is the whole module, `-u MODULE` with no tags.",
+    )
+    parser.add_argument(
+        "--build-daemons",
+        action="store_true",
+        help="Build the Rust daemons even when the selected modules do not mention them. By default a "
+        "run of named modules that never reference a daemon skips the cargo build (minutes, in RAM "
+        "overlay, discarded after every run). A full run (no -u) always builds them.",
+    )
+    parser.add_argument(
+        "--raw-failures",
+        action="store_true",
+        help="Report Odoo's verdict untouched: ignore the known-red baseline and rerun nothing (ADR 0118). "
+        "test_results.json is still written, listing every failing test; tools that bisect a failure use this.",
+    )
+    parser.add_argument(
+        "--bisect-modules",
+        action="store_true",
+        help="With -u MODULES and --test-tags /module:Class,...: find a minimal set of MODULES that still fails the "
+        "named tests, by rerunning test.py on smaller sets through the normal slot queue (ADR 0118). Prints the set "
+        "and writes a JSON report. The modules the tags name are always kept.",
+    )
+    parser.add_argument(
+        "--snapshot-gate",
+        action="store_true",
+        help="Build the whole-system gate tree for the current origin/main commits (hams_com, hams_open and the hams_shared "
+        "commit it records), its build outputs, and print the command line of every shard; refuses when an input is "
+        "stale. Options: tools/gate_snapshot.py create --help (ADR 0118). Runs nothing.",
+    )
+    parser.add_argument("--bisect-jobs", type=int, default=None, metavar="N",
+                        help="With --bisect-modules: trials at once, 1 or 2 (default: 2 when the machine has 2 slots, else 1).")
+    parser.add_argument("--bisect-max-runs", type=int, default=None, metavar="N",
+                        help="With --bisect-modules: stop after N trials (default 40); the set found so far is reported.")
+    parser.add_argument("--bisect-report", default=None, metavar="FILE",
+                        help="With --bisect-modules: the JSON report (default: bisect_<time>.json in the log directory).")
+    parser.add_argument(
+        "--solo",
+        action="store_true",
+        help="Run alone: never join a coalesced batch of other branches' `-u MODULES` runs "
+        "(docs/runbooks/LINT_TEST_BATCHING.md; HAMS_TEST_BATCH=off does the same).",
+    )
+    parser.add_argument(
+        "--keep-db",
+        action="store_true",
+        help="Slot mode (more than one slot): keep this run's database, filestore and slot directory when the run "
+        "ends, and print the database name, for triage of a failure. Without it a run in slot mode drops them "
+        "at the end, whether it passed, failed or was stopped (ADR 0116). The kept database is replaced by the next "
+        "run in the same slot; drop it yourself when done. No effect with one slot, which keeps its database as before.",
+    )
+    parser.add_argument(
+        "--test-order",
+        choices=["reverse"],
+        default=None,
+        help="Run the tests in REVERSE order (finds tests that leak state or depend on an earlier test). "
+        "Compare with a normal run.",
+    )
+    parser.add_argument("--slot-held", type=int, default=None, help=argparse.SUPPRESS)
+    parser.add_argument("--internal-ns-init", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--preflight-done", action="store_true", help=argparse.SUPPRESS)
+    return parser
+
+
+# [@ANCHOR: test:parse_runner_args]
+def parse_runner_args(argv=None):
+    """Parse and cross-check the command line; exits 2 with the cause as the last line."""
+    parser = build_arg_parser()
+    args = parser.parse_args(argv)
+    if args.test_order == "reverse":
+        # Every re-exec'd phase parses the same argv, so the final odoo process gets the environment too.
+        hook_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_order_hook")
+        os.environ["HAMS_TEST_ORDER"] = "reverse"
+        os.environ["PYTHONPATH"] = os.pathsep.join(filter(None, [hook_dir, os.environ.get("PYTHONPATH")]))
+    if args.slots is not None:
+        try:
+            args.slots = runner_slots.parse_slot_count(args.slots, "--slots")
+        except runner_slots.SlotConfigError as e:
+            parser.error(str(e))
+    if not _SAFE_DB_NAME_RE.match(args.db):  # also checked in rebuild_db; failing here costs nothing instead of a minute of set-up
+        parser.error(f"--db {args.db!r} is not a safe database name (must match ^[A-Za-z_][A-Za-z0-9_]*$).")
+    if args.slot_held is not None and not 1 <= args.slot_held <= (args.slots or 1):
+        parser.error(f"--slot-held {args.slot_held} is outside the --slots range 1..{args.slots or 1}")
+    if args.bisect_modules and not (args.module and args.test_tags):
+        parser.error("--bisect-modules needs -u MODULES (the failing set) and --test-tags (the failing tests).")
+    if args.test_tags is not None:
+        if args.mode != "standard":
+            parser.error(f"--test-tags needs --mode standard (got {args.mode}); the other modes pick tests themselves.")
+        if args.offline_isolation:
+            parser.error("--test-tags cannot be combined with --offline-isolation (that run selects its own tags).")
+        if not args.test_tags.strip():
+            parser.error("--test-tags is empty; give an Odoo tag spec such as /my_module:TestClass.test_method.")
+        if not args.module and not tag_spec_modules(args.test_tags):
+            parser.error(
+                f"--test-tags {args.test_tags!r} names no module; add -u MODULE or write the spec as "
+                "/my_module:TestClass.test_method."
+            )
+    return args
+
+
+def tag_spec_modules(test_tags):
+    """The modules an Odoo --test-tags selector names: the part after '/' in each comma-separated
+    spec ('[-][tag][/module][:Class][.method]'). Exclusions ('-...') name nothing to install."""
+    modules = []
+    for spec in test_tags.split(","):
+        spec = spec.strip()
+        if spec.startswith("-") or "/" not in spec:
+            continue
+        module = spec.split("/", 1)[1].split(":", 1)[0].strip()
+        if module and module not in modules:
+            modules.append(module)
+    return modules
+
+
+# [@ANCHOR: test:slot_handoff_args]
+def slot_handoff_args(slots, held_slot):
+    """The command-line words that hand this run's slot to its re-exec'd phases: none with one slot
+    (the command line is then exactly what it always was), else `--slots N --slot-held K`.
+
+    They travel in argv rather than the environment because sudo, systemd-run and unshare each decide
+    for themselves which environment variables survive; a child that lost the slot would have taken
+    slot 1 and shared its database with the run that holds it. Full entry: tools/README.md."""
+    if slots <= 1:
+        return []
+    return ["--slots", str(slots), "--slot-held", str(held_slot)]
+
+
+# [@ANCHOR: test:enforce_slot_refusals]
+def enforce_slot_refusals(resources, args, broker_users=()):
+    """Exit 1, naming every reason, if this run cannot use its slot (runner_slots.slot_refusals).
+    Slot 1 and a machine with one slot never exit here. `broker_users`: the modules under test that
+    use a RabbitMQ shared with the other slots (see broker_users_sharing_the_host). Full entry:
+    tools/README.md."""
+    reasons = runner_slots.slot_refusals(
+        resources,
+        args.pause_on_fail or os.environ.get("HAMS_PAUSE_ON_FAIL") == "1",
+        args.mcp,
+        list(broker_users),
+    )
+    if not reasons:
+        return
+    print(f"❌ ERROR: test slot {resources.slot} of {resources.slots} cannot run this:")
+    for reason in reasons:
+        print(f"   - {reason}")
+    print("NEXT: run it in slot 1 (while no other run holds it), or fix the cause above.")
+    sys.exit(1)
+
+
+# [@ANCHOR: test:broker_users_sharing_the_host]
+def broker_users_sharing_the_host(resources, target_modules, addons_path):
+    """The modules under test that use a RabbitMQ their run would share with the other slots: [] unless
+    the run is on the host in a slot above 1, a RabbitMQ is listening there, and a module's Python mentions
+    it (runner_slots.modules_mentioning_broker). Opens one TCP connection and reads the modules' source
+    only in that case. Full entry: tools/README.md."""
+    if resources.slot == 1 or resources.private_network:
+        return []
+    if not runner_slots.broker_listening():
+        return []
+    directories = {}
+    for module in target_modules:
+        for entry in addons_path.split(","):
+            if os.path.isdir(os.path.join(entry, module)):
+                directories[module] = os.path.join(entry, module)
+                break
+        else:
+            print(f"[*] Broker check: module {module} is in no addons directory; not checked for RabbitMQ use.")
+    return runner_slots.modules_mentioning_broker(directories)
+
+
+# [@ANCHOR: test:apply_slot_resources]
+def apply_slot_resources(resources):
+    """Make the process-wide choices a slot needs. A no-op unless the run shares the host with other slots.
+
+    Points TMPDIR at the slot's own directory (created; made world-writable only if it is not already 0777; refused clearly if that is impossible) so the
+    Chrome profiles of this run are the only ones under it, and narrows the Chrome kill pattern and the
+    end-of-run profile clean-up to that directory. Full entry: tools/README.md."""
+    global _CHROME_KILL_PATTERN, _CHROME_PROFILE_GLOBS
+    if not resources.scoped:
+        return
+    if os.path.islink(resources.tmpdir):
+        # makedirs/chmod/stat would follow it: whoever planted the link would get a 0777 directory of their choosing.
+        print(f"❌ ERROR: the slot directory {resources.tmpdir} is a symbolic link; refusing to use it. "
+              f"Inspect it and remove the link: rm {resources.tmpdir}")
+        sys.exit(1)
+    os.makedirs(resources.tmpdir, exist_ok=True)
+    # chmod only when the mode differs: a directory another account created (the odoo account's earlier run) that is
+    # already 0777 is exactly what is wanted, and chmod on it fails with EPERM for everyone but its owner.
+    mode = stat.S_IMODE(os.stat(resources.tmpdir).st_mode)
+    if mode != 0o777:
+        try:
+            os.chmod(resources.tmpdir, 0o777)
+        except OSError as e:
+            owner = os.stat(resources.tmpdir).st_uid
+            print(
+                f"❌ ERROR: the slot directory {resources.tmpdir} has mode {mode:04o}, not 0777, and this account "
+                f"(uid {os.getuid()}) cannot change it ({e}); it belongs to uid {owner}. "
+                f"Fix it once with: sudo chmod 0777 {resources.tmpdir}"
+            )
+            sys.exit(1)
+    os.environ["TMPDIR"] = resources.tmpdir
+    _CHROME_KILL_PATTERN = resources.chrome_kill_pattern
+    _CHROME_PROFILE_GLOBS = resources.chrome_profile_globs
+
+
+# [@ANCHOR: test:run_preflight_in_slot]
+def run_preflight_in_slot(args, lock_file_path, held_slot, slots, preflight=None):
+    """Run the pre-flight of this run INSIDE the slot it holds, then mark the slot as running.
+
+    Called once per run by the invoking process (or the flat process of a HAMS_ISOLATED_NS=1 run) right after it took its slot,
+    never by the re-exec'd phases (they carry `--preflight-done`). The holder record says `preflight` meanwhile, so
+    `--queue-status` shows the slot busy; when `preflight` (default `run_preflight`) returns, the record becomes `running`. If the
+    pre-flight ends the run (it exits 1 with the findings printed), the slot is released AT ONCE, before the exit: the slot lock is closed, the holder
+    record and the queue ticket are removed, and the line `Pre-flight failed: slot K released.` is printed; the exception then
+    propagates unchanged, so the findings and the exit status are exactly what they were. Nothing else is dropped: no database
+    exists yet. Full entry: tools/README.md."""
+    global _single_instance_lock
+    preflight = preflight or run_preflight
+    qdir = lock_queue.queue_dir_for_lock(lock_file_path)
+    try:
+        preflight(args)
+    except SystemExit:
+        print(f"[*] Pre-flight failed: slot {held_slot} of {slots} released.", flush=True)
+        if _single_instance_lock is not None:
+            _single_instance_lock.close()
+            _single_instance_lock = None
+        for name in os.listdir(qdir) if os.path.isdir(qdir) else []:
+            if name.startswith("holder-%d-" % os.getpid()):
+                lock_queue.release_ticket(qdir, name)
+        ticket = os.environ.get("HAMS_TEST_QUEUE_TICKET")
+        if ticket:
+            lock_queue.release_ticket(qdir, ticket)
+        raise
+    lock_queue.set_holder_phase(qdir, "running")
+
+
+# [@ANCHOR: test:main]
+def main():
+    global _single_instance_lock, _CHROME_PROFILE_GLOBS, _HOLDER_PHASE
+    # First thing, before any lock, namespace, daemon or database work. rebuild_db() repeats the check
+    # with the database list once PostgreSQL is reachable.
+    refuse_to_run_on_production_host()
+    # Reject a bad command line before anything else: not after the lock queue or a long build.
+    early_args = parse_runner_args()
+    if not (early_args.internal_ns_init or early_args.preflight_done):
+        trees = default_worktree_trees(os.getcwd())
+        print(f"test.py trees: hams_com={trees[0]} hams_open={trees[1]}", flush=True)
+        copied = link_missing_cloudflared_ffi(trees[1])
+        if copied:
+            print(f"test.py: libcloudflared.so was missing in the hams_open tree; copied from {copied}", flush=True)
+    queue_opts = lock_queue.wait_options_from_argv(sys.argv[1:])
+    # How many runs this machine allows at once. Only a fresh invocation reads the configuration
+    # (--slots, HAMS_TEST_SLOTS, /opt/hams/etc/test_slots); the re-exec'd phases (the root process and the
+    # final test process) take the count and the slot from the `--slots N --slot-held K` this process
+    # appends to their command line, so a layer that drops the environment can never move a run into
+    # another slot. Without opt-in the count is 1 and nothing below differs from a run without slots.
+    handed_over = early_args.internal_ns_init or os.environ.get("HAMS_TEST_LOCK_HELD") == "1"
+    try:
+        if handed_over:
+            slots = early_args.slots or 1
+        else:
+            slots = runner_slots.configured_slot_count(early_args.slots)
+    except (runner_slots.SlotConfigError, OSError) as e:
+        print(f"❌ ERROR: cannot determine the test slot count: {e}")
+        sys.exit(2)
+    if early_args.snapshot_gate:
+        sys.exit(gate_snapshot.main(["create"]))
+    if early_args.bisect_modules:
+        # The bisection is a driver: each trial is a normal test.py run that takes its own slot through the queue.
+        sys.exit(bisect_modules.run(
+            early_args, os.path.abspath(__file__), tag_spec_modules(early_args.test_tags), slots=slots
+        ))
+    if queue_opts["status"]:
+        # Read-only: never opens, probes or takes the lock itself.
+        print("\n".join(lock_queue.describe_queue(
+            lock_queue.queue_dir_for_lock(_test_runner_lock_path()), slots=slots)))
+        return
+    # After the read-only status branch, whose output is parsed by tools.
+    warn_isolated_ns_with_slots(os.environ, slots)
+    # Coalescing batch (ADR 0115): a plain committed `-u MODULES` run that starts while another run is in progress
+    # joins the next batch, which tests the union of the members' modules once over a combined tree; this caller
+    # still gets its own verdict and exit code. Anything else (and --solo) falls through to the run below.
+    batch_code = odoo_test_batch.maybe_run_batched(early_args)
+    if batch_code is not None:
+        sys.exit(batch_code)
+    # The pre-flight (anchor scan, linters, JavaScript syntax) runs ONCE per run, INSIDE the slot the run takes below, not before
+    # it: a run in its pre-flight is busy, and ran outside any slot accounting (up to eight at once, with the slots reading free).
+    # The re-exec'd phases carry --preflight-done. The cheap check that this is a repository root stays here, so a mistake
+    # in the working directory is reported at once without waiting for a slot.
+    preflight_done = early_args.preflight_done
+    if not early_args.internal_ns_init and not preflight_done and not early_args.queue_status:
+        require_repo_root_cwd()
+    _HOLDER_PHASE = "running" if (preflight_done or early_args.internal_ns_init) else "preflight"
+    audio_sink_before = (
+        get_default_audio_sink_name()
+        if os.environ.get("HAMS_ISOLATED_NS") != "1"
+        else None
+    )
+    # This single-instance lock is taken even under HAMS_ISOLATED_NS=1 -- the standing
+    # convention for how to invoke this script (see hams-odoo-test-runner-sudo-and-polkit).
+    # Skipping it there would make the lock dead for every run following that convention, on
+    # every concurrent session's box. The rule is one test at a time: two concurrent
+    # invocations under the same uid can spawn/kill each other's Chrome, contend for the same
+    # ports/sockets, and race on the same shared database. Kept fail-fast (LOCK_NB, immediate
+    # exit) rather than a blocking wait: a second invocation refusing immediately with a clear
+    # message is safer than queuing behind a first instance that might itself be hung -- a
+    # blocking wait behind a hung holder would just relocate that hang onto every other
+    # session's test run instead of containing it to the one that is actually stuck.
+    #
+    # Opt-in queueing (--wait / HAMS_TEST_WAIT=1, tools/lock_queue.py): the default stays
+    # fail-fast exactly as described above. Sessions that wanted to wait used to poll pgrep and
+    # race each other for the lock; --wait replaces that with a FIFO ticket queue in front of
+    # this SAME flock, so the reasoning against an unbounded blocking flock still holds (a hung
+    # holder is visible with --queue-status, and --wait-timeout bounds the wait).
+    # The lock path is anchored to one fixed path (see _test_runner_lock_path()'s own
+    # docstring for the full reasoning), computed once and passed through explicitly via
+    # HAMS_TEST_LOCK_PATH. It must not be recomputed independently via
+    # os.path.expanduser("~/tmp") at each of the three points in one logical run: those see
+    # three different values of HOME, which would make real protection depend on an unverified
+    # assumption about how `systemd-run --scope` resolves HOME.
+    #
+    # Process C (the final odoo-uid subprocess spawned from
+    # setup_namespace_and_run_tests) is explicitly exempted here via
+    # HAMS_TEST_LOCK_HELD: its own parent, Process B, already holds this same
+    # lock for the ENTIRE duration Process C runs (Process B blocks on
+    # subprocess.run() rather than exec'ing itself away), so a fresh
+    # acquisition attempt in Process C would be redundant at best -- and,
+    # now that the path below is a fixed, shared value instead of one that
+    # happens to fall inside Process C's own private overlay, it would
+    # otherwise be a guaranteed self-deadlock against its own parent's
+    # still-held, non-blocking exclusive lock.
+    held_slot = early_args.slot_held or 1
+    if os.environ.get("HAMS_TEST_LOCK_HELD") == "1":
+        _single_instance_lock = None
+    else:
+        # The continuous-integration load gate runs HERE, strictly before the
+        # single-instance lock is acquired, and the ordering is load-bearing.
+        # Waiting for a relay build matrix to finish while already holding the
+        # box-wide lock would stop every other session from testing for the
+        # whole wait, turning one session's delay into everybody's. Process C
+        # (HAMS_TEST_LOCK_HELD=1) is exempt for free by sitting in this same
+        # else-branch: its parent already gated, and re-gating a run that is
+        # already under way would be both redundant and, once its own Odoo
+        # server is loading the box, self-defeating.
+        # With --wait the gate instead runs when this invocation reaches the front of the queue
+        # (on_head below), so a long gate wait does not forfeit the place in line.
+        # A re-exec'd --internal-ns-init child with no ticket to adopt (a layer dropped the
+        # environment) must not queue: its own parent's live ticket would be ahead of it forever.
+        # The root phase (--internal-ns-init) runs in its own PID namespace, where the invoking process's pid, ticket
+        # and holder record cannot be seen (/proc shows only the namespace): queue code there would take them for dead
+        # and delete them, and write records with namespace pids that the host takes for dead. So it takes back its
+        # slot's flock and touches nothing else; the invoking process's holder record and ticket (its pid lives as long
+        # as sudo does) describe the run for its whole life. See `take_back_slot_lock`.
+        root_phase = "--internal-ns-init" in sys.argv
+        use_queue = queue_opts["wait"] and not root_phase
+        if not use_queue and not root_phase and not wait_for_ci_load_to_subside():
+            sys.exit(1)
+        lock_file_path = _test_runner_lock_path()
+        os.environ.setdefault("HAMS_TEST_LOCK_PATH", lock_file_path)
+        # The lock file is opened with the symlink and sticky-directory protections described in
+        # _open_lock_file()'s docstring. One lock file per slot; slot 1 is the original path.
+        if root_phase:
+            held_slot = take_back_slot_lock(lock_file_path, slots, early_args.slot_held)
+            if held_slot is None:
+                print(_no_slot_message(slots, early_args.slot_held))
+                sys.exit(1)
+        elif use_queue:
+            held_slot = _acquire_lock_via_queue(
+                lock_file_path, queue_opts["timeout"], slots, early_args.slot_held
+            )
+        else:
+            held_slot = _try_slot_locks(lock_file_path, slots, early_args.slot_held)
+            if held_slot is None:
+                print(_no_slot_message(slots, early_args.slot_held))
+                sys.exit(1)
+            _record_lock_holder(lock_file_path, held_slot, os.environ.get("HAMS_TEST_QUEUE_TICKET"))
+        if slots > 1:
+            print(f"[*] Holding test slot {held_slot} of {slots} (lock {runner_slots.slot_lock_path(lock_file_path, held_slot)}).")
+            if os.environ.get("HAMS_ISOLATED_NS") != "1":
+                # The full pipeline will run in a private network namespace: only the refusals that hold there
+                # (--mcp) can apply, and they apply now, before the pre-flight and the minutes of provisioning.
+                enforce_slot_refusals(runner_slots.slot_resources(held_slot, slots, True, None), early_args)
+        if not root_phase and not preflight_done:
+            run_preflight_in_slot(early_args, lock_file_path, held_slot, slots)
+            preflight_done = True
+        if slots > 1 and not root_phase:
+            # Under the slot lock, before anything is built: remove what runs that are gone left behind.
+            try:
+                sweep_slot_leftovers(
+                    default_postgres_access(), held_slot, lock_file_path, default_test_tmpdir(dict(os.environ), create=False)
+                )
+            except FileNotFoundError as e:
+                print(f"❌ ERROR: {e}")
+                sys.exit(1)
+
+    cwd = os.getcwd()
+    if not is_git_checkout_root(cwd) or not (
+        os.path.isfile(os.path.join(cwd, "hams_shared", "tools", "test.py"))
+        or os.path.isfile(os.path.join(cwd, "tools", "test.py"))
+    ):
+        print(
+            "================================================================================"
+        )
+        print("🚨 CRITICAL EXECUTION ENVIRONMENT ERROR 🚨")
+        print(f"Current Working Directory: {cwd}")
+        print(
+            "You MUST execute hams_shared/tools/test.py from the root of the Git repository."
+        )
+        print(
+            "The current directory is either not a git repository or lacks hams_shared/tools/test.py."
+        )
+        print(
+            "[!] DIAGNOSTIC FOR AI: `cd` into the proper repository root before invoking this script."
+        )
+        print(
+            "================================================================================"
+        )
+        sys.exit(1)
+
+    os.environ.setdefault("HAMS_KEYS_DIR", "/opt/hams/etc/keys")
+
+    if os.environ.get("HAMS_ISOLATED_NS") != "1":
+        if "--internal-ns-init" not in sys.argv:
+            check_host_apt_packages()
+
+        if "--internal-ns-init" in sys.argv:
+            # Phase 2: Execute completely within Python (No bash script interpolation)
+            try:
+                resource.setrlimit(
+                    resource.RLIMIT_STACK, (16 * 1024 * 1024, resource.RLIM_INFINITY)
+                )
+            except (ValueError, OSError) as e:
+                print(f"[*] Warning: Could not set RLIMIT_STACK to 16MB: {e}")
+            real_log_dir = os.environ.get("HAMS_REAL_LOG_DIRECTORY")
+            sys_args = [arg for arg in sys.argv[1:] if arg != "--internal-ns-init"]
+            setup_namespace_and_run_tests(real_log_dir, sys_args)
+            return
+
+        real_log_dir = os.path.abspath(os.path.expanduser(early_args.log_directory))
+        os.makedirs(real_log_dir, exist_ok=True)
+        user_tmp = os.path.expanduser("~/tmp")
+        os.makedirs(user_tmp, exist_ok=True)
+        progress_name = runner_slots.slot_file_name("test_progress.txt", held_slot)
+        symlink_target = os.path.join(user_tmp, progress_name)
+        if os.path.lexists(symlink_target) and os.path.islink(symlink_target):
+            os.remove(symlink_target)
+        # When the log directory IS ~/tmp (the default, and always the case for the odoo account
+        # under HAMS_ISOLATED_NS, where both resolve to /var/lib/odoo/tmp), the link would point
+        # at itself. That self-loop made every later progress write fail with "Too many levels of
+        # symbolic links" (seen as a real failure). The progress file is written in place there, so no
+        # link is needed.
+        if os.path.realpath(user_tmp) != os.path.realpath(real_log_dir):
+            try:
+                os.symlink(os.path.join(real_log_dir, progress_name), symlink_target)
+            except OSError as e:
+                _logger.debug("Ignored OSError: %s", e)
+        try:
+            os.chmod(real_log_dir, 0o777)
+        except OSError as e:
+            _logger.debug("Ignored OSError: %s", e)
+        print("[*] Routing test execution to isolated Python namespace...")
+
+        os.environ["HAMS_REAL_LOG_DIRECTORY"] = real_log_dir
+        # Isolate mount (-m) and PID (-p) namespaces. Network isolation happens dynamically post-provisioning.
+        exec_cmd = [
+            "unshare",
+            "-m",
+            "-p",
+            "-f",
+            "--mount-proc",
+            sys.executable,
+            os.path.abspath(__file__),
+            "--internal-ns-init",
+        ] + sys.argv[1:] + ["--preflight-done"]
+        exec_cmd += slot_handoff_args(slots, held_slot)
+
+        if os.geteuid() != 0:
+            print(
+                "[*] Elevating privileges and applying 9G memory limit via systemd-run..."
+            )
+            systemd_run_args = [
+                "systemd-run",
+                "--scope",
+                "-q",
+                "-p",
+                "MemoryMax=9G",
+                "-p",
+                "TasksMax=infinity",
+            ]
+            # `systemd-run --scope` does not forward arbitrary env vars into
+            # the scope it creates (see the longer comment just below, about
+            # DISPLAY/XDG_SESSION_TYPE, for why) -- this specifically broke
+            # HOME-independence for the single-instance lock
+            # (without it the lock path differs per process), so
+            # the fixed lock path computed in main() (see
+            # _test_runner_lock_path()) must be forwarded explicitly here,
+            # the same way, rather than left to rely on `sudo -E` alone.
+            systemd_run_args.append(
+                f"--setenv=HAMS_TEST_LOCK_PATH={_test_runner_lock_path()}"
+            )
+            # Same for the queue ticket: the child adopts it instead of queueing behind its own parent.
+            for queue_var in ("HAMS_TEST_QUEUE_TICKET", "HAMS_TEST_QUEUE_DIR"):
+                if os.environ.get(queue_var):
+                    systemd_run_args.append(f"--setenv={queue_var}={os.environ[queue_var]}")
+            # `systemd-run --scope` does not forward the invoking shell's
+            # environment into the new scope by itself -- `sudo -E` only
+            # preserves env as far as systemd-run's own invocation, not
+            # into the child process systemd-run then starts. Without this,
+            # --pause-on-fail's non-headless Chrome (zero_sudo/tests/
+            # common.py: headless=not HAMS_PAUSE_ON_FAIL) has no DISPLAY to
+            # attach to at all and fails immediately with "Missing X server
+            # or $DISPLAY", regardless of X11 authorization -- confirmed
+            # directly (this environment already has DISPLAY set and a
+            # working X server; a bare Chrome launch with DISPLAY forwarded
+            # manually works, the same launch through this codepath
+            # doesn't). Scoped to only the two variables --pause-on-fail
+            # actually needs, and only when that flag is set -- normal
+            # headless test runs are unaffected.
+            if os.environ.get("HAMS_PAUSE_ON_FAIL") == "1":
+                if os.environ.get("DISPLAY"):
+                    systemd_run_args.append(f"--setenv=DISPLAY={os.environ['DISPLAY']}")
+                systemd_run_args.append("--setenv=XDG_SESSION_TYPE=x11")
+            exec_cmd = ["sudo", "-E"] + systemd_run_args + exec_cmd
+            os.execvpe("sudo", exec_cmd, os.environ)
+        else:
+            # os.execvpe completely replaces the current process, passing control natively
+            os.execvpe("unshare", exec_cmd, os.environ)
+        return
+    os.environ["PYTHONWARNINGS"] = "ignore::DeprecationWarning"
+    host_tmp_dir = (
+        os.path.expanduser("~/tmp")
+        if os.environ.get("HAMS_ISOLATED_NS") == "1"
+        else os.environ.get("HAMS_REAL_LOG_DIRECTORY", os.path.expanduser("~/tmp"))
+    )
+    if os.environ.get("HAMS_ISOLATED_NS") != "1":
+        os.makedirs(host_tmp_dir, exist_ok=True)
+        try:
+            os.chmod(host_tmp_dir, 0o777)
+        except OSError as e:
+            _logger.debug("Ignored OSError: %s", e)
+    os.environ.setdefault(
+        "ODOO_TEST_CHROME_ARGS",
+        "--headless=new --no-sandbox --disable-dev-shm-usage --disable-gpu --disable-software-rasterizer --disable-extensions --disable-background-networking --disable-default-apps --disable-sync --disable-translate --mute-audio --use-fake-device-for-media-stream --use-fake-ui-for-media-stream --no-first-run " + CHROME_NO_CACHE_ARGS + " --hide-scrollbars --metrics-recording-only --safebrowsing-disable-auto-update --disable-features=ServiceWorker,SharedWorker,DialMediaRouteProvider,dbus,OptimizationGuideModelDownloading",
+    )
+    os.environ.setdefault("DBUS_SESSION_BUS_ADDRESS", "autolaunch:")
+
+    shared_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    base_dir = os.getcwd()
+    env_path = os.path.join(base_dir, "deploy", "env")
+    if os.path.exists(env_path):
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                if "=" in line and not line.startswith("#"):
+                    k, v = line.split("=", 1)
+                    os.environ.setdefault(k.strip(), v.strip("'\" \n"))
+
+    os.environ.setdefault("PGHOST", "localhost")
+    os.environ.setdefault("PGUSER", "odoo")
+    os.environ.setdefault("PGPASSWORD", "odoo")
+    os.environ.setdefault("RABBITMQ_HOST", "localhost")
+    os.environ.setdefault("REDIS_HOST", "localhost")
+
+    args = parse_runner_args()
+
+    # Fail fast, before any module install/DB rebuild, rather than letting a
+    # direct `HAMS_ISOLATED_NS=1 --offline-isolation` invocation burn real
+    # wall-clock time only for the tour's own self-check to catch this exact
+    # same gap much later. See check_offline_isolation_invocation_shape()'s
+    # own docstring for why this specific combination can never work.
+    offline_isolation_ok, offline_isolation_reason = check_offline_isolation_invocation_shape(
+        args.offline_isolation,
+        os.environ.get("HAMS_ISOLATED_NS"),
+        os.environ.get("HAMS_TEST_LOCK_HELD"),
+    )
+    if not offline_isolation_ok:
+        print(f"❌ ERROR: {offline_isolation_reason}")
+        sys.exit(1)
+
+    # Before anything is spawned, so every child (Odoo, its headless Chrome profiles) inherits it in every mode, namespaced or flat.
+    base_tmpdir = default_test_tmpdir(os.environ)
+    try:
+        resources = runner_slots.slot_resources(
+            held_slot, slots, runner_slots.in_private_network(os.environ), base_tmpdir
+        )
+        args.db = runner_slots.slot_database_name(args.db, held_slot)
+    except runner_slots.SlotConfigError as e:
+        print(f"❌ ERROR: test slot {held_slot} of {slots} cannot be set up: {e}")
+        sys.exit(1)
+    if slots > 1:
+        print(
+            f"[*] Test slot {held_slot} of {slots}: database {args.db}, HTTP port {resources.http_port}, "
+            f"Redis db {resources.redis_db}, log files tagged '{runner_slots.slot_suffix(held_slot)}'."
+        )
+    enforce_slot_refusals(resources, args)
+    apply_slot_resources(resources)
+    _CHROME_PROFILE_GLOBS = ram_chrome_profile_globs(resources, os.environ.get("TMPDIR"))
+    if slots > 1:
+        install_run_cleanup(
+            args.db, held_slot, args.keep_db, resources.tmpdir if resources.scoped and held_slot > 1 else None
+        )
+    odoo_http_port = str(resources.http_port)
+    odoo_url = f"http://127.0.0.1:{odoo_http_port}"
+    flush_db = resources.redis_db if resources.scoped else None
+    apply_skip_google_fonts_download(os.environ)
+    apply_block_psk_transport(os.environ)
+
+    if args.pause_on_fail:
+        os.environ["HAMS_PAUSE_ON_FAIL"] = "1"
+
+    python_exec = "/usr/bin/python3"
+    # Not /usr/bin/odoo directly: the launcher is that same entry point plus the runner's third-party
+    # warning policy, which has to be installed from inside the Odoo process (odoo_warning_policy.py).
+    odoo_bin = ODOO_LAUNCHER
+    addons_path = get_addons_path(base_dir)
+
+    ignore_filepath = os.path.join(base_dir, args.config)
+    ignore_patterns = load_ignore_file(ignore_filepath)
+
+    target_modules, install_modules = select_modules(args, base_dir, ignore_patterns)
+    if module_arg_for(args):
+        install_modules, companion_note = add_test_companions(install_modules, target_modules, base_dir)
+        if companion_note:
+            print(f"[*] {companion_note}")
+
+    ffi_problem = check_cloudflared_ffi_library(addons_path, install_modules)
+    if ffi_problem:
+        print(f"❌ ERROR: {ffi_problem}")
+        sys.exit(1)
+
+    if not target_modules:
+        print("❌ ERROR: No modules found.")
+        sys.exit(1)
+
+    enforce_slot_refusals(
+        resources, args, broker_users_sharing_the_host(resources, target_modules, addons_path)
+    )
+
+    mod_string = "base," + ",".join(install_modules)
+    test_tags = args.test_tags or ",".join([f"/{m}" for m in target_modules])
+
+    # Odoo's own tag selector treats a spec with no tag part ("/ham_shack") as
+    # implicitly requiring the 'standard' tag (odoo/tests/tag_selector.py:
+    # "including /module:class.method implicitly requires 'standard'"), so a
+    # class tagged @tagged("-standard", "offline_isolation") is simply never
+    # collected by an ordinary run -- no skipTest, nothing to go wrong, and no
+    # change at all to what `test.py -u <module>` runs today. Selecting those
+    # tests therefore means asking for that tag by name, and only for it:
+    # running every other tour through the offline namespace's forwarders
+    # would put unrelated tests at the mercy of this mechanism for no gain.
+    if args.offline_isolation:
+        test_tags = ",".join([f"offline_isolation/{m}" for m in target_modules])
+
+    # Not under base_dir: a real test run found setup_namespace_and_run_tests()
+    # mounts the repo checkout read-only inside the isolated sandbox. And not
+    # plain ~/tmp either -- a real run also found that resolves to
+    # /var/lib/odoo/tmp once HOME is reassigned for the odoo-user child
+    # process (preexec_odoo(), above), which is a path *inside* the ephemeral
+    # per-run overlay of /var, not the persistent host directory the
+    # /mnt/real_tmp bind-mount anchors before that overlay is even applied --
+    # written there, it silently vanished when the sandbox tore down.
+    # FailureExtractor (above) already established the correct fix for this
+    # exact trap: use /mnt/real_tmp directly when inside the isolated
+    # namespace, matching its own self.output_path convention exactly.
+    # Same real-vs-assumed /mnt/real_tmp distinction as FailureExtractor's
+    # self.output_path/self.progress_path above -- a direct `HAMS_ISOLATED_NS=1` invocation
+    # (the standing convention for skipping rebuild_db()'s polkit-triggering `systemctl start`
+    # calls; see hams-odoo-test-runner-sudo-and-polkit) never runs
+    # setup_namespace_and_run_tests(), so /mnt/real_tmp is never bind-mounted and does not
+    # exist. Without this check, --coverage under that invocation would write coverage data
+    # somewhere under root-owned /mnt (or crash trying to create it) instead of the intended,
+    # persistent ~/tmp/coverage_report location.
+    coverage_data_dir = (
+        os.path.join("/mnt/real_tmp", runner_slots.slot_file_name("coverage_report", held_slot))
+        if os.environ.get("HAMS_ISOLATED_NS") == "1" and os.path.isdir("/mnt/real_tmp")
+        else os.path.join(os.path.expanduser("~/tmp"), runner_slots.slot_file_name("coverage_report", held_slot))
+    )
+    coverage_data_file = os.path.join(coverage_data_dir, ".coverage")
+    coverage_rcfile = os.path.join(coverage_data_dir, "coveragerc")
+    if args.coverage:
+        os.makedirs(coverage_data_dir, exist_ok=True)
+        # relative_files=True is what lets Stage 3 later join this report
+        # against check_function_test_anchors.py's own
+        # os.path.relpath(filepath, repo_root) keys -- verify empirically
+        # against a real run (see coverage_report/coverage.json's own
+        # "files" keys) rather than trusting this comment; odoo-bin may
+        # change directory internally in ways that affect what "relative"
+        # resolves against.
+        with open(coverage_rcfile, "w") as f:
+            f.write("[run]\nrelative_files = True\n")
+
+    coverage_source_dirs = [base_dir]
+    for _sibling_name in ("hams_open", "hams_com"):
+        _sibling_dir = anchor_scan_sibling_dir(base_dir, _sibling_name)
+        if _sibling_dir and _sibling_dir != base_dir and _sibling_dir not in coverage_source_dirs:
+            coverage_source_dirs.append(_sibling_dir)
+
+    def get_odoo_test_cmd(suffix=""):
+        cmd = [python_exec]
+        if args.profile:
+            cmd.extend(
+                [
+                    "-m",
+                    "cProfile",
+                    "-o",
+                    f"{os.path.expanduser('~/tmp')}/odoo_test{runner_slots.slot_suffix(held_slot)}{suffix}.pro",
+                ]
+            )
+        elif args.coverage:
+            # --parallel-mode always (even for "standard" mode's single
+            # process): it suffixes the data file with a unique id instead
+            # of overwriting COVERAGE_FILE outright, so the same
+            # combine_coverage_data() step below works identically whether
+            # this ran once (standard) or once per module in a loop
+            # (individual) -- no special-casing which mode produced the
+            # data on disk. `--source=base_dir` (not `--include`) so
+            # coverage's own branch/statement analysis walks the real repo
+            # tree looking for importable-but-never-executed files too,
+            # not just files a test happened to import -- otherwise a
+            # function nobody's test suite touches at all would silently
+            # never appear in the report, rather than appearing as 0%
+            # covered (a real gap Stage 3 needs to see, not a blind spot).
+            cmd.extend(
+                [
+                    "-m",
+                    "coverage",
+                    "run",
+                    f"--rcfile={coverage_rcfile}",
+                    "--parallel-mode",
+                    # Both repositories: a run from hams_com names hams_open modules too (and the
+                    # reverse), and their files would otherwise be missing from the report.
+                    f"--source={','.join(coverage_source_dirs)}",
+                    "--data-file",
+                    coverage_data_file,
+                ]
+            )
+        return cmd
+
+    extractor = FailureExtractor(args.log_directory, mcp_mode=args.mcp, slot=held_slot)
+    print(
+        f"==========================================================\n 🧪 ODOO TEST RUNNER [{args.mode.upper()} MODE]\n=========================================================="
+    )
+
+    if not preflight_done:
+        check_linters(python_exec, base_dir, ignore_filepath, extractor, target_modules)
+
+    final_rc = 0
+
+    if args.mcp:
+        rebuild_db(args.db, flush_db)
+
+        os.environ["ODOO_URL"] = odoo_url
+        os.environ["DB_NAME"] = args.db
+        os.environ["REDIS_DB"] = str(resources.redis_db)
+        os.environ["ODOO_USER"] = "admin"
+        os.environ["ODOO_PASSWORD"] = "admin"
+
+        mcp_server_script = os.path.join(shared_dir, "tools", "test_mcp_server.py")
+        cmd = get_odoo_test_cmd() + [
+            mcp_server_script,
+            "--load=base,web,zero_sudo",
+            "--addons-path",
+            addons_path,
+            "-d",
+            args.db,
+            "-i",
+            mod_string,
+            "--workers=0",
+            "--max-cron-threads=0",
+            "--http-interface",
+            "127.0.0.1",
+            "--http-port",
+            odoo_http_port,
+            "--limit-memory-soft",
+            "0",
+            "--limit-memory-hard",
+            "0",
+        ]
+
+        rc = run_cmd(cmd, extractor)
+        sys.exit(rc)
+
+    if args.mode == "standard":
+        rebuild_db(args.db, flush_db)
+
+        # Inject environment variables for daemons spawned securely by tests
+        os.environ["ODOO_URL"] = odoo_url
+        os.environ["DB_NAME"] = args.db
+        os.environ["REDIS_DB"] = str(resources.redis_db)
+        os.environ["ODOO_USER"] = "admin"
+        os.environ["ODOO_PASSWORD"] = "admin"
+
+        cmd = get_odoo_test_cmd() + [
+            odoo_bin,
+            "--load=base,web,zero_sudo",
+            "--addons-path",
+            addons_path,
+            "-d",
+            args.db,
+            "-i",
+            mod_string,
+            "--test-enable",
+            "--test-tags",
+            test_tags,
+            "--stop-after-init",
+            "--workers=0",
+            "--max-cron-threads=0",
+            "--http-interface",
+            "127.0.0.1",
+            "--http-port",
+            odoo_http_port,
+            "--limit-memory-soft",
+            "0",
+            "--limit-memory-hard",
+            "0",
+        ]
+
+        rc_odoo = exit_status_for_run(run_cmd(cmd, extractor), extractor)
+
+        def rerun_alone(test_ids):
+            # One rerun of just these tests on a fresh database with the same modules installed (ADR 0118).
+            print(f"[*] Rerunning {len(test_ids)} failed test(s) once, alone, on a fresh database.")
+            rebuild_db(args.db, flush_db)
+            again = known_red.RunObservation()
+            tags_at = cmd.index("--test-tags") + 1
+            alone = cmd[:tags_at] + [known_red.rerun_tags(test_ids)] + cmd[tags_at + 1:]
+            again.child_exit_status = run_cmd(alone, again)
+            return again
+
+        if rc_odoo != 0:
+            rc_odoo = apply_failure_policy(
+                args, extractor, rc_odoo, rerun_alone, base_dir, target_modules, held_slot
+            )
+        if rc_odoo != 0:
+            final_rc = rc_odoo
+
+    elif args.mode == "individual":
+        os.environ["ODOO_URL"] = odoo_url
+        os.environ["DB_NAME"] = args.db
+        os.environ["REDIS_DB"] = str(resources.redis_db)
+        os.environ["ODOO_USER"] = "admin"
+        os.environ["ODOO_PASSWORD"] = "admin"
+
+        for mod in target_modules:
+            rebuild_db(args.db, flush_db)
+            cmd = get_odoo_test_cmd(f"_{mod}") + [
+                odoo_bin,
+                "--load=base,web,zero_sudo",
+                "--addons-path",
+                addons_path,
+                "-d",
+                args.db,
+                "-i",
+                mod,
+                "--test-enable",
+                "--test-tags",
+                f"/{mod}",
+                "--stop-after-init",
+                "--workers=0",
+                "--max-cron-threads=0",
+                "--http-interface",
+                "127.0.0.1",
+                "--http-port",
+                odoo_http_port,
+                "--limit-memory-soft",
+                "0",
+                "--limit-memory-hard",
+                "0",
+            ]
+
+            before = len(extractor.odoo_result_lines)
+            rc = exit_status_for_run(run_cmd(cmd, extractor), extractor, before)
+            if rc != 0:
+                final_rc = 1
+
+    else:
+        # "xml" and "downloads" are accepted --mode choices, but neither has a dispatch branch
+        # here (only "standard"/"individual" are handled above). Without this branch, passing
+        # either value would skip rebuild_db()/run_cmd() entirely (this if/elif matches nothing)
+        # and fall through to the Chrome-cleanup/audio-sink checks with `final_rc` still at its
+        # initial 0, so `test.py --mode xml -u <module>` would report a clean, passing exit code
+        # having run zero actual Odoo tests. No hams_com or hams_open code invokes `--mode xml`
+        # or `--mode downloads`. Fail loudly instead of silently no-opping, matching this
+        # codebase's fail-fast philosophy, rather than guessing at what either mode was meant
+        # to do.
+        print(
+            f"❌ ERROR: --mode {args.mode!r} has no implementation in this "
+            "runner (only 'standard' and 'individual' are wired up) -- "
+            "refusing to report a false pass. If this mode is still "
+            "needed, implement its own dispatch branch here; otherwise "
+            "remove it from --mode's own choices list."
+        )
+        sys.exit(1)
+
+    if args.coverage and args.mode in ("standard", "individual"):
+        combine_cmd = [
+            python_exec,
+            "-m",
+            "coverage",
+            "combine",
+            f"--rcfile={coverage_rcfile}",
+            f"--data-file={coverage_data_file}",
+            coverage_data_dir,
+        ]
+        rc_combine = subprocess.run(combine_cmd, capture_output=True, text=True)
+        if rc_combine.returncode != 0 or not os.path.exists(coverage_data_file) or os.path.getsize(coverage_data_file) == 0:
+            # A wrong exit code alone isn't trusted here -- `combine`'s own
+            # exit code has been 0 in the past for "no data files found at
+            # all," which would otherwise look like a real, empty-but-valid
+            # coverage run rather than the real failure it is.
+            print("[!] ERROR: coverage combine failed or produced an empty data file:")
+            print(rc_combine.stdout)
+            print(rc_combine.stderr)
+            final_rc = final_rc or 1
+        else:
+            coverage_json_path = os.path.join(coverage_data_dir, "coverage.json")
+            json_cmd = [
+                python_exec,
+                "-m",
+                "coverage",
+                "json",
+                f"--rcfile={coverage_rcfile}",
+                f"--data-file={coverage_data_file}",
+                "-o",
+                coverage_json_path,
+                "--ignore-errors",
+            ]
+            rc_json = subprocess.run(json_cmd, capture_output=True, text=True)
+            if rc_json.returncode != 0:
+                print("[!] ERROR: coverage json report generation failed:")
+                print(rc_json.stdout)
+                print(rc_json.stderr)
+                final_rc = final_rc or 1
+            else:
+                print(f"[+] Coverage report written to {coverage_json_path}")
+
+    print("[*] Cleaning up Chrome temporary directories...")
+    remove_chrome_profiles(_CHROME_PROFILE_GLOBS)
+
+    if audio_sink_before and "dummy" not in audio_sink_before.lower():
+        audio_sink_after = get_default_audio_sink_name()
+        if not audio_sink_after or "dummy" in audio_sink_after.lower():
+            print(
+                "================================================================================"
+            )
+            print("🚨 CRITICAL: TEST RUN BROKE THE HOST'S REAL AUDIO DEVICE 🚨")
+            print(f"    Default sink before this run: {audio_sink_before!r}")
+            print(f"    Default sink after this run:  {audio_sink_after!r}")
+            print(
+                "    Something spawned during this test run opened the real ALSA "
+                "device directly (bypassing PipeWire's shared access) or otherwise "
+                "knocked the host's real speaker/microphone offline. This breaks "
+                "audio for every other application on this machine, not just tests."
+            )
+            try:
+                subprocess.run(
+                    [
+                        "systemctl",
+                        "--user",
+                        "restart",
+                        "wireplumber",
+                        "pipewire",
+                        "pipewire-pulse",
+                    ],
+                    capture_output=True,
+                    timeout=15,
+                )
+                time.sleep(2)
+                audio_sink_recovered = get_default_audio_sink_name()
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                audio_sink_recovered = None
+            if audio_sink_recovered and "dummy" not in audio_sink_recovered.lower():
+                print(
+                    f"    Auto-recovered by restarting the PipeWire session "
+                    f"(now: {audio_sink_recovered!r}), but the test run that caused "
+                    f"this must still be found and fixed -- it will keep recurring."
+                )
+            else:
+                print(
+                    "    Automatic recovery (restarting wireplumber/pipewire) did NOT "
+                    "restore a real sink -- the developer's audio needs manual attention."
+                )
+            print(
+                "================================================================================"
+            )
+            final_rc = final_rc or 1
+
+    sys.exit(final_rc)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,752 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+"""
+Unit tests for mcp_watchdog.py's pure/near-pure logic: agent-liveness
+detection, family-tree parsing, and persisted-state/IPC-queue bookkeeping.
+The `@mcp.tool()`-decorated async coroutines (wait_for_*, spawn_*, etc.)
+need a live FastMCP context and real file-watching to exercise meaningfully
+and are out of scope here -- this covers the functions those tools are
+built on, which is where a parsing bug would actually hide.
+"""
+
+import asyncio
+import inspect
+import json
+import os
+import shutil
+import tempfile
+import threading
+import unittest
+from unittest.mock import AsyncMock, patch
+
+import mcp_watchdog as wd
+
+
+def _write_transcript(path, lines):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        for line in lines:
+            f.write((json.dumps(line) if isinstance(line, dict) else line) + "\n")
+
+
+class _SafePatchTestCase(unittest.TestCase):
+    """Matches test_provision.py's own convention: a self.safe_patch()
+    wrapper instead of a bare `with patch(...)` context manager or
+    `@patch` decorator at each call site."""
+
+    def safe_patch(self, target, *args, **kwargs):
+        patcher = patch(target, *args, **kwargs)
+        mock_obj = patcher.start()
+        self.addCleanup(patcher.stop)
+        return mock_obj
+
+
+class GetStateFileTests(unittest.TestCase):
+    def test_no_agent_id_uses_the_bare_filename(self):
+        self.assertTrue(wd.get_state_file(None).endswith("watchdog_state.json"))
+        self.assertTrue(wd.get_state_file("").endswith("watchdog_state.json"))
+
+    def test_an_agent_id_is_appended_as_a_suffix(self):
+        path = wd.get_state_file("agent-42")
+        self.assertTrue(path.endswith("watchdog_state_agent-42.json"))
+
+
+class PersistedStateRoundTripTests(_SafePatchTestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(self.tmp, ignore_errors=True))
+        self.safe_patch("mcp_watchdog.os.path.expanduser", side_effect=lambda p: p.replace("~", self.tmp))
+
+    def test_load_returns_none_when_no_state_file_exists_yet(self):
+        self.assertIsNone(wd.load_persisted_states("agent-1"))
+
+    def test_save_then_load_round_trips_the_real_data(self):
+        states = {"agent-1": {"turns": 3, "stalled": False}}
+        wd.save_persisted_states(states, "agent-1")
+        self.assertEqual(wd.load_persisted_states("agent-1"), states)
+
+    def test_different_agent_ids_persist_to_separate_files(self):
+        wd.save_persisted_states({"a": 1}, "agent-1")
+        wd.save_persisted_states({"b": 2}, "agent-2")
+        self.assertEqual(wd.load_persisted_states("agent-1"), {"a": 1})
+        self.assertEqual(wd.load_persisted_states("agent-2"), {"b": 2})
+
+    def test_a_corrupt_state_file_is_treated_as_no_state_not_a_crash(self):
+        state_file = wd.get_state_file("agent-1")
+        os.makedirs(os.path.dirname(state_file), exist_ok=True)
+        with open(state_file, "w") as f:
+            f.write("{not valid json")
+        # Real bug found 2026-09-12: the `except Exception: pass` here used to
+        # swallow a corrupt state file with zero trace anywhere -- confirmed
+        # here with assertLogs so the warning is real, not just a comment.
+        with self.assertLogs("mcp_watchdog", level="WARNING") as cm:
+            self.assertIsNone(wd.load_persisted_states("agent-1"))
+        self.assertTrue(any(state_file in msg for msg in cm.output))
+
+
+class MtimeFsizeTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_get_mtime_of_a_real_file_is_a_real_positive_number(self):
+        path = os.path.join(self.tmp, "f.txt")
+        with open(path, "w") as f:
+            f.write("hi")
+        self.assertGreater(wd.get_mtime(path), 0)
+
+    def test_get_mtime_of_a_missing_file_is_zero_not_an_exception(self):
+        self.assertEqual(wd.get_mtime(os.path.join(self.tmp, "nope.txt")), 0)
+
+    def test_get_fsize_of_a_real_file_matches_its_real_size(self):
+        path = os.path.join(self.tmp, "f.txt")
+        with open(path, "w") as f:
+            f.write("hello")
+        self.assertEqual(wd.get_fsize(path), 5)
+
+    def test_get_fsize_of_a_missing_file_is_zero_not_an_exception(self):
+        self.assertEqual(wd.get_fsize(os.path.join(self.tmp, "nope.txt")), 0)
+
+
+class IsAgentDeadTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmp, "transcript.jsonl")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_a_missing_transcript_counts_as_dead(self):
+        self.assertTrue(wd.is_agent_dead(os.path.join(self.tmp, "nope.jsonl")))
+
+    def test_a_terminal_type_marks_the_agent_dead(self):
+        for terminal_type in ("CANCELLATION", "TERMINATION", "ERROR", "KILLED"):
+            with self.subTest(terminal_type=terminal_type):
+                _write_transcript(self.path, [{"type": terminal_type}])
+                self.assertTrue(wd.is_agent_dead(self.path))
+
+    def test_a_terminal_status_marks_the_agent_dead(self):
+        for terminal_status in ("CANCELLED", "KILLED", "FAILED", "ERROR", "TERMINATED"):
+            with self.subTest(terminal_status=terminal_status):
+                _write_transcript(self.path, [{"status": terminal_status}])
+                self.assertTrue(wd.is_agent_dead(self.path))
+
+    def test_a_system_message_mentioning_killed_marks_the_agent_dead(self):
+        _write_transcript(self.path, [
+            {"source": "SYSTEM", "type": "SYSTEM_MESSAGE", "content": "Agent was killed by the orchestrator"}
+        ])
+        self.assertTrue(wd.is_agent_dead(self.path))
+
+    def test_a_system_message_not_mentioning_a_kill_word_does_not_mark_it_dead(self):
+        _write_transcript(self.path, [
+            {"source": "SYSTEM", "type": "SYSTEM_MESSAGE", "content": "Agent checked in normally"}
+        ])
+        self.assertFalse(wd.is_agent_dead(self.path))
+
+    def test_a_planner_response_with_no_tool_calls_is_idle_and_counts_as_dead(self):
+        _write_transcript(self.path, [
+            {"source": "MODEL", "type": "PLANNER_RESPONSE", "tool_calls": []}
+        ])
+        self.assertTrue(wd.is_agent_dead(self.path))
+
+    def test_a_planner_response_with_pending_tool_calls_is_alive(self):
+        _write_transcript(self.path, [
+            {"source": "MODEL", "type": "PLANNER_RESPONSE", "tool_calls": [{"name": "Bash"}]}
+        ])
+        self.assertFalse(wd.is_agent_dead(self.path))
+
+    def test_only_the_most_recent_matching_line_decides_the_verdict(self):
+        # An earlier idle PLANNER_RESPONSE followed by a later one with real
+        # tool calls must read as alive -- is_agent_dead scans in reverse and
+        # must stop at the FIRST (i.e. most recent) decisive entry, not the
+        # first one found in file order.
+        _write_transcript(self.path, [
+            {"source": "MODEL", "type": "PLANNER_RESPONSE", "tool_calls": []},
+            {"source": "MODEL", "type": "PLANNER_RESPONSE", "tool_calls": [{"name": "Bash"}]},
+        ])
+        self.assertFalse(wd.is_agent_dead(self.path))
+
+    def test_malformed_json_lines_are_skipped_not_fatal(self):
+        with open(self.path, "w") as f:
+            f.write("{not valid json\n")
+            f.write(json.dumps({"source": "MODEL", "type": "PLANNER_RESPONSE", "tool_calls": []}) + "\n")
+        self.assertTrue(wd.is_agent_dead(self.path))
+
+    def test_a_transcript_with_no_decisive_signal_defaults_to_alive(self):
+        _write_transcript(self.path, [{"type": "SOME_OTHER_EVENT"}])
+        self.assertFalse(wd.is_agent_dead(self.path))
+
+    def test_an_empty_transcript_defaults_to_alive(self):
+        with open(self.path, "w"):
+            pass
+        self.assertFalse(wd.is_agent_dead(self.path))
+
+    def test_a_transcript_that_cannot_be_opened_warns_and_defaults_to_alive(self):
+        # Real bug found 2026-09-12: the outer `except Exception: pass` used to
+        # swallow a real read failure (not just a bad line inside the file,
+        # which the inner json.JSONDecodeError handler already covers) with
+        # zero trace. A directory where `path` is expected reproduces a real
+        # IsADirectoryError from the actual filesystem, not a mock.
+        os.makedirs(self.path)
+        with self.assertLogs("mcp_watchdog", level="WARNING") as cm:
+            self.assertFalse(wd.is_agent_dead(self.path))
+        self.assertTrue(any(self.path in msg for msg in cm.output))
+
+
+class CheckTurnLimitTests(unittest.TestCase):
+    # Regression coverage for a real bug found 2026-09-12:
+    # wait_for_agent_state_change's own inline copy of this exact check had
+    # silently regressed to `if False and lines >= turn_warning_limit` --
+    # permanently dead code that disabled the turn-limit/graceful-hand-over
+    # alert for that tool entirely, while wait_for_result's separate inline
+    # copy of the identical check kept working the whole time. The fix
+    # extracts one shared, tested function (this one) that both call sites
+    # now call, so there is exactly one copy of the logic left to regress.
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.path = os.path.join(self.tmp, "transcript.jsonl")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_below_the_limit_returns_none(self):
+        _write_transcript(self.path, [{"a": 1}, {"a": 2}])
+        self.assertIsNone(wd.check_turn_limit(self.path, 10))
+
+    def test_at_the_limit_returns_the_line_count(self):
+        _write_transcript(self.path, [{"a": i} for i in range(5)])
+        self.assertEqual(wd.check_turn_limit(self.path, 5), 5)
+
+    def test_over_the_limit_returns_the_line_count(self):
+        _write_transcript(self.path, [{"a": i} for i in range(5)])
+        self.assertEqual(wd.check_turn_limit(self.path, 3), 5)
+
+    def test_a_non_positive_limit_disables_the_check(self):
+        _write_transcript(self.path, [{"a": i} for i in range(100)])
+        self.assertIsNone(wd.check_turn_limit(self.path, 0))
+        self.assertIsNone(wd.check_turn_limit(self.path, -1))
+
+    def test_blank_lines_are_not_counted_as_turns(self):
+        with open(self.path, "w") as f:
+            f.write(json.dumps({"a": 1}) + "\n\n\n" + json.dumps({"a": 2}) + "\n")
+        self.assertIsNone(wd.check_turn_limit(self.path, 3))
+        self.assertEqual(wd.check_turn_limit(self.path, 2), 2)
+
+    def test_both_wait_tools_call_the_shared_helper_not_a_private_copy(self):
+        # Belt-and-suspenders guard tied directly to the historical bug
+        # pattern: assert neither tool's source has drifted back to an
+        # inline duplicate (or a stray "if False and") of this check.
+        for tool in (wd.wait_for_agent_state_change, wd.wait_for_result):
+            src = inspect.getsource(tool)
+            with self.subTest(tool=tool.__name__):
+                self.assertIn("check_turn_limit(", src)
+                self.assertNotIn("if False", src)
+
+
+def _write_subagent_spawn_line(transcript_path, child_ids):
+    """A minimal real-shaped line matching parse_family_tree's own scan:
+    a plain (non-EPHEMERAL_MESSAGE) entry whose serialized content contains
+    both the literal 'Created the following subagents' marker and each
+    child's conversationId, extractable by parse_family_tree's own regex."""
+    content = "Created the following subagents: " + " ".join(
+        f'"conversationId": "{cid}"' for cid in child_ids
+    )
+    entry = {"type": "MODEL_MESSAGE", "content": content}
+    # parse_family_tree's own membership check requires the LITERAL
+    # substring 'conversationId' in the raw line too (its first, cheap
+    # pre-filter before a real json.loads).
+    _write_transcript(transcript_path, [entry])
+
+
+class ParseFamilyTreeTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _transcript_path(self, agent_id):
+        return os.path.join(self.tmp, agent_id, ".system_generated", "logs", "transcript.jsonl")
+
+    def test_a_lone_agent_with_no_children_is_its_own_root_and_family(self):
+        active_family, parent_map, root_id = wd.parse_family_tree(self.tmp, "solo-agent")
+        self.assertEqual(root_id, "solo-agent")
+        self.assertEqual(active_family, {"solo-agent"})
+        self.assertEqual(parent_map, {})
+
+    def test_a_parent_spawning_one_child_links_them(self):
+        _write_subagent_spawn_line(self._transcript_path("parent-1"), ["child-1"])
+
+        active_family, parent_map, root_id = wd.parse_family_tree(self.tmp, "child-1")
+        self.assertEqual(root_id, "parent-1")
+        self.assertEqual(parent_map["child-1"], "parent-1")
+        self.assertEqual(active_family, {"parent-1", "child-1"})
+
+    def test_a_three_generation_chain_resolves_to_the_true_root(self):
+        _write_subagent_spawn_line(self._transcript_path("grandparent"), ["parent-1"])
+        _write_subagent_spawn_line(self._transcript_path("parent-1"), ["child-1"])
+
+        active_family, parent_map, root_id = wd.parse_family_tree(self.tmp, "child-1")
+        self.assertEqual(root_id, "grandparent")
+        self.assertEqual(active_family, {"grandparent", "parent-1", "child-1"})
+
+    def test_siblings_of_the_queried_agent_are_included_in_the_active_family(self):
+        _write_subagent_spawn_line(self._transcript_path("parent-1"), ["child-1", "child-2"])
+
+        active_family, parent_map, root_id = wd.parse_family_tree(self.tmp, "child-1")
+        self.assertEqual(root_id, "parent-1")
+        self.assertEqual(active_family, {"parent-1", "child-1", "child-2"})
+
+    def test_an_unrelated_agent_directory_is_not_pulled_into_the_family(self):
+        _write_subagent_spawn_line(self._transcript_path("parent-1"), ["child-1"])
+        _write_subagent_spawn_line(self._transcript_path("unrelated-parent"), ["unrelated-child"])
+
+        active_family, parent_map, root_id = wd.parse_family_tree(self.tmp, "child-1")
+        self.assertNotIn("unrelated-parent", active_family)
+        self.assertNotIn("unrelated-child", active_family)
+
+    def test_a_cyclic_parent_chain_does_not_hang_forever(self):
+        # Regression coverage for a real bug found 2026-09-12: parent_map is
+        # built by regex-scraping each agent's own transcript content for
+        # "Created the following subagents" claims -- loosely-structured
+        # data that can end up mutually self-referential (agent-a's
+        # transcript claims it spawned agent-b, agent-b's claims it spawned
+        # agent-a). The root-walk `while root_id in parent_map: root_id =
+        # parent_map[root_id]` had no cycle check at all, so this used to be
+        # a genuine, confirmed-live infinite loop -- and since this is a
+        # plain synchronous function with no `await` inside it, a hang here
+        # freezes the ENTIRE single-threaded watchdog process, not just this
+        # one call. Run on a background daemon thread with a hard join
+        # timeout so a real hang fails this test cleanly instead of wedging
+        # the whole suite.
+        _write_subagent_spawn_line(self._transcript_path("agent-a"), ["agent-b"])
+        _write_subagent_spawn_line(self._transcript_path("agent-b"), ["agent-a"])
+
+        result = {}
+
+        def _run():
+            result["value"] = wd.parse_family_tree(self.tmp, "agent-a")
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+        t.join(timeout=5)
+        self.assertFalse(t.is_alive(), "parse_family_tree hung on a cyclic parent chain")
+
+        active_family, parent_map, root_id = result["value"]
+        self.assertIn(root_id, {"agent-a", "agent-b"})
+        self.assertEqual(active_family, {"agent-a", "agent-b"})
+        self.assertEqual(parent_map, {"agent-a": "agent-b", "agent-b": "agent-a"})
+
+    def test_an_unparseable_matching_line_is_noted_not_silently_dropped(self):
+        # Real bug found 2026-09-12: the inner `except: pass` around the
+        # per-line json.loads() used to swallow a line that passed the cheap
+        # 'conversationId'/'Created the following subagents' substring
+        # pre-filter but wasn't actually valid JSON, with zero trace.
+        path = self._transcript_path("agent-a")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write('{not valid json but mentions conversationId and Created the following subagents\n')
+        with self.assertLogs("mcp_watchdog", level="DEBUG") as cm:
+            active_family, parent_map, root_id = wd.parse_family_tree(self.tmp, "agent-a")
+        self.assertEqual(parent_map, {})
+        self.assertTrue(any(path in msg for msg in cm.output))
+
+    def test_an_unreadable_transcript_is_noted_not_silently_dropped(self):
+        # Real bug found 2026-09-12: the outer `except: pass` around opening
+        # the whole transcript file used to swallow a real read failure (not
+        # just a bad line inside it) with zero trace. A directory where the
+        # file is expected reproduces a real IsADirectoryError, not a mock.
+        path = self._transcript_path("agent-a")
+        os.makedirs(path)
+        with self.assertLogs("mcp_watchdog", level="WARNING") as cm:
+            active_family, parent_map, root_id = wd.parse_family_tree(self.tmp, "agent-a")
+        self.assertEqual(parent_map, {})
+        self.assertTrue(any(path in msg for msg in cm.output))
+
+    def test_a_matching_line_whose_content_field_is_not_a_string_is_noted_not_crashed(self):
+        # Regression test for the narrowed (not catch-all) exception tuple on the inner
+        # per-line handler: a line that parses as valid JSON, has a dict "entry", but whose
+        # "content" field is a number/null/etc (not a string) raises TypeError -- not
+        # AttributeError -- on `'"conversationId"' in content` (a non-iterable `in` check).
+        # Confirmed to fail against a version of the narrowing that only caught
+        # (JSONDecodeError, AttributeError): this exact TypeError propagated uncaught and
+        # crashed the whole parse_family_tree() call instead of just skipping this one line.
+        path = self._transcript_path("agent-a")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(json.dumps({
+                "conversationId": "agent-a",
+                "content": 12345,  # not a string -- the real, malformed shape being guarded against
+                "text": "Created the following subagents",
+            }) + "\n")
+        with self.assertLogs("mcp_watchdog", level="DEBUG") as cm:
+            active_family, parent_map, root_id = wd.parse_family_tree(self.tmp, "agent-a")
+        self.assertEqual(parent_map, {})
+        self.assertTrue(any(path in msg for msg in cm.output))
+
+
+class GetQueueTests(unittest.TestCase):
+    def setUp(self):
+        wd._QUEUES.clear()
+        wd._QUEUE_META.clear()
+
+    def test_first_call_creates_a_queue_with_fresh_metadata(self):
+        q = wd._get_queue("my-queue")
+        self.assertIn("my-queue", wd._QUEUES)
+        meta = wd._QUEUE_META["my-queue"]
+        self.assertIsNone(meta["last_put_at"])
+        self.assertIsNone(meta["last_get_at"])
+        self.assertEqual(meta["waiters"], 0)
+        self.assertIs(q, wd._QUEUES["my-queue"])
+
+    def test_repeated_calls_for_the_same_name_return_the_same_queue_object(self):
+        q1 = wd._get_queue("shared")
+        q1.put("hello")
+        q2 = wd._get_queue("shared")
+        self.assertIs(q1, q2)
+        self.assertEqual(q2.get_nowait(), "hello")
+
+
+class SendIpcMessageAndQueueStatusAreAsyncTests(_SafePatchTestCase, unittest.IsolatedAsyncioTestCase):
+    # Regression coverage for docs/MCP_WATCHDOG_REPORT.md (Gemini-authored
+    # incident report, 2026-08-28): Gemini's local MCP proxy crashed calling
+    # send_ipc_message/queue_status back when they were plain `def` tools,
+    # while every other tool in this file was already `async def` and never
+    # hit the crash. Asserting these are awaitable coroutines (not just
+    # exercising their behavior via a synchronous call) is the part that
+    # would have caught a regression back to plain `def`.
+
+    def setUp(self):
+        wd._QUEUES.clear()
+        wd._QUEUE_META.clear()
+        # Both tools now proxy to the shared SSE instance (127.0.0.1:8767)
+        # whenever this process isn't itself that instance (see
+        # _is_shared_instance) -- exactly like wait_for_inbox already did.
+        # Force the "I am the shared instance" branch so this test exercises
+        # the real local-queue logic instead of trying a real network call.
+        self.safe_patch("mcp_watchdog._is_shared_instance", return_value=True)
+
+    def test_both_tools_are_coroutine_functions(self):
+        self.assertTrue(asyncio.iscoroutinefunction(wd.send_ipc_message))
+        self.assertTrue(asyncio.iscoroutinefunction(wd.queue_status))
+
+    async def test_send_then_status_works_when_awaited(self):
+        result = await wd.send_ipc_message("night-shift-queue", "hello")
+        self.assertEqual(result, "Message sent successfully.")
+
+        status = json.loads(await wd.queue_status("night-shift-queue"))
+        self.assertTrue(status["exists"])
+        self.assertEqual(status["pending_messages"], 1)
+        self.assertFalse(status["receiver_currently_waiting"])
+
+    async def test_a_stdio_instance_proxies_instead_of_touching_its_own_queue(self):
+        self.safe_patch("mcp_watchdog._is_shared_instance", return_value=False)
+        mock_proxy = self.safe_patch(
+            "mcp_watchdog._proxy_to_shared",
+            new_callable=AsyncMock,
+            return_value="Message sent successfully.",
+        )
+        result = await wd.send_ipc_message("night-shift-queue", "hello")
+        mock_proxy.assert_awaited_once_with(
+            "send_ipc_message", queue_name="night-shift-queue", content="hello"
+        )
+        self.assertEqual(result, "Message sent successfully.")
+        # Never touched the local queue -- a stdio instance's own _QUEUES
+        # would be a different store than the shared instance's.
+        self.assertNotIn("night-shift-queue", wd._QUEUES)
+
+
+class WaitForInboxMetaExpectationTests(_SafePatchTestCase, unittest.IsolatedAsyncioTestCase):
+    # Regression coverage for the narrowed (not catch-all) exception tuple around parsing a
+    # "_meta_expectation" envelope: (json.JSONDecodeError, KeyError, TypeError). A plain-text
+    # message (JSONDecodeError) and a dict envelope missing "file" (KeyError) were already the
+    # documented cases; TypeError covers "_meta_expectation" itself not being a dict (so
+    # `exp["file"]` isn't even valid subscripting) -- a real, plausible malformed-sender shape
+    # this narrowing must still tolerate rather than crash the whole wait_for_inbox call on.
+
+    def setUp(self):
+        wd._QUEUES.clear()
+        wd._QUEUE_META.clear()
+        self.safe_patch("mcp_watchdog._is_shared_instance", return_value=True)
+
+    async def test_a_plain_text_message_is_returned_as_is(self):
+        wd._get_queue("q1").put("just a plain string, not JSON")
+        result = await wd.wait_for_inbox("q1", timeout_mins=1)
+        self.assertEqual(result, "just a plain string, not JSON")
+
+    async def test_a_meta_expectation_envelope_missing_file_falls_back_to_raw(self):
+        # exp["file"] is only ever evaluated inside the `if session_id and session_id in
+        # SESSION_REGISTRY:` branch, so a real session_id registered in SESSION_REGISTRY is
+        # required to actually exercise that access (and thus the KeyError/TypeError this
+        # narrowing guards) -- without one, this envelope shape wouldn't reach that code at
+        # all and this test would silently prove nothing.
+        session_id = "sess-missing-file"
+        wd.SESSION_REGISTRY[session_id] = {"dead": False, "error": "", "procs": [], "expectations": []}
+        self.addCleanup(wd.SESSION_REGISTRY.pop, session_id, None)
+        raw = json.dumps({"_meta_expectation": {"timeout_mins": 5}})
+        wd._get_queue("q2").put(raw)
+        with self.assertLogs("mcp_watchdog", level="DEBUG") as cm:
+            result = await wd.wait_for_inbox("q2", timeout_mins=1, session_id=session_id)
+        self.assertEqual(result, raw)
+        self.assertTrue(any("not a structured JSON envelope" in msg for msg in cm.output))
+
+    async def test_a_meta_expectation_that_is_not_a_dict_falls_back_to_raw_not_a_crash(self):
+        # Confirmed to fail against a version of the narrowing that only caught
+        # (json.JSONDecodeError, KeyError): `exp["file"]` on a non-dict `exp` (here a plain
+        # string) raises TypeError ("string indices must be integers"), which propagated
+        # uncaught and crashed the whole call instead of falling back to the raw message.
+        session_id = "sess-not-a-dict"
+        wd.SESSION_REGISTRY[session_id] = {"dead": False, "error": "", "procs": [], "expectations": []}
+        self.addCleanup(wd.SESSION_REGISTRY.pop, session_id, None)
+        raw = json.dumps({"_meta_expectation": "not-a-dict"})
+        wd._get_queue("q3").put(raw)
+        with self.assertLogs("mcp_watchdog", level="DEBUG") as cm:
+            result = await wd.wait_for_inbox("q3", timeout_mins=1, session_id=session_id)
+        self.assertEqual(result, raw)
+        self.assertTrue(any("not a structured JSON envelope" in msg for msg in cm.output))
+
+    async def test_a_well_formed_meta_expectation_registers_an_expectation_and_returns_prompt(self):
+        session_id = "sess-1"
+        wd.SESSION_REGISTRY[session_id] = {"dead": False, "error": "", "procs": [], "expectations": []}
+        self.addCleanup(wd.SESSION_REGISTRY.pop, session_id, None)
+        wd._get_queue("q4").put(json.dumps({
+            "_meta_expectation": {"file": "/tmp/expected.txt", "timeout_mins": 30},
+            "prompt": "do the thing",
+        }))
+        result = await wd.wait_for_inbox("q4", timeout_mins=1, session_id=session_id)
+        self.assertEqual(result, "do the thing")
+        self.assertEqual(len(wd.SESSION_REGISTRY[session_id]["expectations"]), 1)
+        self.assertEqual(wd.SESSION_REGISTRY[session_id]["expectations"][0]["file"], "/tmp/expected.txt")
+
+
+class WaitForAllCompleteOutputFilesTests(_SafePatchTestCase, unittest.IsolatedAsyncioTestCase):
+    # Regression coverage for the narrowed (not catch-all) exception tuple around reading each
+    # output_files entry: (OSError, UnicodeDecodeError). Uses agent_ids whose transcripts don't
+    # exist at all (is_agent_dead() treats a missing transcript as dead -- see
+    # IsAgentDeadTests.test_a_missing_transcript_counts_as_dead), so `completed` already covers
+    # every agent_id before the pyinotify-watching branch is ever entered -- letting this reach
+    # the output_files handling directly without needing a real, live file-watcher.
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(self.tmp, ignore_errors=True))
+        os.makedirs(os.path.join(self.tmp, ".gemini", "antigravity", "brain"), exist_ok=True)
+        self.safe_patch("mcp_watchdog.os.path.expanduser", side_effect=lambda p: p.replace("~", self.tmp))
+
+    async def test_a_missing_output_file_is_reported_inline_not_crashed(self):
+        missing = os.path.join(self.tmp, "never_written.txt")
+        result_json = await wd.wait_for_all_complete(
+            agent_ids=["solo-agent"], output_files=[missing], timeout_mins=1
+        )
+        result = json.loads(result_json)
+        self.assertEqual(result["agents"]["solo-agent"], "COMPLETED")
+        self.assertEqual(len(result["outputs"]), 1)
+        self.assertEqual(result["outputs"][0]["file"], missing)
+        self.assertIn("error", result["outputs"][0])
+        self.assertNotIn("content", result["outputs"][0])
+
+    async def test_a_real_output_file_is_read_and_returned(self):
+        real_path = os.path.join(self.tmp, "real_output.txt")
+        with open(real_path, "w") as f:
+            f.write("the real content")
+        result_json = await wd.wait_for_all_complete(
+            agent_ids=["solo-agent"], output_files=[real_path], timeout_mins=1
+        )
+        result = json.loads(result_json)
+        self.assertEqual(result["outputs"][0]["content"], "the real content")
+        self.assertNotIn("error", result["outputs"][0])
+
+
+class SpawnManagedDaemonsTests(_SafePatchTestCase, unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(self.tmp, ignore_errors=True))
+        self.safe_patch("mcp_watchdog.os.path.expanduser", side_effect=lambda p: p.replace("~", self.tmp))
+
+    def _cleanup_session(self, session_id):
+        wd.SESSION_REGISTRY.pop(session_id, None)
+
+    async def test_invalid_json_is_reported_without_registering_a_session(self):
+        # Regression test for the narrowing on this handler: json.loads() on a real string
+        # can only ever raise json.JSONDecodeError (commands_json is typed `str`, enforced by
+        # the MCP tool schema), so narrowing away from a catch-all here doesn't drop any real
+        # coverage -- confirmed by this still passing against the narrowed source.
+        session_id = "sess-bad-json"
+        self.addCleanup(self._cleanup_session, session_id)
+        result = await wd.spawn_managed_daemons(session_id, "{not valid json")
+        self.assertIn("Invalid JSON format for commands", result)
+        self.assertNotIn(session_id, wd.SESSION_REGISTRY)
+
+    async def test_a_command_with_a_nonexistent_executable_is_reported_and_logged_not_crashed(self):
+        # Regression test for the `# audit-ignore-catch-all` tag added to this handler:
+        # asyncio.create_subprocess_exec() on a nonexistent executable raises a real
+        # FileNotFoundError (an OSError) -- one real, plausible shape of the broad,
+        # unpredictable failure surface this handler exists to catch. Must be reported both
+        # to the caller and via a real logging call, and must mark the session dead so
+        # wait_for_agent_state_change's DAEMON_CRASH check can see it.
+        session_id = "sess-bad-exec"
+        self.addCleanup(self._cleanup_session, session_id)
+        commands_json = json.dumps([{"name": "d1", "cmd": ["/no/such/executable-xyz"]}])
+        with self.assertLogs("mcp_watchdog", level="WARNING") as cm:
+            result = await wd.spawn_managed_daemons(session_id, commands_json)
+        self.assertIn("Failed to spawn daemons", result)
+        self.assertTrue(wd.SESSION_REGISTRY[session_id]["dead"])
+        self.assertIn("Failed to spawn daemons", wd.SESSION_REGISTRY[session_id]["error"])
+        self.assertTrue(any(session_id in msg for msg in cm.output))
+
+
+class WaitForResultExpectedFileRaceTests(_SafePatchTestCase, unittest.IsolatedAsyncioTestCase):
+    # Regression coverage for a real TOCTOU race found 2026-09-12 in
+    # wait_for_result's `expected_file` polling: it used to check
+    # `os.path.exists(expected_file) and os.path.getsize(expected_file) > 0`
+    # as two separate syscalls. A producer that writes the file then
+    # atomically renames it into place, or any process that rotates/removes
+    # it, can make the path vanish in the gap between those two calls --
+    # os.path.getsize() then raises FileNotFoundError, an exception nothing
+    # in wait_for_result caught, which crashed the whole tool call and
+    # skipped notifier.stop(), leaking the pyinotify watch (exactly the
+    # class of bug this file's own "Fix file descriptor leak" commit history
+    # was about). The fix routes through get_fsize(), which already treats
+    # a file that isn't there right now as "not ready yet" (0) -- correct
+    # polling semantics, not error-masking.
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(lambda: shutil.rmtree(self.tmp, ignore_errors=True))
+        os.makedirs(os.path.join(self.tmp, ".gemini", "antigravity", "brain"), exist_ok=True)
+        self.safe_patch("mcp_watchdog.os.path.expanduser", side_effect=lambda p: p.replace("~", self.tmp))
+
+    async def test_a_file_that_vanishes_between_exists_and_getsize_does_not_crash(self):
+        expected_file = os.path.join(self.tmp, "expected_output.txt")
+        with open(expected_file, "w") as f:
+            f.write("data")
+
+        real_getsize = os.path.getsize
+
+        def _flaky_getsize(path):
+            if path == expected_file:
+                raise FileNotFoundError(path)
+            return real_getsize(path)
+
+        self.safe_patch("mcp_watchdog.os.path.getsize", side_effect=_flaky_getsize)
+
+        # timeout_mins=0 makes wait_for_result hit its own "Wait timeout
+        # reached" return on the very first loop pass -- but only if the
+        # expected_file check ahead of it doesn't raise first. Bounded with
+        # an outer wait_for as a last-resort safety net, not because this is
+        # expected to hang.
+        result = await asyncio.wait_for(
+            wd.wait_for_result("nonexistent-agent", expected_file=expected_file, timeout_mins=0),
+            timeout=5,
+        )
+        self.assertIn("Wait timeout reached", result)
+
+
+class AllToolsHaveRealDocstringsTests(unittest.TestCase):
+    # Found 2026-08-28: wait_for_inbox picked up a stray string literal
+    # *after* its first real statement (a proxy-branch block), which Python
+    # only treats as a docstring when it's the function's literal first
+    # statement -- everywhere else it's a no-op expression, silently
+    # dropping the tool's __doc__ to None. FastMCP surfaces __doc__ as the
+    # tool's description to callers, so this was a real, if quiet,
+    # discoverability regression, not just style. Covering all @mcp.tool()
+    # functions generically so this class of mistake can't recur unnoticed
+    # on any of them.
+
+    def test_every_mcp_tool_has_a_nonempty_docstring(self):
+        # wait_for_agent_state_change is deliberately excluded: it has never
+        # had a docstring, a separate, pre-existing gap unrelated to
+        # tonight's fix -- not scope-creeping into auditing it here.
+        tools = [
+            wd.wait_for_result,
+            wd.wait_for_all_complete, wd.send_ipc_message, wd.queue_status,
+            wd.wait_for_fatal_events, wd.spawn_managed_daemons, wd.wait_for_inbox,
+        ]
+        for tool in tools:
+            self.assertIsNotNone(
+                tool.__doc__,
+                f"{tool.__name__} has no docstring -- FastMCP would show callers an empty description",
+            )
+            self.assertTrue(
+                tool.__doc__.strip(),
+                f"{tool.__name__}'s docstring is blank -- FastMCP would show callers an empty description",
+            )
+
+
+class _FakeConn:
+    """Stands in for a socket connection: recv() returns pre-scripted
+    chunks in order, then b"" (EOF), matching _handle_bridge_conn's own
+    read-until-EOF loop."""
+
+    def __init__(self, chunks):
+        self._chunks = list(chunks) + [b""]
+        self.closed = False
+
+    def recv(self, _n):
+        return self._chunks.pop(0)
+
+    def close(self):
+        self.closed = True
+
+
+class HandleBridgeConnTests(unittest.TestCase):
+    def setUp(self):
+        wd._QUEUES.clear()
+        wd._QUEUE_META.clear()
+
+    def test_a_well_formed_message_is_queued_under_its_named_queue(self):
+        conn = _FakeConn([b"my-queue\nhello world"])
+        wd._handle_bridge_conn(conn)
+        self.assertEqual(wd._get_queue("my-queue").get_nowait(), "hello world")
+        self.assertTrue(conn.closed)
+        self.assertIsNotNone(wd._QUEUE_META["my-queue"]["last_put_at"])
+
+    def test_a_leading_slash_on_the_queue_name_is_stripped(self):
+        conn = _FakeConn([b"/my-queue\nhello"])
+        wd._handle_bridge_conn(conn)
+        self.assertEqual(wd._get_queue("my-queue").get_nowait(), "hello")
+
+    def test_a_message_split_across_multiple_recv_chunks_is_reassembled(self):
+        conn = _FakeConn([b"my-queue\nhel", b"lo wor", b"ld"])
+        wd._handle_bridge_conn(conn)
+        self.assertEqual(wd._get_queue("my-queue").get_nowait(), "hello world")
+
+    def test_a_message_with_no_newline_header_is_dropped_not_queued(self):
+        conn = _FakeConn([b"no header here at all"])
+        wd._handle_bridge_conn(conn)
+        self.assertEqual(wd._QUEUES, {})
+        self.assertTrue(conn.closed)
+
+    def test_an_empty_queue_name_is_dropped(self):
+        conn = _FakeConn([b"\nsome content"])
+        wd._handle_bridge_conn(conn)
+        self.assertEqual(wd._QUEUES, {})
+
+    def test_a_recv_exception_still_closes_the_connection(self):
+        class ExplodingConn:
+            def recv(self, _n):
+                raise OSError("simulated socket failure")
+
+            def close(self):
+                self.closed = True
+
+        conn = ExplodingConn()
+        # Also confirms this `# audit-ignore-catch-all` handler's existing logger.warning()
+        # call is real (not just a comment) -- required by check_burn_list.py's own
+        # catch-all-exception rule to prove the exception isn't silently swallowed.
+        with self.assertLogs("mcp_watchdog", level="WARNING") as cm:
+            wd._handle_bridge_conn(conn)
+        self.assertTrue(conn.closed)
+        self.assertTrue(any("error handling client" in msg for msg in cm.output))
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+# Class anchors (ADR 0113) exercised by the tests above.
+# Tests [@ANCHOR: mcp_watchdog:mcp_watchdog_watchdog_event_handler_class]
+# Tests [@ANCHOR: mcp_watchdog:mcp_watchdog_dummy_notifier_class]

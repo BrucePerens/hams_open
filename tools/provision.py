@@ -1,0 +1,499 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+"""
+Standalone Environment Provisioning Script
+Must be run as root.
+"""
+import argparse
+import contextlib
+import os
+import re
+import sys
+import subprocess
+import tempfile
+import logging
+
+# This script lives at hams_shared/tools/provision.py, and infrastructure.py is
+# its own direct sibling in that same tools/ directory -- so `repo_root` must not
+# be computed as ONE level up from here (dirname(__file__) + "/.."), which lands
+# on hams_shared itself, not hams_open. That would break two different things
+# that share this one value:
+#   1. `sys.path.insert(0, repo_root)` needs the directory infrastructure.py
+#      actually lives in (this file's own directory, zero levels up) for
+#      `import infrastructure` to succeed at all: running this script
+#      standalone (not under pytest, which happens to also put this same
+#      directory on sys.path via its own test collection and so masks the
+#      problem) raises a real ModuleNotFoundError.
+#   2. `env_vars["REPO_ROOT"]`, which infrastructure.provision_environment()
+#      expects to be hams_open's own root (it checks
+#      `os.path.exists(os.path.join(repo_root, "hams_shared"))` as its PRIMARY
+#      test for "this repo_root IS hams_open") -- that needs TWO levels up from
+#      here (tools -> hams_shared -> hams_open), not one. A single wrong value
+#      would still often locate hams_com_dir/hams_community_dir correctly in
+#      practice, purely by falling through to this same function's own
+#      `../..`-relative fallback branches for the specific, real
+#      `/opt/hams/src/{hams_com,hams_open}` sibling layout -- a coincidence that
+#      would mask the deeper problem, not evidence the value was right.
+_provision_tools_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _provision_tools_dir)
+import infrastructure  # noqa: E402
+import provision_test_environment  # noqa: E402
+
+
+# This script is
+# deployed as an identical copy at two genuinely different nesting depths --
+# `hams_com/tools/provision.py` (one level above hams_com's own root, which holds `hams_shared`
+# as a symlink into hams_open) and `hams_open/hams_shared/tools/provision.py` (two levels above
+# hams_open's own root, which holds `hams_shared` as a real directory). A fixed
+# `"..", ".."` walk is only correct for the second copy -- for the first copy it lands on the
+# PARENT of hams_com (e.g. `~/workspace`), where `hams_shared` does not exist at all, which breaks
+# every caller of `repo_root` for that copy. A fixed-depth walk cannot serve both real layouts by
+# construction, so this walks upward from this file's own location until it finds the first
+# ancestor directory whose own `hams_shared` subdirectory exists (real directory or symlink,
+# `os.path.exists` follows both) -- the one property both deployed copies actually share.
+def _find_repo_root(start_dir):
+    """The nearest ancestor whose `hams_shared` is THIS checkout of hams_shared, or None.
+
+    Finding any ancestor with a `hams_shared` entry is not enough. For example, a test run inside a git worktree of
+    hams_shared itself (no hams_open above it) walked up to the user's home directory, found an unrelated, months-old
+    ~/hams_shared copy there, and `test_provision_py_help_runs_in_a_fresh_subprocess...` then executed THAT
+    copy's provision.py through sudo, which provisioned the dev box (apt, usermod) before the test timed out. So an
+    ancestor only counts when its hams_shared/tools/provision.py is this very file once symlinks are resolved: the
+    main checkout (hams_open/hams_shared, a real directory), a hams_open worktree whose hams_shared symlink points
+    here, and hams_com (whose hams_shared and tools are symlinks into hams_open) all satisfy that, an unrelated copy
+    does not. None means this file is not inside a hams_open layout at all (a standalone hams_shared clone or
+    worktree); provision() refuses to run then, and the tests build a throwaway layout instead."""
+    this_file = os.path.realpath(os.path.join(start_dir, os.path.basename(__file__)))
+    current = start_dir
+    for _ in range(5):  # five levels is already far more than either real layout ever needs
+        candidate = os.path.join(current, "hams_shared", "tools", os.path.basename(__file__))
+        if os.path.exists(candidate) and os.path.realpath(candidate) == this_file:
+            return current
+        parent = os.path.dirname(current)
+        if parent == current:
+            break
+        current = parent
+    return None
+
+
+repo_root = _find_repo_root(_provision_tools_dir)
+
+logging.basicConfig(level=logging.INFO)
+_logger = logging.getLogger(__name__)
+
+
+def _provision_only_host_class(host_class, plan, env_vars):
+    """`--only-host-class`: the entries of one host class and nothing else (see
+    infrastructure.provision_host_class)."""
+    if host_class not in infrastructure.KNOWN_HOST_CLASSES:
+        _logger.error(f"[!] Unknown host class: {host_class}")
+        sys.exit(1)
+
+    def run_only(cmd, **kw):
+        printable = " ".join(infrastructure.redact_command(cmd))
+        if plan:
+            print(f"PLAN run: {printable}", flush=True)
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        _logger.info(f"[*] Running: {printable}")
+        return subprocess.run(cmd, check=True, **kw)
+
+    if plan:
+        os.environ["HAMS_HOST_CLASSES"] = host_class
+        with infrastructure.planning():
+            infrastructure.provision_host_class(host_class, run_only, env_vars)
+        return
+    if infrastructure.record_host_class(host_class):
+        _logger.info(f"[*] Recorded host class {host_class} in {infrastructure.HOST_CLASSES_FILE}")
+    infrastructure.provision_host_class(host_class, run_only, env_vars)
+
+
+def _provision_only_daemon_families(accounts, plan, env_vars):
+    """`--daemon-family`: the entries of the named daemon families and nothing else (see
+    infrastructure.provision_daemon_families)."""
+
+    def run_only(cmd, **kw):
+        printable = " ".join(infrastructure.redact_command(cmd))
+        if plan:
+            print(f"PLAN run: {printable}", flush=True)
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        _logger.info(f"[*] Running: {printable}")
+        return subprocess.run(cmd, check=True, **kw)
+
+    try:
+        if plan:
+            with infrastructure.planning():
+                infrastructure.provision_daemon_families(accounts, run_only, env_vars)
+        else:
+            infrastructure.provision_daemon_families(accounts, run_only, env_vars)
+    except (ValueError, RuntimeError) as e:
+        _logger.error(f"[!] {e}")
+        sys.exit(1)
+
+
+def _provision_only_units(plan, env_vars):
+    """`--units`: the unit files, drop-ins and sbin wrappers and nothing else (see infrastructure.provision_units)."""
+
+    def run_only(cmd, **kw):
+        printable = " ".join(infrastructure.redact_command(cmd))
+        if plan:
+            print(f"PLAN run: {printable}", flush=True)
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        _logger.info(f"[*] Running: {printable}")
+        return subprocess.run(cmd, check=True, **kw)
+
+    if plan:
+        with infrastructure.planning():
+            infrastructure.provision_units(run_only, env_vars)
+    else:
+        infrastructure.provision_units(run_only, env_vars)
+
+
+def provision():
+    test_environment = "--test-environment" in sys.argv[1:]
+    if test_environment:
+        # Before the sudo re-exec and before anything else: the marker files need no root. The database check runs
+        # again as root in provision_test_environment.start(), once PostgreSQL can be asked.
+        provision_test_environment.refuse_production()
+    # A standalone hams_shared clone is how a fresh host starts: --test-environment clones hams_open and hams_com
+    # beside it (provision_test_environment.discover_layout). Every other mode needs the full layout.
+    if repo_root is None and not test_environment:
+        _logger.error(
+            "[!] %s is not inside a hams_open checkout (no ancestor directory has this file as its hams_shared/tools/"
+            "provision.py). Run it from <hams_open>/hams_shared/tools/ or <hams_com>/tools/; refusing to guess a root.",
+            os.path.abspath(__file__))
+        sys.exit(1)
+    os.chdir(repo_root or _provision_tools_dir)
+
+    if os.geteuid() != 0:
+        _logger.info("[*] Elevating privileges (sudo) to provision environment...")
+        # This re-exec forwards every one of this process's own CLI arguments
+        # (sys.argv[1:], e.g. --test/--force-reset), as test.py's own equivalent
+        # self-re-exec-via-sudo pattern does
+        # (`["sudo", "-H", "-E", sys.executable] + sys.argv`). A caller running
+        # `provision.py --force-reset` as a non-root user (the common case)
+        # would otherwise have that flag silently vanish
+        # the moment this script escalated to root: the re-exec'd,
+        # actually-provisioning process ran with NO CLI args at all, so
+        # neither --force-reset nor --test ever took effect unless the
+        # caller happened to already be root. So sys.argv[1:] is forwarded
+        # explicitly.
+        os.execvp(
+            "sudo",
+            ["sudo", "-H", "-E", sys.executable, os.path.abspath(__file__)]
+            + sys.argv[1:],
+        )
+
+    orig_user = os.environ.get("SUDO_USER") or os.environ.get("USER")
+    env_vars = dict(os.environ)
+    env_vars["DEBIAN_FRONTEND"] = "noninteractive"
+    env_vars["REPO_ROOT"] = repo_root or ""
+
+    os_id = infrastructure.get_os_identifier()
+    _logger.info(f"[*] Discovered OS: {os_id}")
+
+    parser = argparse.ArgumentParser(description="Standalone Environment Provisioning Script")
+    parser.add_argument(
+        "--test",
+        action="store_true",
+        help="Provision a test host: smoke-test the local daemons and stop them after, even on "
+        "failure. Units that fetch from third-party servers (MANIFEST external_fetch) are "
+        "linked but never enabled or started",
+    )
+    parser.add_argument("--force-reset", action="store_true", help="Completely destroy the existing database, filestore, and cache before provisioning")
+    parser.add_argument(
+        "--hold-odoo",
+        action="store_true",
+        help="Prepare the box (packages, accounts, env files, code, empty database, units) but do NOT "
+        "install the Odoo modules into the database and do NOT start Odoo or any daemon",
+    )
+    parser.add_argument(
+        "--plan",
+        action="store_true",
+        help="Print every action provisioning would take (accounts, directories, files and config "
+        "writes, apt installs, units linked/enabled/restarted, database steps) and change nothing. "
+        "Read-only probes still run. Secret values are never printed",
+    )
+    parser.add_argument(
+        "--enable-opt-in",
+        action="append",
+        default=[],
+        metavar="UNIT",
+        help="Also enable (and smoke-test) this MANIFEST opt_in unit, e.g. code.review.sweep.timer, "
+        "which calls the paid Gemini API. Repeatable. Without it opt-in units are linked only",
+    )
+    parser.add_argument(
+        "--only-host-class",
+        metavar="CLASS",
+        help="Provision ONLY the entries of this host class (accounts, directories, unit files; "
+        "nothing is enabled or started) instead of the whole hams.com stack. For a machine that is "
+        "not a full server, such as the CA signer accounts and units alone: `--only-host-class ca_signer`. "
+        "Records the class in /opt/hams/etc/host_classes. Honours --plan",
+    )
+    parser.add_argument(
+        "--daemon-family",
+        action="append",
+        default=[],
+        metavar="ACCOUNT",
+        help="Provision ONLY this daemon family (a hamsd_<family> account: the account, the directories "
+        "it owns, its unit files and sudoers grant) instead of the whole stack. Nothing is enabled, "
+        "started or restarted. Repeatable. Honours --plan. docs/proposals/DAEMON_OS_ISOLATION_PLAN.md",
+    )
+    parser.add_argument(
+        "--units",
+        action="store_true",
+        help="Provision ONLY the systemd unit files, their drop-ins and the /usr/local/sbin wrappers (write, link, "
+        "daemon-reload). Nothing is enabled, started or restarted; no account, directory, package or database is "
+        "touched. Honours --plan. Set DB_NAME in the environment (hams.daemon.keys.service uses it).",
+    )
+    parser.add_argument(
+        "--host-class",
+        action="append",
+        default=[],
+        metavar="CLASS",
+        help="Designate this host as a MANIFEST host class (for example ca_signer, the host that runs the CA signer "
+        "daemons: hams1 only). Recorded in /opt/hams/etc/host_classes so later runs keep it. Repeatable",
+    )
+    parser.add_argument(
+        "--fetch-models",
+        action="store_true",
+        help="Fetch ONLY the simulated-band bots' speech models (MANIFEST model_files) into "
+        "/opt/hams/models, each verified against its pinned size and SHA-256, and exit. Production "
+        "hosts only: refused with --test. Honours --plan",
+    )
+    parser.add_argument(
+        "--refresh-cache",
+        action="store_true",
+        help="Re-download every cached provisioning download (apt keys, kopia, wkhtmltopdf) and accept a "
+        "changed trust-on-first-use hash (a changed signing key is otherwise refused). Same as "
+        "HAMS_PROVISION_REFRESH=1. Review the logged old and new hash first",
+    )
+    parser.add_argument(
+        "--test-environment",
+        action="store_true",
+        help="Make this host a test host where test.py and run_linters.py work, in one command: clone the missing "
+        "repositories beside this checkout (with the push credential the host already has), the test-runner "
+        "packages, Odoo, PostgreSQL with a hams_test database, then a self-check. Refuses production. Idempotent. "
+        "With --test, the full test provisioning also runs. tools/README.md, provision_test_environment.py",
+    )
+    parser.add_argument(
+        "--git-key",
+        metavar="PATH",
+        help="With --test-environment: an SSH deploy key (mode 600) to clone and push with when the host has no cloud "
+        "git proxy and no authenticated gh. Set as core.sshCommand on these clones only; never read or copied",
+    )
+    parser.add_argument(
+        "--workspace",
+        metavar="DIR",
+        help="With --test-environment: the directory that holds (or will hold) hams_com and hams_open. Default: the "
+        "parent of this checkout",
+    )
+    parser.add_argument(
+        "--no-self-check",
+        action="store_true",
+        help="With --test-environment: skip the closing run_linters.py --changed and test.py -u zero_sudo",
+    )
+    args = parser.parse_args()  # an unknown flag (a mistyped --plan) must stop the run, not provision for real
+    if (args.git_key or args.workspace or args.no_self_check) and not args.test_environment:
+        _logger.error("[!] --git-key, --workspace and --no-self-check only apply with --test-environment")
+        sys.exit(1)
+    if args.test_environment and (args.fetch_models or args.only_host_class or args.daemon_family or args.units):
+        _logger.error("[!] --test-environment cannot be combined with --fetch-models, --only-host-class, "
+                      "--daemon-family or --units")
+        sys.exit(1)
+    if args.refresh_cache:
+        os.environ["HAMS_PROVISION_REFRESH"] = "1"
+
+    if args.fetch_models:
+        if args.test:
+            _logger.error("[!] --fetch-models is for production hosts; a test host never downloads models")
+            sys.exit(1)
+        if args.plan:
+            with infrastructure.planning():
+                infrastructure.provision_model_files(environment="prod")
+            return
+        failed = infrastructure.provision_model_files(environment="prod")
+        if failed:
+            _logger.error("[!] %d model file(s) were not installed: %s", len(failed), ", ".join(failed))
+            sys.exit(2)
+        _logger.info("[*] Every speech model file is present and verified")
+        return
+
+    if os_id not in ("ubuntu", "debian"):
+        _logger.error(
+            f"[!] Unsupported OS: {os_id}. Only Debian and Ubuntu are currently supported."
+        )
+        sys.exit(1)
+
+    for host_class in args.host_class:
+        if host_class not in infrastructure.KNOWN_HOST_CLASSES:
+            _logger.error(f"[!] Unknown host class: {host_class}")
+            sys.exit(1)
+        if args.plan:
+            print(f"PLAN record host class {host_class} in {infrastructure.HOST_CLASSES_FILE}", flush=True)
+        elif infrastructure.record_host_class(host_class):
+            _logger.info(f"[*] Recorded host class {host_class} in {infrastructure.HOST_CLASSES_FILE}")
+    if args.plan and args.host_class:
+        # --plan writes nothing, so make the classes visible to this process's own plan.
+        os.environ["HAMS_HOST_CLASSES"] = ",".join(
+            sorted(set(filter(None, os.environ.get("HAMS_HOST_CLASSES", "").split(","))) | set(args.host_class))
+        )
+
+    if args.only_host_class:
+        _provision_only_host_class(args.only_host_class, args.plan, env_vars)
+        return
+
+    if args.daemon_family:
+        _provision_only_daemon_families(args.daemon_family, args.plan, env_vars)
+        return
+
+    if args.units:
+        _provision_only_units(args.plan, env_vars)
+        return
+
+    def run_sys(cmd, **kw):
+        printable = " ".join(infrastructure.redact_command(cmd))
+        if args.plan:
+            # --plan: never execute; record the command (passwords masked) and report success.
+            print(f"PLAN run: {printable}", flush=True)
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+        _logger.info(f"[*] Running: {printable}")
+        if "env" not in kw:
+            kw["env"] = env_vars
+        return subprocess.run(cmd, check=True, **kw)
+
+    test_env_state = None
+    if args.test_environment:
+        # The clones come first: with --test, provision_environment() below needs hams_com and hams_open in place.
+        try:
+            test_env_state = provision_test_environment.start(
+                run_sys, env_vars, orig_user, _provision_tools_dir, repo_root, workspace=args.workspace,
+                git_key=args.git_key, plan=args.plan,
+            )
+        except ValueError as e:
+            _logger.error(f"[!] {e}")
+            sys.exit(1)
+        if not repo_root or not os.path.exists(os.path.join(repo_root, ".git")):
+            # Started from a standalone hams_shared clone: the hams_open just cloned is the root --test needs.
+            env_vars["REPO_ROOT"] = test_env_state["layout"]["hams_open"]
+    if args.test or not args.test_environment:
+        infrastructure.load_and_prompt_env(env_vars, args.test)
+
+    if args.force_reset and args.plan:
+        _logger.warning(
+            "[*] PLAN: --force-reset would stop odoo, drop the database, wipe its filestore and flush redis"
+        )
+    elif args.force_reset:
+        db_name = env_vars.get("DB_NAME", "hams_test")
+        # db_name is interpolated below into a
+        # filesystem path that a subsequent `rm -rf` deletes outright
+        # (`filestore_path`). DB_NAME is normally an operator-controlled
+        # config value (a .env file or an interactive prompt in
+        # infrastructure.load_and_prompt_env), not external input, so this
+        # guards against a typo'd/copy-pasted DB_NAME (e.g. one containing
+        # "../") causing this force-reset to `rm -rf` something outside
+        # the intended filestore directory, not against a remote attacker.
+        # Mirrors test.py's own rebuild_db() identifier check (same
+        # underlying risk shape: a config value interpolated unvalidated
+        # into a destructive operation).
+        if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*\Z", db_name):
+            _logger.error(
+                f"[!] DB_NAME {db_name!r} is not a safe database/directory "
+                "name (must match ^[A-Za-z_][A-Za-z0-9_]*$) -- refusing to "
+                "use it in a --force-reset teardown."
+            )
+            sys.exit(1)
+        _logger.warning(f"[*] Force-reset enabled! Tearing down old environment for '{db_name}'...")
+        
+        _logger.info("[*] Stopping odoo service...")
+        subprocess.run(["systemctl", "stop", "odoo"], check=False)
+        
+        _logger.info(f"[*] Dropping database {db_name}...")
+        subprocess.run(["sudo", "-u", "postgres", "dropdb", "--if-exists", db_name], check=False)
+        
+        filestore_path = f"/var/lib/odoo/filestore/{db_name}"
+        _logger.info(f"[*] Wiping filestore at {filestore_path}...")
+        subprocess.run(["rm", "-rf", filestore_path], check=False)
+        
+        _logger.info("[*] Flushing redis cache...")
+        subprocess.run(["redis-cli", "flushall"], check=False)
+
+    if os_id == "debian" and "python3-pypdf2" in infrastructure._installed_apt_packages():
+        # Already there (every re-run on a provisioned box): rebuilding and re-installing it would
+        # only churn dpkg on a live host.
+        _logger.info("[*] Dummy python3-pypdf2 package already installed; skipping its build")
+    elif os_id == "debian":
+        _logger.info("[*] Generating dummy python3-pypdf2 package for Debian compatibility")
+        run_sys(["apt-get", "update", "-y"])
+        run_sys(["apt-get", "install", "-y", "--no-upgrade", "equivs"])
+        # Real, previously-masked ordering bug found 2026-09-13 hardware-qualifying pi500-1
+        # (Raspberry Pi 500, a genuinely fresh Debian 12 bookworm box): the equivs package
+        # built just below declares `Depends: python3-pypdf`, but that real package is only
+        # installed later, inside infrastructure.provision_environment()'s own apt_packages
+        # pass -- so `dpkg -i` on a fresh box fails outright with "python3-pypdf2 depends on
+        # python3-pypdf; however: Package python3-pypdf is not installed." This was never
+        # caught on the dev box because it already had python3-pypdf installed incidentally
+        # from unrelated prior work, masking the real ordering bug the same way this
+        # project's own install_debian_deps.sh has already documented for python3-numpy/
+        # autoconf/automake/libtool on a bare CI image. Install the real dependency here,
+        # explicitly, before building/installing the dummy compatibility package that needs
+        # it -- not duplicated later, since infrastructure.py's own MANIFEST-driven install of
+        # python3-pypdf is naturally a no-op once apt already has it satisfied.
+        run_sys(["apt-get", "install", "-y", "--no-upgrade", "python3-pypdf"])
+        equivs_config = (
+            "Section: python\n"
+            "Priority: optional\n"
+            "Standards-Version: 4.1.4\n"
+            "Package: python3-pypdf2\n"
+            "Version: 1.0\n"
+            "Depends: python3-pypdf\n"
+            "Description: Dummy python3-pypdf2 package for Ubuntu compatibility\n"
+        )
+        with tempfile.TemporaryDirectory(prefix="python3-pypdf2-") as build_dir:
+            if not args.plan:
+                with open(os.path.join(build_dir, "python3-pypdf2.control"), "w") as f:
+                    f.write(equivs_config)
+            run_sys(["equivs-build", "python3-pypdf2.control"], cwd=build_dir)
+            run_sys(["dpkg", "-i", os.path.join(build_dir, "python3-pypdf2_1.0_all.deb")])
+
+    if args.test or not args.test_environment:
+        infrastructure.provision_environment(
+            run_sys, env_vars, orig_user, os_id, is_test=args.test, hold_odoo=args.hold_odoo,
+            plan=args.plan, opt_in_units=tuple(args.enable_opt_in),
+        )
+    if args.test_environment:
+        with (infrastructure.planning() if args.plan else contextlib.nullcontext()):
+            provision_test_environment.finish(
+                test_env_state, run_sys, env_vars, os_id, self_check=not args.no_self_check, plan=args.plan,
+            )
+        return
+    if args.plan:
+        return
+
+    domain = env_vars.get("DOMAIN", "hams.com")
+    _logger.info(f"""
+======================================================================
+[!] EMAIL REPUTATION ACTION REQUIRED
+======================================================================
+To ensure high deliverability and stay on the good side of mailing 
+services (SES, Mailgun, etc.), you must add the following DNS records 
+to your domain ({domain}):
+
+1. SPF Record (TXT):
+   Name: @
+   Value: v=spf1 include:mailgun.org ~all  (replace with your provider)
+
+2. DMARC Record (TXT):
+   Name: _dmarc
+   Value: v=DMARC1; p=quarantine; rua=mailto:admin@{domain};
+
+3. DKIM Record (TXT):
+   (Fetch this specific value from your email provider's dashboard)
+
+The system is now configured to automatically append 'List-Unsubscribe' 
+headers and compliance footers to all outgoing mail.
+======================================================================
+""")
+
+if __name__ == "__main__":
+    provision()

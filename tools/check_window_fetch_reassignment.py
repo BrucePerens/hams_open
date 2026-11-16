@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+"""
+Flags direct `window.fetch = ...`/`globalThis.fetch = ...` reassignment in *.test.js files.
+
+Origin: `ham_world_map_view.test.js` -- two tests reassigned `window.fetch` directly to mock a network
+call, which throws `TypeError: Cannot assign to read only property 'fetch'` under the real Odoo
+`@odoo/hoot` test harness, since hoot's mocked `window` makes `window.fetch` read-only. Both tests
+had silently never been run for real; the codebase's own sanctioned pattern is the `mockFetch()`
+helper (established in `ham_shack/static/tests/web_transceiver.test.js`), which this check
+recommends in its violation message. A follow-up sweep the same night found the identical pattern
+in 17 more tests across four other modules (ham_logbook, ham_satellite, theme_hams), none of which
+ship a hoot test runner at all -- meaning this specific defect can go undetected indefinitely
+without a mechanical check, since nothing forces these tests to actually run. `globalThis.fetch =`
+is the exact same failure under the exact same read-only property (module code and ES module scope
+both resolve `globalThis` to the same mocked `window` object hoot patches), so it's covered by the
+same regex rather than a second check.
+
+This check is deliberately narrow (a single, low-noise regex) rather than a general JS static
+analyzer: `window.fetch =`/`globalThis.fetch =` (or the bracket-notation equivalents) assigned to
+anything, excluding `==`/`===`/`!=`/`!==` comparisons, inside a `*.test.js` file.
+"""
+
+import os
+import re
+import sys
+
+import check_target
+from tree_files import tree_files
+
+_ASSIGNMENT_RE = re.compile(
+    r"""(?:window|globalThis)(?:\.fetch|\[['"]fetch['"]\])\s*=(?!=)"""
+)
+
+_IGNORE_DIRS = {
+    ".git",
+    "node_modules",
+    "venv",
+    "env",
+    ".venv",
+    "__pycache__",
+    ".agents",
+    "target",
+    "radae",
+    # Stale `git worktree add` checkouts under .claude/worktrees/<hash>/ --
+    # frozen, historical copies from past agent sessions, not live source.
+    # Already-fixed test.js files can have old, broken worktree copies
+    # lingering here, which this check would flag even though the real
+    # source is clean. Same reasoning as check_absolute_paths.py's own archive/
+    # exclusion and check_hoot_runner_coverage.py's own ignore_dirs.
+    ".claude",
+    # Matches any virtualenv by its structurally-guaranteed lib/pythonX.Y/site-packages/
+    # subdirectory regardless of the venv's own outer directory name -- "venv"/".venv" alone
+    # missed a real stray "whisper_venv/" (see check_float_isfinite.py's own comment/test).
+    "site-packages",
+}
+
+
+def check_window_fetch_reassignment(repo_dir):
+    violations = []
+
+    for file_path in tree_files(repo_dir, ".test.js", _IGNORE_DIRS):
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                for i, line in enumerate(f, 1):
+                    if _ASSIGNMENT_RE.search(line):
+                        violations.append(
+                            f"{os.path.relpath(file_path, repo_dir)}:{i} Direct `window.fetch = "
+                            "...`/`globalThis.fetch = ...` reassignment -- this throws under the "
+                            "real @odoo/hoot test harness (hoot's mocked window makes fetch "
+                            "read-only). Use this repo's own mockFetch() helper instead (see "
+                            "ham_shack/static/tests/web_transceiver.test.js for the established "
+                            "pattern)."
+                        )
+        except (UnicodeDecodeError, OSError) as e:
+            # OSError added 2026-09-10: a broken symlink (target doesn't exist) with a
+            # .test.js name makes open() raise FileNotFoundError, not caught before this
+            # fix -- crashing the entire scan on one unreadable file. Real, reachable repo
+            # state (see check_absolute_paths.py's identical fix), not contrived.
+            print(f"Warning: could not read {file_path}: {e}")
+
+    return violations
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: check_window_fetch_reassignment.py <repo_dir> [<repo_dir> ...]")
+        sys.exit(1)
+
+    # Several repositories are scanned by ONE process (one step in run_linters.py).
+    violations = []
+    roots = [check_target.require_directory(repo_dir, "check_window_fetch_reassignment") for repo_dir in dict.fromkeys(sys.argv[1:])]
+    # One scan of nothing across ALL the roots is the failure: hams_com alone may hold no test file while hams_open holds them all.
+    check_target.require_scanned(
+        sum(len(tree_files(repo_dir, ".test.js", _IGNORE_DIRS)) for repo_dir in roots),
+        ", ".join(roots),
+        "check_window_fetch_reassignment",
+        "*.test.js files",
+    )
+    for repo_dir in roots:
+        violations.extend(check_window_fetch_reassignment(repo_dir))
+
+    if violations:
+        print("❌ window.fetch Reassignment Violations:")
+        for v in violations:
+            print(f"  - {v}")
+        sys.exit(1)
+
+    sys.exit(0)

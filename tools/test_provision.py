@@ -1,0 +1,454 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+"""
+Unit tests for provision.py.
+
+provision() is almost entirely orchestration -- sudo re-exec, apt-get,
+systemctl, dropdb, rm -rf, redis-cli -- run for real only as root on a
+real Debian/Ubuntu box, per this script's own module docstring ("Must be
+run as root"). Actually executing any of that here would be destructive
+(--force-reset really does drop a database and wipe a filestore) and
+isn't what these tests verify anyway: what matters is that the *decision
+logic* around those real commands is correct -- which branch runs, in
+what order, and that a genuinely unsupported OS refuses to proceed
+rather than plowing ahead. So os.geteuid, os.execvp, subprocess.run, and
+every infrastructure.py function provision() calls are mocked; only
+provision()'s own control flow runs for real, against a real argv.
+
+Every test patches sys.argv (via unittest.mock.patch.object) rather than
+relying on whatever argv this test process itself was started with,
+since provision() parses arguments straight from sys.argv via
+argparse.parse_known_args() with no way to inject them otherwise.
+"""
+
+import os
+import subprocess
+import sys
+import tempfile
+import unittest
+from unittest.mock import MagicMock, patch
+
+import provision
+
+# provision.repo_root is None when this checkout is a standalone hams_shared clone or worktree (no hams_open above it).
+# provision() refuses to run then, so the tests that drive it with every side effect mocked are given a stand-in root;
+# the tests of the root discovery itself read the real value from here.
+REAL_REPO_ROOT = provision.repo_root
+_root_patcher = patch.object(provision, "repo_root", "/nonexistent/hams_open") if REAL_REPO_ROOT is None else None
+
+
+def setUpModule():
+    if _root_patcher:
+        _root_patcher.start()
+
+
+def tearDownModule():
+    if _root_patcher:
+        _root_patcher.stop()
+
+
+class ProvisionTestCase(unittest.TestCase):
+    def safe_patch(self, target, *args, **kwargs):
+        patcher = patch(target, *args, **kwargs)
+        mock_obj = patcher.start()
+        self.addCleanup(patcher.stop)
+        return mock_obj
+
+    def safe_patch_object(self, target, attribute, *args, **kwargs):
+        patcher = patch.object(target, attribute, *args, **kwargs)
+        mock_obj = patcher.start()
+        self.addCleanup(patcher.stop)
+        return mock_obj
+
+    def safe_patch_dict(self, target, values, clear=False):
+        patcher = patch.dict(target, values, clear=clear)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def run_provision(self, argv, geteuid=0, os_id="debian", patch_open=True):
+        """Runs provision.provision() with every real side-effecting call
+        mocked and returns (mock_infra, mock_subprocess) for assertions.
+        geteuid defaults to 0 (root) since most tests care about behavior
+        *after* the sudo re-exec, not the re-exec itself."""
+        self.safe_patch_object(os, "geteuid", return_value=geteuid)
+        self.safe_patch_object(sys, "argv", ["provision.py"] + argv)
+        mock_infra = self.safe_patch_object(provision, "infrastructure", MagicMock())
+        mock_infra.get_os_identifier.return_value = os_id
+        mock_subprocess = self.safe_patch_object(provision, "subprocess", MagicMock())
+        self.safe_patch("os.chdir")
+        if patch_open:
+            self.safe_patch("builtins.open", MagicMock())
+        provision.provision()
+        return mock_infra, mock_subprocess
+
+
+class ProvisionRootElevationTests(ProvisionTestCase):
+    def test_re_execs_via_sudo_when_not_root(self):
+        mock_execvp = self.safe_patch_object(os, "execvp")
+        self.safe_patch_object(os, "geteuid", return_value=1000)
+        self.safe_patch_object(sys, "argv", ["provision.py"])
+        self.safe_patch_object(provision, "infrastructure", MagicMock())
+        self.safe_patch_object(provision, "subprocess", MagicMock())
+        self.safe_patch("os.chdir")
+        # execvp really does replace the process and never returns in
+        # real life; mocked here it returns normally, so provision()
+        # continues past it into the unsupported-OS gate (infrastructure
+        # is a bare MagicMock here, so get_os_identifier() returns a
+        # MagicMock that never equals "debian"/"ubuntu") and exits there
+        # -- exactly why the real code must treat everything after the
+        # execvp call as "only reached if execvp itself never actually
+        # ran." This test only cares that execvp was invoked correctly,
+        # not about that downstream exit, but asserts it happens rather
+        # than silently discarding it.
+        with self.assertRaises(SystemExit):
+            provision.provision()
+        mock_execvp.assert_called_once()
+        args = mock_execvp.call_args[0]
+        self.assertEqual(args[0], "sudo")
+        self.assertIn("sudo", args[1])
+        self.assertIn("-H", args[1])
+        self.assertIn("-E", args[1])
+
+    def test_does_not_re_exec_when_already_root(self):
+        mock_execvp = self.safe_patch_object(os, "execvp")
+        self.run_provision([])
+        mock_execvp.assert_not_called()
+
+    def test_re_exec_forwards_the_original_cli_arguments(self):
+        # The re-exec must forward every one of the original process's own
+        # CLI arguments; otherwise a non-root caller running
+        # `provision.py --force-reset` would never actually get a force-reset,
+        # because the re-exec'd root process would run with no CLI args at all.
+        mock_execvp = self.safe_patch_object(os, "execvp")
+        self.safe_patch_object(os, "geteuid", return_value=1000)
+        self.safe_patch_object(
+            sys, "argv", ["provision.py", "--force-reset", "--test"]
+        )
+        self.safe_patch_object(provision, "infrastructure", MagicMock())
+        self.safe_patch_object(provision, "subprocess", MagicMock())
+        self.safe_patch("os.chdir")
+        with self.assertRaises(SystemExit):
+            provision.provision()
+        mock_execvp.assert_called_once()
+        args = mock_execvp.call_args[0][1]
+        self.assertIn("--force-reset", args)
+        self.assertIn("--test", args)
+
+
+class ProvisionOsGatingTests(ProvisionTestCase):
+    def test_refuses_to_proceed_on_an_unsupported_os(self):
+        self.safe_patch_object(os, "geteuid", return_value=0)
+        self.safe_patch_object(sys, "argv", ["provision.py"])
+        mock_infra = self.safe_patch_object(provision, "infrastructure", MagicMock())
+        mock_infra.get_os_identifier.return_value = "fedora"
+        mock_subprocess = self.safe_patch_object(provision, "subprocess", MagicMock())
+        self.safe_patch("os.chdir")
+        with self.assertRaises(SystemExit) as ctx:
+            provision.provision()
+        self.assertEqual(ctx.exception.code, 1)
+        # An unsupported OS must never reach apt-get, dpkg, or
+        # provision_environment -- refusing loud beats silently doing
+        # Debian-specific things on a system that isn't one.
+        mock_subprocess.run.assert_not_called()
+        mock_infra.provision_environment.assert_not_called()
+
+    def test_proceeds_on_debian(self):
+        mock_infra, _ = self.run_provision([], os_id="debian")
+        mock_infra.provision_environment.assert_called_once()
+
+    def test_proceeds_on_ubuntu(self):
+        mock_infra, _ = self.run_provision([], os_id="ubuntu", patch_open=False)
+        mock_infra.provision_environment.assert_called_once()
+
+
+class ProvisionDebianDummyPackageTests(ProvisionTestCase):
+    def test_builds_and_installs_the_dummy_pypdf2_package_on_debian(self):
+        _, mock_subprocess = self.run_provision([], os_id="debian")
+        commands_run = [c.args[0] for c in mock_subprocess.run.call_args_list]
+        self.assertIn(["apt-get", "update", "-y"], commands_run)
+        self.assertIn(["apt-get", "install", "-y", "--no-upgrade", "equivs"], commands_run)
+        self.assertTrue(
+            any(cmd[:1] == ["equivs-build"] for cmd in commands_run),
+            f"expected an equivs-build invocation, got: {commands_run}",
+        )
+        self.assertTrue(
+            any(cmd[:2] == ["dpkg", "-i"] for cmd in commands_run),
+            f"expected a dpkg -i invocation, got: {commands_run}",
+        )
+
+    def test_installs_the_real_python3_pypdf_before_dpkg_installs_the_dummy_package(self):
+        # Real ordering bug found 2026-09-13 hardware-qualifying pi500-1 (a genuinely
+        # fresh Raspberry Pi 500, Debian 12 bookworm): the equivs-built dummy
+        # python3-pypdf2 package declares `Depends: python3-pypdf`, but that real
+        # package was previously only installed later, inside
+        # infrastructure.provision_environment()'s own apt_packages pass -- so a
+        # fresh box's `dpkg -i` failed outright with "python3-pypdf2 depends on
+        # python3-pypdf; however: Package python3-pypdf is not installed." Never
+        # caught on the dev box because it already had python3-pypdf installed
+        # incidentally from unrelated prior work. This test asserts the real fix:
+        # python3-pypdf is installed explicitly, and strictly before the dpkg -i
+        # that needs it to already be present.
+        _, mock_subprocess = self.run_provision([], os_id="debian")
+        commands_run = [c.args[0] for c in mock_subprocess.run.call_args_list]
+        self.assertIn(
+            ["apt-get", "install", "-y", "--no-upgrade", "python3-pypdf"],
+            commands_run,
+            f"expected an explicit python3-pypdf install, got: {commands_run}",
+        )
+        pypdf_index = commands_run.index(["apt-get", "install", "-y", "--no-upgrade", "python3-pypdf"])
+        dpkg_indices = [i for i, cmd in enumerate(commands_run) if cmd[:2] == ["dpkg", "-i"]]
+        self.assertTrue(dpkg_indices, f"expected a dpkg -i invocation, got: {commands_run}")
+        self.assertLess(
+            pypdf_index,
+            dpkg_indices[0],
+            "python3-pypdf must be installed BEFORE dpkg -i installs the dummy "
+            "python3-pypdf2 package that depends on it, not after",
+        )
+
+    def test_dummy_package_is_built_in_a_private_directory_not_a_predictable_tmp_name(self):
+        _, mock_subprocess = self.run_provision([], os_id="debian")
+        commands_run = [c.args[0] for c in mock_subprocess.run.call_args_list]
+        flat = [part for cmd in commands_run for part in cmd]
+        self.assertFalse([p for p in flat if p in ("/tmp/python3-pypdf2_1.0_all.deb", "/tmp/python3-pypdf2.control")], flat)
+        build_cwd = [c.kwargs.get("cwd") for c in mock_subprocess.run.call_args_list if c.args[0][:1] == ["equivs-build"]]
+        self.assertNotIn("/tmp", build_cwd)
+
+    def test_skips_the_dummy_pypdf2_package_on_ubuntu(self):
+        _, mock_subprocess = self.run_provision([], os_id="ubuntu", patch_open=False)
+        commands_run = [c.args[0] for c in mock_subprocess.run.call_args_list]
+        self.assertNotIn(["apt-get", "install", "-y", "--no-upgrade", "equivs"], commands_run)
+
+
+class ProvisionForceResetTests(ProvisionTestCase):
+    def test_force_reset_stops_odoo_drops_the_db_wipes_filestore_and_flushes_redis(self):
+        _, mock_subprocess = self.run_provision(["--force-reset"], os_id="debian")
+        commands_run = [c.args[0] for c in mock_subprocess.run.call_args_list]
+        self.assertIn(["systemctl", "stop", "odoo"], commands_run)
+        self.assertTrue(
+            any(cmd[:3] == ["sudo", "-u", "postgres"] and "dropdb" in cmd for cmd in commands_run),
+            f"expected a dropdb invocation, got: {commands_run}",
+        )
+        self.assertTrue(
+            any(cmd[:2] == ["rm", "-rf"] for cmd in commands_run),
+            f"expected an rm -rf of the filestore, got: {commands_run}",
+        )
+        self.assertIn(["redis-cli", "flushall"], commands_run)
+
+    def test_without_force_reset_none_of_the_teardown_commands_run(self):
+        _, mock_subprocess = self.run_provision([], os_id="debian")
+        commands_run = [c.args[0] for c in mock_subprocess.run.call_args_list]
+        self.assertNotIn(["systemctl", "stop", "odoo"], commands_run)
+        self.assertNotIn(["redis-cli", "flushall"], commands_run)
+
+    def test_force_reset_uses_db_name_from_env_when_present(self):
+        self.safe_patch_dict(os.environ, {"DB_NAME": "my_custom_db"})
+        _, mock_subprocess = self.run_provision(["--force-reset"], os_id="debian")
+        commands_run = [c.args[0] for c in mock_subprocess.run.call_args_list]
+        self.assertTrue(
+            any("my_custom_db" in cmd for cmd in commands_run),
+            f"expected the real DB_NAME to reach dropdb, got: {commands_run}",
+        )
+
+    def test_force_reset_refuses_a_db_name_with_a_trailing_newline(self):
+        # `$` also matches before a final newline, so "hams_test\n" used to pass the identifier check; it ends with \Z now.
+        self.safe_patch_dict(os.environ, {"DB_NAME": "hams_test\n"})
+        self.safe_patch_object(os, "geteuid", return_value=0)
+        self.safe_patch_object(sys, "argv", ["provision.py", "--force-reset"])
+        mock_infra = self.safe_patch_object(provision, "infrastructure", MagicMock())
+        mock_infra.get_os_identifier.return_value = "debian"
+        mock_subprocess = self.safe_patch_object(provision, "subprocess", MagicMock())
+        self.safe_patch("os.chdir")
+        with self.assertRaises(SystemExit) as ctx:
+            provision.provision()
+        self.assertEqual(ctx.exception.code, 1)
+        self.assertFalse([c for c in mock_subprocess.run.call_args_list if c.args[0][:2] == ["rm", "-rf"]])
+
+    def test_force_reset_refuses_an_unsafe_db_name_instead_of_running_rm_rf(self):
+        # DB_NAME feeds directly
+        # into an `rm -rf` filestore path with no validation -- a
+        # traversal-shaped value (e.g. containing "../") could point that
+        # deletion outside the intended filestore directory. Removing the
+        # re.match() guard would let this proceed straight to subprocess.run.
+        self.safe_patch_dict(os.environ, {"DB_NAME": "../../etc"})
+        self.safe_patch_object(os, "geteuid", return_value=0)
+        self.safe_patch_object(sys, "argv", ["provision.py", "--force-reset"])
+        mock_infra = self.safe_patch_object(provision, "infrastructure", MagicMock())
+        mock_infra.get_os_identifier.return_value = "debian"
+        mock_subprocess = self.safe_patch_object(provision, "subprocess", MagicMock())
+        self.safe_patch("os.chdir")
+        with self.assertRaises(SystemExit) as ctx:
+            provision.provision()
+        self.assertEqual(ctx.exception.code, 1)
+        commands_run = [c.args[0] for c in mock_subprocess.run.call_args_list]
+        self.assertFalse(
+            any(cmd[:2] == ["rm", "-rf"] for cmd in commands_run),
+            f"must never reach rm -rf with an unvalidated DB_NAME, got: {commands_run}",
+        )
+
+
+class ProvisionEnvPropagationTests(ProvisionTestCase):
+    def test_passes_test_flag_through_to_load_and_prompt_env(self):
+        mock_infra, _ = self.run_provision(["--test"], os_id="debian")
+        mock_infra.load_and_prompt_env.assert_called_once()
+        self.assertTrue(mock_infra.load_and_prompt_env.call_args[0][1])
+
+    def test_provision_environment_receives_repo_root_and_orig_user(self):
+        self.safe_patch_dict(os.environ, {"SUDO_USER": "bruce"})
+        mock_infra, _ = self.run_provision([], os_id="debian")
+        _run_sys, env_vars, orig_user = mock_infra.provision_environment.call_args[0][:3]
+        self.assertEqual(orig_user, "bruce")
+        self.assertEqual(env_vars["REPO_ROOT"], provision.repo_root)
+        self.assertEqual(env_vars["DEBIAN_FRONTEND"], "noninteractive")
+
+class ProvisionHoldOdooTests(ProvisionTestCase):
+    def test_hold_odoo_flag_is_forwarded_to_provision_environment(self):
+        mock_infra, _ = self.run_provision(["--hold-odoo"], os_id="debian")
+        self.assertIs(mock_infra.provision_environment.call_args.kwargs["hold_odoo"], True)
+
+    def test_hold_odoo_defaults_to_off(self):
+        mock_infra, _ = self.run_provision([], os_id="debian")
+        self.assertIs(mock_infra.provision_environment.call_args.kwargs["hold_odoo"], False)
+
+
+class ProvisionPlanModeTests(ProvisionTestCase):
+    """Tests [@ANCHOR: infrastructure:provision_plan] (provision.py's half)."""
+
+    def test_plan_is_forwarded_and_run_sys_executes_nothing(self):
+        mock_infra, mock_subprocess = self.run_provision(["--plan"], os_id="debian")
+        mock_infra.redact_command.side_effect = lambda cmd: list(cmd)
+        kwargs = mock_infra.provision_environment.call_args.kwargs
+        self.assertIs(kwargs["plan"], True)
+        run_sys = mock_infra.provision_environment.call_args[0][0]
+        mock_subprocess.run.reset_mock()
+        result = run_sys(["systemctl", "restart", "postgresql"])
+        mock_subprocess.run.assert_not_called()
+        self.assertIs(result, mock_subprocess.CompletedProcess.return_value)
+
+    def test_plan_runs_none_of_the_debian_dummy_package_commands(self):
+        _, mock_subprocess = self.run_provision(["--plan"], os_id="debian")
+        mock_subprocess.run.assert_not_called()
+
+    def test_plan_with_force_reset_destroys_nothing(self):
+        _, mock_subprocess = self.run_provision(["--plan", "--force-reset"], os_id="ubuntu", patch_open=False)
+        mock_subprocess.run.assert_not_called()
+
+    def test_a_mistyped_flag_is_refused_instead_of_provisioning_for_real(self):
+        """`--plna` is not `--plan`: ignoring it would run the real provisioning the operator meant to only preview."""
+        with self.assertRaises(SystemExit) as raised:
+            self.run_provision(["--plna"], os_id="debian")
+        self.assertEqual(raised.exception.code, 2)
+
+    def test_plan_defaults_to_off_and_opt_in_units_are_forwarded(self):
+        mock_infra, _ = self.run_provision(
+            ["--enable-opt-in", "code.review.sweep.timer"], os_id="ubuntu", patch_open=False
+        )
+        kwargs = mock_infra.provision_environment.call_args.kwargs
+        self.assertIs(kwargs["plan"], False)
+        self.assertEqual(kwargs["opt_in_units"], ("code.review.sweep.timer",))
+
+
+class RepoRootAndImportInAFreshProcessTests(unittest.TestCase):
+    """Regression test for a real bug found 2026-09-23 while preparing a
+    production release: `import infrastructure` and `repo_root`'s own value
+    both silently depended on hams_shared/tools already being on sys.path --
+    true inside THIS pytest run (pytest puts every collected test file's own
+    directory on sys.path, which happens to also make `infrastructure`
+    importable directly, entirely independent of provision.py's own now-fixed
+    sys.path.insert line), but false for the real, documented deploy
+    invocation (`cd .../hams_open && sudo python3
+    hams_shared/tools/provision.py`), which raised a real ModuleNotFoundError
+    before ever reaching provision()'s own sudo re-exec. Every other test in
+    this file imports `provision` the same masked way pytest always does, so
+    none of them could have caught this -- only a genuinely fresh subprocess,
+    with no pytest-inserted sys.path entries at all, actually exercises the
+    real invocation path.
+
+    2026-10-12: inside a git worktree of hams_shared itself (no hams_open above it) the old
+    "first ancestor that has a hams_shared entry" walk found an unrelated stale copy in the
+    home directory, and the fresh-subprocess test ran THAT copy through sudo -- a real
+    provisioning run of the dev box. provision._find_repo_root now requires the ancestor's
+    hams_shared/tools/provision.py to be this very file, and these tests build a throwaway
+    hams_open layout when there is none."""
+
+    def setUp(self):
+        self._layout = None
+        self.root = REAL_REPO_ROOT
+        if self.root is None:
+            # A standalone hams_shared clone or worktree: make <tmp>/hams_open/hams_shared point at this checkout so
+            # the module is exercised in the layout it is deployed in, whatever directory this checkout lives in.
+            self._layout = tempfile.TemporaryDirectory()
+            self.addCleanup(self._layout.cleanup)
+            self.root = os.path.join(self._layout.name, "hams_open")
+            os.makedirs(self.root)
+            checkout = os.path.dirname(os.path.dirname(os.path.realpath(provision.__file__)))
+            os.symlink(checkout, os.path.join(self.root, "hams_shared"))
+
+    def test_provision_py_help_runs_in_a_fresh_subprocess_with_no_import_error(self):
+        # This test file is deployed as an identical copy at two
+        # different nesting depths, same as provision.py itself (see provision._find_repo_root's
+        # own comment) -- re-deriving "hams_open's own root" here with a second, independent
+        # fixed-depth "..", ".." walk breaks for one of the two copies by the same construction
+        # (it landed on the PARENT of hams_com, not hams_open, when this file runs as
+        # hams_com/tools/test_provision.py). Reusing provision.repo_root directly ties this test
+        # to the SAME value the module itself considers correct, instead of a second, divergent
+        # computation of the same thing -- and `repo_root/hams_shared/tools/provision.py` is a
+        # real, reachable file from either copy's own repo_root (a real directory from the
+        # hams_open copy, a symlink into hams_open from the hams_com copy).
+        result = subprocess.run(
+            [sys.executable, "hams_shared/tools/provision.py", "--help"],
+            cwd=self.root,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        self.assertEqual(
+            result.returncode, 0,
+            f"provision.py --help failed in a fresh subprocess:\n{result.stderr}",
+        )
+        self.assertNotIn("ModuleNotFoundError", result.stderr)
+        self.assertIn("Standalone Environment Provisioning Script", result.stdout)
+
+    def test_repo_root_is_hams_opens_own_root_not_hams_shared(self):
+        # The real assertion behind the bug: infrastructure.provision_environment
+        # treats REPO_ROOT as correct precisely when repo_root/hams_shared exists
+        # (infrastructure.py's own primary, non-fallback check) -- which is only
+        # true when repo_root IS hams_open's own root.
+        self.assertTrue(
+            os.path.isdir(os.path.join(self.root, "hams_shared")),
+            f"provision.repo_root ({self.root!r}) is not hams_open's "
+            "own root -- infrastructure.provision_environment's primary "
+            "hams_community_dir check would miss it.",
+        )
+
+    def test_find_repo_root_ignores_an_unrelated_hams_shared_copy(self):
+        # The 2026-10-12 incident: an unrelated hams_shared higher up (a stale copy in the home
+        # directory) must never be taken for this checkout's root.
+        with tempfile.TemporaryDirectory() as tmp:
+            stale = os.path.join(tmp, "hams_shared", "tools")
+            os.makedirs(stale)
+            with open(os.path.join(stale, "provision.py"), "w", encoding="utf-8") as handle:  # audit-ignore-path
+                handle.write("# an unrelated, older copy\n")
+            mine = os.path.join(tmp, "work", "standalone", "tools")
+            os.makedirs(mine)
+            with open(os.path.join(mine, "provision.py"), "w", encoding="utf-8") as handle:  # audit-ignore-path
+                handle.write("# this checkout\n")
+            self.assertIsNone(provision._find_repo_root(mine))
+
+    def test_find_repo_root_accepts_a_symlinked_hams_shared(self):
+        # hams_com's layout: <hams_com>/hams_shared is a symlink into hams_open, <hams_com>/tools -> hams_shared/tools.
+        with tempfile.TemporaryDirectory() as tmp:
+            tools = os.path.join(tmp, "hams_open", "hams_shared", "tools")
+            os.makedirs(tools)
+            with open(os.path.join(tools, "provision.py"), "w", encoding="utf-8") as handle:  # audit-ignore-path
+                handle.write("# real\n")
+            com = os.path.join(tmp, "hams_com")
+            os.makedirs(com)
+            os.symlink(os.path.join(tmp, "hams_open", "hams_shared"), os.path.join(com, "hams_shared"))
+            os.symlink(os.path.join("hams_shared", "tools"), os.path.join(com, "tools"))
+            self.assertEqual(provision._find_repo_root(os.path.join(com, "tools")), com)
+            self.assertEqual(provision._find_repo_root(tools), os.path.join(tmp, "hams_open"))
+
+
+if __name__ == "__main__":
+    unittest.main()

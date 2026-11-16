@@ -1,0 +1,349 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+"""
+Unit tests for run_js_coverage.py's bundle-offset parser.
+
+Fixtures use the exact real header format confirmed live against Odoo's own debug-mode asset
+bundle output (ANCHOR_COVERAGE_AND_REMEDIATION_PLAN.md's JS Stage 2 section, 2026-09-07) --
+`ham_dns`'s real DNS tour test run under `debug=assets`, not a guessed-at format.
+"""
+import os
+import tempfile
+import unittest
+
+from hypothesis import given, settings
+from hypothesis import strategies as st
+
+from run_js_coverage import (  # noqa: E402
+    function_hits_for_script,
+    line_hits_for_script,
+    map_coverage_records,
+    merge_file_reports,
+    merge_function_reports,
+    parse_bundle_module_offsets,
+    parse_minified_bundle_files,
+    resolve_addon_static_path,
+)
+
+
+def _module_header(filepath, lines):
+    stars = "*" * max(len(f"  Filepath: {filepath}  "), len(f"  Lines: {lines}  "))
+    return (
+        f"/{stars}\n"
+        f"*  Filepath: {filepath}  *\n"
+        f"*  Lines: {lines}                               *\n"
+        f"{stars}/\n"
+    )
+
+
+class ParseBundleModuleOffsetsTests(unittest.TestCase):
+    def test_a_single_real_shaped_module_is_parsed_with_correct_line_range(self):
+        # The exact real sample confirmed live: a header, then a body of a known real line count.
+        header = (
+            "/*********************************************\n"
+            "*  Filepath: /web/static/lib/luxon/luxon.js  *\n"
+            "*  Lines: 3                               *\n"
+            "*********************************************/\n"
+        )
+        body = "line one\nline two\nline three\n"
+        bundle = header + body
+        modules = parse_bundle_module_offsets(bundle)
+        self.assertEqual(len(modules), 1)
+        start, end, filepath = modules[0]
+        self.assertEqual(filepath, "/web/static/lib/luxon/luxon.js")
+        self.assertEqual(start, 5)  # header is 4 lines, body starts on line 5
+        self.assertEqual(end, 7)  # 3-line body: lines 5, 6, 7
+
+    def test_two_consecutive_modules_get_non_overlapping_ranges(self):
+        bundle = (
+            _module_header("/web/static/lib/luxon/luxon.js", 2)
+            + "a\nb\n"
+            + _module_header("/ham_shack/static/src/js/web_shack.js", 3)
+            + "c\nd\ne\n"
+        )
+        modules = parse_bundle_module_offsets(bundle)
+        self.assertEqual(len(modules), 2)
+        (start1, end1, path1), (start2, end2, path2) = modules
+        self.assertEqual(path1, "/web/static/lib/luxon/luxon.js")
+        self.assertEqual((start1, end1), (5, 6))
+        self.assertEqual(path2, "/ham_shack/static/src/js/web_shack.js")
+        self.assertGreater(start2, end1)
+        self.assertEqual(end2 - start2 + 1, 3)
+
+    def test_a_bundle_with_no_headers_returns_an_empty_list(self):
+        self.assertEqual(parse_bundle_module_offsets("plain unbundled content\nno headers here\n"), [])
+
+    def test_a_module_whose_body_contains_the_word_filepath_is_not_mistaken_for_a_new_header(self):
+        # Real robustness case for comment-based parsing: a source file's own body could contain
+        # the literal word "Filepath" without matching the fixed 4-line star-boxed header shape.
+        bundle = (
+            _module_header("/web/static/lib/luxon/luxon.js", 2)
+            + "// Filepath: not a real header, just a comment mentioning the word\n"
+            + "const x = 1;\n"
+        )
+        modules = parse_bundle_module_offsets(bundle)
+        self.assertEqual(len(modules), 1)
+
+
+# Filepath alphabet restricted to what a real Odoo addon-relative static path actually looks
+# like (letters, digits, /, _, ., -) -- deliberately excludes whitespace/backslash/'*' so
+# Hypothesis can't accidentally generate a filepath string that itself looks like part of the
+# fixed header shape (which would change how many headers the regex matches, a different
+# property than the one under test here).
+_FILEPATH_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/_.-"
+_filepaths = st.text(alphabet=_FILEPATH_ALPHABET, min_size=1, max_size=40)
+# Body lines restricted to plain alphanumeric text -- real module bodies can contain almost
+# anything, but this property is about offset/line-count arithmetic, not about every possible
+# body content; the "body contains the literal word Filepath" robustness case is already covered
+# separately, by example, above.
+_body_lines = st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789 ", min_size=0, max_size=20)
+
+
+@st.composite
+def _bundle_with_known_modules(draw):
+    """Builds a real-shaped bundle (an optional random noise prefix, then 1-5 modules each with a
+    real header and a body of exactly its declared line count) and returns
+    `(bundle_text, expected)` where `expected` is the list of `(line_count, filepath)` pairs the
+    parser should recover, in order."""
+    prefix_lines = draw(st.lists(_body_lines, min_size=0, max_size=5))
+    bundle = "".join(line + "\n" for line in prefix_lines)
+    expected = []
+    num_modules = draw(st.integers(min_value=1, max_value=5))
+    for _ in range(num_modules):
+        filepath = "/" + draw(_filepaths)
+        body = draw(st.lists(_body_lines, min_size=1, max_size=15))
+        bundle += _module_header(filepath, len(body))
+        bundle += "".join(line + "\n" for line in body)
+        expected.append((len(body), filepath))
+    return bundle, expected
+
+
+class ParseBundleModuleOffsetsPropertyTests(unittest.TestCase):
+    """Hypothesis property tests, added per CODE_REVIEW_PROCESS.md's own standing "more Hypothesis
+    property-test scoping" guidance -- this parser is exactly the kind of small, pure, well-typed
+    target that section calls out, and shares its regex-header-parsing shape with
+    `run_rust_coverage.py`'s `parse_lcov`, where the same kind of property test already caught a
+    real bug (counts landing in both executed/missing buckets for a duplicate DA: record)."""
+
+    @given(_bundle_with_known_modules())
+    @settings(max_examples=200)
+    def test_recovers_exactly_the_declared_modules_with_correct_line_counts_and_no_overlap(
+        self, bundle_and_expected
+    ):
+        bundle, expected = bundle_and_expected
+        modules = parse_bundle_module_offsets(bundle)
+        self.assertEqual(len(modules), len(expected))
+        prev_end = None
+        for (start, end, filepath), (expected_line_count, expected_filepath) in zip(
+            modules, expected
+        ):
+            self.assertEqual(filepath, expected_filepath)
+            # The real invariant this parser exists to guarantee: a module's reported range has
+            # exactly as many lines as its own header declared, regardless of what other modules,
+            # or how much noise, precede it in the bundle.
+            self.assertEqual(end - start + 1, expected_line_count)
+            if prev_end is not None:
+                self.assertGreater(start, prev_end)
+            prev_end = end
+
+    @given(st.integers(min_value=1, max_value=200))
+    @settings(max_examples=50)
+    def test_a_single_modules_range_never_includes_its_own_header_lines(self, line_count):
+        filepath = "/web/static/src/js/some_module.js"
+        header = _module_header(filepath, line_count)
+        header_line_count = header.count("\n")
+        body = "".join(f"line {i}\n" for i in range(line_count))
+        modules = parse_bundle_module_offsets(header + body)
+        self.assertEqual(len(modules), 1)
+        start, end, _ = modules[0]
+        self.assertEqual(start, header_line_count + 1)
+        self.assertEqual(end, header_line_count + line_count)
+
+
+class ResolveAddonStaticPathTests(unittest.TestCase):
+    def test_resolves_against_the_first_addons_dir_containing_a_real_match(self):
+        with tempfile.TemporaryDirectory() as addons_a, tempfile.TemporaryDirectory() as addons_b:
+            target_dir = os.path.join(addons_b, "ham_shack", "static", "src", "js")
+            os.makedirs(target_dir)
+            target_file = os.path.join(target_dir, "web_shack.js")
+            with open(target_file, "w", encoding="utf-8") as f:
+                f.write("// real file\n")
+            resolved = resolve_addon_static_path(
+                "/ham_shack/static/src/js/web_shack.js", [addons_a, addons_b]
+            )
+            self.assertEqual(resolved, target_file)
+
+    def test_returns_none_when_no_addons_dir_has_the_file(self):
+        with tempfile.TemporaryDirectory() as addons_a:
+            self.assertIsNone(
+                resolve_addon_static_path("/nonexistent_module/static/x.js", [addons_a])
+            )
+
+    def test_returns_none_for_a_path_with_no_module_segment(self):
+        self.assertIsNone(resolve_addon_static_path("/just_one_segment.js", ["/tmp"]))
+
+
+def _fn(*ranges):
+    return {"ranges": [{"startOffset": a, "endOffset": b, "count": c} for a, b, c in ranges]}
+
+
+class LineHitsForScriptTests(unittest.TestCase):
+    def test_nested_block_count_overrides_enclosing_function(self):
+        text = "function f() {\n  if (x) {\n    a();\n  }\n  b();\n}\n"
+        # line 3 ("    a();") starts at offset 15+11=26; the inner block is never taken.
+        inner_start = text.index("    a();")
+        inner_end = text.index("  }\n  b()")
+        hits = line_hits_for_script(
+            text, [_fn((0, len(text), 1), (inner_start, inner_end, 0))]
+        )
+        self.assertEqual(hits[1], 1)
+        self.assertEqual(hits[3], 0)
+        self.assertEqual(hits[5], 1)
+
+    def test_blank_lines_are_not_reported_and_uncovered_lines_are_absent(self):
+        text = "a\n\n   \nb\n"
+        hits = line_hits_for_script(text, [_fn((0, 2, 1))])
+        self.assertEqual(hits, {1: 1})
+
+    def test_offsets_are_utf16_code_units(self):
+        # U+1F600 is one code point but two UTF-16 units: "b" on line 2 starts at offset 3 (a code-point count would say 2).
+        text = "\U0001F600\nb\n"
+        hits = line_hits_for_script(text, [_fn((3, 4, 7))])
+        self.assertEqual(hits, {2: 7})
+
+    def test_unsorted_ranges_still_apply_outer_before_inner(self):
+        text = "a\nb\nc\n"
+        hits = line_hits_for_script(text, [_fn((2, 3, 0)), _fn((0, 6, 4))])
+        self.assertEqual(hits, {1: 4, 2: 0, 3: 4})
+
+
+class MapCoverageRecordsTests(unittest.TestCase):
+    def _addons(self, tmp):
+        d = os.path.join(tmp, "addons", "mod_a", "static", "src")
+        os.makedirs(d)
+        open(os.path.join(d, "x.js"), "w", encoding="utf-8").write("l1\nl2\nl3\n")
+        return os.path.join(tmp, "addons")
+
+    def test_bundle_lines_map_to_source_file_lines(self):
+        body = "l1\nl2\nl3\n"
+        bundle = "// noise\n" + _module_header("/mod_a/static/src/x.js", 3) + body
+        start = len("// noise\n" + _module_header("/mod_a/static/src/x.js", 3))
+        record = {
+            "scripts": [
+                {
+                    "url": "http://h/web/assets/1/debug/web.assets_backend.js",
+                    # l1 and l3 run, l2 does not.
+                    "functions": [_fn((0, len(bundle), 1), (start + 3, start + 6, 0))],
+                }
+            ],
+            "bundles": {"http://h/web/assets/1/debug/web.assets_backend.js": bundle},
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            addons = self._addons(tmp)
+            out = map_coverage_records([record], [addons], tmp)
+        entry = out["files"]["addons/mod_a/static/src/x.js"]
+        self.assertEqual(entry["executed_lines"], [1, 3])
+        self.assertEqual(entry["missing_lines"], [2])
+        self.assertEqual(out["unresolved"], [])
+
+    def test_unresolved_module_is_reported_not_dropped_silently(self):
+        bundle = _module_header("/gone/static/y.js", 1) + "z\n"
+        record = {
+            "scripts": [{"url": "u", "functions": [_fn((0, len(bundle), 1))]}],
+            "bundles": {"u": bundle},
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            out = map_coverage_records([record], [tmp], tmp)
+        self.assertEqual(out["files"], {})
+        self.assertEqual(out["unresolved"], ["/gone/static/y.js"])
+
+    def test_minified_bundle_without_headers_is_reported_as_a_gap(self):
+        record = {
+            "scripts": [{"url": "http://h/a.min.js", "functions": [_fn((0, 5, 1))]}],
+            "bundles": {"http://h/a.min.js": "/* /web/x.js */\nvar a=1;\n"},
+        }
+        out = map_coverage_records([record], [], "/")
+        self.assertEqual(out["files"], {})
+        self.assertEqual(out["unresolved"], ["(no module headers: http://h/a.min.js)"])
+
+    def test_script_without_bundle_body_is_skipped(self):
+        record = {"scripts": [{"url": "u", "functions": []}], "bundles": {}}
+        out = map_coverage_records([record], [], "/")
+        self.assertEqual(out, {"files": {}, "functions": {}, "unresolved": []})
+
+    def test_merge_prefers_executed_over_missing(self):
+        a = {"f.js": {"executed_lines": [1], "missing_lines": [2, 3]}}
+        b = {"f.js": {"executed_lines": [2], "missing_lines": [1, 3]}}
+        merged = merge_file_reports([a, b])
+        self.assertEqual(merged["f.js"], {"executed_lines": [1, 2], "missing_lines": [3]})
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+def _utf16(text):
+    return len(text.encode("utf-16-le", "surrogatepass")) // 2
+
+
+MIN_BUNDLE = (
+    "\n/* /web/static/src/a.js */\nfunction foo(){return 1}const x='\U0001F600';"
+    "\n/* /my_mod/static/src/b.js */\nclass B{setup(){}run(){}}(()=>1)();\n"
+)
+
+
+class MinifiedBundleTests(unittest.TestCase):
+    def test_files_are_found_from_the_per_file_headers_with_utf16_offsets(self):
+        files = parse_minified_bundle_files(MIN_BUNDLE)
+        self.assertEqual([f[2] for f in files], ["/web/static/src/a.js", "/my_mod/static/src/b.js"])
+        a_start, a_end, _ = files[0]
+        b_start, b_end, _ = files[1]
+        self.assertEqual(a_start, _utf16("\n/* /web/static/src/a.js */\n"))
+        # The first file's range stops where the second header begins; the emoji counts as 2 units.
+        self.assertEqual(a_end, _utf16(MIN_BUNDLE[: MIN_BUNDLE.index("\n/* /my_mod")]))
+        self.assertEqual(b_end, _utf16(MIN_BUNDLE))
+        self.assertEqual(b_start, a_end + _utf16("\n/* /my_mod/static/src/b.js */\n"))
+
+    def test_a_bundle_without_headers_has_no_files(self):
+        self.assertEqual(parse_minified_bundle_files("var a=1;"), [])
+
+    def _offset(self, needle):
+        return _utf16(MIN_BUNDLE[: MIN_BUNDLE.index(needle)])
+
+    def test_functions_are_attributed_to_their_file_and_counted_executed_or_not(self):
+        functions = [
+            {"functionName": "", "ranges": [{"startOffset": 0, "endOffset": _utf16(MIN_BUNDLE), "count": 1}]},
+            {"functionName": "foo", "ranges": [{"startOffset": self._offset("function foo"), "endOffset": self._offset("function foo") + 22, "count": 3}]},
+            {"functionName": "setup", "ranges": [{"startOffset": self._offset("setup()"), "endOffset": self._offset("setup()") + 9, "count": 0}]},
+            {"functionName": "run", "ranges": [{"startOffset": self._offset("run()"), "endOffset": self._offset("run()") + 6, "count": 1}]},
+            {"functionName": "", "ranges": [{"startOffset": self._offset("(()=>1)"), "endOffset": self._offset("(()=>1)") + 5, "count": 1}]},
+        ]
+        out = function_hits_for_script(MIN_BUNDLE, functions)
+        self.assertEqual(out["/web/static/src/a.js"]["functions"], {"foo": {"executed": 1, "total": 1}})
+        self.assertEqual(
+            out["/my_mod/static/src/b.js"]["functions"],
+            {"setup": {"executed": 0, "total": 1}, "run": {"executed": 1, "total": 1}},
+        )
+        self.assertEqual(out["/my_mod/static/src/b.js"]["anonymous"], {"executed": 1, "total": 1})
+
+    def test_merge_adds_counts_across_runs(self):
+        one = {"f.js": {"functions": {"a": {"executed": 0, "total": 1}}, "anonymous": {"executed": 0, "total": 2}}}
+        two = {"f.js": {"functions": {"a": {"executed": 1, "total": 1}}, "anonymous": {"executed": 1, "total": 2}}}
+        merged = merge_function_reports([one, two])
+        self.assertEqual(merged["f.js"]["functions"]["a"], {"executed": 1, "total": 2})
+        self.assertEqual(merged["f.js"]["anonymous"], {"executed": 1, "total": 4})
+
+    def test_map_coverage_records_maps_a_minified_record_to_repo_files(self):
+        with tempfile.TemporaryDirectory() as addons:
+            os.makedirs(os.path.join(addons, "my_mod", "static", "src"))
+            open(os.path.join(addons, "my_mod", "static", "src", "b.js"), "w").close()
+            record = {
+                "scripts": [{"url": "http://h/x.min.js", "functions": [
+                    {"functionName": "run", "ranges": [{"startOffset": self._offset("run()"), "endOffset": self._offset("run()") + 6, "count": 2}]},
+                ]}],
+                "bundles": {"http://h/x.min.js": MIN_BUNDLE},
+            }
+            out = map_coverage_records([record], [addons], addons)
+        self.assertEqual(out["functions"]["my_mod/static/src/b.js"]["functions"]["run"], {"executed": 1, "total": 1})
+        self.assertEqual(out["files"], {})
+        self.assertEqual(out["unresolved"], [])

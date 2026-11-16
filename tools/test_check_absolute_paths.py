@@ -1,0 +1,272 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+"""
+Unit tests for check_absolute_paths.py.
+"""
+
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+
+import check_absolute_paths as chk  # noqa: E402
+
+_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "check_absolute_paths.py")
+_HOME = "/home/bruce/workspace"
+
+
+def _write(path, content):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+
+class CheckAbsolutePathsTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_a_hardcoded_home_path_is_flagged_with_file_and_line(self):
+        _write(os.path.join(self.tmp, "script.py"), f"path = '{_HOME}/thing'\n")
+        violations = chk.check_absolute_paths(self.tmp)
+        self.assertEqual(len(violations), 1)
+        self.assertIn("script.py:1", violations[0])
+
+    def test_a_file_with_no_home_path_is_clean(self):
+        _write(os.path.join(self.tmp, "script.py"), "path = '/tmp/thing'\n")
+        self.assertEqual(chk.check_absolute_paths(self.tmp), [])
+
+    def test_multiple_occurrences_across_lines_are_all_flagged(self):
+        _write(
+            os.path.join(self.tmp, "script.py"),
+            f"a = '{_HOME}/one'\nb = 'clean'\nc = '{_HOME}/two'\n",
+        )
+        violations = chk.check_absolute_paths(self.tmp)
+        self.assertEqual(len(violations), 2)
+        self.assertIn("script.py:1", violations[0])
+        self.assertIn("script.py:3", violations[1])
+
+    def test_ignores_site_packages_regardless_of_the_venvs_own_directory_name(self):
+        """A venv's own outer directory can be named anything ("whisper_venv", not just "venv" or
+        ".venv") -- matches check_float_isfinite.py's own real-bug regression test."""
+        _write(
+            os.path.join(self.tmp, "whisper_venv", "lib", "python3.13", "site-packages", "numpy", "x.py"),
+            f"path = '{_HOME}/thing'\n",
+        )
+        _write(os.path.join(self.tmp, "real_dir", "x.py"), "path = '/tmp/thing'\n")
+        self.assertEqual(chk.check_absolute_paths(self.tmp), [])
+
+    def test_a_disallowed_extension_is_never_scanned(self):
+        _write(os.path.join(self.tmp, "image.png"), f"{_HOME}/binary-looking-content")
+        self.assertEqual(chk.check_absolute_paths(self.tmp), [])
+
+    def test_a_makefile_with_no_extension_is_scanned(self):
+        _write(os.path.join(self.tmp, "Makefile"), f"BUILD_DIR={_HOME}/build\n")
+        violations = chk.check_absolute_paths(self.tmp)
+        self.assertEqual(len(violations), 1)
+
+    def test_an_ignored_directory_is_never_walked(self):
+        _write(os.path.join(self.tmp, "node_modules", "pkg", "index.js"), f"'{_HOME}'")
+        self.assertEqual(chk.check_absolute_paths(self.tmp), [])
+
+    def test_the_vendored_cloudflared_tree_is_excluded_by_repo_relative_path_only(self):
+        # daemons/cloudflared/vendor is upstream's source (an upstream Makefile names a developer's
+        # home directory); a directory that is merely called "vendor" elsewhere is still checked.
+        _write(os.path.join(self.tmp, "daemons", "cloudflared", "vendor", "otel", "Makefile"), f"cd {_HOME}\n")
+        self.assertEqual(chk.check_absolute_paths(self.tmp), [])
+        _write(os.path.join(self.tmp, "daemons", "other", "vendor", "Makefile"), f"cd {_HOME}\n")
+        self.assertEqual(
+            chk.check_absolute_paths(self.tmp),
+            [f"{os.path.join('daemons', 'other', 'vendor', 'Makefile')}:1 Contains hardcoded home path"],
+        )
+
+    def test_the_frozen_handoff_and_proof_evidence_records_are_excluded_by_repo_relative_path(self):
+        for rel in ("docs/handoff/2026-10-x/scripts", "docs/reviews/relay_self_update_proof_evidence"):
+            _write(os.path.join(self.tmp, *rel.split("/"), "record.json"), f'{{"path": "{_HOME}/x"}}')
+        self.assertEqual(chk.check_absolute_paths(self.tmp), [])
+        _write(os.path.join(self.tmp, "docs", "other", "record.json"), f'{{"path": "{_HOME}/x"}}')
+        self.assertEqual(len(chk.check_absolute_paths(self.tmp)), 1)
+
+    def test_mypy_cache_is_specifically_excluded(self):
+        # Documented rationale: .mypy_cache's own .json files legitimately
+        # embed real absolute paths as cached type-check data, not source.
+        _write(os.path.join(self.tmp, ".mypy_cache", "3.13", "foo.json"), f'"{_HOME}"')
+        self.assertEqual(chk.check_absolute_paths(self.tmp), [])
+
+    def test_archive_directory_is_specifically_excluded(self):
+        # Documented rationale: archive/ holds frozen historical pipeline
+        # snapshots, not live source -- a real path baked into an old
+        # artifact isn't a bug to fix, and rewriting it would make the
+        # archive inaccurate.
+        _write(os.path.join(self.tmp, "archive", "run_1", "meta.json"), f'"{_HOME}"')
+        self.assertEqual(chk.check_absolute_paths(self.tmp), [])
+
+    def test_the_night_shift_history_log_its_directory_and_its_archive_are_excluded(self):
+        # Append-only logs of past runs record real paths; rewriting them would make them inaccurate.
+        _write(os.path.join(self.tmp, "night_shift_history.md"), f"ran in {_HOME}/x\n")
+        _write(os.path.join(self.tmp, "night_shift_history_archive", "part_01", "night_shift_history.md"), f"{_HOME}/y\n")
+        self.assertEqual(chk.check_absolute_paths(self.tmp), [])
+        _write(os.path.join(self.tmp, "night_shift_history", "2026-10-01-000001-entry-aaaaaa.md"), f"{_HOME}/w\n")
+        self.assertEqual(chk.check_absolute_paths(self.tmp), [])
+        _write(os.path.join(self.tmp, "night_shift_todo", "x.md"), f"{_HOME}/z\n")
+        self.assertEqual(len(chk.check_absolute_paths(self.tmp)), 1)
+
+    def test_claude_directory_is_specifically_excluded(self):
+        # Documented rationale: .claude/ is this tool's own local
+        # configuration (skills, agent definitions), not shipped
+        # application source -- a skill legitimately documenting a real,
+        # box-specific path is its actual content, not a mistake.
+        _write(
+            os.path.join(self.tmp, ".claude", "skills", "example", "SKILL.md"),
+            f"Secret lives at `{_HOME}/.secrets/thing.ini`.\n",
+        )
+        self.assertEqual(chk.check_absolute_paths(self.tmp), [])
+
+    def test_ics_training_directory_is_specifically_excluded(self):
+        # Documented rationale: ics_training/ is the ICS ingestion
+        # pipeline's own live working directory (no __manifest__.py
+        # anywhere under it -- not an installed Odoo module), holding
+        # in-progress course data that legitimately embeds real local
+        # staging paths as internal provenance metadata.
+        _write(
+            os.path.join(self.tmp, "ics_training", "data", "course_ICS.json"),
+            f'{{"reference_sheets_used": ["{_HOME}/tmp/ics_ingestion/visual_assets/x.jpg"]}}',
+        )
+        self.assertEqual(chk.check_absolute_paths(self.tmp), [])
+
+    def test_ham_auxcomm_training_directory_is_specifically_excluded(self):
+        # Documented rationale: ham_auxcomm_training/ has no
+        # __manifest__.py -- it holds a single human-review draft
+        # artifact from the same ingestion pipeline family as
+        # ics_training/, never meant to be served.
+        _write(
+            os.path.join(self.tmp, "ham_auxcomm_training", "data", "review_draft.html"),
+            f'<img src="{_HOME}/.gemini/antigravity/brain/x/y.jpg">\n',
+        )
+        self.assertEqual(chk.check_absolute_paths(self.tmp), [])
+
+    def test_course_json_files_are_skipped_by_name_even_inside_a_real_module(self):
+        # Documented rationale: course_*.json is the ingestion pipeline's
+        # own naming convention, not tied to any one directory -- it can
+        # land inside a real Odoo module's data/ directory (e.g.
+        # ham_training/data/course_HAM_TECH.json) without being
+        # referenced by that module's own __manifest__.py, so it's
+        # skipped by filename rather than by directory.
+        _write(
+            os.path.join(self.tmp, "ham_training", "data", "course_HAM_TECH.json"),
+            f'{{"reference_sheets_used": ["{_HOME}/tmp/ham_ingestion/visual_assets/x.jpg"]}}',
+        )
+        self.assertEqual(chk.check_absolute_paths(self.tmp), [])
+        # A same-directory sibling that ISN'T named course_*.json must
+        # still be checked -- this isn't a blanket ham_training/ pass.
+        _write(
+            os.path.join(self.tmp, "ham_training", "data", "other_data.json"),
+            f'"{_HOME}"\n',
+        )
+        violations = chk.check_absolute_paths(self.tmp)
+        self.assertEqual(len(violations), 1)
+        self.assertIn("other_data.json:1", violations[0])
+
+    def test_a_binary_file_with_invalid_utf8_is_skipped_without_crashing(self):
+        p = os.path.join(self.tmp, "data.json")
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "wb") as f:
+            f.write(b"\xff\xfe\x00\x01 not valid utf-8")
+        self.assertEqual(chk.check_absolute_paths(self.tmp), [])
+
+    def test_relative_path_in_the_violation_is_relative_to_repo_dir_not_absolute(self):
+        _write(os.path.join(self.tmp, "sub", "script.py"), f"'{_HOME}'\n")
+        violations = chk.check_absolute_paths(self.tmp)
+        self.assertEqual(len(violations), 1)
+        self.assertTrue(violations[0].startswith(os.path.join("sub", "script.py")))
+        self.assertNotIn(self.tmp, violations[0])
+
+    def test_a_broken_symlink_to_a_checked_extension_is_skipped_without_crashing(self):
+        # A broken symlink (target doesn't exist) with a checked extension makes open() raise
+        # FileNotFoundError, which must be caught (not only UnicodeDecodeError) -- otherwise the
+        # entire scan crashes instead of skipping just this one unreadable file. This is a real,
+        # currently-reachable repo state, not a contrived edge case: hams_com's own checked-in
+        # "AGENTS.md -> hams_shared/AGENTS.md" symlink is broken inside a freshly created git
+        # worktree (the standard agent working setup) until fix_worktree_symlinks.py is run, and AGENTS.md's ".md"
+        # extension is one this checker scans.
+        os.symlink(
+            os.path.join(self.tmp, "does_not_exist_target.md"),
+            os.path.join(self.tmp, "AGENTS.md"),
+        )
+        self.assertEqual(chk.check_absolute_paths(self.tmp), [])
+
+    def test_a_real_violation_alongside_a_broken_symlink_is_still_caught(self):
+        # The broken symlink must not silently swallow a REAL violation sitting right next to
+        # it in the same scan -- confirms the fix skips only the one unreadable file, not the
+        # whole run.
+        os.symlink(
+            os.path.join(self.tmp, "does_not_exist_target.md"),
+            os.path.join(self.tmp, "AGENTS.md"),
+        )
+        _write(os.path.join(self.tmp, "script.py"), f"path = '{_HOME}/thing'\n")
+        violations = chk.check_absolute_paths(self.tmp)
+        self.assertEqual(len(violations), 1)
+        self.assertIn("script.py:1", violations[0])
+
+
+class MainIntegrationTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _run(self):
+        result = subprocess.run(
+            [sys.executable, _SCRIPT, self.tmp], capture_output=True, text=True, timeout=30
+        )
+        return result.returncode, result.stdout + result.stderr
+
+    def test_a_clean_repo_passes(self):
+        _write(os.path.join(self.tmp, "script.py"), "path = '/tmp/thing'\n")
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+
+    def test_a_violation_fails_with_the_expected_message(self):
+        _write(os.path.join(self.tmp, "script.py"), f"path = '{_HOME}'\n")
+        code, out = self._run()
+        self.assertEqual(code, 1)
+        self.assertIn("Absolute Paths Violations", out)
+
+    def test_check_absolute_paths_dot_py_is_specifically_excluded(self):
+        # This checker's own source necessarily
+        # contains the literal "/home/" string it searches for, so scanning it would
+        # always flag a false self-match. Confirms the by-filename self-exclusion, not
+        # just that the string happens to be absent from the real file today.
+        _write(
+            os.path.join(self.tmp, "check_absolute_paths.py"),
+            f"path = '{_HOME}'\n",
+        )
+        self.assertEqual(chk.check_absolute_paths(self.tmp), [])
+
+    def test_test_check_absolute_paths_dot_py_is_specifically_excluded(self):
+        _write(
+            os.path.join(self.tmp, "test_check_absolute_paths.py"),
+            f"_HOME = '{_HOME}'\n",
+        )
+        self.assertEqual(chk.check_absolute_paths(self.tmp), [])
+
+    def test_a_same_named_violation_in_a_different_file_is_still_caught(self):
+        # The exclusion above is by exact filename, not a blanket "skip anything with
+        # 'check_absolute_paths' in the name" -- confirms it doesn't over-widen.
+        _write(
+            os.path.join(self.tmp, "other_script.py"),
+            f"path = '{_HOME}'\n",
+        )
+        violations = chk.check_absolute_paths(self.tmp)
+        self.assertEqual(len(violations), 1)
+        self.assertIn("other_script.py:1", violations[0])
+
+
+if __name__ == "__main__":
+    unittest.main()

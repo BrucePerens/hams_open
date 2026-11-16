@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+"""
+XML Comment Double-Hyphen Checker
+-------------------------------------------------------------------------------------------
+The XML spec forbids a literal `--` anywhere inside a `<!-- ... -->` comment except as the
+closing delimiter itself. lxml (and every other real XML parser) enforces this strictly:
+`lxml.etree.XMLSyntaxError: Double hyphen within comment`. Odoo's module loader has no partial-
+failure mode for this -- one malformed comment in one XML data file aborts that module's install
+outright.
+
+Hit this exact bug twice in one night (2026-08-24/25) writing explanatory comments in security
+XML files, both times from using " -- " as an em-dash-style aside (a habit carried over from
+this codebase's own Python comment style, where it's fine) inside an XML `<!-- -->` block. Both
+were only caught by actually running the test suite and getting a real module-load crash --
+exactly the kind of failure check_access_csv_group_order.py/check_module_subpackage_imports.py
+already exist to catch statically instead of via a live crash discovered by whoever next
+happens to run the full suite.
+
+There is no legitimate use of `--` inside an XML comment (it's a hard syntax error, not a style
+preference), so there is no escape-hatch comment for this check.
+
+Usage: check_xml_comment_double_hyphen.py <repo_root>
+"""
+
+import os
+import check_target
+import lint_exec
+import re
+import sys
+from tree_files import tree_walk
+
+SKIP_DIRS = {"node_modules", "__pycache__", ".git", "daemons", "radae"}
+# Real bug found 2026-09-10: the bare directory name "tools" was in SKIP_DIRS above (almost
+# certainly meant to exempt this checker's OWN directory, hams_shared/tools), but os.walk's
+# `dirs[:] = [d for d in dirs if ...]` filter matches ANY directory literally named "tools"
+# ANYWHERE in either repo's tree by bare name, not just hams_shared/tools specifically --
+# silently exempting a real Odoo module's own "tools" subdirectory too (ham_shack/tools is a
+# real, currently-existing example; it has no .xml files today, so this was latent, not yet
+# live, but any future XML data/view file placed there would go unchecked with no warning).
+# Matched by path suffix below instead, the same precision check_init_imports.py's own
+# odoo_type_stubs exclusion already uses for the identical class of mistake ("matched by the
+# exact generated path, not just the directory name, so an unrelated directory that happens to
+# share that name elsewhere in the repo is not silently exempted too").
+_HAMS_SHARED_TOOLS_SUFFIX = os.path.join("hams_shared", "tools")
+
+_COMMENT_RE = re.compile(r"<!--(.*?)-->", re.DOTALL)
+
+
+def _resolve_repo_root(given_path):
+    given_path = os.path.abspath(given_path)
+    if os.path.basename(given_path) == "hams_shared":
+        return os.path.dirname(given_path)
+    return given_path
+
+
+def _resolve_repo_roots(given_path):
+    """run_linters.py's own dir_path is hams_shared, and _resolve_repo_root above only ever
+    redirects that to ONE repo (hams_open, its parent) -- but this checker's real XML targets
+    span both hams_open and hams_com (real Odoo modules with real XML data/view files exist in
+    both). Scan both, the same sibling-repo shape check_self_writeable_field_tests.py and the
+    fixed check_untyped_utility_files.py already use for the identical two-repos problem."""
+    repo_root = _resolve_repo_root(given_path)
+    roots = [repo_root]
+    sibling = lint_exec.sibling_repo_root(repo_root, lint_exec.has_odoo_module)
+    if sibling:
+        roots.append(sibling)
+    return roots
+
+
+def _line_of_offset(text, offset):
+    return text.count("\n", 0, offset) + 1
+
+
+def _is_hams_shared_tools(path):
+    """True only for the real hams_shared/tools directory itself (by path suffix, not bare
+    name) -- see the SKIP_DIRS comment above for why a bare "tools" name match was wrong."""
+    normalized = os.path.normpath(path)
+    return normalized == _HAMS_SHARED_TOOLS_SUFFIX or normalized.endswith(
+        os.sep + _HAMS_SHARED_TOOLS_SUFFIX
+    )
+
+
+def _xml_tree(repo_root):
+    """The (dir, subdirs, files) walk of the .xml files this checker reads under `repo_root`."""
+
+    def not_under_hams_shared_tools(rel):
+        # The real hams_shared/tools directory (by path suffix, not bare name) is skipped with everything below it.
+        parts = rel.split("/")[:-1]
+        return not any(
+            part == "tools" and _is_hams_shared_tools(os.path.join(repo_root, *parts[: k + 1])) for k, part in enumerate(parts)
+        )
+
+    return tree_walk(repo_root, ".xml", SKIP_DIRS, skip_hidden=True, accept=not_under_hams_shared_tools, untracked=True)
+
+
+def count_xml_files(repo_root):
+    return sum(len(files) for _root, _dirs, files in _xml_tree(repo_root))
+
+
+def check_xml_comment_double_hyphen(repo_root):
+    violations = []
+    for root, _dirs, files in _xml_tree(repo_root):
+        for filename in files:
+            if not filename.endswith(".xml"):
+                continue
+            path = os.path.join(root, filename)
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    content = f.read()
+            except (UnicodeDecodeError, OSError) as e:
+                # OSError added 2026-09-10: a broken symlink (target doesn't exist) named
+                # *.xml makes open() raise FileNotFoundError, not caught before this fix --
+                # crashing the entire scan on one unreadable file. Real, reachable repo state
+                # (see check_absolute_paths.py's identical fix), not contrived.
+                print(f"Warning: could not read {path}: {e}")
+                continue
+
+            for match in _COMMENT_RE.finditer(content):
+                inner = match.group(1)
+                if "--" in inner:
+                    # match.start(1), not match.start(): the latter is the
+                    # start of the WHOLE match (including the 4-char "<!--"
+                    # delimiter), so adding inner.index("--") to it landed 4
+                    # characters too early -- usually harmless (same line
+                    # either way), but a real off-by-one-line bug when "--"
+                    # is the very first thing on a line inside the comment,
+                    # since the 4-character undershoot can cross back over
+                    # the preceding newline. Found via a Hypothesis property
+                    # test, not by inspection -- see
+                    # test_check_xml_comment_double_hyphen.py's
+                    # CheckXmlCommentDoubleHyphenPropertyTests.
+                    lineno = _line_of_offset(content, match.start(1) + inner.index("--"))
+                    violations.append(
+                        f"{os.path.relpath(path, repo_root)}:{lineno} "
+                        f"Literal '--' inside an XML comment -- illegal per the XML spec "
+                        f"(lxml raises 'Double hyphen within comment' and Odoo's module "
+                        f"loader aborts the whole module install on it). Reword to avoid "
+                        f"the double hyphen (e.g. use a comma or period instead of an "
+                        f"em-dash-style ' -- ' aside)."
+                    )
+    return violations
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: check_xml_comment_double_hyphen.py <repo_root>")
+        sys.exit(1)
+
+    violations = []
+    for repo_root in _resolve_repo_roots(sys.argv[1]):
+        check_target.require_directory(repo_root, "check_xml_comment_double_hyphen")
+        check_target.require_scanned(count_xml_files(repo_root), repo_root, "check_xml_comment_double_hyphen", "*.xml files")
+        violations.extend(check_xml_comment_double_hyphen(repo_root))
+
+    if violations:
+        print("❌ XML comment double-hyphen violations:")
+        for v in violations:
+            print(f"  - {v}")
+        sys.exit(1)
+
+    print("✅ No XML comment double-hyphen violations found.")
+    sys.exit(0)

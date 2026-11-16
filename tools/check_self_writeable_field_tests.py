@@ -1,0 +1,344 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+"""
+SELF_WRITEABLE_FIELDS Write-Proof Verifier
+-------------------------------------------
+MASTER_10 (Identity & Access Control) mandates that any module extending
+res.users' SELF_WRITEABLE_FIELDS property must be verified by a test that
+actually performs the self-write and asserts it took effect -- not a
+test that merely inspects the returned field list. The bug this policy
+exists to prevent: several modules once overrode a method Odoo core
+never calls at all (_get_writeable_fields instead of the real
+SELF_WRITEABLE_FIELDS property), and their tests still "passed" because
+they only checked that a field NAME appeared in the override's return
+value, never that a non-admin user could actually write it. The dead
+override and the passing-but-hollow test shipped together for years.
+
+This script, for every `def SELF_WRITEABLE_FIELDS` property override:
+  1. Requires a `# Verified by [@ANCHOR: <name>]` comment on or
+     immediately above the property definition.
+  2. Requires a matching `# Tests [@ANCHOR: <name>]` comment on some
+     test method, in that same module's own tests/ directory.
+  3. Deep-AST-verifies that test method's body actually contains the
+     required shape: a `.write(` call, a `.with_user(` call (proving
+     identity was switched to a specific, non-default user), and an
+     assertion call textually after the write (assertEqual/assertTrue/
+     assertFalse/assertIn) -- proving the test checked the write
+     actually landed, not just that it didn't raise.
+Anything short of that shape is reported as an error, the same style as
+check_burn_list.py's existing bypass-testing Deep AST Verification.
+"""
+
+import ast
+import os
+import check_target
+import lint_exec
+import re
+import sys
+from source_text import read_source  # noqa: E402
+from tree_files import tree_walk
+
+ANCHOR_VERIFIED_RE = re.compile(r"#\s*Verified by \[@ANCHOR:\s*([A-Za-z0-9_:]+)\]")
+ANCHOR_TESTS_RE = re.compile(r"#\s*Tests \[@ANCHOR:\s*([A-Za-z0-9_:]+)\]")
+
+
+def _resolve_repo_root(given_path):
+    """run_linters.py's own `dir_path` resolves to the hams_shared directory itself, not a real
+    repo root (as in check_model_extension_collisions.py and other checkers) --
+    without the redirect this checker silently finds 0 SELF_WRITEABLE_FIELDS overrides via
+    run_linters.py's actual invocation, versus 8 at a real repo root, one of which (ham_callbook's)
+    is a genuine MASTER_10 write-proof gap. Detect the hams_shared case by
+    name and redirect to its real parent repo."""
+    given_path = os.path.abspath(given_path)
+    if os.path.basename(given_path) == "hams_shared":
+        return os.path.dirname(given_path)
+    return given_path
+# This codebase's anchor convention has two forms in active use:
+#   simple:   source "# Verified by [@ANCHOR: X]"  <->  test "# Tests [@ANCHOR: X]"
+#   elaborate: source "[@ANCHOR: A]" + "# Verified by [@ANCHOR: B]"
+#              <-> test "# Tests [@ANCHOR: A]" + "[@ANCHOR: B]" (bare)
+# In the elaborate form, the test side's link to the source's "Verified
+# by" target (B) is a BARE anchor declaration, not a "# Tests" line -- so
+# a bare `[@ANCHOR: X]` counts as a match too, provided it isn't itself
+# the "Verified by" or "Tests" line already captured above.
+ANCHOR_BARE_RE = re.compile(r"\[@ANCHOR:\s*([A-Za-z0-9_:]+)\]")
+WRITE_ASSERTIONS = {
+    "assertEqual",
+    "assertTrue",
+    "assertFalse",
+    "assertIn",
+    "assertNotEqual",
+}
+
+
+def _owning_module(path, repo_root):
+    d = os.path.dirname(path)
+    while d and d != repo_root and os.path.dirname(d) != d:
+        if os.path.isfile(os.path.join(d, "__manifest__.py")):
+            return d
+        d = os.path.dirname(d)
+    return None
+
+
+def _find_self_writeable_overrides(repo_roots, stats=None):
+    """Yields (py_path, anchor_or_None, def_lineno) for every
+    `def SELF_WRITEABLE_FIELDS` found outside a tests/ directory."""
+    for repo_root in repo_roots:
+        skip = ("radae", "node_modules", "__pycache__", ".git", "tools", "daemons")
+        for root, _dirs, files in tree_walk(repo_root, ".py", skip, skip_hidden=True, untracked=True):
+            if os.sep + "tests" + os.sep in root + os.sep or root.endswith("tests"):
+                continue
+            for f in files:
+                if not f.endswith(".py"):
+                    continue
+                path = os.path.join(root, f)
+                if stats is not None:
+                    stats["files"] = stats.get("files", 0) + 1
+                content, problem = read_source(path)
+                if problem:
+                    if stats is not None:
+                        stats.setdefault("unreadable", []).append(problem)
+                    continue
+                if "def SELF_WRITEABLE_FIELDS" not in content:
+                    continue
+                lines = content.splitlines()
+                for i, line in enumerate(lines):
+                    if "def SELF_WRITEABLE_FIELDS" not in line:
+                        continue
+                    anchor = None
+                    # Look at the def line itself and the ~4 lines above/below
+                    # (property definitions usually have the decorator, then
+                    # def, then a "# Verified by" comment as the first body
+                    # line, or the comment sits just above the decorator).
+                    window = lines[max(0, i - 4): i + 5]
+                    for w in window:
+                        m = ANCHOR_VERIFIED_RE.search(w)
+                        if m:
+                            anchor = m.group(1)
+                            break
+                    yield path, anchor, i + 1
+
+
+def _find_tests_anchor(module_dir, anchor):
+    """Searches module_dir/tests for a `# Tests [@ANCHOR: anchor]` comment
+    and returns (test_file_path, containing_function_ast_node, file_content)
+    or (None, None, None) if not found."""
+    tests_dir = os.path.join(module_dir, "tests")
+    if not os.path.isdir(tests_dir):
+        return None, None, None
+    for root, _dirs, files in tree_walk(tests_dir, ".py", untracked=True):
+        for f in files:
+            if not f.endswith(".py"):
+                continue
+            path = os.path.join(root, f)
+            content, problem = read_source(path)
+            if problem:
+                print(f"❌ ERROR: {problem}")
+                continue
+            lines = content.splitlines()
+            anchor_line = None
+            for i, line in enumerate(lines, 1):
+                m = ANCHOR_TESTS_RE.search(line) or ANCHOR_BARE_RE.search(line)
+                if m and m.group(1) == anchor:
+                    anchor_line = i
+                    break
+            if anchor_line is None:
+                continue
+            try:
+                tree = ast.parse(content, filename=path)
+            except SyntaxError:
+                continue
+            # Method-level anchor (most specific) wins if present.
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef):
+                    start = getattr(node, "lineno", 0)
+                    end = getattr(node, "end_lineno", float("inf"))
+                    if start <= anchor_line <= end:
+                        return path, node, content
+            # Fall back to a class-level anchor (e.g. right after the
+            # `class Foo(...):` line, not inside any one method) -- the
+            # write-proof shape then needs to be found somewhere in the
+            # class as a whole, since ast.walk() on the ClassDef covers
+            # every method's body.
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef):
+                    start = getattr(node, "lineno", 0)
+                    end = getattr(node, "end_lineno", float("inf"))
+                    if start <= anchor_line <= end:
+                        return path, node, content
+    return None, None, None
+
+
+def _expr_resolves_to_with_user(expr, with_user_vars):
+    """True if `expr` (an AST expression, e.g. the receiver of a `.write(...)`
+    call) is, or was assigned from, a `.with_user(...)` call -- either
+    chained directly (`rec.with_user(other).write(...)`) or via an
+    intermediate variable (`switched = rec.with_user(other)` then
+    `switched.write(...)`, resolved through `with_user_vars`)."""
+    for node in ast.walk(expr):
+        if isinstance(node, ast.Call) and getattr(node.func, "attr", "") == "with_user":
+            return True
+        if isinstance(node, ast.Name) and node.id in with_user_vars:
+            return True
+    return False
+
+
+def _verify_write_proof_shape(func_node):
+    """Returns a list of missing-shape error strings (empty if the shape
+    is satisfied)."""
+    found_with_user = False
+    write_lines = []
+    proven_write_lines = []
+    assertion_lines = []
+
+    # First pass: collect any local variable that was assigned the result
+    # of a `.with_user(...)` call, so a two-step
+    # `switched = rec.with_user(other)` / `switched.write(...)` pattern is
+    # recognized, not just the directly-chained form.
+    with_user_vars = set()
+    for node in ast.walk(func_node):
+        if isinstance(node, ast.Assign) and _expr_resolves_to_with_user(node.value, ()):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    with_user_vars.add(target.id)
+
+    # Two passes rather than one: ast.walk() is breadth-first, not source
+    # order, so a write nested one level deeper (e.g. inside a `try:`)
+    # can be visited AFTER a sibling assertion that is textually later in
+    # the file but shallower in the tree. Comparing line numbers requires
+    # collecting them all first, not comparing mid-walk.
+    for node in ast.walk(func_node):
+        if isinstance(node, ast.Call):
+            attr = getattr(node.func, "attr", "")
+            if attr == "write":
+                lineno = getattr(node, "lineno", 0)
+                write_lines.append(lineno)
+                receiver = getattr(node.func, "value", None)
+                # A test can call BOTH .with_user(...)
+                # and .write(...) without the write ever actually running
+                # through the switched recordset -- e.g. a throwaway
+                # `other.with_user(other)` statement alongside a plain
+                # `self.partner.write(...)` still run as the test's default
+                # (often admin) user. Checking that both calls merely exist
+                # ANYWHERE in the function proves nothing; the write's own
+                # receiver must actually resolve to a with_user(...) switch.
+                if receiver is not None and _expr_resolves_to_with_user(receiver, with_user_vars):
+                    proven_write_lines.append(lineno)
+            if attr == "with_user":
+                found_with_user = True
+            if attr in WRITE_ASSERTIONS:
+                assertion_lines.append(getattr(node, "lineno", 0))
+
+    found_write = bool(write_lines)
+    write_chained_to_with_user = bool(proven_write_lines)
+    assertion_after_write = write_chained_to_with_user and any(
+        a >= min(proven_write_lines) for a in assertion_lines
+    )
+
+    errors = []
+    if not found_write:
+        errors.append("does not call .write(...) at all")
+    if not found_with_user:
+        errors.append(
+            "does not call .with_user(...) -- must switch to a specific, "
+            "non-default user to prove the SELF write works for someone "
+            "other than the record's creator/admin context"
+        )
+    elif found_write and not write_chained_to_with_user:
+        errors.append(
+            "calls both .write(...) and .with_user(...) but the write is not "
+            "performed on the with_user(...)-switched recordset (e.g. "
+            "`rec.with_user(other_user).write(...)`, or `switched = "
+            "rec.with_user(other_user)` then `switched.write(...)`) -- the "
+            "write must actually run as the switched user, not merely appear "
+            "in the same test as an unrelated with_user(...) call"
+        )
+    if found_write and write_chained_to_with_user and not assertion_after_write:
+        errors.append(
+            "has a .write(...) call but no assertEqual/assertTrue/assertFalse/"
+            "assertIn/assertNotEqual AFTER it -- must prove the write actually "
+            "took effect, not just that it didn't raise"
+        )
+    return errors
+
+
+def _resolve_repo_roots(given_path):
+    """This checker's own dual-repo scan -- the template the other 8 checkers hit by the same
+    dir_path/sibling-repo bug now mirror exactly. Extracted here, unchanged in
+    behavior, so it's independently testable the same way theirs are rather than only reachable
+    through main()'s own argv-driven flow."""
+    repo_root = _resolve_repo_root(given_path)
+    roots = [repo_root]
+    sibling = lint_exec.sibling_repo_root(repo_root, lint_exec.has_odoo_module)
+    if sibling:
+        roots.append(sibling)
+    return roots
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: check_self_writeable_field_tests.py <repo_root>")
+        sys.exit(1)
+
+    check_target.require_directory(sys.argv[1], "check_self_writeable_field_tests")
+    roots = _resolve_repo_roots(sys.argv[1])
+
+    errors = 0
+    stats = {}
+    overrides = list(_find_self_writeable_overrides(roots, stats))
+    for problem in stats.get("unreadable", []):
+        print(f"❌ ERROR: {problem}")
+        errors += 1
+    for path, anchor, lineno in overrides:
+        if not anchor:
+            print(
+                f"❌ ERROR: {path}:{lineno}: SELF_WRITEABLE_FIELDS override has no "
+                "'# Verified by [@ANCHOR: <name>]' comment. See MASTER_10 "
+                "Identity & Access Control, section 2."
+            )
+            errors += 1
+            continue
+
+        # path lives under exactly one of `roots`; try each as the bound
+        # _owning_module() walks up to (a wrong root just means the walk
+        # never hits `d == repo_root` early, so it's harmless to try).
+        module_dir = None
+        for candidate_root in roots:
+            module_dir = _owning_module(path, candidate_root)
+            if module_dir:
+                break
+
+        if not module_dir:
+            print(f"❌ ERROR: {path}:{lineno}: could not resolve owning module for anchor lookup.")
+            errors += 1
+            continue
+
+        test_path, func_node, _content = _find_tests_anchor(module_dir, anchor)
+        if not func_node:
+            print(
+                f"❌ ERROR: {path}:{lineno}: anchor '{anchor}' has no matching "
+                f"'# Tests [@ANCHOR: {anchor}]' comment in {module_dir}/tests/."
+            )
+            errors += 1
+            continue
+
+        shape_errors = _verify_write_proof_shape(func_node)
+        if shape_errors:
+            print(
+                f"❌ ERROR: {test_path}:{func_node.lineno}: test '{func_node.name}' "
+                f"(anchor '{anchor}') does not prove the self-write actually works:"
+            )
+            for e in shape_errors:
+                print(f"    - {e}")
+            errors += len(shape_errors)
+
+    check_target.require_scanned(stats.get("files", 0), ", ".join(roots), "check_self_writeable_field_tests", "Python files outside tests/")
+    if errors:
+        print(f"Total Errors (SELF_WRITEABLE_FIELDS Write Proof): {errors}")
+        sys.exit(1)
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

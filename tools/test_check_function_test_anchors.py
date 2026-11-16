@@ -1,0 +1,387 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+"""
+Unit tests for check_function_test_anchors.py (ADR 0090).
+"""
+
+import ast
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+
+import check_function_test_anchors as cfta  # noqa: E402
+
+
+def _write(path, content):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+
+def _init_git_repo(root):
+    # scan_tree walks `git ls-files`, not a raw os.walk -- a real repo
+    # (even an empty, un-pushed one) is needed for these fixtures to be
+    # discovered at all.
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+
+
+class DirectFunctionsTests(unittest.TestCase):
+    def test_a_module_level_function_is_found(self):
+        tree = ast.parse("def foo():\n    pass\n")
+        found = list(cfta._direct_functions(tree.body, []))
+        self.assertEqual([q for q, _n in found], ["foo"])
+
+    def test_a_class_method_is_found_with_its_qualified_name(self):
+        tree = ast.parse("class Foo:\n    def bar(self):\n        pass\n")
+        found = list(cfta._direct_functions(tree.body, []))
+        self.assertEqual([q for q, _n in found], ["Foo.bar"])
+
+    def test_a_nested_closure_is_not_found(self):
+        tree = ast.parse("def outer():\n    def inner():\n        pass\n    return inner\n")
+        found = list(cfta._direct_functions(tree.body, []))
+        self.assertEqual([q for q, _n in found], ["outer"])
+
+    def test_an_async_function_is_found(self):
+        tree = ast.parse("async def foo():\n    pass\n")
+        found = list(cfta._direct_functions(tree.body, []))
+        self.assertEqual([q for q, _n in found], ["foo"])
+
+
+class ScanFileTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_a_function_with_a_base_anchor_is_reported_as_anchored(self):
+        path = os.path.join(self.tmp, "foo.py")
+        _write(path, "def bar():\n    # [@ANCHOR: COMM_bar]\n    pass\n")
+        results = cfta.scan_file(path, self.tmp)
+        self.assertEqual(results, [("foo.py::bar", True)])
+
+    def test_a_function_with_no_anchor_is_reported_as_unanchored(self):
+        path = os.path.join(self.tmp, "foo.py")
+        _write(path, "def bar():\n    pass\n")
+        results = cfta.scan_file(path, self.tmp)
+        self.assertEqual(results, [("foo.py::bar", False)])
+
+    def test_a_begin_end_anchor_counts_as_anchored(self):
+        path = os.path.join(self.tmp, "foo.py")
+        _write(
+            path,
+            "def bar():\n    # [@ANCHOR-BEGIN: COMM_bar]\n    pass\n    # [@ANCHOR-END: COMM_bar]\n",
+        )
+        results = cfta.scan_file(path, self.tmp)
+        self.assertEqual(results, [("foo.py::bar", True)])
+
+    def test_a_syntax_error_file_is_skipped_not_crashed_on(self):
+        path = os.path.join(self.tmp, "broken.py")
+        _write(path, "def broken(:\n    pass\n")
+        results = cfta.scan_file(path, self.tmp)
+        self.assertEqual(results, [])
+
+    def test_an_anchor_on_a_different_function_does_not_count(self):
+        path = os.path.join(self.tmp, "foo.py")
+        _write(
+            path,
+            "def bar():\n    pass\n\n\ndef baz():\n    # [@ANCHOR: COMM_baz]\n    pass\n",
+        )
+        results = dict(cfta.scan_file(path, self.tmp))
+        self.assertFalse(results["foo.py::bar"])
+        self.assertTrue(results["foo.py::baz"])
+
+    def test_an_anchor_above_a_decorator_counts_as_anchored(self):
+        # The real bug found sweeping compliance/controllers/main.py: a
+        # decorated function's own node.lineno is the `def` line, NOT the
+        # decorator -- an anchor comment placed above the decorator (this
+        # codebase's own established convention) must still count.
+        path = os.path.join(self.tmp, "foo.py")
+        _write(
+            path,
+            "class C:\n"
+            "    # [@ANCHOR: COMM_bar]\n"
+            "    @http.route('/x')\n"
+            "    def bar(self):\n"
+            "        pass\n",
+        )
+        results = dict(cfta.scan_file(path, self.tmp))
+        self.assertTrue(results["foo.py::C.bar"])
+
+    def test_a_verified_by_citation_with_no_real_base_anchor_is_reported_as_unanchored(self):
+        # Real case: user_websites/models/content_violation_appeal.py's
+        # ContentViolationAppeal.action_approve has only a
+        # "# Verified by [@ANCHOR: user_websites:test_tour_moderation_appeal]" citation in its
+        # body -- a rule-3 VERIFICATION LINK per verify_anchors.py's own docstring, not a rule-1
+        # base declaration. A bare `ANCHOR_PATTERN.search` over the function's span (the old,
+        # naive check) matched this citation and silently counted the function as anchored,
+        # exempting it from the ADR 0090 gap check it should have failed.
+        path = os.path.join(self.tmp, "foo.py")
+        _write(
+            path,
+            "def bar():\n"
+            "    # Verified by [@ANCHOR: mod:test_bar]\n"
+            "    pass\n",
+        )
+        results = cfta.scan_file(path, self.tmp)
+        self.assertEqual(results, [("foo.py::bar", False)])
+
+    def test_a_tests_citation_with_no_real_base_anchor_is_reported_as_unanchored(self):
+        path = os.path.join(self.tmp, "foo.py")
+        _write(
+            path,
+            "def bar():\n"
+            "    # Tests [@ANCHOR: mod:something_else]\n"
+            "    pass\n",
+        )
+        results = cfta.scan_file(path, self.tmp)
+        self.assertEqual(results, [("foo.py::bar", False)])
+
+    def test_a_doc_prefixed_anchor_name_is_not_a_real_base_declaration(self):
+        # Mirrors verify_anchors.py's own `story_`/`journey_`/`doc_` documentation-only exclusion
+        # (_process_file_for_anchors: "Documentation-only anchors, ignored in code logic tracing").
+        # A function whose only anchor comment names a documentation anchor is never cited by a
+        # real test the way a genuine code anchor is -- it must not count as anchored here either.
+        for prefix in ("doc_", "story_", "journey_"):
+            with self.subTest(prefix=prefix):
+                path = os.path.join(self.tmp, "foo.py")
+                _write(path, f"def bar():\n    # [@ANCHOR: {prefix}something]\n    pass\n")
+                results = cfta.scan_file(path, self.tmp)
+                self.assertEqual(results, [("foo.py::bar", False)])
+
+    def test_a_module_qualified_doc_prefixed_anchor_name_is_not_a_real_base_declaration(self):
+        path = os.path.join(self.tmp, "foo.py")
+        _write(path, "def bar():\n    # [@ANCHOR: mymodule:doc_something]\n    pass\n")
+        results = cfta.scan_file(path, self.tmp)
+        self.assertEqual(results, [("foo.py::bar", False)])
+
+    def test_a_multiline_comment_reference_with_see_on_the_preceding_line_is_not_a_declaration(self):
+        # Real case: ham_shack/tests/test_station_timeshare_security.py had
+        # a comment shaped exactly like this -- the referencing word "see" sits on the line BEFORE
+        # the anchor tag, so the anchor's own same-line prefix is empty and gives no signal either
+        # way. The old check only ever looked at the anchor's own line, wrongly counting this as a
+        # real base declaration -- which, via check_claims_freshness.py's own duplicate-anchor
+        # resolution, silently corrupted a real claim's recorded hash to this function's hash
+        # instead of the real declaring function's.
+        path = os.path.join(self.tmp, "foo.py")
+        _write(
+            path,
+            "def bar():\n"
+            "    # A thing can no longer happen a certain way (see\n"
+            "    # [@ANCHOR: mod:real_thing]) -- go through the real flow instead.\n"
+            "    pass\n",
+        )
+        results = cfta.scan_file(path, self.tmp)
+        self.assertEqual(results, [("foo.py::bar", False)])
+
+    def test_a_multiline_comment_reference_with_verified_by_on_the_preceding_line_is_not_a_declaration(self):
+        path = os.path.join(self.tmp, "foo.py")
+        _write(
+            path,
+            "def bar():\n"
+            "    # Verified by\n"
+            "    # [@ANCHOR: mod:real_thing]\n"
+            "    pass\n",
+        )
+        results = cfta.scan_file(path, self.tmp)
+        self.assertEqual(results, [("foo.py::bar", False)])
+
+    def test_a_real_base_declaration_on_its_own_line_still_counts_when_the_prior_line_is_unrelated(self):
+        # The prev_line check must never turn a GENUINE declaration into a false negative just
+        # because some unrelated comment happens to sit above it.
+        path = os.path.join(self.tmp, "foo.py")
+        _write(
+            path,
+            "def bar():\n"
+            "    # Some unrelated comment line.\n"
+            "    # [@ANCHOR: mod:bar]\n"
+            "    pass\n",
+        )
+        results = cfta.scan_file(path, self.tmp)
+        self.assertEqual(results, [("foo.py::bar", True)])
+
+    def test_a_real_base_anchor_alongside_a_citation_still_counts_as_anchored(self):
+        path = os.path.join(self.tmp, "foo.py")
+        _write(
+            path,
+            "def bar():\n"
+            "    # [@ANCHOR: mod:bar]\n"
+            "    # Verified by [@ANCHOR: mod:test_bar]\n"
+            "    pass\n",
+        )
+        results = cfta.scan_file(path, self.tmp)
+        self.assertEqual(results, [("foo.py::bar", True)])
+
+    def test_every_anchor_of_a_tests_list_is_a_citation_not_a_base_declaration(self):
+        """`Tests [@ANCHOR: a] [@ANCHOR: b]` cites both; only the first used to be seen as one."""
+        path = os.path.join(self.tmp, "foo.py")
+        _write(
+            path,
+            "def bar():\n"
+            "    \"\"\"Tests [@ANCHOR: mod:one] [@ANCHOR: mod:two]\n"
+            "    [@ANCHOR: mod:three]: text.\"\"\"\n"
+            "    pass\n",
+        )
+        self.assertEqual(cfta.scan_file(path, self.tmp), [("foo.py::bar", False)])
+
+    def test_two_base_anchors_on_one_line_are_both_still_base_declarations(self):
+        path = os.path.join(self.tmp, "foo.py")
+        _write(path, "def bar():\n    # [@ANCHOR: mod:one] [@ANCHOR: mod:two]\n    pass\n")
+        self.assertEqual(cfta.scan_file(path, self.tmp), [("foo.py::bar", True)])
+
+    def test_the_decorator_lookback_does_not_cross_a_blank_line_into_the_prior_function(self):
+        # The real, named risk of the fix above: an unrelated trailing
+        # comment on the PREVIOUS function, separated by the ordinary
+        # blank line between two defs, must not be absorbed as if it
+        # anchored this one.
+        path = os.path.join(self.tmp, "foo.py")
+        _write(
+            path,
+            "def bar():\n"
+            "    pass\n"
+            "    # [@ANCHOR: COMM_bar]\n"
+            "\n"
+            "@http.route('/x')\n"
+            "def baz():\n"
+            "    pass\n",
+        )
+        results = dict(cfta.scan_file(path, self.tmp))
+        self.assertFalse(results["foo.py::baz"])
+
+
+class ScanTreeAndBaselineTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_scan_tree_only_sees_git_tracked_files(self):
+        _write(os.path.join(self.tmp, "tracked.py"), "def a():\n    pass\n")
+        _init_git_repo(self.tmp)
+        # Written AFTER the repo's own `git add -A`/init above, and never
+        # added itself -- genuinely untracked, not just uncommitted.
+        _write(os.path.join(self.tmp, "untracked.py"), "def b():\n    pass\n")
+        gaps = cfta.scan_tree(self.tmp)
+        self.assertIn("tracked.py::a", gaps)
+        self.assertNotIn("untracked.py::b", gaps)
+
+    def test_a_test_file_itself_is_not_scanned(self):
+        _write(os.path.join(self.tmp, "tests", "test_foo.py"), "def test_something():\n    pass\n")
+        _init_git_repo(self.tmp)
+        gaps = cfta.scan_tree(self.tmp)
+        self.assertEqual(gaps, {})
+
+    def test_a_tools_directory_is_not_scanned(self):
+        _write(os.path.join(self.tmp, "tools", "helper.py"), "def helper():\n    pass\n")
+        _init_git_repo(self.tmp)
+        gaps = cfta.scan_tree(self.tmp)
+        self.assertEqual(gaps, {})
+
+    def test_a_devbox_tools_directory_is_not_scanned(self):
+        _write(os.path.join(self.tmp, "devbox_tools", "helper.py"), "def helper():\n    pass\n")
+        _init_git_repo(self.tmp)
+        gaps = cfta.scan_tree(self.tmp)
+        self.assertEqual(gaps, {})
+
+    def test_ratet27_captures_directory_is_not_scanned(self):
+        _write(
+            os.path.join(
+                self.tmp, "daemons", "ham_digital_modes", "docs", "references",
+                "ratet27_captures", "analyze_amplitude_sweep.py",
+            ),
+            "def golay_decode():\n    pass\n",
+        )
+        _init_git_repo(self.tmp)
+        gaps = cfta.scan_tree(self.tmp)
+        self.assertEqual(gaps, {})
+
+    def test_a_fixture_recording_script_under_tests_is_not_scanned(self):
+        _write(
+            os.path.join(self.tmp, "daemons", "x", "tests", "usb_fixtures", "capture.py"),
+            "def capture():\n    pass\n",
+        )
+        _write(
+            os.path.join(self.tmp, "daemons", "x", "tests", "fixtures", "make_vectors.py"),
+            "def make():\n    pass\n",
+        )
+        _init_git_repo(self.tmp)
+        gaps = cfta.scan_tree(self.tmp)
+        self.assertEqual(gaps, {})
+
+    def test_a_fixtures_directory_outside_tests_is_still_scanned(self):
+        _write(os.path.join(self.tmp, "pkg", "fixtures", "loader.py"), "def load():\n    pass\n")
+        _init_git_repo(self.tmp)
+        gaps = cfta.scan_tree(self.tmp)
+        self.assertIn("pkg/fixtures/loader.py::load", gaps)
+
+    def test_baseline_round_trips_through_save_and_load(self):
+        gaps = {"foo.py::bar": True, "baz.py::qux": True}
+        path = os.path.join(self.tmp, "baseline.json")
+        cfta.save_baseline(path, gaps)
+        loaded = cfta.load_baseline(path)
+        self.assertEqual(sorted(loaded), sorted(gaps.keys()))
+
+    def test_load_baseline_returns_empty_dict_when_file_is_absent(self):
+        self.assertEqual(cfta.load_baseline(os.path.join(self.tmp, "nonexistent.json")), {})
+
+
+class MainIntegrationTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.baseline = os.path.join(self.tmp, "baseline.json")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _run(self, *extra_args):
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "check_function_test_anchors.py")
+        return subprocess.run(
+            [sys.executable, script, self.tmp, "--baseline", self.baseline, *extra_args],
+            capture_output=True,
+            text=True,
+        )
+
+    def test_a_new_unanchored_function_fails_with_no_baseline(self):
+        _write(os.path.join(self.tmp, "foo.py"), "def bar():\n    pass\n")
+        _init_git_repo(self.tmp)
+        result = self._run()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("foo.py::bar", result.stdout)
+
+    def test_generating_a_baseline_then_checking_again_passes(self):
+        _write(os.path.join(self.tmp, "foo.py"), "def bar():\n    pass\n")
+        _init_git_repo(self.tmp)
+        gen = self._run("--generate-baseline")
+        self.assertEqual(gen.returncode, 0)
+        check = self._run()
+        self.assertEqual(check.returncode, 0)
+
+    def test_a_function_added_after_the_baseline_is_a_new_failure(self):
+        _write(os.path.join(self.tmp, "foo.py"), "def bar():\n    pass\n")
+        _init_git_repo(self.tmp)
+        self._run("--generate-baseline")
+
+        _write(os.path.join(self.tmp, "foo.py"), "def bar():\n    pass\n\n\ndef new_one():\n    pass\n")
+        result = self._run()
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("foo.py::new_one", result.stdout)
+        self.assertNotIn("foo.py::bar\n", result.stdout)
+
+    def test_anchoring_a_baselined_function_keeps_it_passing(self):
+        _write(os.path.join(self.tmp, "foo.py"), "def bar():\n    pass\n")
+        _init_git_repo(self.tmp)
+        self._run("--generate-baseline")
+
+        _write(os.path.join(self.tmp, "foo.py"), "def bar():\n    # [@ANCHOR: COMM_bar]\n    pass\n")
+        result = self._run()
+        self.assertEqual(result.returncode, 0)
+
+
+if __name__ == "__main__":
+    unittest.main()

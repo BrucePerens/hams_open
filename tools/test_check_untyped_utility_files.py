@@ -1,0 +1,412 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+"""
+Unit tests for check_untyped_utility_files.py (ODOO_AWARE_TYPE_CHECKING.md Phase 1).
+
+collect_candidates() only ever scans the hardcoded SCAN_ROOTS (a fixed list
+of repo-relative paths this repo actually has), so temp-directory fixtures
+here mirror those exact names (e.g. "daemons/...", "ingest/...") rather than
+arbitrary directory names, the same way the script itself only ever sees
+real hams_com/hams_open paths.
+"""
+
+import ast
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+
+import check_untyped_utility_files as chk  # noqa: E402
+
+_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "check_untyped_utility_files.py")
+
+
+def _write(path, content):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+
+def _class_node(src):
+    tree = ast.parse(src)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            return node
+    raise AssertionError("no class in fixture")
+
+
+class CacheSlotTests(unittest.TestCase):
+    def test_concurrent_runs_never_share_a_mypy_cache_directory(self):
+        from concurrent.futures import ThreadPoolExecutor
+        import threading
+        import time
+
+        slots = chk.cache_slots(3)
+        lock = threading.Lock()
+        in_use, overlaps = set(), []
+
+        def work(_):
+            with slots.borrow() as slot:
+                with lock:
+                    if slot in in_use:
+                        overlaps.append(slot)
+                    in_use.add(slot)
+                time.sleep(0.01)
+                with lock:
+                    in_use.discard(slot)
+
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            list(pool.map(work, range(30)))
+        self.assertEqual(overlaps, [])
+
+    def test_a_directory_is_reused_after_its_run_ends(self):
+        slots = chk.cache_slots(1)
+        with slots.borrow() as first:
+            pass
+        with slots.borrow() as second:
+            self.assertEqual(first, second)
+
+
+class PersistentCacheRootTests(unittest.TestCase):
+    def test_the_cache_lives_outside_the_checkout_and_is_per_lint_slot(self):
+        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as repo:
+            old = {k: os.environ.get(k) for k in ("XDG_CACHE_HOME", "HAMS_LINT_SLOT")}
+            os.environ["XDG_CACHE_HOME"] = home
+            try:
+                os.environ["HAMS_LINT_SLOT"] = "2"
+                first = chk.persistent_cache_root(repo)
+                os.environ["HAMS_LINT_SLOT"] = "3"
+                second = chk.persistent_cache_root(repo)
+            finally:
+                for key, value in old.items():
+                    if value is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = value
+            self.assertTrue(first.startswith(home) and not first.startswith(repo))
+            self.assertNotEqual(first, second)
+            self.assertTrue(os.path.isdir(first))
+
+
+class IsModelClassTests(unittest.TestCase):
+    def test_recognizes_models_dot_model(self):
+        self.assertTrue(chk._is_model_class(_class_node("class Foo(models.Model):\n    pass\n")))
+
+    def test_recognizes_a_bare_model_import_form(self):
+        self.assertTrue(chk._is_model_class(_class_node("class Foo(Model):\n    pass\n")))
+
+    def test_recognizes_abstract_and_transient_model(self):
+        self.assertTrue(chk._is_model_class(_class_node("class Foo(models.AbstractModel):\n    pass\n")))
+        self.assertTrue(chk._is_model_class(_class_node("class Foo(models.TransientModel):\n    pass\n")))
+
+    def test_a_plain_class_is_not_a_model_class(self):
+        self.assertFalse(chk._is_model_class(_class_node("class Foo:\n    pass\n")))
+
+
+class DefinesOdooModelClassTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _path(self, content):
+        p = os.path.join(self.tmp, "f.py")
+        _write(p, content)
+        return p
+
+    def test_true_for_a_file_that_defines_a_model_class(self):
+        p = self._path("class Foo(models.Model):\n    _name = 'x'\n")
+        self.assertTrue(chk.defines_odoo_model_class(p))
+
+    def test_false_for_a_plain_utility_file(self):
+        p = self._path("def add(a, b):\n    return a + b\n")
+        self.assertFalse(chk.defines_odoo_model_class(p))
+
+    def test_false_for_a_runtime_isinstance_check_with_no_class_def(self):
+        # The real, documented false-negative this script's own docstring
+        # fixed: distributed_redis_cache/redis_cache.py referenced
+        # `models.Model` only in an isinstance() check, defined no class,
+        # and an earlier textual "imports models from odoo" version of
+        # this check wrongly exempted it. The real AST-based check must
+        # NOT exempt this file (no class defined here at all -- False is
+        # actually correct: it should be SCANNED, i.e. not treated as an
+        # Odoo model file to skip).
+        p = self._path(
+            "def notify_model_invalidation(obj):\n"
+            "    if isinstance(obj, models.Model):\n"
+            "        pass\n"
+        )
+        self.assertFalse(chk.defines_odoo_model_class(p))
+
+    def test_false_and_no_crash_for_a_syntax_broken_file(self):
+        p = self._path("class Foo(models.Model: broken")
+        self.assertFalse(chk.defines_odoo_model_class(p))
+
+    def test_false_for_a_nonexistent_file(self):
+        self.assertFalse(chk.defines_odoo_model_class(os.path.join(self.tmp, "does_not_exist.py")))
+
+    def test_false_and_no_crash_for_invalid_utf8_bytes(self):
+        """Real gap found reviewing this checker: `except OSError:` around the file read does
+        NOT also catch UnicodeDecodeError -- UnicodeDecodeError is a ValueError subclass, not an
+        OSError subclass, in Python 3. Every sibling checker in this tree pairs
+        `except (OSError, UnicodeDecodeError):` for exactly this reason; this file's own
+        `except OSError:` alone would let an invalid-encoding .py file crash the whole checker
+        (collect_candidates calls this on every real .py file under daemons/ and ingest/ before
+        ever running mypy)."""
+        p = os.path.join(self.tmp, "f.py")
+        with open(p, "wb") as f:
+            f.write(b"# -*- coding: utf-8 -*-\nx = '\xff\xfe broken bytes'\n")
+        self.assertFalse(chk.defines_odoo_model_class(p))
+
+
+class CollectCandidatesTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_ignores_site_packages_under_a_directory_scan_root_regardless_of_the_venvs_own_name(self):
+        """A venv's own outer directory can be named anything ("whisper_venv", not just "venv" or
+        ".venv") -- matches check_float_isfinite.py's own real-bug regression test, and the
+        original real incident (an untracked daemons/hams_local_relay/test_run/whisper_venv/ the
+        exclusion sweep started from) was genuinely nested under "daemons", a real
+        SCAN_ROOTS directory this checker walks recursively."""
+        _write(
+            os.path.join(
+                self.tmp, "daemons", "whisper_venv", "lib", "python3.13", "site-packages", "numpy", "x.py"
+            ),
+            "def f():\n    pass\n",
+        )
+        _write(os.path.join(self.tmp, "daemons", "real", "x.py"), "def f():\n    pass\n")
+        candidates = chk.collect_candidates(self.tmp)
+        self.assertEqual(candidates, [os.path.join(self.tmp, "daemons", "real", "x.py")])
+
+    def test_a_single_file_scan_root_is_collected_when_present(self):
+        _write(
+            os.path.join(self.tmp, "distributed_redis_cache", "redis_cache.py"),
+            "def f():\n    pass\n",
+        )
+        candidates = chk.collect_candidates(self.tmp)
+        self.assertIn(os.path.join(self.tmp, "distributed_redis_cache", "redis_cache.py"), candidates)
+
+    def test_a_missing_scan_root_is_skipped_without_crashing(self):
+        # None of SCAN_ROOTS exist under this empty temp dir at all.
+        self.assertEqual(chk.collect_candidates(self.tmp), [])
+
+    def test_a_directory_scan_root_is_walked_recursively(self):
+        _write(os.path.join(self.tmp, "daemons", "a", "b.py"), "def f():\n    pass\n")
+        candidates = chk.collect_candidates(self.tmp)
+        self.assertIn(os.path.join(self.tmp, "daemons", "a", "b.py"), candidates)
+
+    def test_a_file_defining_an_odoo_model_class_is_excluded(self):
+        _write(
+            os.path.join(self.tmp, "daemons", "models_file.py"),
+            "class Foo(models.Model):\n    _name = 'x'\n",
+        )
+        candidates = chk.collect_candidates(self.tmp)
+        self.assertEqual(candidates, [])
+
+    def test_a_file_under_an_excluded_dir_prefix_is_never_collected(self):
+        _write(
+            os.path.join(self.tmp, "daemons", "hams_local_relay", "radae", "vendored.py"),
+            "def f():\n    pass\n",
+        )
+        candidates = chk.collect_candidates(self.tmp)
+        self.assertEqual(candidates, [])
+
+    def test_a_file_under_an_ignored_dir_name_is_never_collected(self):
+        _write(os.path.join(self.tmp, "daemons", "node_modules", "x.py"), "def f():\n    pass\n")
+        candidates = chk.collect_candidates(self.tmp)
+        self.assertEqual(candidates, [])
+
+    def test_a_non_py_file_is_never_collected(self):
+        _write(os.path.join(self.tmp, "daemons", "readme.txt"), "not python")
+        candidates = chk.collect_candidates(self.tmp)
+        self.assertEqual(candidates, [])
+
+    def test_an_explicitly_excluded_file_is_skipped(self):
+        _write(os.path.join(self.tmp, "daemons", "known_bad.py"), "def f():\n    pass\n")
+        original = chk.EXCLUDED_FILES
+        chk.EXCLUDED_FILES = {os.path.join("daemons", "known_bad.py")}
+        try:
+            candidates = chk.collect_candidates(self.tmp)
+        finally:
+            chk.EXCLUDED_FILES = original
+        self.assertEqual(candidates, [])
+
+    def test_candidates_are_deduplicated_and_sorted(self):
+        _write(os.path.join(self.tmp, "daemons", "b.py"), "def f():\n    pass\n")
+        _write(os.path.join(self.tmp, "daemons", "a.py"), "def f():\n    pass\n")
+        candidates = chk.collect_candidates(self.tmp)
+        self.assertEqual(candidates, sorted(set(candidates)))
+
+
+class MainIntegrationTests(unittest.TestCase):
+    """Real subprocess runs against real mypy -- this environment has mypy
+    installed, and main()'s actual value is entirely in that wiring."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _run(self):
+        result = subprocess.run(
+            [sys.executable, _SCRIPT, self.tmp], capture_output=True, text=True, timeout=60
+        )
+        return result.returncode, result.stdout + result.stderr
+
+    def _run_only(self, *files):
+        result = subprocess.run(
+            [sys.executable, _SCRIPT, self.tmp, "--only-files", *files], capture_output=True, text=True, timeout=60
+        )
+        return result.returncode, result.stdout + result.stderr
+
+    def test_only_files_checks_the_named_files_and_not_a_broken_one_nobody_changed(self):
+        broken = os.path.join(self.tmp, "daemons", "broken.py")
+        clean = os.path.join(self.tmp, "daemons", "clean.py")
+        _write(broken, "def f(a: int) -> int:\n    return a\n\n\nf('x')\n")
+        _write(clean, "def add(a: int, b: int) -> int:\n    return a + b\n")
+        self.assertEqual(self._run()[0], 1, "the full scan finds the broken file")
+        code, out = self._run_only(clean)
+        self.assertEqual(code, 0, out)
+        code, out = self._run_only(broken)
+        self.assertEqual(code, 1, out)
+        self.assertIn("broken.py", out)
+
+    def test_only_files_with_no_file_checks_nothing(self):
+        _write(os.path.join(self.tmp, "daemons", "broken.py"), "def f(a: int) -> int:\n    return a\n\n\nf('x')\n")
+        self.assertEqual(self._run_only()[0], 0)
+
+    def test_a_clean_utility_file_passes(self):
+        _write(
+            os.path.join(self.tmp, "daemons", "clean.py"),
+            "def add(a: int, b: int) -> int:\n    return a + b\n",
+        )
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+
+    def test_a_real_wrong_arg_count_call_is_caught(self):
+        # Mirrors the proposal doc's own motivating case.
+        _write(
+            os.path.join(self.tmp, "daemons", "bug.py"),
+            "def notify(a, b):\n"
+            "    pass\n\n"
+            "def caller():\n"
+            "    notify(1, 2, 3)\n",
+        )
+        code, out = self._run()
+        self.assertEqual(code, 1)
+        self.assertIn("mypy findings", out)
+
+    def test_a_file_defining_an_odoo_model_class_is_never_scanned_even_with_a_real_bug(self):
+        # A second, clean candidate keeps the scan non-empty: a scan of nothing is red (check_target.py).
+        _write(os.path.join(self.tmp, "daemons", "clean.py"), "x = 1\n")
+        _write(
+            os.path.join(self.tmp, "daemons", "model_with_bug.py"),
+            "class Foo(models.Model):\n"
+            "    _name = 'x'\n\n"
+            "    def notify(self, a, b):\n"
+            "        pass\n\n"
+            "    def caller(self):\n"
+            "        self.notify(1, 2, 3)\n",
+        )
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+
+    def test_no_candidates_at_all_is_red_by_hand_and_a_quiet_pass_only_with_the_opt_out(self):
+        code, out = self._run()
+        self.assertEqual(code, 2, out)
+        self.assertIn("scanned 0", out)
+        result = subprocess.run(
+            [sys.executable, _SCRIPT, self.tmp],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env=dict(os.environ, HAMS_CHECK_ALLOW_EMPTY="1"),
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
+class ResolveRepoRootTests(unittest.TestCase):
+    # Regression test for a real bug found the same night check_model_extension_collisions.py's
+    # own identical bug was found and fixed: run_linters.py's own dir_path resolves to
+    # .../hams_shared, not a real repo root -- confirmed directly, this checker was silently
+    # finding 0 utility-file candidates via run_linters.py's actual invocation, versus 2 at a
+    # real repo root.
+    def test_a_hams_shared_path_redirects_to_its_parent_repo(self):
+        fake_repo = os.path.join(os.sep, "some", "workspace", "some_repo")
+        self.assertEqual(
+            chk._resolve_repo_root(os.path.join(fake_repo, "hams_shared")),
+            fake_repo,
+        )
+
+    def test_a_real_repo_root_passes_through_unchanged(self):
+        fake_repo = os.path.join(os.sep, "some", "workspace", "some_repo")
+        self.assertEqual(chk._resolve_repo_root(fake_repo), fake_repo)
+
+
+class StrictFlagsTests(unittest.TestCase):
+    def test_a_fully_typed_package_also_runs_under_disallow_untyped_defs(self):
+        root = os.sep + "repo"
+        typed = os.path.join(root, "hams_shared", "tools", "restoration_system", "build.py")
+        self.assertEqual(chk.strict_flags(root, typed), ["--disallow-untyped-defs"])
+
+    def test_any_other_file_keeps_only_check_untyped_defs(self):
+        root = os.sep + "repo"
+        self.assertEqual(chk.strict_flags(root, os.path.join(root, "daemons", "x", "main.py")), [])
+
+
+class ResolveRepoRootsTests(unittest.TestCase):
+    # Regression test for the second half of the same repo-root problem as ResolveRepoRootTests above:
+    # _resolve_repo_root's redirect only ever lands on ONE repo (hams_shared's
+    # literal parent), but real SCAN_ROOTS entries (ham_com/, ham_base/, daemons, ingest) live
+    # only under the OTHER, sibling repo -- run_linters.py's own real
+    # invocation was silently scanning just 2 distributed_redis_cache files and missing 5 real
+    # files with real mypy findings that only exist on the sibling side.
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.workspace = os.path.join(self.tmp, "workspace")
+        os.makedirs(self.workspace)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _make_repo(self, name, module_names=()):
+        repo = os.path.join(self.workspace, name)
+        for module_name in module_names:
+            _write(os.path.join(repo, module_name, "__manifest__.py"), "{}")
+        return repo
+
+    def test_hams_shared_input_appends_the_real_hams_com_sibling(self):
+        self._make_repo("hams_open", module_names=["zero_sudo"])
+        hams_com = self._make_repo("hams_com", module_names=["ham_base"])
+        hams_shared = os.path.join(self.workspace, "hams_open", "hams_shared")
+        os.makedirs(hams_shared)
+        roots = chk._resolve_repo_roots(hams_shared)
+        self.assertEqual(roots, [os.path.join(self.workspace, "hams_open"), hams_com])
+
+    def test_a_real_repo_root_with_no_odoo_sibling_present_scans_alone(self):
+        # No hams_com dir at all next to this one -- must not crash or fabricate a second root.
+        repo = self._make_repo("hams_open", module_names=["zero_sudo"])
+        self.assertEqual(chk._resolve_repo_roots(repo), [repo])
+
+    def test_a_sibling_directory_with_no_manifest_py_anywhere_is_not_treated_as_a_repo(self):
+        repo = self._make_repo("hams_open", module_names=["zero_sudo"])
+        # A same-named sibling exists on disk but isn't a real Odoo checkout (no __manifest__.py
+        # in any of its subdirectories) -- must not be appended as a second root.
+        os.makedirs(os.path.join(self.workspace, "hams_com", "not_a_module"))
+        self.assertEqual(chk._resolve_repo_roots(repo), [repo])
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+# Class anchors (ADR 0113) exercised by the tests above.
+# Tests [@ANCHOR: check_untyped_utility_files:check_untyped_utility_files_cache_slots_class]

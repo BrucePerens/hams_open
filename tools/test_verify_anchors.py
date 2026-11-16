@@ -1,0 +1,1561 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+"""
+Unit tests for verify_anchors.py (ADR-0054, ADR-0055, ADR-0074).
+
+main() computes its own `repo_root` from this script's real on-disk
+location (not from the scanned target directory), so every location string
+it builds is relative to the real hams_shared root even when scanning a
+/tmp fixture -- verified empirically before writing these tests: the
+round-trip through os.path.relpath()/os.path.join()/os.path.abspath() still
+resolves back to the real fixture path correctly, so main() works
+hermetically against a fixture despite that. Also verified empirically: a
+docs/stories/ (or journeys/) directory must live INSIDE the module
+directory (e.g. mod_a/docs/stories/x.md), not at a fixture's top level
+separate from the module, for get_module() to attribute it to the same
+module as the code anchor it documents -- a flat top-level docs/ directory
+resolves to module "global" instead, which is a real, worth-knowing
+behavior of get_module()'s fallback chain, not a test-authoring shortcut.
+No real-repo assertions anywhere in this file: verify_anchors.py currently
+fails against the real hams_open/hams_com tree (a real, pre-existing
+documentation-coverage backlog, tracked separately),
+not this sweep's concern), so any real-repo assertion here would be
+guaranteed-fragile on arrival.
+"""
+
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+
+import verify_anchors as va  # noqa: E402
+
+_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "verify_anchors.py")
+
+
+def _timeout(base_seconds):
+    """A subprocess time limit that follows the machine's load. These tests run the whole script (10 s alone on an idle
+    box); with ten agents' lint runs sharing the cores the same run took more than the fixed 30 s limit (2026-11-03,
+    load 20 on 16 cores) while still being correct. The limit is the base limit times twice the 1-minute load per core,
+    never below the base and never above 8 times it, so a script that really hangs still fails, just later."""
+    try:
+        per_core = os.getloadavg()[0] / (os.cpu_count() or 1)
+    except OSError:
+        per_core = 1.0
+    return base_seconds * min(8.0, max(1.0, 2.0 * per_core))
+
+_TREE_OVERRIDES = ("HAMS_COM_TREE", "HAMS_OPEN_TREE")
+_saved_tree_overrides = {}
+
+
+def setUpModule():
+    """The sibling-repository lookup honours `HAMS_COM_TREE` / `HAMS_OPEN_TREE` (run_linters.py sets one for its own run, and a
+    person running the linters from a worktree exports it), so every test here runs without them: the tests build their own
+    fixture trees and must not see the real sibling repository. Their subprocesses inherit this environment."""
+    for name in _TREE_OVERRIDES:
+        _saved_tree_overrides[name] = os.environ.pop(name, None)
+
+
+def tearDownModule():
+    for name, value in _saved_tree_overrides.items():
+        if value is not None:
+            os.environ[name] = value
+_ANCHOR_PATTERN = re.compile(r"\[@ANCHOR:\s*([a-zA-Z0-9_:]+)\s*\]")
+
+
+def _write(path, content):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+
+class CleanTests(unittest.TestCase):
+    def test_strips_comm_prefix(self):
+        self.assertEqual(va._clean("COMM_my_feature"), "my_feature")
+
+    def test_strips_pri_prefix(self):
+        self.assertEqual(va._clean("PRI_my_feature"), "my_feature")
+
+    def test_leaves_an_unprefixed_name_alone(self):
+        self.assertEqual(va._clean("my_feature"), "my_feature")
+
+
+class GetModuleTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_a_file_under_a_real_manifest_resolves_to_that_module(self):
+        _write(os.path.join(self.tmp, "mod_a", "__manifest__.py"), "{}\n")
+        p = os.path.join(self.tmp, "mod_a", "models", "foo.py")
+        _write(p, "pass\n")
+        self.assertEqual(va.get_module(p), "mod_a")
+
+    def test_a_docs_modules_markdown_file_resolves_to_its_own_filename(self):
+        p = os.path.join(self.tmp, "docs", "modules", "ham_qso.md")
+        _write(p, "docs\n")
+        self.assertEqual(va.get_module(p), "ham_qso")
+
+    def test_a_daemons_subdirectory_file_with_no_manifest_resolves_to_the_daemon_name(self):
+        p = os.path.join(self.tmp, "daemons", "some_daemon", "src", "main.rs")
+        _write(p, "// x\n")
+        self.assertEqual(va.get_module(p), "some_daemon")
+
+    def test_a_file_under_a_recognized_common_dir_with_no_manifest_falls_back_to_its_parent(self):
+        p = os.path.join(self.tmp, "orphan_mod", "models", "foo.py")
+        _write(p, "pass\n")
+        self.assertEqual(va.get_module(p), "orphan_mod")
+
+    def test_a_file_matching_nothing_falls_back_to_global(self):
+        p = os.path.join(self.tmp, "some_random_dir", "notes.txt")
+        _write(p, "x\n")
+        self.assertEqual(va.get_module(p), "global")
+
+
+class IsPrimaryTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_no_primary_dirs_means_everything_is_primary(self):
+        self.assertTrue(va.is_primary("./anything.py:1", [], self.tmp))
+
+    def test_a_location_under_a_primary_dir_is_primary(self):
+        primary = os.path.join(self.tmp, "mod_a")
+        loc = f"./{os.path.relpath(os.path.join(primary, 'foo.py'), self.tmp)}:1"
+        self.assertTrue(va.is_primary(loc, [primary], self.tmp))
+
+    def test_a_location_outside_every_primary_dir_is_not_primary(self):
+        primary = os.path.join(self.tmp, "mod_a")
+        other = os.path.join(self.tmp, "mod_b", "foo.py")
+        loc = f"./{os.path.relpath(other, self.tmp)}:1"
+        self.assertFalse(va.is_primary(loc, [primary], self.tmp))
+
+    def test_explicit_non_primary_wins_even_over_a_matching_primary_dir(self):
+        primary = os.path.join(self.tmp, "mod_a")
+        loc = f"./{os.path.relpath(os.path.join(primary, 'foo.py'), self.tmp)}:1"
+        self.assertFalse(
+            va.is_primary(loc, [primary], self.tmp, explicit_non_primary=[primary])
+        )
+
+
+class FindAnchorsInDocsTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_a_readme_anchor_is_a_contract_anchor(self):
+        _write(os.path.join(self.tmp, "mod_a", "__manifest__.py"), "{}\n")
+        _write(os.path.join(self.tmp, "mod_a", "README.md"), "[@ANCHOR: COMM_x]\n")
+        docs, contracts, _lines = va.find_anchors_in_docs(self.tmp, self.tmp)
+        self.assertIn("mod_a:COMM_x", contracts)
+        self.assertNotIn("mod_a:COMM_x", docs)
+
+    def test_a_docs_directory_markdown_anchor_is_a_plain_doc_anchor(self):
+        _write(os.path.join(self.tmp, "mod_a", "__manifest__.py"), "{}\n")
+        _write(os.path.join(self.tmp, "mod_a", "docs", "stories", "x.md"), "[@ANCHOR: COMM_x]\n")
+        docs, contracts, _lines = va.find_anchors_in_docs(self.tmp, self.tmp)
+        self.assertIn("mod_a:COMM_x", docs)
+        self.assertNotIn("mod_a:COMM_x", contracts)
+
+    def test_llm_linter_guide_is_always_skipped(self):
+        _write(os.path.join(self.tmp, "docs", "LLM_LINTER_GUIDE.md"), "[@ANCHOR: COMM_x]\n")
+        docs, contracts, _lines = va.find_anchors_in_docs(self.tmp, self.tmp)
+        self.assertEqual(docs, {})
+        self.assertEqual(contracts, {})
+
+    def test_an_explicit_module_prefix_overrides_the_files_own_inferred_module(self):
+        _write(
+            os.path.join(self.tmp, "mod_a", "docs", "stories", "x.md"),
+            "[@ANCHOR: other_module:COMM_x]\n",
+        )
+        docs, _contracts, _lines = va.find_anchors_in_docs(self.tmp, self.tmp)
+        self.assertIn("other_module:COMM_x", docs)
+
+    def test_radae_is_never_walked(self):
+        _write(os.path.join(self.tmp, "radae", "docs", "x.md"), "[@ANCHOR: COMM_x]\n")
+        docs, contracts, _lines = va.find_anchors_in_docs(self.tmp, self.tmp)
+        self.assertEqual(docs, {})
+        self.assertEqual(contracts, {})
+
+    def test_a_code_islands_py_file_is_not_double_counted_as_a_doc_anchor(self):
+        # A genuine PDF-generation pipeline
+        # (build_spec.py/build_drawings.py/make_pdf.py) lives under
+        # docs/proposals/.../_pipeline -- this scanner used to treat every
+        # .py file under any docs/ subtree as documentation, so its real,
+        # correctly-anchored-and-tested functions were silently classified
+        # as doc-only references, producing false "missing from operational
+        # source code" reports. CODE_ISLANDS_UNDER_DOCS carves this one
+        # directory out so its .py files are only ever code (see the
+        # matching FindAnchorsInCodeTests case below), while its own
+        # README.md (if any) still counts here, as a normal contract anchor.
+        island = va.CODE_ISLANDS_UNDER_DOCS[0]
+        _write(os.path.join(self.tmp, island, "build_spec.py"), "[@ANCHOR: patent_pipeline:x]\n")
+        _write(os.path.join(self.tmp, island, "README.md"), "[@ANCHOR: patent_pipeline:x]\n")
+        docs, contracts, _lines = va.find_anchors_in_docs(self.tmp, self.tmp)
+        self.assertNotIn("patent_pipeline:x", docs, "the .py file itself must not be treated as doc content")
+        self.assertIn("patent_pipeline:x", contracts, "the island's own README.md is still a real contract anchor")
+
+    def test_a_readme_inside_a_code_island_is_a_contract_anchor(self):
+        # daemons/shack_console/tools/stt_accuracy/README.md documents the anchors of the .py files next to it; the
+        # `tools` pruning hid it, so those anchors read as undocumented. Another daemon's tools README stays hidden.
+        _write(os.path.join(self.tmp, "daemons", "shack_console", "tools", "stt_accuracy", "README.md"), "[@ANCHOR: stt_accuracy:x]\n")
+        _write(os.path.join(self.tmp, "daemons", "other", "tools", "README.md"), "[@ANCHOR: other:y]\n")
+        _docs, contracts, _lines = va.find_anchors_in_docs(self.tmp, self.tmp)
+        self.assertIn("stt_accuracy:x", contracts)
+        self.assertNotIn("other:y", contracts)
+
+
+class FindAnchorsInCodeTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _scan(self):
+        return va.find_anchors_in_code(self.tmp, self.tmp)
+
+    def test_a_base_anchor_declaration_is_captured(self):
+        _write(os.path.join(self.tmp, "mod_a", "models", "foo.py"), "# [@ANCHOR: COMM_x]\n")
+        code_anchors, anchor_locations, *_rest = self._scan()
+        self.assertIn("mod_a:COMM_x", code_anchors)
+        self.assertIn("mod_a:COMM_x", anchor_locations)
+
+    def test_the_relay_tools_island_scans_python_and_rust_files(self):
+        # hams_local_relay/tools (rig simulators, audio_enum_probe, xrun_loopback) carries anchored Python and Rust; the
+        # `tools` pruning hid both. Another daemon's tools directory stays hidden.
+        _write(os.path.join(self.tmp, "daemons", "hams_local_relay", "tools", "sim.py"), "# [@ANCHOR: relay_tool_py]\n")
+        _write(os.path.join(self.tmp, "daemons", "hams_local_relay", "tools", "probe", "src", "main.rs"), "// [@ANCHOR: relay_tool_rs]\n")
+        _write(os.path.join(self.tmp, "daemons", "other", "tools", "x.py"), "# [@ANCHOR: other_tool]\n")
+        _write(os.path.join(self.tmp, "daemons", "hams_auth_gateway", "tools", "check.py"), "# [@ANCHOR: gateway_tool_py]\n")
+        code_anchors, *_rest = self._scan()
+        self.assertIn("hams_auth_gateway:gateway_tool_py", code_anchors)
+        self.assertIn("hams_local_relay:relay_tool_py", code_anchors)
+        self.assertIn("hams_local_relay:relay_tool_rs", code_anchors)
+        self.assertNotIn("other:other_tool", code_anchors)
+
+    def test_a_code_islands_py_file_under_docs_is_scanned_as_real_code(self):
+        # Companion to FindAnchorsInDocsTests' matching case above -- the
+        # same fixture must resolve as real code here, not just "not doc
+        # content" there. A plain .py file elsewhere under docs/ (NOT one
+        # of CODE_ISLANDS_UNDER_DOCS) must still be invisible to this scan,
+        # confirming the carve-out is narrow, not a blanket "docs/ is code
+        # after all" reversal.
+        island = va.CODE_ISLANDS_UNDER_DOCS[0]
+        _write(os.path.join(self.tmp, island, "build_spec.py"), "# [@ANCHOR: patent_pipeline:x]\n")
+        _write(os.path.join(self.tmp, "docs", "other", "unrelated.py"), "# [@ANCHOR: should_never_appear:y]\n")
+        code_anchors, *_rest = self._scan()
+        self.assertIn("patent_pipeline:x", code_anchors)
+        self.assertNotIn("should_never_appear:y", code_anchors)
+
+    def test_radioctls_python_tools_are_scanned_as_code_though_named_tools(self):
+        # The scan prunes every directory called `tools`, which hid daemons/radioctl/tools/*.py: the story files
+        # cite those anchors as `radioctl:<id>` and every one was reported missing from the source code.
+        _write(os.path.join(self.tmp, "daemons", "radioctl", "tools", "caps.py"), "# [@ANCHOR: radioctl_caps_x]\ndef x(): pass\n")
+        _write(os.path.join(self.tmp, "daemons", "other", "tools", "t.py"), "# [@ANCHOR: other_t]\n")
+        code_anchors, *_rest = self._scan()
+        self.assertIn("radioctl:radioctl_caps_x", code_anchors)
+        self.assertNotIn("other:other_t", code_anchors)
+
+    def test_shack_consoles_python_tools_are_scanned_as_code_though_named_tools(self):
+        _write(os.path.join(self.tmp, "daemons", "shack_console", "tools", "jobs.py"), "# [@ANCHOR: shack_console:jobs_x]\ndef x(): pass\n")
+        code_anchors, *_rest = self._scan()
+        self.assertIn("shack_console:jobs_x", code_anchors)
+
+    def test_a_rust_test_file_included_by_path_is_scanned_for_tests_links(self):
+        # A crate that keeps its unit tests in `foo.rs.test`, pulled in with
+        # `#[cfg(test)] #[path = "foo.rs.test"] mod tests;` (daemons/hams_simulated_band does),
+        # cites its features from that file. `.rs.test` must be scanned, otherwise
+        # every such citation is invisible and each feature it covers read as untested.
+        _write(os.path.join(self.tmp, "daemons", "some_daemon", "src", "auth.rs"), "// [@ANCHOR: check_secret]\nfn check_secret() {}\n")
+        _write(
+            os.path.join(self.tmp, "daemons", "some_daemon", "src", "auth.rs.test"),
+            "#[test]\n// Tests [@ANCHOR: check_secret]\nfn it_checks() { check_secret(); }\n",
+        )
+        code_anchors, _locs, _links, tests_links_set, *_rest = self._scan()
+        self.assertIn("some_daemon:check_secret", code_anchors)
+        self.assertIn("some_daemon:check_secret", tests_links_set)
+
+    def test_a_begin_marker_base_declaration_is_captured_the_same_as_plain(self):
+        # 2026-09-04 (ADR 0089, Bruce's own request): [@ANCHOR-BEGIN: name] /
+        # [@ANCHOR-END: name] must resolve identically to a plain
+        # [@ANCHOR: name] everywhere this tool looks for one -- otherwise a
+        # multi-line anchor written per check_burn_list.py's own syntax
+        # would be silently invisible here.
+        _write(os.path.join(self.tmp, "mod_a", "models", "foo.py"), "# [@ANCHOR-BEGIN: COMM_x]\nbody\n# [@ANCHOR-END: COMM_x]\n")
+        code_anchors, anchor_locations, *_rest = self._scan()
+        self.assertIn("mod_a:COMM_x", code_anchors)
+        self.assertIn("mod_a:COMM_x", anchor_locations)
+
+    def test_a_begin_marker_tests_link_is_captured_the_same_as_plain(self):
+        _write(os.path.join(self.tmp, "mod_a", "tests", "test_foo.py"), "# Tests [@ANCHOR-BEGIN: COMM_x]\nbody\n# [@ANCHOR-END: COMM_x]\n")
+        code_anchors, _locs, tests_links, tests_links_set, *_rest = self._scan()
+        self.assertIn("mod_a:COMM_x", code_anchors)
+        self.assertIn("mod_a:COMM_x", tests_links_set)
+
+    def test_a_tests_link_is_captured_separately_from_a_base_declaration(self):
+        _write(os.path.join(self.tmp, "mod_a", "tests", "test_foo.py"), "# Tests [@ANCHOR: COMM_x]\n")
+        code_anchors, _locs, tests_links, tests_links_set, *_rest = self._scan()
+        self.assertIn("mod_a:COMM_x", code_anchors)
+        self.assertIn("mod_a:COMM_x", tests_links_set)
+        self.assertEqual(len(tests_links), 1)
+
+    def test_a_verified_by_link_is_captured(self):
+        _write(os.path.join(self.tmp, "mod_a", "models", "foo.py"), "# # Verified by [@ANCHOR: COMM_x]\n")
+        *_rest, verified_by_links, _audit_ignore, _cross_refs, _dups, _lines = self._scan()
+        self.assertIn("mod_a:COMM_x", verified_by_links)
+
+    def test_a_triggers_link_is_captured_as_a_cross_reference(self):
+        _write(os.path.join(self.tmp, "mod_a", "models", "foo.py"), "# Triggers [@ANCHOR: mod_b:COMM_x]\n")
+        *_rest, _verified, cross_references, _dups, _lines = self._scan()
+        self.assertIn("mod_b:COMM_x", cross_references)
+
+    def test_a_genuine_duplicate_base_declaration_is_flagged(self):
+        _write(
+            os.path.join(self.tmp, "mod_a", "models", "foo.py"),
+            "# [@ANCHOR: COMM_x]\nsome code\n# [@ANCHOR: COMM_x]\n",
+        )
+        *_rest, duplicates, _lines = self._scan()
+        self.assertEqual(len(duplicates), 1)
+
+    def test_an_example_prefixed_anchor_repeated_is_never_a_duplicate(self):
+        _write(
+            os.path.join(self.tmp, "mod_a", "models", "foo.py"),
+            "# [@ANCHOR: COMM_example_x]\nsome code\n# [@ANCHOR: COMM_example_x]\n",
+        )
+        *_rest, duplicates, _lines = self._scan()
+        self.assertEqual(duplicates, [])
+
+    # ---- previous-line lookback parity with check_function_test_anchors.py (2026-09-17 fix) ----
+    #
+    # Real, live divergence found and fixed: check_function_test_anchors.py's own
+    # _is_base_anchor_declaration gained a prev_line lookback 2026-09-13 for a comment that wraps
+    # its referencing word onto the line BEFORE a same-line-prefix-empty anchor -- but this
+    # module's own _process_file_for_anchors, despite that function's docstring claiming to mirror
+    # it exactly, never got the same fix. Confirmed against the real repo: hams_com
+    # ham_shack/tests/test_station_timeshare_security.py:53-54 and
+    # ham_shack/tests/test_operator_chat_friends_api.py:122-123 (both `# ...(see` /
+    # `# [@ANCHOR: ham_operator_friendship_create_authz]) -- ...`) were each reported as a false
+    # "Duplicate Semantic Anchors" CI failure against the function's real declaration in
+    # ham_shack/models/ham_operator_friendship.py, purely from this gap.
+
+    def test_a_wrapped_conversational_reference_is_not_a_base_declaration(self):
+        _write(
+            os.path.join(self.tmp, "mod_a", "tests", "test_foo.py"),
+            "# some prose ending in (see\n# [@ANCHOR: COMM_x]) -- go through the real flow instead\n",
+        )
+        code_anchors, anchor_locations, *_rest = self._scan()
+        self.assertNotIn("mod_a:COMM_x", anchor_locations)
+        self.assertNotIn("mod_a:COMM_x", code_anchors)
+
+    def test_a_wrapped_tests_link_is_captured_as_a_tests_link_not_a_base_declaration(self):
+        _write(
+            os.path.join(self.tmp, "mod_a", "tests", "test_foo.py"),
+            "# Tests\n# [@ANCHOR: COMM_x]\n",
+        )
+        code_anchors, _locs, _tests_links, tests_links_set, *_rest = self._scan()
+        self.assertIn("mod_a:COMM_x", tests_links_set)
+
+    def test_a_wrapped_verified_by_link_is_captured_as_a_verified_by_link(self):
+        _write(
+            os.path.join(self.tmp, "mod_a", "models", "foo.py"),
+            "# # Verified by\n# [@ANCHOR: COMM_x]\n",
+        )
+        *_rest, verified_by_links, _audit_ignore, _cross_refs, _dups, _lines = self._scan()
+        self.assertIn("mod_a:COMM_x", verified_by_links)
+
+    def test_a_wrapped_triggers_link_is_captured_as_a_cross_reference(self):
+        _write(
+            os.path.join(self.tmp, "mod_a", "models", "foo.py"),
+            "# Triggers\n# [@ANCHOR: mod_b:COMM_x]\n",
+        )
+        *_rest, _verified, cross_references, _dups, _lines = self._scan()
+        self.assertIn("mod_b:COMM_x", cross_references)
+
+    def test_a_wrapped_reference_does_not_falsely_duplicate_the_real_base_declaration(self):
+        # The exact live shape: a real base declaration in one file, and elsewhere a wrapped
+        # conversational reference to the same anchor -- must never be flagged as a second
+        # declaration of it.
+        _write(os.path.join(self.tmp, "mod_a", "models", "foo.py"), "# [@ANCHOR: COMM_x]\n")
+        _write(
+            os.path.join(self.tmp, "mod_a", "tests", "test_bar.py"),
+            "# some prose ending in (see\n# [@ANCHOR: COMM_x]) -- elsewhere\n",
+        )
+        *_rest, duplicates, _lines = self._scan()
+        self.assertEqual(duplicates, [])
+
+    def test_a_real_same_line_declaration_is_not_overridden_by_the_previous_line(self):
+        # The lookback must never win over a real same-line signal -- a genuine base declaration
+        # immediately below unrelated prose (not itself a Tests/Verified-by/conversational marker)
+        # stays a base declaration.
+        _write(
+            os.path.join(self.tmp, "mod_a", "models", "foo.py"),
+            "# Some unrelated context here.\n# [@ANCHOR: COMM_x]\n",
+        )
+        code_anchors, anchor_locations, *_rest = self._scan()
+        self.assertIn("mod_a:COMM_x", anchor_locations)
+
+    def test_the_lookback_only_applies_to_the_first_anchor_on_a_line(self):
+        # A second anchor sharing a line with a first one is classified by the text BETWEEN them,
+        # never by the line above -- the lookback exists for "this whole line has no signal of its
+        # own", not for an anchor that merely has little text immediately before it mid-line.
+        _write(
+            os.path.join(self.tmp, "mod_a", "models", "foo.py"),
+            "# Tests\n# [@ANCHOR: COMM_x][@ANCHOR: COMM_y]\n",
+        )
+        code_anchors, anchor_locations, *_rest = self._scan()
+        # The first anchor on the line correctly falls back to "# Tests" on the line above.
+        self.assertNotIn("mod_a:COMM_x", anchor_locations)
+        # The second, with nothing but the first anchor's own closing bracket before it, must NOT
+        # also inherit the line-above fallback -- it stays a (spurious but real) base declaration.
+        self.assertIn("mod_a:COMM_y", anchor_locations)
+
+    def test_a_real_begin_end_pair_with_body_between_does_not_produce_adjacent_anchor_lines(self):
+        # The real practical question this widening raises: does a normal
+        # multi-line anchor (content between BEGIN and END, the whole
+        # point of the syntax) accidentally look like the "stacked/dummy"
+        # shape the (since removed) stacked-anchor rule flagged? It shouldn't -- BEGIN and END
+        # land on lines 1 and 3 here, not adjacent, so code_anchor_lines
+        # for this file must not contain two consecutive line numbers.
+        _write(
+            os.path.join(self.tmp, "mod_a", "tests", "test_foo.py"),
+            "# Tests [@ANCHOR-BEGIN: COMM_x]\nreal_test_body_here()\n# [@ANCHOR-END: COMM_x]\n",
+        )
+        *_rest, code_anchor_lines = self._scan()
+        lines = sorted(next(iter(code_anchor_lines.values())))
+        self.assertEqual(lines, [1, 3])
+
+    def test_a_doc_prefixed_anchor_is_not_treated_as_a_base_code_anchor(self):
+        _write(os.path.join(self.tmp, "mod_a", "models", "foo.py"), "# [@ANCHOR: COMM_story_x]\n")
+        code_anchors, anchor_locations, *_rest = self._scan()
+        self.assertEqual(code_anchors, {})
+        self.assertEqual(anchor_locations, {})
+
+    def test_a_conversational_reference_ending_in_see_is_ignored(self):
+        _write(os.path.join(self.tmp, "mod_a", "models", "foo.py"), "# See [@ANCHOR: COMM_x]\n")
+        code_anchors, anchor_locations, *_rest = self._scan()
+        self.assertEqual(code_anchors, {})
+        self.assertEqual(anchor_locations, {})
+
+    def test_a_second_anchor_on_the_same_line_is_classified_by_its_own_preceding_text(self):
+        # Classification used to reuse the text before the FIRST
+        # anchor on a line for EVERY anchor on that line. A base declaration followed on the
+        # same physical line by a real "# Verified by [@ANCHOR: ...]" comment silently dropped
+        # the verification link entirely -- the second anchor was misclassified as a second base
+        # declaration (using the first anchor's own empty/"#" prefix) instead of being recorded
+        # in verified_by_links. Confirmed empirically against the pre-fix source before writing
+        # this test. Each anchor must now be classified using the text between the END of the
+        # previous anchor on the line (or the line start, for the first) and its OWN start.
+        _write(
+            os.path.join(self.tmp, "mod_a", "models", "foo.py"),
+            "# [@ANCHOR: COMM_feature] # Verified by [@ANCHOR: test_it]\n",
+        )
+        code_anchors, anchor_locations, _tl, _tls, verified_by_links, *_rest = self._scan()
+        self.assertIn("mod_a:COMM_feature", anchor_locations)
+        self.assertIn("mod_a:test_it", verified_by_links)
+        # The second anchor must NOT also have been recorded as a second base declaration.
+        self.assertNotIn("mod_a:test_it", anchor_locations)
+
+    def test_a_tests_tag_followed_by_a_conversational_second_anchor_is_not_double_counted(self):
+        # The other direction of the same bug: a real "# Tests [@ANCHOR: real_target]" comment
+        # followed on the same line by an incidental "and [@ANCHOR: mentioned_elsewhere]" mention
+        # used to silently record `mentioned_elsewhere` as test-covered too, purely because it
+        # shared a line with a real Tests-tag -- exactly the kind of false "tested" classification
+        # that could mask a real coverage gap for `mentioned_elsewhere`. The conversational-word
+        # regex (`\b(See|and|also|or|to)\b$`) exists precisely to catch this shape, but could never
+        # fire for anything but the first anchor on a line before this fix.
+        _write(
+            os.path.join(self.tmp, "mod_a", "tests", "test_foo.py"),
+            "# Tests [@ANCHOR: real_target] and [@ANCHOR: mentioned_elsewhere]\n",
+        )
+        code_anchors, _locs, _tl, tests_links_set, *_rest = self._scan()
+        self.assertIn("mod_a:real_target", tests_links_set)
+        self.assertNotIn("mod_a:mentioned_elsewhere", tests_links_set)
+        self.assertNotIn("mod_a:mentioned_elsewhere", code_anchors)
+
+    def test_a_base_declaration_whose_preceding_text_merely_ends_in_the_word_tests_is_not_a_tests_link(self):
+        # The "Tests"/"Verified by"/"Tested
+        # by"/"Triggers"/"Triggered by" marker checks used bare `str.endswith(...)`, with no
+        # word-boundary check at all. A perfectly ordinary base-declaration comment that happens
+        # to end in a word SUFFIXED by "Tests" -- e.g. "UnitTests", nothing to do with the
+        # documented `# Tests [@ANCHOR: ...]` convention -- silently misclassified the anchor as
+        # test-covered, purely because "UnitTests".endswith("Tests") is True. Consequence: a truly
+        # untested feature's own orphaned-source check (`a not in tests_links_set`) would
+        # incorrectly conclude it already has test coverage, masking a real ADR-0054 gap -- a
+        # false negative.
+        _write(
+            os.path.join(self.tmp, "mod_a", "models", "foo.py"),
+            "# Runs our UnitTests [@ANCHOR: COMM_should_be_a_base_anchor]\n",
+        )
+        code_anchors, anchor_locations, _tl, tests_links_set, *_rest = self._scan()
+        self.assertIn("mod_a:COMM_should_be_a_base_anchor", anchor_locations)
+        self.assertNotIn("mod_a:COMM_should_be_a_base_anchor", tests_links_set)
+
+    def test_a_base_declaration_whose_preceding_text_ends_in_a_word_glued_onto_triggers_is_not_a_cross_reference(self):
+        # Same bug, the "Triggers" marker: "MisTriggers" ends with the substring "Triggers" too.
+        _write(
+            os.path.join(self.tmp, "mod_a", "models", "foo.py"),
+            "# MisTriggers [@ANCHOR: COMM_should_be_a_base_anchor]\n",
+        )
+        code_anchors, anchor_locations, _tl, _tls, _verified, _audit, cross_refs, *_rest = self._scan()
+        self.assertIn("mod_a:COMM_should_be_a_base_anchor", anchor_locations)
+        self.assertNotIn("mod_a:COMM_should_be_a_base_anchor", cross_refs)
+
+    def test_a_base_declaration_whose_preceding_text_ends_in_a_word_glued_onto_verified_by_is_not_a_verified_by_link(self):
+        # Same bug, the "Verified by" marker: "NotVerified by" ends with the phrase "Verified by".
+        _write(
+            os.path.join(self.tmp, "mod_a", "models", "foo.py"),
+            "# NotVerified by [@ANCHOR: COMM_should_be_a_base_anchor]\n",
+        )
+        code_anchors, anchor_locations, _tl, _tls, verified_by_links, *_rest = self._scan()
+        self.assertIn("mod_a:COMM_should_be_a_base_anchor", anchor_locations)
+        self.assertNotIn("mod_a:COMM_should_be_a_base_anchor", verified_by_links)
+
+    def test_a_genuine_tests_marker_with_extra_leading_prose_still_works_after_the_word_boundary_fix(self):
+        # Guards against an over-correction: the word-boundary fix must not break the
+        # already-permissive (and already-tested-elsewhere) acceptance of extra whitespace-
+        # separated words before the marker, only the glued-word-suffix case.
+        _write(
+            os.path.join(self.tmp, "mod_a", "tests", "test_foo.py"),
+            "# Add more Tests [@ANCHOR: COMM_x]\n",
+        )
+        code_anchors, _locs, _tl, tests_links_set, *_rest = self._scan()
+        self.assertIn("mod_a:COMM_x", tests_links_set)
+
+    def test_a_leftover_claude_worktree_directory_is_never_scanned(self):
+        """Real incident, 2026-09-29: an orphaned, untracked, .gitignore'd
+        .claude/worktrees/<session>/ directory (this project's own standing convention for
+        isolated concurrent work, left behind after its git worktree registration was removed
+        without deleting the directory itself) held a byte-identical copy of a real source file.
+        Because .claude was missing from this scan's own exclude_dirs, that leftover copy was
+        walked as if it were real code, and its anchor was reported as a duplicate of the real
+        one -- a hard CI/CD failure caused entirely by stale disk state. This exact shape (a
+        second on-disk copy of the same anchor, buried under .claude/worktrees/) must never be
+        seen at all, not merely tolerated as a non-duplicate."""
+        _write(os.path.join(self.tmp, "mod_a", "models", "foo.py"), "# [@ANCHOR: COMM_x]\n")
+        _write(
+            os.path.join(self.tmp, ".claude", "worktrees", "some-session", "mod_a", "models", "foo.py"),
+            "# [@ANCHOR: COMM_x]\n",
+        )
+        code_anchors, anchor_locations, _tl, _tls, _vbl, _aig, _crefs, duplicates, _lines = self._scan()
+        self.assertEqual(duplicates, [])
+        self.assertEqual(len(anchor_locations["mod_a:COMM_x"]), 1)
+
+    def test_a_claude_prefixed_sibling_worktree_directory_is_never_scanned(self):
+        """hams_open keeps a worktree at .claude-wt-<name>/ (a full copy of the tree); the exact
+        '.claude' name does not match it, so its anchors were reported as duplicates."""
+        _write(os.path.join(self.tmp, "mod_a", "models", "foo.py"), "# [@ANCHOR: COMM_x]\n")
+        _write(
+            os.path.join(self.tmp, ".claude-wt-shared", "mod_a", "models", "foo.py"),
+            "# [@ANCHOR: COMM_x]\n",
+        )
+        _ca, anchor_locations, _tl, _tls, _vbl, _aig, _crefs, duplicates, _lines = self._scan()
+        self.assertEqual(duplicates, [])
+        self.assertEqual(len(anchor_locations["mod_a:COMM_x"]), 1)
+
+
+class ReportDuplicatesTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_a_primary_duplicate_is_reported(self):
+        dup = ("mod_a:COMM_x", "./mod_a/models/b.py:5", ["./mod_a/models/a.py:1"])
+        self.assertTrue(va._report_duplicates([dup], [], self.tmp))
+
+    def test_no_duplicates_reports_nothing(self):
+        self.assertFalse(va._report_duplicates([], [], self.tmp))
+
+
+class ReportMissingTestsTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_a_tests_link_to_a_nonexistent_anchor_is_flagged(self):
+        filepath = os.path.join(self.tmp, "mod_a", "tests", "test_foo.py")
+        tests_links = {filepath: [("mod_a:COMM_ghost", 3)]}
+        self.assertTrue(
+            va._report_missing_tests(tests_links, {}, {}, self.tmp, [])
+        )
+
+    def test_a_tests_link_to_a_real_anchor_is_not_flagged(self):
+        filepath = os.path.join(self.tmp, "mod_a", "tests", "test_foo.py")
+        tests_links = {filepath: [("mod_a:COMM_real", 3)]}
+        code_anchors = {"mod_a:COMM_real": ["./mod_a/models/foo.py:1"]}
+        self.assertFalse(
+            va._report_missing_tests(tests_links, code_anchors, {}, self.tmp, [])
+        )
+
+    def test_a_non_primary_filepath_is_never_checked(self):
+        filepath = os.path.join(self.tmp, "mod_b", "tests", "test_foo.py")
+        tests_links = {filepath: [("mod_b:COMM_ghost", 3)]}
+        primary = os.path.join(self.tmp, "mod_a")
+        self.assertFalse(
+            va._report_missing_tests(tests_links, {}, {}, self.tmp, [primary])
+        )
+
+
+class ReportMissingCrossRefsTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_a_triggers_target_that_does_not_exist_anywhere_is_flagged(self):
+        cross_references = {"mod_b:COMM_ghost": ["./mod_a/models/foo.py:5"]}
+        self.assertTrue(
+            va._report_missing_cross_refs(cross_references, {}, {}, [], self.tmp)
+        )
+
+    def test_a_triggers_target_that_exists_in_code_anchors_is_not_flagged(self):
+        cross_references = {"mod_b:COMM_real": ["./mod_a/models/foo.py:5"]}
+        code_anchors = {"mod_b:COMM_real": ["./mod_b/models/bar.py:1"]}
+        self.assertFalse(
+            va._report_missing_cross_refs(
+                cross_references, code_anchors, {}, [], self.tmp
+            )
+        )
+
+    def test_a_triggers_target_that_exists_only_as_a_contract_anchor_is_not_flagged(self):
+        cross_references = {"mod_b:COMM_real": ["./mod_a/models/foo.py:5"]}
+        contract_anchors = {"mod_b:COMM_real": ["./mod_b/README.md:1"]}
+        self.assertFalse(
+            va._report_missing_cross_refs(
+                cross_references, {}, contract_anchors, [], self.tmp
+            )
+        )
+
+    def test_a_triggers_source_with_only_non_primary_locations_is_never_checked(self):
+        cross_references = {"mod_b:COMM_ghost": ["./mod_b/models/foo.py:5"]}
+        primary = os.path.join(self.tmp, "mod_a")
+        self.assertFalse(
+            va._report_missing_cross_refs(cross_references, {}, {}, [primary], self.tmp)
+        )
+
+
+class ReportBidirectionalOrphansTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_a_source_anchor_with_no_test_link_is_an_orphaned_source(self):
+        code_anchors = {"mod_a:COMM_x": ["./mod_a/models/foo.py:1"]}
+        has_errors, source_anchors = va._report_bidirectional_orphans(
+            code_anchors, {}, {}, {}, [], self.tmp
+        )
+        self.assertTrue(has_errors)
+        self.assertIn("mod_a:COMM_x", source_anchors)
+
+    def test_a_source_anchor_with_a_matching_test_link_is_not_orphaned(self):
+        code_anchors = {"mod_a:COMM_x": ["./mod_a/models/foo.py:1"]}
+        tests_links_set = {"mod_a:COMM_x": ["./mod_a/tests/test_foo.py:1"]}
+        has_errors, _source_anchors = va._report_bidirectional_orphans(
+            code_anchors, tests_links_set, {}, {}, [], self.tmp
+        )
+        self.assertFalse(has_errors)
+
+    def test_an_unverified_test_anchor_is_an_orphaned_test(self):
+        code_anchors = {"mod_a:test_COMM_x": ["./mod_a/tests/test_foo.py:1"]}
+        has_errors, _source_anchors = va._report_bidirectional_orphans(
+            code_anchors, {}, {}, {}, [], self.tmp
+        )
+        self.assertTrue(has_errors)
+
+    def test_test_tour_signup_is_specifically_exempt_from_the_orphaned_test_check(self):
+        # A real, hardcoded exception in the script's own logic -- verified
+        # rather than assumed to still apply.
+        code_anchors = {"mod_a:test_tour_signup": ["./mod_a/tests/test_foo.py:1"]}
+        has_errors, _source_anchors = va._report_bidirectional_orphans(
+            code_anchors, {}, {}, {}, [], self.tmp
+        )
+        self.assertFalse(has_errors)
+
+
+class ReportDocumentationGapsTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_a_source_anchor_missing_from_docs_is_flagged(self):
+        source_anchors = {"mod_a:COMM_x": ["./mod_a/models/foo.py:1"]}
+        self.assertTrue(
+            va._report_documentation_gaps(source_anchors, {}, {}, {}, [], self.tmp)
+        )
+
+    def test_a_source_anchor_cited_in_the_modules_own_readme_is_not_flagged(self):
+        # ADR 0090, Bruce's own direct decision, 2026-09-04: every function
+        # should get a real doc citation, but WHERE depends on audience --
+        # an infrastructure anchor a real user never sees can be cited in
+        # the module's own README.md (already a recognized "contract"
+        # location, see all_contracts above) rather than docs/stories/,
+        # without being exempt from documentation altogether. Verified
+        # directly, not assumed: README.md citations already flow into
+        # contract_anchors via find_anchors_in_docs's own is_readme check.
+        source_anchors = {"mod_a:COMM_infra_helper": ["./mod_a/models/foo.py:1"]}
+        contract_anchors = {"mod_a:COMM_infra_helper": ["./mod_a/README.md:3"]}
+        self.assertFalse(
+            va._report_documentation_gaps(
+                source_anchors, {}, {}, contract_anchors, [], self.tmp
+            )
+        )
+
+    def test_a_source_anchor_present_in_docs_is_not_flagged(self):
+        # code_anchors must also contain the anchor here: the function
+        # separately checks the inverse direction (a docs_anchors entry
+        # missing from code_anchors trips its own "missing_in_code"
+        # branch), so an empty code_anchors would trip that branch for
+        # this same key and defeat the point of this test.
+        source_anchors = {"mod_a:COMM_x": ["./mod_a/models/foo.py:1"]}
+        docs_anchors = {"mod_a:COMM_x": ["./mod_a/docs/stories/x.md:1"]}
+        code_anchors = {"mod_a:COMM_x": ["./mod_a/models/foo.py:1"]}
+        self.assertFalse(
+            va._report_documentation_gaps(
+                source_anchors, docs_anchors, code_anchors, {}, [], self.tmp
+            )
+        )
+
+    def test_a_doc_anchor_with_no_matching_code_anchor_still_sets_has_errors(self):
+        # Real, non-obvious behavior: this branch prints "CI/CD WARNING"
+        # (not "FAILURE" like every other category), but still sets
+        # has_errors = True -- it DOES fail the build, the "WARNING" label
+        # is misleading. Verified directly, not assumed from the message
+        # text.
+        docs_anchors = {"mod_a:COMM_ghost": ["./mod_a/docs/stories/x.md:1"]}
+        self.assertTrue(
+            va._report_documentation_gaps({}, docs_anchors, {}, {}, [], self.tmp)
+        )
+
+    def test_a_story_prefixed_doc_anchor_missing_from_code_is_not_flagged(self):
+        docs_anchors = {"mod_a:COMM_story_x": ["./mod_a/docs/stories/x.md:1"]}
+        self.assertFalse(
+            va._report_documentation_gaps({}, docs_anchors, {}, {}, [], self.tmp)
+        )
+
+
+class StackedAnchorsAreNoLongerARuleTests(unittest.TestCase):
+    """The adjacent-anchor ("stacked") rule was removed 2026-09-28 (Bruce approved). Every file it still flagged after it was narrowed
+    to `Tests` anchors was a real test with a real body that covers several features, so it only produced false positives; the
+    check for a test that cannot fail (`DummyTestBodyTests`) is what guards against dummy tests, independent of anchor layout."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _run(self):
+        result = subprocess.run([sys.executable, _SCRIPT, self.tmp], capture_output=True, text=True, timeout=_timeout(60))
+        return result.returncode, result.stdout + result.stderr
+
+    def test_the_rule_and_its_report_no_longer_exist(self):
+        self.assertIsNone(getattr(va, "_report_dummy_blocks", None))
+
+    def test_several_tests_anchors_above_a_real_body_are_accepted(self):
+        _write(
+            os.path.join(self.tmp, "mod_a", "tests", "test_foo.py"),
+            "def test_x(self):\n"
+            "    # Tests [@ANCHOR: mod_a:COMM_one]\n"
+            "    # Tests [@ANCHOR: mod_a:COMM_two]\n"
+            "    self.assertEqual(f(), 1)\n",
+        )
+        _code, out = self._run()
+        self.assertNotIn("Stacked", out)
+        self.assertNotIn("cannot fail", out)
+
+    def test_the_same_anchors_above_a_body_that_cannot_fail_are_still_refused(self):
+        _write(
+            os.path.join(self.tmp, "mod_a", "tests", "test_foo.py"),
+            "def test_x(self):\n"
+            "    # Tests [@ANCHOR: mod_a:COMM_one]\n"
+            "    # Tests [@ANCHOR: mod_a:COMM_two]\n"
+            "    pass\n",
+        )
+        code, out = self._run()
+        self.assertEqual(code, 1, out)
+        self.assertIn("cannot fail", out)
+
+
+class DummyTestBodyTests(unittest.TestCase):
+    """A `test*` function that cannot fail, however its anchors are laid out."""
+
+    def _names(self, source):
+        return [name for name, _line in va.find_dummy_test_functions(source)]
+
+    def test_pass_only_is_a_dummy_test(self):
+        self.assertEqual(self._names("def test_a(self):\n    pass\n"), ["test_a"])
+
+    def test_a_body_of_only_comments_and_a_docstring_is_a_dummy_test(self):
+        source = 'def test_a(self):\n    """Covers it."""\n    # Tests [@ANCHOR: mod:COMM_a] # Tests [@ANCHOR: mod:COMM_b]\n'
+        # A comment-only body is a syntax error on its own, so give it the docstring the real shape always has.
+        self.assertEqual(self._names(source), ["test_a"])
+
+    def test_ellipsis_and_an_assertion_that_cannot_fail_are_dummy_tests(self):
+        self.assertEqual(self._names("def test_a(self):\n    ...\n"), ["test_a"])
+        self.assertEqual(self._names("def test_b(self):\n    self.assertTrue(True)\n"), ["test_b"])
+        self.assertEqual(self._names("def test_c(self):\n    self.assertFalse(False)\n"), ["test_c"])
+        self.assertEqual(self._names("def test_d(self):\n    assert True\n"), ["test_d"])
+
+    def test_a_test_that_exercises_something_is_not_a_dummy_test(self):
+        self.assertEqual(self._names("def test_a(self):\n    self.assertEqual(f(), 1)\n"), [])
+        self.assertEqual(self._names("def test_b(self):\n    x = f()\n"), [])
+        self.assertEqual(self._names("def test_c(self):\n    raise NotImplementedError\n"), [])
+        self.assertEqual(self._names("def test_d(self):\n    self.assertTrue(f())\n"), [])
+
+    def test_nested_and_async_dummy_tests_are_found_in_the_order_ast_walk_gave(self):
+        source = (
+            "class A:\n"
+            "    def test_in_class(self):\n        pass\n"
+            "    async def test_async(self):\n        ...\n"
+            "    if True:\n"
+            "        def test_in_if(self):\n            pass\n"
+            "try:\n    pass\n"
+            "except Exception:\n"
+            "    def test_in_handler():\n        pass\n"
+            "match 1:\n    case 1:\n        def test_in_case():\n            pass\n"
+            "def helper():\n    def test_nested_in_function():\n        pass\n"
+            "def test_top():\n    pass\n"
+            "x = lambda: 1\n"
+        )
+        import ast
+        reference = [(n.name, n.lineno) for n in ast.walk(ast.parse(source))
+                     if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name.startswith("test")]
+        self.assertEqual(len(reference), 7)
+        self.assertEqual(va.find_dummy_test_functions(source), reference)
+        tree = ast.parse(source)
+        self.assertEqual(list(va._statement_nodes(tree)),
+                         [n for n in ast.walk(tree) if isinstance(n, (ast.stmt, ast.excepthandler, ast.match_case))])
+
+    def test_a_file_without_an_anchor_costs_no_module_lookup(self):
+        import unittest.mock
+        tables = [{} for _ in range(8)]
+        with unittest.mock.patch.object(va, "get_module", side_effect=AssertionError("looked up")):
+            va._process_file_for_anchors("/r/m/a.py", "x = 1\n# [@ANCH OR: no]\n", va.ANCHOR_PATTERN,
+                                         tables[0], tables[1], tables[2], tables[3], tables[4], tables[5], tables[6],
+                                         [], tables[7], "/r")
+        self.assertTrue(all(not table for table in tables))
+        with unittest.mock.patch.object(va, "get_module", return_value="m"):
+            va._process_file_for_anchors("/r/m/a.py", "x = 1\n# [@ANCHOR: feat]\n", va.ANCHOR_PATTERN,
+                                         tables[0], tables[1], tables[2], tables[3], tables[4], tables[5], tables[6],
+                                         [], tables[7], "/r")
+        self.assertEqual(list(tables[0]), ["m:feat"])
+
+    def test_a_source_without_a_test_function_is_not_parsed(self):
+        self.assertEqual(va.find_dummy_test_functions("this is not python ((("), [])  # no `def test`: never parsed
+        self.assertEqual(va.find_dummy_test_functions("def test_a(:\n"), [])  # a syntax error is still no finding
+
+    def test_one_real_statement_among_no_ops_makes_it_a_real_test(self):
+        self.assertEqual(self._names("def test_a(self):\n    pass\n    self.assertEqual(f(), 1)\n"), [])
+
+    def test_a_helper_that_is_not_named_test_is_never_flagged(self):
+        self.assertEqual(self._names("def helper(self):\n    pass\n"), [])
+
+    def test_async_test_methods_and_nested_classes_are_checked(self):
+        source = "class T:\n    async def test_a(self):\n        pass\n"
+        self.assertEqual(self._names(source), ["test_a"])
+
+    def test_a_file_that_does_not_parse_is_skipped_not_crashed(self):
+        self.assertEqual(self._names("def test_a(:\n"), [])
+
+    def test_the_report_flags_a_dummy_test_in_an_anchored_file_and_ignores_a_real_one(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        path = os.path.join(tmp, "mod_a", "tests", "test_foo.py")
+        _write(path, "def test_dummy(self):\n    # Tests [@ANCHOR: mod_a:COMM_x]\n    pass\n")
+        self.assertTrue(va._report_dummy_test_bodies({path: [("mod_a:COMM_x", 2)]}, [], tmp))
+        _write(path, "def test_real(self):\n    # Tests [@ANCHOR: mod_a:COMM_x]\n    self.assertEqual(f(), 1)\n")
+        self.assertFalse(va._report_dummy_test_bodies({path: [("mod_a:COMM_x", 2)]}, [], tmp))
+
+
+class ReportMissingUxDocsTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_a_ux_anchor_missing_from_the_user_manual_is_flagged(self):
+        code_anchors = {"mod_a:COMM_UX_x": ["./mod_a/static/src/js/x.js:1"]}
+        self.assertTrue(va._report_missing_ux_docs(code_anchors, set(), [], self.tmp))
+
+    def test_a_ux_anchor_present_in_the_user_manual_is_not_flagged(self):
+        code_anchors = {"mod_a:COMM_UX_x": ["./mod_a/static/src/js/x.js:1"]}
+        self.assertFalse(
+            va._report_missing_ux_docs(code_anchors, {"mod_a:COMM_UX_x"}, [], self.tmp)
+        )
+
+    def test_a_non_ux_anchor_is_never_considered(self):
+        code_anchors = {"mod_a:COMM_x": ["./mod_a/models/foo.py:1"]}
+        self.assertFalse(va._report_missing_ux_docs(code_anchors, set(), [], self.tmp))
+
+
+class AddSiblingRepoTargetTests(unittest.TestCase):
+    # The old check in main() tested for the substring
+    # "hams_community" (a name no real directory in this codebase has ever used) or "hams_com"
+    # anywhere in a target path. Since ANY path under a repo named "hams_com" trivially contains
+    # the substring "hams_com", invoking verify_anchors.py unscoped from hams_com made that check
+    # true purely by SELF-match, skipping sibling detection entirely -- confirmed empirically
+    # against the real repo tree before writing this fix. Even when the check was false (e.g.
+    # invoked from hams_open), the four candidate directory names it probed were
+    # "hams_community"/"hams_com" only, never the real name "hams_open" -- so a hams_com-rooted
+    # invocation could never have found hams_open as a sibling either way. Net effect:
+    # verify_anchors.py invoked unscoped from hams_com never scanned hams_open at all, silently
+    # missing every cross-repo anchor reference into it.
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_starting_from_hams_com_finds_the_real_hams_open_sibling(self):
+        # The exact case the real bug got wrong: repo_root IS hams_com, target_dirs is just
+        # [hams_com] -- hams_open must still be found and added as a sibling target.
+        hams_com = os.path.join(self.tmp, "hams_com")
+        hams_open = os.path.join(self.tmp, "hams_open")
+        os.makedirs(hams_com)
+        os.makedirs(hams_open)
+        new_targets, warning = va._add_sibling_repo_target(hams_com, [hams_com])
+        self.assertIn(hams_open, new_targets)
+        self.assertIsNone(warning)
+
+    def test_starting_from_hams_open_finds_the_real_hams_com_sibling(self):
+        hams_com = os.path.join(self.tmp, "hams_com")
+        hams_open = os.path.join(self.tmp, "hams_open")
+        os.makedirs(hams_com)
+        os.makedirs(hams_open)
+        new_targets, warning = va._add_sibling_repo_target(hams_open, [hams_open])
+        self.assertIn(hams_com, new_targets)
+        self.assertIsNone(warning)
+
+    def test_a_module_scoped_target_under_hams_com_still_finds_hams_open(self):
+        # target_dirs need not literally be the repo root -- a module-scoped invocation
+        # (run_linters.py's own `targets` list) passes a deeper path whose basename is the
+        # module name, not "hams_com". The sibling must still be found.
+        hams_com = os.path.join(self.tmp, "hams_com")
+        hams_open = os.path.join(self.tmp, "hams_open")
+        scoped_module = os.path.join(hams_com, "some_module")
+        os.makedirs(scoped_module)
+        os.makedirs(hams_open)
+        new_targets, warning = va._add_sibling_repo_target(hams_com, [scoped_module])
+        self.assertIn(hams_open, new_targets)
+
+    def test_the_sibling_is_not_re_added_when_already_present(self):
+        hams_com = os.path.join(self.tmp, "hams_com")
+        hams_open = os.path.join(self.tmp, "hams_open")
+        os.makedirs(hams_com)
+        os.makedirs(hams_open)
+        new_targets, warning = va._add_sibling_repo_target(hams_com, [hams_com, hams_open])
+        self.assertEqual(new_targets, [hams_com, hams_open])
+        self.assertIsNone(warning)
+
+    def test_a_missing_sibling_directory_is_simply_not_added(self):
+        hams_com = os.path.join(self.tmp, "hams_com")
+        os.makedirs(hams_com)
+        new_targets, warning = va._add_sibling_repo_target(hams_com, [hams_com])
+        self.assertEqual(new_targets, [hams_com])
+        self.assertIsNone(warning)
+
+    def test_a_sibling_nested_as_a_child_is_still_found_but_warns(self):
+        hams_com = os.path.join(self.tmp, "hams_com")
+        nested_hams_open = os.path.join(hams_com, "hams_open")
+        os.makedirs(nested_hams_open)
+        new_targets, warning = va._add_sibling_repo_target(hams_com, [hams_com])
+        self.assertIn(nested_hams_open, new_targets)
+        self.assertIsNotNone(warning)
+        self.assertIn("ANTI-PATTERN", warning)
+
+
+class MainIntegrationTests(unittest.TestCase):
+    """Hermetic subprocess runs against real temp-directory fixtures only --
+    verify_anchors.py currently fails against the real repo tree (a
+    pre-existing documentation-coverage backlog, not this sweep's
+    concern), so no real-repo assertion is safe to make here."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _run(self):
+        result = subprocess.run(
+            [sys.executable, _SCRIPT, self.tmp], capture_output=True, text=True, timeout=_timeout(30)
+        )
+        return result.returncode, result.stdout + result.stderr
+
+    def test_a_fully_traced_feature_passes(self):
+        # A base anchor, a test link, a verified-by back-link, and a docs
+        # entry INSIDE the module directory (verified empirically: a
+        # top-level docs/ separate from the module resolves to module
+        # "global" instead and would not satisfy this same-module check).
+        # The base anchor and the Verified-by anchor are deliberately kept
+        # on non-adjacent lines: two anchor-bearing lines right next to
+        # each other trips _report_dummy_blocks's own separate "stacked
+        # anchors" check regardless of the anchors' different roles here,
+        # found empirically while first writing this fixture.
+        _write(os.path.join(self.tmp, "mod_a", "__manifest__.py"), "{}\n")
+        _write(
+            os.path.join(self.tmp, "mod_a", "models", "foo.py"),
+            "# [@ANCHOR: COMM_my_feature]\n"
+            "class Foo:\n"
+            "    pass\n"
+            "# # Verified by [@ANCHOR: COMM_test_my_feature]\n",
+        )
+        _write(
+            os.path.join(self.tmp, "mod_a", "tests", "test_foo.py"),
+            "# Tests [@ANCHOR: COMM_my_feature]\n"
+            "class TestFoo:\n    def test_my_feature(self):\n        assert 1 + 1 == 2\n",
+        )
+        _write(
+            os.path.join(self.tmp, "mod_a", "docs", "stories", "my_feature.md"),
+            "# My Feature\n[@ANCHOR: COMM_my_feature]\n",
+        )
+        code, out = self._run()
+        self.assertEqual(code, 0, out)
+        self.assertIn("SUCCESS", out)
+
+    def test_a_source_anchor_with_no_test_or_doc_coverage_fails(self):
+        _write(os.path.join(self.tmp, "mod_a", "__manifest__.py"), "{}\n")
+        _write(
+            os.path.join(self.tmp, "mod_a", "models", "foo.py"),
+            "# [@ANCHOR: COMM_orphan_feature]\n",
+        )
+        code, out = self._run()
+        self.assertEqual(code, 1)
+        self.assertIn("CI/CD FAILURE", out)
+
+    def test_a_duplicate_base_anchor_across_two_files_fails(self):
+        _write(os.path.join(self.tmp, "mod_a", "__manifest__.py"), "{}\n")
+        _write(os.path.join(self.tmp, "mod_a", "models", "a.py"), "# [@ANCHOR: COMM_dup]\n")
+        _write(os.path.join(self.tmp, "mod_a", "models", "b.py"), "# [@ANCHOR: COMM_dup]\n")
+        code, out = self._run()
+        self.assertEqual(code, 1)
+        self.assertIn("Duplicate Semantic Anchors", out)
+
+    def test_a_duplicate_base_anchor_declared_once_in_each_of_two_scanned_target_dirs_is_flagged(self):
+        # find_anchors_in_code's own duplicate
+        # detection is scoped to a single call (one target_dir) -- main() calls it once per
+        # `final_target` and merges the accumulated results afterward, but never re-checked the
+        # merged `anchor_locations` for a base anchor declared once in EACH of two separately-
+        # scanned target dirs. Since this tool's flagship use case is scanning hams_com and
+        # hams_open TOGETHER (see AddSiblingRepoTargetTests / `_add_sibling_repo_target` above), a
+        # genuine duplicate straddling that exact repo boundary went completely undetected -- the
+        # other checks (missing-test-link, missing-docs) still correctly saw both locations,
+        # because those operate on the already-merged dicts, but "Duplicate Semantic Anchors"
+        # itself silently passed.
+        dir_a = os.path.join(self.tmp, "repo_a")
+        dir_b = os.path.join(self.tmp, "repo_b")
+        _write(os.path.join(dir_a, "mod_a", "__manifest__.py"), "{}\n")
+        _write(os.path.join(dir_a, "mod_a", "models", "foo.py"), "# [@ANCHOR: COMM_dup_cross_repo]\n")
+        _write(os.path.join(dir_b, "mod_a", "__manifest__.py"), "{}\n")
+        _write(os.path.join(dir_b, "mod_a", "models", "foo.py"), "# [@ANCHOR: COMM_dup_cross_repo]\n")
+        result = subprocess.run(
+            [sys.executable, _SCRIPT, dir_a, dir_b], capture_output=True, text=True, timeout=_timeout(30)
+        )
+        out = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 1, out)
+        self.assertIn("Duplicate Semantic Anchors", out, out)
+        self.assertIn("mod_a:COMM_dup_cross_repo", out, out)
+
+
+class SiblingRepoScanningIntegrationTests(unittest.TestCase):
+    """main()'s own `repo_root` (this script's containing directory,
+    deliberately `hams_shared` itself -- see this file's own module docstring) was being passed
+    straight into `_add_sibling_repo_target`, whose own logic and unit tests (see
+    AddSiblingRepoTargetTests above) assume that argument IS the enclosing hams_com/hams_open
+    checkout, not hams_shared. Since `os.path.basename(<...>/hams_shared)` is always literally
+    "hams_shared", the function's own `own_name`-exclusion logic never excluded either real repo
+    name, so `has_sibling` went true purely because the PRIMARY scan target happened to be named
+    "hams_com" (or "hams_open") -- never because the actual sibling had been added -- and even
+    where that short-circuit didn't fire (a module-scoped invocation), the sibling-candidate paths
+    were computed one directory level too deep to ever resolve. Net, directly-observed effect
+    against the real repo: a real, unscoped `verify_anchors.py .` run from hams_com's own root
+    never scanned hams_open at all -- e.g. `zero_sudo:*` anchors, whose real source lives only in
+    hams_open, were reported as "missing from operational source code" purely because hams_open
+    was silently never scanned.
+
+    These fixtures reproduce the real script's own directory shape -- a COPY of the real
+    verify_anchors.py under `<tmp>/hams_com/hams_shared/tools/` (so its own `__file__`-derived
+    `repo_root` resolves exactly the way it does in the real checkout) with a real sibling
+    `<tmp>/hams_open` directory -- and confirm a cross-repo `# Triggers` reference into the
+    sibling resolves cleanly, both unscoped and module-scoped, matching the two real invocation
+    shapes `run_linters.py` actually uses.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.hams_com = os.path.join(self.tmp, "hams_com")
+        self.hams_open = os.path.join(self.tmp, "hams_open")
+        self.script_copy = os.path.join(self.hams_com, "hams_shared", "tools", "verify_anchors.py")
+        os.makedirs(os.path.dirname(self.script_copy), exist_ok=True)
+        shutil.copy(_SCRIPT, self.script_copy)
+
+        # A real anchor whose ONLY source-code declaration lives in the hams_open sibling.
+        _write(os.path.join(self.hams_open, "mod_b", "__manifest__.py"), "{}\n")
+        _write(
+            os.path.join(self.hams_open, "mod_b", "models", "target.py"),
+            "# [@ANCHOR: COMM_shared_target]\n",
+        )
+        _write(
+            os.path.join(self.hams_open, "mod_b", "tests", "test_target.py"),
+            "# Tests [@ANCHOR: COMM_shared_target]\n",
+        )
+        _write(
+            os.path.join(self.hams_open, "mod_b", "docs", "stories", "target.md"),
+            "[@ANCHOR: COMM_shared_target]\n",
+        )
+
+        # A hams_com module that cross-references it via the real `# Triggers` syntax.
+        _write(os.path.join(self.hams_com, "mod_a", "__manifest__.py"), "{}\n")
+        _write(
+            os.path.join(self.hams_com, "mod_a", "models", "trigger.py"),
+            "# Triggers [@ANCHOR: mod_b:COMM_shared_target]\n",
+        )
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_an_unscoped_run_from_the_hams_com_root_still_scans_the_hams_open_sibling(self):
+        # The exact shape run_linters.py uses for an unscoped run: `targets == [repo_root]`.
+        result = subprocess.run(
+            [sys.executable, self.script_copy, self.hams_com],
+            capture_output=True,
+            text=True,
+            timeout=_timeout(30),
+        )
+        out = result.stdout + result.stderr
+        self.assertNotIn("Missing Cross-Reference Target", out, out)
+        self.assertNotIn(
+            "mod_b:COMM_shared_target' is missing from operational source code", out, out
+        )
+
+    def test_a_module_scoped_run_under_hams_com_still_scans_the_hams_open_sibling(self):
+        # The exact shape run_linters.py uses for a scoped run: `targets == resolved_mod_paths`,
+        # a deeper path whose basename is a module name, not "hams_com" or "hams_open" -- the
+        # sibling must still be found via the candidate-path search, not the has_sibling
+        # short-circuit.
+        result = subprocess.run(
+            [sys.executable, self.script_copy, os.path.join(self.hams_com, "mod_a")],
+            capture_output=True,
+            text=True,
+            timeout=_timeout(30),
+        )
+        out = result.stdout + result.stderr
+        self.assertNotIn("Missing Cross-Reference Target", out, out)
+
+
+class ForeignWorktreesAreNeverScannedTests(unittest.TestCase):
+    """2026-11-09: lint runs failed `verify_anchors` with duplicate-anchor findings whose paths were another agent's
+    worktree (`tmp/bh-rv-open/...`), none from the branch's own files, and a rerun passed once that worktree was
+    gone. The scan walked the checkout with `os.walk`, which also enters a worktree that sits under it
+    (`git worktree add tmp/<name>`, untracked, not ignored) or beside it. Only the tree's own git-tracked (and new,
+    unignored) files may be scanned."""
+
+    ANCHOR = "# [@ANCHOR: mod_a:COMM_x]\n"
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.tree = os.path.join(self.tmp, "hams_open")
+        os.makedirs(self.tree)
+        self._git(self.tree, "init", "-q", "-b", "main")
+        _write(os.path.join(self.tree, "mod_a", "models", "foo.py"), self.ANCHOR)
+        self._git(self.tree, "add", "mod_a/models/foo.py")
+        self._git(self.tree, "commit", "-q", "-m", "init")
+
+    @staticmethod
+    def _git(cwd, *args):
+        subprocess.run(
+            ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "-C", cwd, *args],
+            check=True, capture_output=True,
+        )
+
+    def _scan(self):
+        return va.find_anchors_in_code(self.tree, self.tree)
+
+    def test_a_worktree_nested_under_the_tree_is_not_scanned(self):
+        self._git(self.tree, "worktree", "add", "-q", "--detach", os.path.join(self.tree, "tmp", "bh-rv-open"))
+        self.assertTrue(os.path.exists(os.path.join(self.tree, "tmp", "bh-rv-open", "mod_a", "models", "foo.py")))
+        _ca, locations, _tl, _tls, _vbl, _aig, _crefs, duplicates, _lines = self._scan()
+        self.assertEqual(duplicates, [])
+        self.assertEqual(locations["mod_a:COMM_x"], ["./mod_a/models/foo.py:1"])
+
+    def test_a_new_file_not_yet_added_is_still_scanned(self):
+        _write(os.path.join(self.tree, "mod_b", "models", "bar.py"), "# [@ANCHOR: mod_b:COMM_y]\n")
+        _ca, locations, *_rest = self._scan()
+        self.assertIn("mod_b:COMM_y", locations)
+
+    def test_a_worktree_beside_the_tree_in_the_shared_parent_gives_no_error(self):
+        """A foreign worktree with the same anchor sits next to the tree (and under it): the whole script, started the
+        way run_linters.py starts it, reports no duplicate and succeeds."""
+        self._git(self.tree, "worktree", "add", "-q", "--detach", os.path.join(self.tmp, "bh-rv-open"))
+        self._git(self.tree, "worktree", "add", "-q", "--detach", os.path.join(self.tree, "tmp", "bh-hw-open"))
+        script_dir = os.path.join(self.tree, "hams_shared", "tools")
+        os.makedirs(script_dir)
+        for name in os.listdir(os.path.dirname(_SCRIPT)):
+            if name.endswith(".py") and not name.startswith("test_"):
+                shutil.copy(os.path.join(os.path.dirname(_SCRIPT), name), script_dir)
+        result = subprocess.run(
+            [sys.executable, os.path.join(script_dir, "verify_anchors.py"), self.tree],
+            capture_output=True, text=True, timeout=_timeout(60),
+            env={**os.environ, "HAMS_ANCHOR_REPO": "hams_open"},
+        )
+        out = result.stdout + result.stderr
+        self.assertNotIn("Duplicate Anchor", out, out)
+        self.assertNotIn("bh-rv-open", out, out)
+        self.assertNotIn("bh-hw-open", out, out)
+
+    def test_outside_git_a_directory_with_its_own_git_marker_is_not_entered(self):
+        bare = os.path.join(self.tmp, "bare")
+        _write(os.path.join(bare, "mod_a", "models", "foo.py"), self.ANCHOR)
+        _write(os.path.join(bare, "other", "mod_a", "models", "foo.py"), self.ANCHOR)
+        _write(os.path.join(bare, "other", ".git"), "gitdir: /elsewhere\n")
+        _ca, locations, _tl, _tls, _vbl, _aig, _crefs, duplicates, _lines = va.find_anchors_in_code(bare, bare)
+        self.assertEqual(len(locations["mod_a:COMM_x"]), 1)
+        self.assertEqual(duplicates, [])
+
+
+class SubprocessTimeoutFollowsLoadTests(unittest.TestCase):
+    """The time limit of the tests that run verify_anchors.py as a subprocess grows with the load (it failed at load 20)."""
+
+    def _limit(self, load, cores, base=30):
+        import unittest.mock as mock
+
+        with mock.patch("os.getloadavg", return_value=(load, load, load)), mock.patch("os.cpu_count", return_value=cores):
+            return _timeout(base)
+
+    def test_an_idle_machine_keeps_the_base_limit(self):
+        self.assertEqual(self._limit(0.5, 16), 30)
+        self.assertEqual(self._limit(8, 16), 30)
+
+    def test_a_loaded_machine_gets_proportionally_longer(self):
+        self.assertEqual(self._limit(20, 16), 75)
+
+    def test_the_limit_is_capped_so_a_real_hang_still_fails(self):
+        self.assertEqual(self._limit(500, 16), 240)
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+class BaselineRatchetTests(unittest.TestCase):
+    """The baseline ratchet: findings already recorded in a baseline file are grandfathered, any
+    finding NOT in it still fails, and with no baseline nothing is grandfathered."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.baseline = os.path.join(self.tmp, "baseline.json")
+        self.saved = (va._BASELINE, set(va._CURRENT_FINDINGS))
+        va._CURRENT_FINDINGS.clear()
+
+    def tearDown(self):
+        va._BASELINE = self.saved[0]
+        va._CURRENT_FINDINGS.clear()
+        va._CURRENT_FINDINGS.update(self.saved[1])
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _fixture(self, anchors):
+        target = os.path.join(self.tmp, "fixture")
+        shutil.rmtree(target, ignore_errors=True)
+        _write(os.path.join(target, "mod_a", "__manifest__.py"), "{}\n")
+        body = "".join(f"# [@ANCHOR: COMM_{a}]\nclass C_{a}:\n    pass\n\n" for a in anchors)
+        _write(os.path.join(target, "mod_a", "models", "foo.py"), body)
+        return target
+
+    def _run(self, target, *flags):
+        r = subprocess.run(
+            [sys.executable, _SCRIPT, target, "--baseline", self.baseline, *flags],
+            capture_output=True,
+            text=True,
+            timeout=_timeout(60),
+        )
+        return r.returncode, r.stdout + r.stderr
+
+    def test_load_returns_none_for_a_missing_file_and_round_trips_a_saved_one(self):
+        self.assertIsNone(va.load_baseline(self.baseline))
+        va.save_baseline(self.baseline, {"doc_gap|b:x", "duplicate|a:y"})
+        self.assertEqual(va.load_baseline(self.baseline), {"doc_gap|b:x", "duplicate|a:y"})
+
+    def test_is_grandfathered_records_every_finding_but_only_passes_baselined_ones(self):
+        va._BASELINE = {"doc_gap|m:old"}
+        self.assertTrue(va._is_grandfathered("doc_gap", "m:old"))
+        self.assertFalse(va._is_grandfathered("doc_gap", "m:new"))
+        self.assertFalse(va._is_grandfathered("no_test_link", "m:old"))
+        self.assertEqual(
+            va._CURRENT_FINDINGS,
+            {"doc_gap|m:old", "doc_gap|m:new", "no_test_link|m:old"},
+        )
+
+    def test_baseline_names_cover_every_scanned_repo_not_just_the_first(self):
+        """test.py scans hams_com AND hams_open as primary targets; each repo's findings belong to
+        its own baseline, so both files must be loaded."""
+        root = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        com, opn = os.path.join(root, "hams_com"), os.path.join(root, "hams_open")
+        os.makedirs(com)
+        os.makedirs(opn)
+        self.assertEqual(va._baseline_repo_names([com, opn], com), ["hams_com", "hams_open"])
+        self.assertEqual(va._baseline_repo_names([opn, com], com), ["hams_open", "hams_com"])
+        self.assertEqual(va._baseline_repo_names([com, com], com), ["hams_com"])
+        self.assertEqual(va._baseline_repo_names([os.path.join(com, "mod")], com), ["hams_com"])
+
+    def test_no_baseline_grandfathers_nothing(self):
+        va._BASELINE = None
+        self.assertFalse(va._is_grandfathered("doc_gap", "m:old"))
+
+    def test_documentation_gap_report_skips_a_baselined_anchor_only(self):
+        source_anchors = {
+            "mod_a:COMM_old": ["./mod_a/models/foo.py:1"],
+            "mod_a:COMM_new": ["./mod_a/models/foo.py:9"],
+        }
+        va._BASELINE = {"doc_gap|mod_a:COMM_old"}
+        self.assertTrue(
+            va._report_documentation_gaps(source_anchors, {}, {}, {}, [], self.tmp)
+        )
+        va._BASELINE = {"doc_gap|mod_a:COMM_old", "doc_gap|mod_a:COMM_new"}
+        self.assertFalse(
+            va._report_documentation_gaps(source_anchors, {}, {}, {}, [], self.tmp)
+        )
+
+    def test_end_to_end_baseline_lets_current_gaps_pass_but_fails_a_new_one(self):
+        target = self._fixture(["old_one"])
+        code, _ = self._run(target)
+        self.assertEqual(code, 1, "the fixture must fail with no baseline present")
+
+        code, out = self._run(target, "--generate-baseline")
+        self.assertEqual(code, 0, out)
+        recorded = va.load_baseline(self.baseline)
+        self.assertIn("doc_gap|mod_a:COMM_old_one", recorded)
+
+        code, out = self._run(target)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("Code Feature", out)
+
+        target = self._fixture(["old_one", "brand_new"])
+        code, out = self._run(target)
+        self.assertEqual(code, 1, out)
+        self.assertIn("COMM_brand_new", out)
+        self.assertNotIn("Code Feature 'mod_a:COMM_old_one'", out)
+
+    def test_a_fixed_finding_is_reported_as_a_shrinkable_baseline_entry(self):
+        target = self._fixture(["old_one"])
+        self._run(target, "--generate-baseline")
+        va.save_baseline(self.baseline, va.load_baseline(self.baseline) | {"doc_gap|mod_a:gone"})
+        code, out = self._run(target)
+        self.assertEqual(code, 0, out)
+        self.assertIn("1 baseline entries no longer occur", out)
+
+
+def _git(cwd, *args):
+    return subprocess.run(
+        ["git", "-C", cwd, "-c", "user.email=t@example.invalid", "-c", "user.name=t", *args],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+
+
+class RepoIdentityTests(unittest.TestCase):
+    """The baseline file is chosen by repository, not by what the checkout directory is called, so
+    a worktree with any name still finds `anchor_baseline_<repo>.json`."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.saved_env = os.environ.pop("HAMS_ANCHOR_REPO", None)
+
+    def tearDown(self):
+        os.environ.pop("HAMS_ANCHOR_REPO", None)
+        if self.saved_env is not None:
+            os.environ["HAMS_ANCHOR_REPO"] = self.saved_env
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _odd_dir(self):
+        d = os.path.join(self.tmp, "wt-foo")
+        os.makedirs(d)
+        return d
+
+    def test_standard_names_win_with_no_git_and_no_env(self):
+        d = os.path.join(self.tmp, "hams_open", "mod")
+        os.makedirs(d)
+        self.assertEqual(va.repo_identity(d), "hams_open")
+
+    def test_unknown_directory_is_none(self):
+        self.assertIsNone(va.repo_identity(self._odd_dir()))
+
+    def test_env_var_names_the_repo_for_a_nonstandard_directory(self):
+        d = self._odd_dir()
+        os.environ["HAMS_ANCHOR_REPO"] = "hams_com"
+        self.assertEqual(va.repo_identity(d), "hams_com")
+        self.assertEqual(va._baseline_repo_names([d], d), ["hams_com"])
+
+    def test_env_var_with_an_unknown_name_is_ignored(self):
+        d = self._odd_dir()
+        os.environ["HAMS_ANCHOR_REPO"] = "something_else"
+        self.assertIsNone(va.repo_identity(d))
+        self.assertEqual(va._baseline_repo_name([d], d), "wt-foo")
+
+    def test_git_origin_names_the_repo_for_a_nonstandard_worktree(self):
+        d = self._odd_dir()
+        _git(d, "init", "-q")
+        _git(d, "remote", "add", "origin", "https://github.com/BrucePerens/hams_open.git")
+        self.assertEqual(va.repo_identity(d), "hams_open")
+        self.assertEqual(va._baseline_repo_names([d], d), ["hams_open"])
+
+    def test_an_unrelated_git_origin_is_not_a_known_repo(self):
+        d = self._odd_dir()
+        _git(d, "init", "-q")
+        _git(d, "remote", "add", "origin", "https://github.com/someone/else.git")
+        self.assertIsNone(va.repo_identity(d))
+
+    def test_sibling_lookup_treats_an_oddly_named_checkout_by_its_identity(self):
+        os.makedirs(os.path.join(self.tmp, "hams_open"))
+        d = self._odd_dir()
+        os.environ["HAMS_ANCHOR_REPO"] = "hams_com"
+        targets, warning = va._add_sibling_repo_target(d, [d])
+        self.assertIsNone(warning)
+        self.assertIn(os.path.join(self.tmp, "hams_open"), targets)
+
+
+class WorktreeLayoutTests(unittest.TestCase):
+    """A hams_open worktree has `hams_shared` as a symlink (fix_worktree_symlinks.py) and may sit
+    anywhere, not next to the hams_com checkout."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.saved_env = {k: os.environ.pop(k, None) for k in ("HAMS_COM_TREE", "HAMS_OPEN_TREE")}
+
+    def tearDown(self):
+        for k, v in self.saved_env.items():
+            os.environ.pop(k, None)
+            if v is not None:
+                os.environ[k] = v
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_a_symlinked_hams_shared_is_walked_like_a_directory(self):
+        real = os.path.join(self.tmp, "real_shared")
+        _write(os.path.join(real, "modules", "x.md"), "# [@ANCHOR: x:feat]\n")
+        tree = os.path.join(self.tmp, "wt")
+        os.makedirs(tree)
+        os.symlink(real, os.path.join(tree, "hams_shared"))
+        walked = [root for root, _dirs, _files in va._walk_with_shared(tree)]
+        self.assertIn(os.path.join(tree, "hams_shared", "modules"), walked)
+
+    def test_a_real_hams_shared_directory_is_walked_once(self):
+        tree = os.path.join(self.tmp, "wt")
+        _write(os.path.join(tree, "hams_shared", "modules", "x.md"), "x\n")
+        walked = [root for root, _dirs, _files in va._walk_with_shared(tree)]
+        self.assertEqual(walked.count(os.path.join(tree, "hams_shared", "modules")), 1)
+
+    def test_tree_env_var_names_the_sibling_for_a_worktree_anywhere(self):
+        d = os.path.join(self.tmp, "wt-foo")
+        com = os.path.join(self.tmp, "elsewhere", "my_com_checkout")
+        os.makedirs(d)
+        os.makedirs(com)
+        os.environ["HAMS_ANCHOR_REPO"] = "hams_open"
+        os.environ["HAMS_COM_TREE"] = com
+        try:
+            targets, _warning = va._add_sibling_repo_target(d, [d])
+        finally:
+            os.environ.pop("HAMS_ANCHOR_REPO", None)
+        self.assertIn(com, targets)
+
+    def test_missing_sibling_hint_names_the_exact_fix(self):
+        d = os.path.join(self.tmp, "hams_open")
+        os.makedirs(d)
+        hint = va._missing_sibling_hint(d, [d])
+        self.assertIn("HAMS_COM_TREE=", hint)
+        self.assertIn("hams_com was NOT scanned", hint)
+
+    def test_no_hint_once_the_sibling_was_scanned(self):
+        d = os.path.join(self.tmp, "hams_open")
+        com = os.path.join(self.tmp, "hams_com")
+        os.makedirs(d)
+        os.makedirs(com)
+        self.assertIsNone(va._missing_sibling_hint(d, [d, com]))
+
+
+class BaselineShrinkOnlyTests(unittest.TestCase):
+    """`baseline_growth`: the baseline may lose entries, never gain one. A file absent at the ref is
+    empty, which is the end state (zero findings, baselines deleted)."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.tools = os.path.join(self.tmp, "tools")
+        os.makedirs(self.tools)
+        _git(self.tmp, "init", "-q", "-b", "main")
+        self.path = os.path.join(self.tools, "anchor_baseline_hams_com.json")
+        va.save_baseline(self.path, {"doc_gap|a:one", "doc_gap|a:two", "duplicate|a:three"})
+        _git(self.tmp, "add", "-A")
+        _git(self.tmp, "commit", "-q", "-m", "base")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_unchanged_baseline_is_not_growth(self):
+        self.assertEqual(va.baseline_growth("HEAD", self.tools), {})
+
+    def test_removing_entries_is_not_growth(self):
+        va.save_baseline(self.path, {"doc_gap|a:one"})
+        self.assertEqual(va.baseline_growth("HEAD", self.tools), {})
+
+    def test_deleting_the_file_is_not_growth(self):
+        os.remove(self.path)
+        self.assertEqual(va.baseline_growth("HEAD", self.tools), {})
+
+    def test_an_added_entry_is_growth_and_swapping_one_in_is_growth(self):
+        va.save_baseline(self.path, {"doc_gap|a:one", "doc_gap|a:new"})
+        self.assertEqual(
+            va.baseline_growth("HEAD", self.tools),
+            {"anchor_baseline_hams_com.json": ["doc_gap|a:new"]},
+        )
+
+    def test_a_baseline_recreated_after_it_was_deleted_is_growth(self):
+        os.remove(self.path)
+        _git(self.tmp, "add", "-A")
+        _git(self.tmp, "commit", "-q", "-m", "zero findings")
+        va.save_baseline(self.path, {"doc_gap|a:one"})
+        self.assertEqual(
+            va.baseline_growth("HEAD", self.tools),
+            {"anchor_baseline_hams_com.json": ["doc_gap|a:one"]},
+        )
+
+    def test_a_new_file_for_the_other_repo_is_growth(self):
+        va.save_baseline(os.path.join(self.tools, "anchor_baseline_hams_open.json"), {"doc_gap|b:x"})
+        self.assertEqual(
+            va.baseline_growth("HEAD", self.tools),
+            {"anchor_baseline_hams_open.json": ["doc_gap|b:x"]},
+        )
+
+    def test_unreadable_ref_raises(self):
+        with self.assertRaises(RuntimeError):
+            va.baseline_growth("no-such-ref", self.tools)
+
+    def test_saved_baseline_is_sorted_one_key_per_line_so_shrink_prs_merge(self):
+        with open(self.path, encoding="utf-8") as f:
+            lines = f.read().splitlines()
+        self.assertEqual(lines[0], "[")
+        self.assertEqual(lines[-1], "]")
+        keys = [ln.strip().rstrip(",").strip('"') for ln in lines[1:-1]]
+        self.assertEqual(keys, sorted(keys))
+        self.assertEqual(len(keys), 3)
