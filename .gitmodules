@@ -1,5 +1,0 @@
-[submodule "hams_shared"]
-	path = hams_shared
-	url = https://github.com/BrucePerens/hams_shared
-	branch = main
-	ignore = untracked
