@@ -192,6 +192,22 @@ class TestParkingHttp(HamsHttpCase):
         self.assertEqual(response.status_code, 303)
         self.assertEqual(self.env["parking.inquiry"].search_count([]), count)
 
+    def test_sale_form_refuses_incomplete_or_oversized_posts_and_stores_nothing(self):
+        # Tests [@ANCHOR: parking:COMM_inquiry_controller]
+        token = self.token_from("sale.example")
+        self.safe_patch_object(utils, "TOKEN_MIN_AGE", 0)
+        count = self.env["parking.inquiry"].search_count([])
+        self.assertEqual(self.post({"token": token, "email": "not-an-address", "message": "hi"}, "sale.example").status_code, 400)
+        self.assertEqual(self.post({"token": token, "email": "a@b.example", "message": "  "}, "sale.example").status_code, 400)
+        self.assertEqual(self.post({"token": token, "email": "a@b.example", "message": "x" * 100000}, "sale.example").status_code, 413)
+        self.assertEqual(self.env["parking.inquiry"].search_count([]), count)
+
+    def test_favicon_is_an_empty_204_on_a_parked_host(self):
+        # Tests [@ANCHOR: parking:COMM_parking_serve]
+        response = self.get("/favicon.ico", "parked.example")
+        self.assertEqual(response.status_code, 204)
+        self.assertEqual(response.content, b"")
+
     # [@ANCHOR: parking:COMM_test_parking_secret]
     # [@ANCHOR: parking:COMM_test_inquiry_rate_limited]
     def test_sale_form_rate_limit_per_address(self):
