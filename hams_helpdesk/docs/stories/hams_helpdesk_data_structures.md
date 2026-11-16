@@ -102,6 +102,22 @@
 
 **See also:** test `test_01_ticket_creation_and_routing (tests/test_helpdesk_core.py)`.
 
+### `GithubDelivery` [@ANCHOR: hams_helpdesk:hams_helpdesk_github_delivery_github_delivery]
+
+**Purpose and location.** Model description: GitHub webhook delivery already processed. Remembers each `X-GitHub-Delivery` id the `/webhook/github` controller has accepted, so a captured signed delivery cannot be replayed to open a fresh ticket. Defined in `hams_helpdesk/models/github_delivery.py:17` as an Odoo model; bases: `models.Model`. (model `hams_helpdesk.github_delivery`.) It is a stored model with its own database table.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `name` | `Char` | Delivery id: the GitHub delivery id; required, indexed, and unique by the SQL constraint `_delivery_once` ("A delivery id is recorded once."). |
+
+**Class attributes.** `_name = "hams_helpdesk.github_delivery"`.
+
+**Invariants, ownership and concurrency.** Each id is stored once (UNIQUE constraint). `_claim` deletes rows older than `RETENTION_DAYS` (7) before checking, so an id can be claimed again after the window. Rows are created through the webhook service user only (see `security/ir.model.access.csv`).
+
+**Methods.** `_claim`.
+
+**See also:** test `test_github_webhook_replayed_delivery_id_opens_no_second_ticket (tests/test_github_webhook.py)`.
+
 ### `ExceptionFingerprintDaemon` [@ANCHOR: hams_helpdesk:hams_helpdesk_daemon_exception_exception_fingerprint_daemon]
 
 **Purpose and location.** Extends the Odoo model "hams_helpdesk.exception.fingerprint" with no new fields and the methods `report_daemon_failure`, `_report_unit_failures`. Defined in `hams_helpdesk/models/daemon_exception.py:51` as an Odoo model; bases: `models.Model`. (extends `hams_helpdesk.exception.fingerprint`.)
