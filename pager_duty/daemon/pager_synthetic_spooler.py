@@ -354,9 +354,26 @@ def execute_check(check):
     return name, res
 
 
+# [@ANCHOR: pager_duty:synthetic_spooler_resolve_config_path]
+# Verified by [@ANCHOR: pager_duty:test_synthetic_spooler_reads_the_same_config_file]
+def resolve_config_path(environ=None):
+    """The configuration file to read, by the same rule as generalized_monitor.resolve_config_path: PAGER_CONFIG_PATH, then
+    pager_config.json in PAGER_CONFIG_DIR (default /opt/hams/etc) if it exists, then the file next to this script. This
+    spooler used to read only the file next to itself, so the checks an administrator pushed from Odoo never reached it. (It
+    cannot import generalized_monitor, which is large and starts threads; a test keeps the two rules equal.)"""
+    environ = os.environ if environ is None else environ
+    explicit = environ.get("PAGER_CONFIG_PATH")
+    if explicit:
+        return explicit
+    system_path = os.path.join(environ.get("PAGER_CONFIG_DIR", "/opt/hams/etc"), "pager_config.json")
+    if os.path.exists(system_path):
+        return system_path
+    return os.path.join(os.path.dirname(__file__), "pager_config.json")
+
+
 # [@ANCHOR: pager_duty:synthetic_spooler_main]
 def main():
-    config_path = os.path.join(os.path.dirname(__file__), "pager_config.json")
+    config_path = resolve_config_path()
     if not os.path.exists(config_path):
         # This branch must log before returning 1: with no log line, and
         # with the `if __name__ == "__main__":` guard below calling `main()`

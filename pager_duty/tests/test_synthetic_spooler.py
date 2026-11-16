@@ -8,6 +8,7 @@ import os
 import tempfile
 import threading
 import time
+from unittest.mock import patch
 
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
@@ -213,6 +214,10 @@ class TestSyntheticSpooler(HamsTransactionCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             config_path = os.path.join(tmpdir, "pager_config.json")
             spool_path = os.path.join(tmpdir, "pager_synthetic_spool.json")
+            # main() prefers PAGER_CONFIG_PATH, so point it at this throwaway config, not the real one in /opt/hams/etc.
+            env_patch = patch.dict(os.environ, {"PAGER_CONFIG_PATH": config_path})
+            env_patch.start()
+            self.addCleanup(env_patch.stop)
             with open(config_path, "w", encoding="utf-8") as f:
                 json.dump(
                     {
@@ -325,6 +330,9 @@ class TestSyntheticSpooler(HamsTransactionCase):
     def test_04_main_returns_1_when_no_config_file_exists(self):
         # Tests [@ANCHOR: pager_duty:synthetic_spooler_main]
         with tempfile.TemporaryDirectory() as tmpdir:
+            env_patch = patch.dict(os.environ, {"PAGER_CONFIG_DIR": os.path.join(tmpdir, "none")})
+            env_patch.start()
+            self.addCleanup(env_patch.stop)
             self.safe_patch(
                 "odoo.addons.pager_duty.daemon.pager_synthetic_spooler.__file__",
                 os.path.join(tmpdir, "pager_synthetic_spooler.py"),
