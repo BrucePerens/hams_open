@@ -205,6 +205,26 @@ class TestGeneralizedConfig(HamsTransactionCase):
             "must tighten its mode to 0o600, not leave whatever mode it already had.",
         )
 
+    def test_06f_a_write_that_fails_part_way_leaves_the_previous_config_in_place(self):
+        """The export used to truncate pager_config.json first and then write, so a full disk or any failure after the open left
+        an empty or partial file: the message said the daemon "is still using its previous configuration", and its next start
+        halted on "Failed to parse ... as valid JSON"."""
+        # Tests [@ANCHOR: generalized_pager_config]
+        check_model = self.env["pager.check"].with_user(self.admin)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "pager_config.json")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write('{"checks": []}')
+            self.safe_patch_object(type(check_model), "_get_config_path", return_value=path)
+            self.safe_patch("os.fchmod", side_effect=OSError(28, "No space left on device"))
+            result = check_model.action_push_to_json()
+            with open(path, encoding="utf-8") as f:
+                kept = f.read()
+            leftovers = [name for name in os.listdir(tmp) if name != "pager_config.json"]
+        self.assertEqual(result["params"]["type"], "danger")
+        self.assertEqual(kept, '{"checks": []}')
+        self.assertEqual(leftovers, [], "a failed export must not leave its temporary file behind")
+
     def test_06c_export_names_a_childs_parent_by_id_as_well_as_by_name(self):
         """A check name is only unique per website, so the daemon matches a parent by id; the name stays for a config
         file or daemon from before parent_id existed."""
