@@ -99,3 +99,5 @@ A rule for the three mail templates in `data/user_websites_data.xml` (content vi
 
 ### Words inside owner-site template expressions are translated [@ANCHOR: user_websites:template_literals_translatable]
 Odoo translates template text but not a string literal inside `t-out`. The owner pages (Published/Unpublished/Draft, Publish/Unpublish, Edit page/New page) therefore showed English to owners using another language. They are now plain text under `t-if`/`t-else`, and the `user_websites` test `test_template_literals_translatable` fails if English prose is put back inside an expression in any `views/` template of this repo.
+
+* **Story:** As a moderator, I want an appeal kept when the suspended user or group is deleted outright, still showing who it was about, so the moderation history is not lost -> [@ANCHOR: user_websites:appeal_compute_target_label]; checked by [@ANCHOR: user_websites:test_appeal_survives_user_delete].

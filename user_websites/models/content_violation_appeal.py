@@ -19,7 +19,9 @@ class ContentViolationAppeal(models.Model):
         "res.users",
         string="Suspended User",
         required=False,
-        ondelete="cascade",
+        # Moderation history is kept when the user is deleted outright (Bruce, 2026-11-16): the link is
+        # cleared and `target_label` still says who it was about.
+        ondelete="set null",
         tracking=True,
         # Odoo only runs @api.constrains methods whose watched fields were
         # actually present in the create()/write() vals; an explicit default
@@ -33,9 +35,15 @@ class ContentViolationAppeal(models.Model):
         "user.websites.group",
         string="Suspended Group",
         required=False,
-        ondelete="cascade",
+        ondelete="set null",
         tracking=True,
         default=False,
+    )
+    target_label = fields.Char(
+        string="Appeal About",
+        compute="_compute_target_label",
+        store=True,
+        help="Name of the suspended user or group. Kept when that user or group is deleted, so the appeal stays identifiable.",
     )
     reason = fields.Text(string="Appeal Reason", required=True)
 
@@ -57,6 +65,18 @@ class ContentViolationAppeal(models.Model):
         tracking=True,
         index=True,
     )
+
+    # [@ANCHOR: user_websites:appeal_compute_target_label]
+    # Verified by [@ANCHOR: user_websites:test_appeal_survives_user_delete]
+    @api.depends("user_id.name", "group_id.name")
+    def _compute_target_label(self):
+        for appeal in self:
+            target = appeal.user_id or appeal.group_id
+            # An orphaned appeal (its user or group was deleted) keeps the label it had.
+            if target:
+                appeal.target_label = target.name
+            elif not appeal.target_label:
+                appeal.target_label = False
 
     @api.constrains("user_id", "group_id")
     # [@ANCHOR: user_websites:COMM_check_appeal_target]
@@ -125,6 +145,10 @@ class ContentViolationAppeal(models.Model):
                 raise UserError(
                     _("This appeal has already been resolved (%s) and cannot be approved again.")
                     % appeal.state
+                )
+            if not (appeal.user_id or appeal.group_id):
+                raise UserError(
+                    _("The user or group this appeal was about no longer exists; there is no one to pardon. Reject it to close it.")
                 )
         # ADR 0078: Fetch service account outside the loop for O(1) Memory Mapping
         mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
