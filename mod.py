@@ -1,7 +1,5 @@
-# Doubles the input.
-# [@ANCHOR: my_module:foo]
-def foo(x):
-    """Return x plus one."""
-    # add one
-    y = x + 2  # the sum
-    return y, "# not a comment"
+# [@ANCHOR: t:x]
+def foo(a, b=1):
+    """Add."""
+    total = a - b  # add
+    return total
