@@ -1,5 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_daemon_key_registry_manager,daemon.key.registry.manager,model_daemon_key_registry,group_daemon_key_manager,1,1,1,1
-access_daemon_key_registry_apikeys_manager,daemon.key.registry.apikeys.manager,base.model_res_users_apikeys,group_daemon_key_manager,1,1,1,1
-access_daemon_key_registry_users_read,daemon.key.registry.users.read,base.model_res_users,group_daemon_key_manager,1,0,0,0
-access_daemon_key_registry_cron_trigger,daemon.key.registry.cron.trigger,base.model_ir_cron,group_daemon_key_manager,1,1,0,0

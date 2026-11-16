@@ -1,1 +1,0 @@
-hams_shared/AGENTS.md
