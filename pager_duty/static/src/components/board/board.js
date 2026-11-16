@@ -50,7 +50,11 @@ export class PagerBoard extends Component {
         if (urlParams.has('website_id')) {
             context.website_id = parseInt(urlParams.get('website_id'));
         }
+        // A slow older answer must not overwrite a newer one that overlapped it.
+        this.fetchSeq = (this.fetchSeq || 0) + 1;
+        const seq = this.fetchSeq;
         const data = await this.orm.call("pager.incident", "get_board_data", [], { context });
+        if (seq !== this.fetchSeq) return;
         this.state.active_incidents = data.active;
         this.state.resolved_incidents = data.resolved;
         this.state.on_duty = data.on_duty;

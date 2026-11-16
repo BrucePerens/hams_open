@@ -119,6 +119,23 @@ describe("pager_duty_board", () => {
         expect(shifted).toBe(2);
     });
 
+    test("fetchData: a slow older answer does not overwrite the newer one that overlapped it", async () => {
+        // Tests [@ANCHOR: pager_duty:js_board_fetch_data]
+        const older = { active: [], resolved: [], on_duty: "OLD", stats: {} };
+        const newer = { active: [], resolved: [], on_duty: "NEW", stats: {} };
+        const releases = [];
+        const board = bareBoard({ calls: [] });
+        board.orm = { call: () => new Promise((resolve) => releases.push(resolve)) };
+        board.applyBurnInShift = () => {};
+        const first = PagerBoard.prototype.fetchData.call(board);
+        const second = PagerBoard.prototype.fetchData.call(board);
+        releases[1](newer);
+        await second;
+        releases[0](older);
+        await first;
+        expect(board.state.on_duty).toBe("NEW");
+    });
+
     test("applyBurnInShift moves the display by up to 15 pixels each way over twenty seconds", () => {
         // Tests [@ANCHOR: pager_duty:js_board_apply_burn_in_shift]
         const board = bareBoard({ calls: [] });
