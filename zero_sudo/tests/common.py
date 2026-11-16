@@ -1010,8 +1010,9 @@ def _patched_wait_ready(self, ready_code=None, timeout=60, *args, **kwargs):
             return True
 
         remaining = timeout - (time.time() - start_time)
-        if remaining > 0:
-            time.sleep(min(_WAIT_READY_POLL_INTERVAL, remaining))  # audit-ignore-sleep
+        if remaining <= 0:
+            break  # at exactly the deadline `taken > timeout` is false and no sleep would advance the clock: spin forever
+        time.sleep(min(_WAIT_READY_POLL_INTERVAL, remaining))  # audit-ignore-sleep
 
     exc = self._result.done() and self._result.exception()
     if exc:

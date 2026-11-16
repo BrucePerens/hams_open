@@ -31,6 +31,8 @@ class _FakeBrowser:
         self.screenshots = []
 
     def _websocket_request(self, method, *, params=None, timeout=10.0):
+        if len(self.calls) > 1000:
+            raise AssertionError("_wait_ready is spinning: over 1000 evaluate calls")
         self.calls.append((method, timeout))
         nxt = self._responses[0] if len(self._responses) == 1 else self._responses.pop(0)
         if isinstance(nxt, BaseException):
@@ -52,8 +54,11 @@ class _FakeClock:
         return self.now
 
     def sleep(self, seconds):
+        if len(self.sleeps) > 1000:
+            raise AssertionError("_wait_ready is spinning: over 1000 sleeps on the fake clock")
         self.sleeps.append(seconds)
-        self.now += seconds
+        # Always move at least a microsecond: a sub-ulp sleep at 1000.0 would not change `now` at all.
+        self.now += max(seconds, 1e-6)
 
     def __getattr__(self, name):
         return getattr(time, name)
