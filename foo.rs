@@ -1,3 +1,8 @@
-fn clamp(x: f32) -> f32 {
-    if x > 1.0 { 1.0 } else { x }
+// Verified by [@ANCHOR: mod:test_bar]
+fn bar(x: i32) -> i32 {
+    if x > 0 {
+        x
+    } else {
+        -x
+    }
 }
