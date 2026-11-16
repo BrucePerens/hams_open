@@ -1494,6 +1494,7 @@ class HelpdeskTicket(models.Model):
         # drop), it just starts in the "spam" quarantine stage, which a
         # human can move back to "new" to recover a false positive.
         parked = stash_for(self.env).get(msg_dict.get("message_id") or "") or {}
+        parked["new_ticket"] = True  # the first message of a new ticket is not a reply (UntrustedMixin.message_post)
         spam_reasons = inbound_spam_reasons(
             subject=msg_dict.get("subject") or "",
             body_html=msg_dict.get("body") or "",

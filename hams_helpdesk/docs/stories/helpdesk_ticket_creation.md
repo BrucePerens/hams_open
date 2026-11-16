@@ -171,6 +171,18 @@ to the From address, or `False`/`None`. Returns True when that partner has at le
 a partner that is only a contact. Runs as the helpdesk service account because the mail-ingest identity cannot read `res.users`.
 No side effects. Mail from a member is never run through the spam filter (but see the DMARC exception above).
 
+### `inbound_failed_sender_authentication` [@ANCHOR: hams_helpdesk:inbound_failed_sender_authentication]
+
+`failed_sender_authentication(signals)`: the reason (a string) when SES recorded a DMARC failure, or an SPF failure without a passing
+DKIM signature, else `''`. The same rule as ses_webhook's `_failed_sender_check`, for mail that arrives through `ingest_inbound_email`.
+
+### `inbound_reply_hold_reason` [@ANCHOR: hams_helpdesk:inbound_reply_hold_reason]
+
+An email reply onto an existing ticket lands as an internal note, with no author and a "Held email reply" banner, when its From fails
+authentication or its sender is neither a user nor a participant (the ticket's customer, a follower, or an address that wrote on it
+before). Decision: the support@ alias accepts any sender, so a stranger who knows a Message-ID cannot post a customer-visible message.
+Verified by `test_17_a_spoofed_reply_lands_as_a_note_not_in_the_members_name`.
+
 ### A quarantined ticket mails nobody [@ANCHOR: hams_helpdesk:COMM_helpdesk_spam_create_sends_no_mail]
 
 `create()` switches off Odoo's own "you have been assigned" email (the `mail_auto_subscribe_no_notify` context key) when every ticket
