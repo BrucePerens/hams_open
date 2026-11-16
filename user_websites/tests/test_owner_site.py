@@ -632,6 +632,27 @@ class TestOwnerSite(HamsHttpCase):
         self.authenticate("ownertwo", "ownertwo")
         self.assertEqual(self._upload(PNG).status_code, 404)
 
+    def test_19b_uploads_have_their_own_limit_and_a_redis_outage_refuses_rather_than_allows(self):
+        # Tests [@ANCHOR: user_websites:owner_rate_limit]
+        self.authenticate("ownerone", "ownerone")
+        db = self.env.cr.dbname
+        write_key = f"uw:rl:{db}:write:{self.owner.id}"
+        upload_key = f"uw:rl:{db}:upload:{self.owner.id}"
+        self.addCleanup(redis_client.delete, write_key, upload_key)
+        redis_client.set(write_key, 10_000, ex=60)
+        self.assertEqual(self._upload(PNG).status_code, 200, "the write limit does not use up the upload limit")
+        redis_client.delete(write_key)
+        redis_client.set(upload_key, owner_site.UPLOADS_PER_MINUTE, ex=60)
+        self.assertEqual(self._upload(PNG).status_code, 429)
+        redis_client.delete(upload_key)
+        self.safe_patch_object(owner_site, "expiring_counter", side_effect=redis.RedisError("simulated"))
+        # The refusal is a 503 in the controller; the error page for it is missing on this box, so only "refused" is asserted.
+        before = self.env["ir.attachment"].search_count([("res_model", "=", "res.users"), ("res_id", "=", self.owner.id)])
+        self.assertGreaterEqual(self._upload(PNG).status_code, 400, "a limiter that cannot count fails closed")
+        self.assertEqual(
+            self.env["ir.attachment"].search_count([("res_model", "=", "res.users"), ("res_id", "=", self.owner.id)]), before
+        )
+
     def test_20_image_limit_per_site(self):
         self.authenticate("ownerone", "ownerone")
         attachments = self.env["ir.attachment"]
