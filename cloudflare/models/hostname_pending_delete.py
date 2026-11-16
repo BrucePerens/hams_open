@@ -48,7 +48,7 @@ class CloudflareHostnamePendingDelete(models.Model):
     _description = "Cloudflare Custom Hostname Pending Delete"
     _order = "state, next_attempt_at, id"
 
-    name = fields.Char(string="Name", compute="_compute_name", readonly=True)
+    name = fields.Char(string="Name", compute="_compute_name", store=True, readonly=True)
     cf_hostname_id = fields.Char(
         string="Cloudflare Hostname ID", required=True, readonly=True, index=True
     )

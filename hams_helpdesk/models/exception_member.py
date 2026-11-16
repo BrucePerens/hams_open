@@ -55,7 +55,7 @@ class ExceptionMember(models.Model):
     _description = "Member affected by an automatic exception ticket"
     _order = "last_seen desc, id desc"
 
-    name = fields.Char(compute="_compute_name", help="A number only; the member's name is never part of it.")
+    name = fields.Char(compute="_compute_name", store=True, help="A number only; the member's name is never part of it.")
     fingerprint_id = fields.Many2one(
         "hams_helpdesk.exception.fingerprint", required=True, index=True, ondelete="cascade", readonly=True
     )

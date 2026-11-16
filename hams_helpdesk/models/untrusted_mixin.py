@@ -316,7 +316,7 @@ class HamsHelpdeskTicketSuspicion(models.Model):
     _description = "What the untrusted-text filter removed or flagged on a ticket (staff evidence)"
     _order = "id desc"
 
-    name = fields.Char(compute="_compute_name")
+    name = fields.Char(compute="_compute_name", store=True)
     ticket_id = fields.Many2one("hams_helpdesk.ticket", required=True, ondelete="cascade", index=True)
     source = fields.Char()
     score = fields.Integer()
