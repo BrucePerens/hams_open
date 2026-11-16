@@ -31,6 +31,8 @@ class SesWebhookLog(models.Model):
     error_message = fields.Text(string='Error Message', readonly=True)
     raw_payload = fields.Text(string='Raw JSON Payload', readonly=True)
 
+    # [@ANCHOR: ses_webhook:log_compute_company_id]
+    # Verified by [@ANCHOR: ses_webhook:test_log_survives_domain_delete]
     @api.depends('domain_id.company_id')
     def _compute_company_id(self):
         for log in self:
