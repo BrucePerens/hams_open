@@ -165,9 +165,17 @@ class CloudflareConfigManager(models.AbstractModel):
                 if not token or not zone_id:
                     continue
 
-                existing_ruleset = get_zone_ruleset(
+                # A Cloudflare outage or a token that cannot read the zone must not look like "no ruleset":
+                # the default rules would then be pushed over the real ones.
+                state, existing_ruleset = get_zone_ruleset_checked(
                     "http_request_firewall_custom", token, zone_id
                 )
+                if state == "error":
+                    _logger.warning(
+                        "[!] Cloudflare ruleset for %s could not be read (%s); leaving it alone.",
+                        website.name, existing_ruleset,
+                    )
+                    continue
                 if existing_ruleset and existing_ruleset.get("rules"):
                     _logger.info(
                         "[+] Existing rules detected for %s. Backing up and syncing.",
