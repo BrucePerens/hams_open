@@ -61,6 +61,8 @@ def _mac(key, text):
 
 # [@ANCHOR: form_shield:ip_tag]
 # Verified by [@ANCHOR: form_shield:test_ip_tag_uses_prefix_and_keeps_no_address]
+# Verified by [@ANCHOR: form_shield:test_tokens_guards_ip_prefix]
+# Verified by [@ANCHOR: form_shield:test_tokens_guards_ip_tag_and_challenge_shape]
 def ip_prefix(address):
     """The /24 (IPv4) or /48 (IPv6) network of `address`, as text.
 
@@ -83,6 +85,7 @@ def ip_prefix(address):
 
 # [@ANCHOR: form_shield:ip_tag_hash]
 # Verified by [@ANCHOR: form_shield:test_ip_tag_uses_prefix_and_keeps_no_address]
+# Verified by [@ANCHOR: form_shield:test_tokens_guards_ip_tag_and_challenge_shape]
 def ip_tag(key, address):
     """A keyed hash of the address's network. The address itself is never stored."""
     return _mac(key, "ip|" + ip_prefix(address))[:16]
@@ -90,6 +93,7 @@ def ip_tag(key, address):
 
 # [@ANCHOR: form_shield:make_challenge]
 # Verified by [@ANCHOR: form_shield:test_tampered_challenge_is_refused]
+# Verified by [@ANCHOR: form_shield:test_tokens_guards_ip_tag_and_challenge_shape]
 def make_challenge(key, address, now, difficulty, kind, ttl):
     """A signed challenge issued at `now` (seconds) that stops being valid after `ttl`."""
     fields = [
@@ -111,6 +115,7 @@ class Parsed:
 
     # [@ANCHOR: form_shield:parsed_challenge]
     # Verified by [@ANCHOR: form_shield:test_tampered_challenge_is_refused]
+    # Verified by [@ANCHOR: form_shield:test_tokens_guards_parse_challenge]
     def __init__(self, token, kind, issued, expires, difficulty, nonce, tag):
         self.token = token
         self.kind = kind
@@ -123,6 +128,7 @@ class Parsed:
 
 # [@ANCHOR: form_shield:split_response]
 # Verified by [@ANCHOR: form_shield:test_check_refusal_table]
+# Verified by [@ANCHOR: form_shield:test_tokens_guards_split_response]
 def split_response(response):
     """(challenge, solution) from `<challenge>~<solution>`, or (None, None)."""
     text = (response or "").strip()
@@ -134,6 +140,7 @@ def split_response(response):
 
 # [@ANCHOR: form_shield:parse_challenge]
 # Verified by [@ANCHOR: form_shield:test_tampered_challenge_is_refused]
+# Verified by [@ANCHOR: form_shield:test_tokens_guards_parse_challenge]
 def parse_challenge(key, token):
     """(Parsed, None) when the signature holds, else (None, reason)."""
     parts = (token or "").split(".")
@@ -159,6 +166,7 @@ def parse_challenge(key, token):
 
 # [@ANCHOR: form_shield:leading_zero_bits]
 # Verified by [@ANCHOR: form_shield:test_pow_vector_matches_the_browser_solver]
+# Verified by [@ANCHOR: form_shield:test_tokens_guards_pow_edges]
 def leading_zero_bits(digest):
     """How many zero bits `digest` (bytes) starts with."""
     value = int.from_bytes(digest, "big")
@@ -175,6 +183,7 @@ def pow_digest(token, form_id, counter):
 
 # [@ANCHOR: form_shield:pow_valid]
 # Verified by [@ANCHOR: form_shield:test_pow_vector_matches_the_browser_solver]
+# Verified by [@ANCHOR: form_shield:test_tokens_guards_pow_edges]
 def pow_valid(token, form_id, counter, difficulty):
     """True when `counter` is a decimal that solves `token` for `form_id`."""
     text = str(counter)
@@ -188,6 +197,7 @@ def pow_valid(token, form_id, counter, difficulty):
 
 # [@ANCHOR: form_shield:solve_pow]
 # Verified by [@ANCHOR: form_shield:test_pow_vector_matches_the_browser_solver]
+# Verified by [@ANCHOR: form_shield:test_tokens_guards_pow_edges]
 def solve_pow(token, form_id, difficulty, start=0):
     """The smallest counter that solves `token`. The browser does this in a Web Worker."""
     counter = start
@@ -198,6 +208,7 @@ def solve_pow(token, form_id, difficulty, start=0):
 
 # [@ANCHOR: form_shield:question_numbers]
 # Verified by [@ANCHOR: form_shield:test_question_fallback_accepts_the_right_answer]
+# Verified by [@ANCHOR: form_shield:test_tokens_guards_question_edges]
 def question_numbers(nonce):
     """The two numbers of the arithmetic question a "q" challenge asks, from its nonce."""
     first = 2 + int(nonce[0:2], 16) % 9
@@ -207,6 +218,7 @@ def question_numbers(nonce):
 
 # [@ANCHOR: form_shield:question_text]
 # Verified by [@ANCHOR: form_shield:test_question_fallback_accepts_the_right_answer]
+# Verified by [@ANCHOR: form_shield:test_tokens_guards_question_edges]
 def question_text(nonce):
     first, second = question_numbers(nonce)
     return "What is %s plus %s? Type your answer as digits." % (
@@ -217,6 +229,7 @@ def question_text(nonce):
 
 # [@ANCHOR: form_shield:question_valid]
 # Verified by [@ANCHOR: form_shield:test_question_fallback_accepts_the_right_answer]
+# Verified by [@ANCHOR: form_shield:test_tokens_guards_question_edges]
 def question_valid(nonce, answer):
     try:
         first, second = question_numbers(nonce)
