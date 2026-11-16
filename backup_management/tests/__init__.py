@@ -18,3 +18,4 @@ from . import test_tdd_batch2
 from . import test_hooks
 from . import test_rpc_exposure
 from . import test_board_hoot
+from . import test_path_and_restore_refusals
