@@ -52,7 +52,6 @@ class TestParkingUtils(HamsTransactionCase):
         for junk in ("", "x", "1000.", "abc.def", None, "1000.\u00e9", "1000." + "\u0661" * 32):
             self.assertFalse(utils.verify_form_token("s3cret", "a.example", junk, now=1010))
 
-    # [@ANCHOR: parking:COMM_test_form_token_age_window]
     def test_form_token_age_window_edges_and_clock(self):
         # Tests [@ANCHOR: parking:COMM_verify_form_token]
         # Tests [@ANCHOR: parking:COMM_form_token]
@@ -84,7 +83,6 @@ class TestParkingUtils(HamsTransactionCase):
         clock.time = lambda: 5000.7 + utils.TOKEN_MIN_AGE
         self.assertTrue(utils.verify_form_token("s3cret", "a.example", fresh))
 
-    # [@ANCHOR: parking:COMM_test_client_ip_hash_lengths]
     def test_client_ip_and_hash_are_bounded(self):
         # Tests [@ANCHOR: parking:COMM_client_ip]
         # Tests [@ANCHOR: parking:COMM_hash_ip]
