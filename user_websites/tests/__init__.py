@@ -60,6 +60,7 @@ from . import test_open_source_defaults
 from . import test_image_cap_race
 from . import test_appeal_race
 from . import test_layout_seo
+from . import test_site_creation_refusals
 
 from .open_source_defaults import pin_package
 
