@@ -62,6 +62,7 @@ from . import test_image_cap_race
 from . import test_post_quota_race
 from . import test_page_quota_race
 from . import test_appeal_race
+from . import test_user_delete_cleanup
 from . import test_layout_seo
 from . import test_site_creation_refusals
 from . import test_template_literals_translatable
