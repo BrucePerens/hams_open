@@ -22,6 +22,7 @@ from ..utils.cloudflare_api import (
 # verification labels, a leading "*" label for a wildcard.
 NAME_PATTERN = re.compile(r"(\*\.)?([a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?\.)+[a-z0-9_]([a-z0-9_-]{0,61}[a-z0-9_])?")
 CREDENTIAL_ERROR = "***ERROR***"
+NO_ZONE_PROBLEM = "no Cloudflare zone for"
 
 
 # [@ANCHOR: cloudflare_dns_record_cloudflare_dnsrecord]
@@ -239,7 +240,8 @@ class CloudflareDNSRecord(models.Model):
                 continue
             zone_id, problem = self._dns_zone_of(row.name, website, token, zone_cache)
             if problem:
-                entries.append(self._dns_problem_entry(plain, problem))
+                entry = self._dns_gone_retire_entry(plain, problem)
+                entries.append(entry or self._dns_problem_entry(plain, problem))
                 continue
             key = (zone_id, row.name)
             if key not in record_cache:
@@ -256,6 +258,19 @@ class CloudflareDNSRecord(models.Model):
         problems = self._dns_problems(entries)
         return {"entries": entries, "problems": problems, "hash": dns_plan.plan_hash(entries),
                 "text": dns_plan.render(entries)}
+
+    # [@ANCHOR: cloudflare:COMM_dns_gone_retire_entry]
+    # Verified by [@ANCHOR: cloudflare:COMM_test_dns_gone_retire_entry]
+    @staticmethod
+    def _dns_gone_retire_entry(plain, problem):
+        """The plan entry for a row marked Retire and linked to a record whose zone Cloudflare no longer shows the
+        token (deleted, or moved away when the domain's name servers changed): the record went with the zone, so the
+        row is archived on Apply, the same as a retired row whose record is already absent. None for any other row or
+        problem (an API error says nothing about the zone), which stays a problem entry."""
+        if not problem.startswith(NO_ZONE_PROBLEM) or not (plain["retire"] and plain["manage"] and plain["cf_record_id"]):
+            return None
+        entry = dns_plan.plan_row(plain, [])
+        return entry if entry.get("already_gone") else None
 
     # [@ANCHOR: cloudflare:COMM_dns_problem_entry]
     @staticmethod
@@ -281,7 +296,7 @@ class CloudflareDNSRecord(models.Model):
             if zone_id:
                 cache[("zone_name", zone_id)] = candidate
                 return zone_id, None
-        return None, f"no Cloudflare zone for {name} is visible to the token of website {website.display_name}"
+        return None, f"{NO_ZONE_PROBLEM} {name} is visible to the token of website {website.display_name}"
 
     # [@ANCHOR: cloudflare:COMM_dns_problems_hook]
     def _dns_problems(self, entries):
