@@ -8,11 +8,15 @@ from odoo.addons.zero_sudo.daemon.ssrf_safe_fetch import (
     urlopen_ssrf_safe as _urlopen_ssrf_safe,
 )
 import base64
+import hashlib
 import html
 import logging
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
+from email.utils import parseaddr
+
+import redis
 
 from markupsafe import Markup
 
@@ -23,6 +27,7 @@ from .link_defang import DEFANG_WARNING_TEXT, defang_html
 from .mail_thread_untrusted import stash_for
 from . import untrusted_text as ut
 from .triage_wakeup import write_triage_wakeups
+from odoo.addons.distributed_redis_cache.redis_pool import expiring_counter, get_redis_connection
 from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
@@ -47,6 +52,11 @@ _TRIAGE_FIELDS = (
 # Bruce's policy settings for the triage verdict are system parameters, read through zero_sudo's whitelist; the code
 # default is the conservative choice.
 _TRIAGE_PARAM_QUARANTINE = "hams_helpdesk.triage_quarantine_verdicts"
+# Tickets one anonymous (non-member) email sender may open per hour: per address, and per sender domain (a spammer rotates
+# local parts). Over either, the ticket starts in the Spam stage (never a silent drop).
+_INBOUND_CREATE_LIMITS = (("address", 5), ("domain", 30))
+_INBOUND_CREATE_WINDOW = 3600
+
 _TRIAGE_QUARANTINE_DEFAULT = "spam,phishing"
 _TRIAGE_PARAM_HOLD = "hams_helpdesk.triage_notify_hold_seconds"
 _TRIAGE_PARAM_ON_LEAVING_SPAM = "hams_helpdesk.triage_notify_on_leaving_spam"
@@ -1502,6 +1512,8 @@ class HelpdeskTicket(models.Model):
             verdicts=parked.get("ses_verdicts"),
             trusted_sender=self._inbound_sender_is_member(author_id),
         )
+        if not spam_reasons and not self._inbound_sender_is_member(author_id):
+            spam_reasons = self._inbound_create_rate_reasons(msg_dict.get("email_from"))
         if spam_reasons:
             values["stage"] = "spam"
             _logger.info(
@@ -1526,6 +1538,28 @@ class HelpdeskTicket(models.Model):
                 subtype_xmlid="mail.mt_note",
             )
         return ticket
+
+    # [@ANCHOR: hams_helpdesk:inbound_create_rate_reasons]
+    @api.model
+    def _inbound_create_rate_reasons(self, email_from):
+        """Spam reasons ([] when within the limits) for a ticket an anonymous sender opens by email: more than
+        ``_INBOUND_CREATE_LIMITS`` tickets from the address or its domain in an hour. Each call counts one ticket. When Redis
+        is down the mail is accepted (the mail is not dropped; the limit is an abuse brake)."""
+        address = (parseaddr(email_from or "")[1] or "").strip().lower()
+        if "@" not in address:
+            return []
+        scopes = {"address": address, "domain": address.rpartition("@")[2]}
+        reasons = []
+        try:
+            client = get_redis_connection(self.env)
+            for scope, allowed in _INBOUND_CREATE_LIMITS:
+                digest = hashlib.sha256(f"{self.env.cr.dbname}|{scopes[scope]}".encode()).hexdigest()[:24]
+                used = expiring_counter(client, f"hams_helpdesk:inbound_create:{scope}:{digest}", _INBOUND_CREATE_WINDOW)
+                if used > allowed:
+                    reasons.append(f"more than {allowed} tickets an hour from this sender {scope}")
+        except redis.RedisError as error:
+            _logger.info("Inbound ticket-creation limiter unavailable, the mail is accepted: %r", error)
+        return reasons
 
     @api.model
     # [@ANCHOR: hams_helpdesk:inbound_sender_is_member]

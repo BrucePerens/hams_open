@@ -5,6 +5,7 @@
 import ast
 import base64
 import hashlib
+import redis
 
 from odoo.exceptions import AccessError
 from odoo.tests.common import tagged
@@ -46,6 +47,18 @@ class TestMailIngest(HamsTransactionCase):
             cls.company.alias_domain_id = alias_domain
 
         cls.ingest_user = cls.env.ref("hams_helpdesk.user_mail_ingest_service")
+
+    def setUp(self):
+        super().setUp()
+        # The real counters live in Redis and outlive the test transaction: an in-memory stand-in keeps runs independent.
+        self.create_counts = {}
+
+        def counter(_client, key, _window, amount=1):
+            self.create_counts[key] = self.create_counts.get(key, 0) + amount
+            return self.create_counts[key]
+
+        self.safe_patch("odoo.addons.hams_helpdesk.models.helpdesk_ticket.get_redis_connection", return_value=object())
+        self.safe_patch("odoo.addons.hams_helpdesk.models.helpdesk_ticket.expiring_counter", side_effect=counter)
 
     def _raw_email(self, to_addr, subject="Test inquiry", from_addr="customer@example.com", extra_headers=""):
         return (
@@ -550,3 +563,27 @@ class TestMailIngest(HamsTransactionCase):
         self.assertEqual(reply.subtype_id, self.env.ref("mail.mt_note"), "an address that is no participant cannot post a visible message")
         self.assertFalse(reply.author_id)
         self.assertIn("not a participant", reply.body)
+
+    def _stage_after_ingest(self, subject, from_addr):
+        self._ingest(raw_message("support@hams.com", subject, from_addr=from_addr, html=False))
+        return self.env["hams_helpdesk.ticket"].search([("name", "=", subject)], order="id desc", limit=1).stage
+
+    def test_19_an_anonymous_sender_over_the_hourly_limit_is_quarantined(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_create_rate_reasons]
+        stages = [self._stage_after_ingest(f"Flood number {n}", "flooder@example.net") for n in range(6)]
+        self.assertEqual(stages, ["new"] * 5 + ["spam"], "the sixth ticket in an hour from one address starts in Spam")
+        self.assertEqual(self._stage_after_ingest("Another address same place", "other@example.net"), "new")
+
+    def test_20_many_addresses_of_one_domain_are_limited_together(self):
+        stages = [self._stage_after_ingest(f"Rotating {n}", f"rot{n}@spamhost.example") for n in range(31)]
+        self.assertEqual(stages[:30], ["new"] * 30)
+        self.assertEqual(stages[30], "spam", "the 31st ticket from one domain starts in Spam")
+
+    def test_21_a_member_is_never_rate_limited_and_a_redis_outage_accepts_the_mail(self):
+        self.env["res.users"].create({"name": "Chatty", "login": "chatty", "email": "chatty@example.org"})
+        stages = [self._stage_after_ingest(f"Member note {n}", "chatty@example.org") for n in range(7)]
+        self.assertEqual(set(stages), {"new"})
+        self.safe_patch(
+            "odoo.addons.hams_helpdesk.models.helpdesk_ticket.expiring_counter", side_effect=redis.ConnectionError("down")
+        )
+        self.assertEqual(self._stage_after_ingest("During the outage", "outage@example.net"), "new")
