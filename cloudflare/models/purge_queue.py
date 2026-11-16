@@ -4,7 +4,7 @@ import logging
 import time
 from contextlib import contextmanager
 from odoo import models, fields, api
-from ..utils.cloudflare_api import purge_everything, purge_urls, purge_tags
+from ..utils.cloudflare_api import purge_everything, purge_urls, purge_tags, zone_is_gone
 
 _logger = logging.getLogger(__name__)
 
@@ -334,6 +334,22 @@ class CloudflarePurgeQueue(models.Model):
                         tag_records.write({"state": "failed"})
                     else:
                         tag_records.unlink()
+
+            if not success and token and zone_id and zone_is_gone(token, zone_id):
+                # [@ANCHOR: cloudflare:COMM_purge_zone_gone]
+                # Verified by [@ANCHOR: cloudflare:COMM_test_purge_zone_gone]
+                # The zone was removed or moved (the domain's DNS went elsewhere): no retry can ever work, so these
+                # purges are dropped as they are for missing credentials, and the incident names the real cause.
+                failure_severity = "medium"
+                failure_reason = (
+                    "the Cloudflare zone no longer exists or has moved, so cache purges are being dropped; "
+                    "set the Zone ID in Settings > Cloudflare to the zone that serves this website"
+                )
+                _logger.warning(
+                    "Cloudflare purge queue: dropping the purges of website id=%s -- zone %s is gone or moved.",
+                    first_website.id if first_website else False, zone_id,
+                )
+                batch_records.exists().unlink()
 
             if first_website:
                 if success:

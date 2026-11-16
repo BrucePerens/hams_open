@@ -761,6 +761,29 @@ def get_zone_details(zone_id, token):
     return True, body.get("result") or {}
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_zone_is_gone]
+def zone_is_gone(token, zone_id):
+    """True when Cloudflare no longer has this zone to serve: it answers 404 for the id, or reports the zone as
+    moved or deleted (the state a zone is in after its domain's name servers were pointed elsewhere). False for
+    every other answer, an outage or a refused token included, so a passing failure never makes anyone drop work."""
+    # # Verified by [@ANCHOR: COMM_test_cf_api_zone_is_gone]
+    if not token or not zone_id:
+        return False
+    response = _make_request(
+        "GET", f"https://api.cloudflare.com/client/v4/zones/{zone_id}", token,
+        "Cloudflare Zone Gone check API failed", timeout=15,
+    )
+    if response is None:
+        return False
+    if response.status_code == 404:
+        return True
+    if response.status_code != 200:
+        return False
+    body = _json_body(response)
+    status = ((body or {}).get("result") or {}).get("status")
+    return status in ("moved", "deleted")
+
+
 # [@ANCHOR: cloudflare:COMM_dns_api_count_records]
 def count_dns_records(zone_id, token):
     """How many DNS records the zone holds (Cloudflare's own total_count): (True, int) or (False, message).

@@ -92,6 +92,7 @@ class TestPurgeWizardRefusals(HamsTransactionCase):
         )
         self.purge_urls = self.safe_patch(WIZARD + "purge_urls", return_value=True)
         self.purge_tags = self.safe_patch(WIZARD + "purge_tags", return_value=True)
+        self.zone_gone = self.safe_patch(WIZARD + "zone_is_gone", return_value=False)
 
     def _wizard(self, purge_type, items=""):
         return self.env["cloudflare.purge.wizard"].create(
@@ -131,3 +132,17 @@ class TestPurgeWizardRefusals(HamsTransactionCase):
         self.purge_urls.return_value = False
         with self.assertRaises(UserError):
             self._wizard("urls", "/a").action_purge()
+
+    def test_a_failed_purge_into_a_zone_that_is_gone_says_so(self):
+        # Tests [@ANCHOR: cloudflare:COMM_purge_wizard_zone_gone]
+        # [@ANCHOR: cloudflare:COMM_test_purge_wizard_zone_gone]
+        self.purge_urls.return_value = False
+        self.zone_gone.return_value = True
+        with self.assertRaises(UserError) as caught:
+            self._wizard("urls", "/a").action_purge()
+        self.assertIn("no longer exists or has moved", str(caught.exception))
+        self.zone_gone.assert_called_once_with("tok", "zone")
+        self.zone_gone.return_value = False
+        with self.assertRaises(UserError) as caught:
+            self._wizard("urls", "/a").action_purge()
+        self.assertIn("Failed to purge", str(caught.exception))

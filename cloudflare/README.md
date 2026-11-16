@@ -444,6 +444,18 @@ Part of `action_apply_settings()`. The wizard sends the `browser_cache_ttl` sett
 
 `_report_purge_failure(website, description, severity)` in `models/purge_queue.py` opens (or adds an occurrence to) the pager incident that says a website's purges are not reaching Cloudflare. `website` is the record, `description` the reason and `severity` is `medium` (no credentials) or `high` (API call failed). The incident source is the constant `PURGE_INCIDENT_SOURCE`, "Cloudflare purge queue", and the text names the website and its id. It returns what `report_incident` returns, or False when `pager_duty` is not installed. The call runs inside `_pager_default_env`. Called by `process_queue` once per failed batch. See also `test_01_no_credentials_drops_rows_and_pages_medium` and `test_02_api_failure_keeps_rows_failed_and_pages_high` in `tests/test_purge_queue.py`.
 
+### Purges into a zone that is gone [@ANCHOR: cloudflare:COMM_purge_zone_gone]
+
+When a batch of a website's purges fails, `process_queue` in `models/purge_queue.py` asks `zone_is_gone(token, zone_id)` whether Cloudflare still has the zone. If not (the zone was deleted, or moved after its domain's name servers went elsewhere) no retry can ever work, so the batch is dropped as it is for missing credentials, a `medium` pager incident says the zone is gone and where to set the new Zone ID, and `requeue_failed` has nothing to retry. Any other failure keeps the old behaviour: rows marked failed, retried hourly, `high` incident. See also `test_02b_a_zone_that_is_gone_drops_the_rows_and_pages_medium` in `tests/test_purge_queue.py`.
+
+### Manual Cache Purge into a zone that is gone [@ANCHOR: cloudflare:COMM_purge_wizard_zone_gone]
+
+`action_purge` in `models/purge_wizard.py` raises the generic "Failed to purge" message when Cloudflare refuses, except when `zone_is_gone` says the website's zone no longer exists or has moved: then the message says so and tells the administrator to set the Zone ID in Settings > Cloudflare. See also `test_a_failed_purge_into_a_zone_that_is_gone_says_so` in `tests/test_refusal_branches.py`.
+
+### `zone_is_gone(token, zone_id)` [@ANCHOR: cloudflare:COMM_cf_api_zone_is_gone]
+
+`zone_is_gone(token, zone_id)` in `utils/cloudflare_api.py` makes one GET of `/zones/{zone_id}` and returns True only for a 404 or a zone whose `status` is `moved` or `deleted`. Any other answer (an outage, a refused token, an active zone, missing arguments) returns False, so a passing failure never makes anyone drop purges. See also `test_zone_is_gone_only_for_a_404_or_a_moved_or_deleted_zone` in `tests/test_cloudflare_api_calls.py`.
+
 ### Retrying failed purges [@ANCHOR: cloudflare:COMM_requeue_failed_purges]
 
 `requeue_failed()` in `models/purge_queue.py` (private, called at the start of every `process_queue` run) makes one more attempt at purges that failed on an API error. It looks at up to 1000 rows in state `failed` whose `write_date` is at least `RETRY_FAILED_AFTER_HOURS` (1) old, keeps only those of websites that now have both an API token and a Zone ID, and sets them back to `pending`. It returns the number of rows set back. A row that fails again goes back to `failed` with a new write date, so the retry repeats hourly while the pager incident stays open. Rows of a website without credentials are left alone (credential failures are deleted, not marked failed). See also `test_04_failed_rows_are_retried_once_an_hour_later_with_credentials` and `test_05_failed_rows_without_credentials_are_not_retried` in `tests/test_purge_queue.py`.
