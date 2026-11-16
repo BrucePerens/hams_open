@@ -44,6 +44,7 @@ _logger = logging.getLogger(__name__)
 SUSPICION_THRESHOLD = 5
 EXCERPT_CHARS = 60
 MAX_FINDINGS = 40
+_LINK_TEXT_SCAN_CHARS = 300  # a host name is at most 253 characters; link text is mail content and has no size limit of its own
 
 # ---------------------------------------------------------------------------------------------
 # Result
@@ -774,7 +775,7 @@ class _Sanitizer(HTMLParser):
             self.bg = saved_bg
             if t == "a" and self.link_stack:
                 href, texts = self.link_stack.pop()
-                visible = "".join(texts).strip()
+                visible = "".join(texts).strip()[:_LINK_TEXT_SCAN_CHARS]
                 if href:
                     host = (urlsplit(href).hostname or "") if not href.lower().startswith("mailto:") else href[7:].split("@")[-1]
                     m = re.search(r"(?:https?://)?([a-z0-9-]+(?:\.[a-z0-9-]+)+)", visible.lower())

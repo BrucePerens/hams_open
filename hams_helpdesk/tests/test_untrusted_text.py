@@ -11,6 +11,7 @@ trick. Two kinds of case:
 """
 import base64
 import codecs
+import time
 import random  # audit-ignore-weak-random: seeded, reproducible fuzz input for tests, never a secret
 
 from odoo.tests.common import BaseCase, tagged
@@ -280,6 +281,13 @@ class TestUntrustedTextCorpus(BaseCase):
     def test_link_text_and_href_disagree(self):
         result = ut.sanitize_html('<a href="https://evil.example/login">https://bank.example.com</a>')
         self.assertTrue(has_finding(result, "link_text_href_mismatch"))
+
+    def test_a_very_long_link_text_is_scanned_in_linear_time(self):
+        # 20000 letters in one link took about 7 s to scan for a host name (quadratic); the scan sees the first 300.
+        started = time.monotonic()
+        result = ut.sanitize_html('<a href="https://evil.example/x">' + "a" * 20000 + "</a>")
+        self.assertLess(time.monotonic() - started, 2)
+        self.assertFalse(has_finding(result, "link_text_href_mismatch"))
 
     def test_matching_link_is_not_flagged(self):
         result = ut.sanitize_html('<a href="https://example.com/a">example.com</a>')
