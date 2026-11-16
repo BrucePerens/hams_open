@@ -11,6 +11,7 @@ class TestLogSurvivesDomainDelete(HamsTransactionCase):
     # [@ANCHOR: ses_webhook:test_log_survives_domain_delete]
     def test_log_survives_domain_delete(self):
         # Tests [@ANCHOR: ses_webhook:log_compute_domain_name]
+        # Tests [@ANCHOR: ses_webhook:log_compute_company_id]
         domain = self.env["ses.webhook.domain"].create({"name": "keep-logs.example.com"})
         log = self.env["ses.webhook.log"].create(
             {"name": "msg-keep-1", "domain_id": domain.id, "status": "rejected_signature", "payload_type": "Notification"}
