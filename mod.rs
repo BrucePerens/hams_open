@@ -1,5 +1,0 @@
-// [@ANCHOR: t:x]
-fn foo(a: i32, b: i32) -> i32 {
-    let t = a + b; // add
-    t
-}
