@@ -646,3 +646,24 @@
         * *Given* a tunnel record exists for a website
         * *When* another record with the same Cloudflare tunnel id is created for that website
         * *Then* the database MUST refuse it, and the upgrade MUST delete older duplicates keeping the first.
+
+### `CloudflareConfigManagerRateLimit` [@ANCHOR: cloudflare:cloudflare_rate_limit_push_cloudflare_config_manager_rate_limit]
+
+**Purpose and location.** The rate-limit push of the Cloudflare configuration manager, defined in `cloudflare/models/rate_limit_push.py` as an abstract Odoo model that extends (`_inherit`) `cloudflare.config.manager`; bases: `models.AbstractModel`. It adds `plan_rate_limits` (a plan that only reads Cloudflare) and `action_push_rate_limits` (the explicit apply) for the zone's `http_ratelimit` ruleset.
+
+It declares no `fields.*` columns of its own and has no table of its own.
+
+**Class attributes.** `_inherit = "cloudflare.config.manager"`. The module constants `RATE_LIMIT_PHASE = "http_ratelimit"` and `CHARACTERISTICS = ["cf.colo.id", "ip.src"]` (counted per IP and Cloudflare data centre) are shared by every rule it builds.
+
+**Invariants, ownership and concurrency.** Holds no state: each call reads the zone, plans and returns a result. Callers must be the WAF service user (`_check_waf_caller_authorized`). Apply refuses a stale plan hash. The cited tests cover the plan and apply behaviour.
+
+### `CloudflareRateLimitButtons` [@ANCHOR: cloudflare:cloudflare_rate_limit_push_cloudflare_rate_limit_buttons]
+
+**Purpose and location.** The two form buttons of a rate-limit row, defined in `cloudflare/models/rate_limit_push.py` as an Odoo model that extends (`_inherit`) `cloudflare.rate.limit`; bases: `models.Model`. "Show plan (changes nothing)" and "Push rate limits to Cloudflare" run the configuration manager as the WAF service user and return a toast.
+
+It declares no `fields.*` columns of its own.
+
+**Class attributes.** `_inherit = "cloudflare.rate.limit"`; no other attribute.
+
+**Invariants, ownership and concurrency.** Holds no state. Each button needs a single record (`ensure_one`), uses the row's website or the current one, and reports a failed push as a sticky danger toast. Nothing is shared between threads except through the database.
+
