@@ -12,14 +12,26 @@ class BackupSnapshot(models.Model):
     _order = "start_time desc"
 
     config_id = fields.Many2one(
-        "backup.config", string="Configuration", required=True, ondelete="cascade"
+        "backup.config",
+        string="Configuration",
+        # History is kept when the configuration is deleted (Bruce, 2026-11-16); website_id and
+        # company_id are stored copies, so the record stays scoped to its tenant.
+        ondelete="set null",
+        index=True,
     )
-    website_id = fields.Many2one(
-        "website", string="Website", related="config_id.website_id", store=True
-    )
-    company_id = fields.Many2one(
-        "res.company", string="Company", related="config_id.company_id", store=True
-    )
+    # Stored copies of the configuration's website and company that a configuration delete does not clear
+    # (a stored related field would be), so the kept record stays in its tenant.
+    website_id = fields.Many2one("website", string="Website", compute="_compute_tenant", store=True)
+    company_id = fields.Many2one("res.company", string="Company", compute="_compute_tenant", store=True)
+    # [@ANCHOR: backup_management:snapshot_compute_tenant]
+    # Verified by [@ANCHOR: backup_management:test_history_survives_config_delete]
+    @api.depends("config_id.website_id", "config_id.company_id")
+    def _compute_tenant(self):
+        for rec in self:
+            if rec.config_id:
+                rec.website_id = rec.config_id.website_id
+                rec.company_id = rec.config_id.company_id
+
     snapshot_id = fields.Char(string="Snapshot ID / Label", required=True)
     start_time = fields.Datetime(string="Start Time")
     size_bytes = fields.Float(string="Size (Bytes)")

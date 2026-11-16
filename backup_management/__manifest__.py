@@ -11,7 +11,7 @@
     "author": "Bruce Perens K6BP",
     "category": "Administration",
     "license": "AGPL-3",
-    "version": "1.0",
+    "version": "1.1",
     "depends": [
         "base",
         "mail",

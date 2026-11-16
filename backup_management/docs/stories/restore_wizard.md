@@ -88,3 +88,5 @@ Kopia snapshot with `restore_target_path` `/etc/passwd` and asserts `UserError` 
 creates a pgBackRest configuration and snapshot and asserts the pgBackRest refusal even for an injection-shaped
 target. `tests/test_backup.py::test_13_restore_action` carries the tag next to a patched `pika.BlockingConnection`; it is the
 happy path: a Kopia restore returns a `backup.job` action for the right configuration. To-do: no test yet asserts the exact Kopia `cmd_args` or the job-id based destination.
+
+* **Story:** As a backup administrator, I want job and snapshot history kept when a backup configuration is deleted (it stays scoped to its website and company; restoring it is refused) -> [@ANCHOR: backup_management:test_history_survives_config_delete]; the job and snapshot keep their website and company through [@ANCHOR: backup_management:job_compute_tenant] and [@ANCHOR: backup_management:snapshot_compute_tenant]; the snapshot tenant rule reads the snapshot's own website, and existing databases get that through [@ANCHOR: backup_management:migration_snapshot_rule_own_website].

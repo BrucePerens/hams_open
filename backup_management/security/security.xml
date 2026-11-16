@@ -53,7 +53,7 @@
         <record id="rule_backup_snapshot_multi_tenant" model="ir.rule">
             <field name="name">Backup Snapshot Multi-Tenant</field>
             <field name="model_id" ref="model_backup_snapshot"/>
-            <field name="domain_force">[('company_id', 'in', company_ids), '|', ('config_id.website_id', '=', False), ('config_id.website_id', '=', user.website_id.id)]</field>
+            <field name="domain_force">[('company_id', 'in', company_ids), '|', ('website_id', '=', False), ('website_id', '=', user.website_id.id)]</field>
             <field name="groups" eval="[(4, ref('backup_management.group_backup_admin'))]"/>
         </record>
 

@@ -31,6 +31,8 @@ class BackupRestoreWizard(models.TransientModel):
     def action_restore(self):
         self.ensure_one()
         # [@ANCHOR: COMM_backup_trigger_restore]
+        if not self.snapshot_id.config_id:
+            raise UserError(_("The backup configuration of this snapshot was deleted; it cannot be restored from here."))
 
         # # Verified by [@ANCHOR: COMM_test_restore_action]
         if not self.env.user.has_group("backup_management.group_backup_admin"):
