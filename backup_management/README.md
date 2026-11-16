@@ -211,6 +211,8 @@ parse error) is still acknowledged, so a job that can never succeed cannot loop 
 **Special concerns.** The consumer sleeps in the callback during the back-off, which is below RabbitMQ's heartbeat window. A key that stays refused makes the message cycle every 20
 seconds and log an error each time; the stale-backup alert (see "Backup health") is what pages in that case.
 
+**Long commands.** While a kopia or restore command is running and silent, the worker services the RabbitMQ connection instead of blocking in `read()` (`_read_stdout_chunks` [@ANCHOR: backup_management:read_stdout_chunks]), as the pgbackrest sidecar wait already did: pika answers heartbeats only inside `process_data_events`, and a connection reset by the broker mid-job meant the finished job could not be acknowledged and ran again.
+
 **See also.** `test_job_that_cannot_be_reported_is_requeued` in `daemon/test_main.py`.
 
 ### `[@ANCHOR: backup_management:COMM_json2_call]` `_json2_call(model, method_name, svc_uid=None, **kwargs)`

@@ -13,6 +13,8 @@ import urllib.request
 import urllib.error
 import logging
 import re
+import queue
+import threading
 
 # Reports an uncaught exception to the Odoo exception tickets (Helpdesk > Server Exceptions) and raises it again.
 # hams_helpdesk/daemon/exception_reporter.py is copied flat to /opt/hams/daemons by deploy_to_production.py --sync-daemons
@@ -588,6 +590,37 @@ def _json2_call(model, method_name, svc_uid=None, **kwargs):
             raise OdooAPIError(f"JSON-2 API Connection/Parse Error: {e}") from e
 
 
+# [@ANCHOR: backup_management:read_stdout_chunks]
+# Verified by [@ANCHOR: backup_management:test_a_silent_command_does_not_starve_the_rabbitmq_heartbeat]
+def _read_stdout_chunks(proc, channel):
+    """Yields what `proc` writes to stdout, in chunks, until it closes it. While the command is silent (a kopia snapshot or
+    a restore runs for minutes with no output) the channel's connection is serviced instead of blocking in read(): pika's
+    BlockingConnection answers heartbeats only inside process_data_events, and a callback that blocks past the heartbeat
+    window gets its connection reset by the broker, so the finished job could not be acknowledged and ran again."""
+    chunks = queue.Queue()
+
+    def pump():
+        try:
+            while True:
+                chunk = proc.stdout.read(4096)
+                if not chunk:
+                    return
+                chunks.put(chunk)
+        finally:
+            chunks.put("")
+
+    threading.Thread(target=pump, daemon=True).start()
+    while True:
+        try:
+            chunk = chunks.get_nowait()
+        except queue.Empty:
+            channel.connection.process_data_events(time_limit=1)
+            continue
+        if not chunk:
+            return
+        yield chunk
+
+
 # [@ANCHOR: backup_management:COMM_test_backup_worker_real]
 # Verified by [@ANCHOR: backup_management:COMM_test_execute_job_s3_b2]
 def execute_job(ch, method, properties, body):
@@ -880,10 +913,7 @@ def execute_job(ch, method, properties, body):
             unsent_buffer = ""
             last_update = time.time()
 
-            while True:
-                chunk = proc.stdout.read(4096)
-                if not chunk:
-                    break
+            for chunk in _read_stdout_chunks(proc, ch):
                 log_buffer += chunk
                 unsent_buffer += chunk
                 # Throttle updates to Odoo to avoid overwhelming it
