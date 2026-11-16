@@ -1,1 +1,5 @@
-<odoo noupdate="1"><record id="r1" model="ir.rule"><field name="name">old</field></record></odoo>
+<odoo>
+<data noupdate="1">
+<record id="r1" model="ir.rule"><field name="name">old</field></record><template id="t1"><p>fixed</p></template>
+</data>
+</odoo>
