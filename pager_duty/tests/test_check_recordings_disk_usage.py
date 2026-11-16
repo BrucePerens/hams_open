@@ -79,8 +79,9 @@ class TestRecordingsVolumeEstimate(HamsTransactionCase):
             self._touch(os.path.join(tmp, "sessions", "s.json"), 10, 2)
             self._touch(os.path.join(tmp, "elsewhere", "ignored.bin"), 99999, 0)
             count, total, recent, complete, oldest = check_mod.directory_volume(tmp)
+            old_mtime = os.path.getmtime(os.path.join(tmp, "old.opus"))
         self.assertEqual((count, total, recent, complete), (4, 6110, 1110, True))
-        self.assertAlmostEqual(oldest, time.time() - 30 * DAY, delta=60)
+        self.assertEqual(oldest, old_mtime)
 
     def test_a_directory_that_does_not_exist_has_no_files(self):
         self.assertEqual(check_mod.directory_volume("/nonexistent/qso_recordings"), (0, 0, 0, True, None))

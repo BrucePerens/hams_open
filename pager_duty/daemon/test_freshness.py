@@ -450,10 +450,11 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_utcnow_is_a_naive_utc_datetime(self):
         # Tests [@ANCHOR: pager_duty:utcnow]
+        before = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
         now = gm._utcnow()
+        after = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
         self.assertIsNone(now.tzinfo)
-        expected = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
-        self.assertLess(abs((expected - now).total_seconds()), 5)
+        self.assertTrue(before <= now <= after, "bracketed by clock reads, so how long the call took does not matter")
 
 
 if __name__ == "__main__":
