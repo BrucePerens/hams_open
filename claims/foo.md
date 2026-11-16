@@ -1,8 +1,0 @@
----
-anchor: t:x
-code_hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
-hash_algorithm: v2
-review_tier: 1
----
-
-Body.
