@@ -684,7 +684,9 @@ def find_zone_id(name, token):
     if body is None or not isinstance(body.get("result") or [], list):
         return False, "API Error"
     for zone in body.get("result") or []:
-        if (zone.get("name") or "").lower() == name.lower():
+        # A zone whose domain's name servers went elsewhere is "moved" (then deleted): another server is authoritative
+        # for it, so a record written there is never answered. It counts as no zone, so nothing is planned into it.
+        if (zone.get("name") or "").lower() == name.lower() and zone.get("status") not in ("moved", "deleted"):
             return True, zone.get("id")
     return True, None
 
@@ -784,6 +786,29 @@ def get_zone_details(zone_id, token):
     if body is None:
         return False, "API Error"
     return True, body.get("result") or {}
+
+
+# [@ANCHOR: cloudflare:COMM_cf_api_zone_is_gone]
+def zone_is_gone(token, zone_id):
+    """True when Cloudflare no longer has this zone to serve: it answers 404 for the id, or reports the zone as
+    moved or deleted (the state a zone is in after its domain's name servers were pointed elsewhere). False for
+    every other answer, an outage or a refused token included, so a passing failure never makes anyone drop work."""
+    # # Verified by [@ANCHOR: COMM_test_cf_api_zone_is_gone]
+    if not token or not zone_id:
+        return False
+    response = _make_request(
+        "GET", f"https://api.cloudflare.com/client/v4/zones/{zone_id}", token,
+        "Cloudflare Zone Gone check API failed", timeout=15,
+    )
+    if response is None:
+        return False
+    if response.status_code == 404:
+        return True
+    if response.status_code != 200:
+        return False
+    body = _json_body(response)
+    status = ((body or {}).get("result") or {}).get("status")
+    return status in ("moved", "deleted")
 
 
 # [@ANCHOR: cloudflare:COMM_dns_api_count_records]

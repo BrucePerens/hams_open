@@ -248,11 +248,28 @@ class TestPurgeFailureAlerts(RealTransactionCase):
         # Tests [@ANCHOR: cloudflare:COMM_report_purge_failure]
         self.website.write({"cloudflare_api_token": "t", "cloudflare_zone_id": "z"})
         self.safe_patch("odoo.addons.cloudflare.models.purge_queue.purge_urls", return_value=False)
+        self.safe_patch("odoo.addons.cloudflare.models.purge_queue.zone_is_gone", return_value=False)
         self._enqueue()
         self.Queue.process_queue()
         rows = self.Queue.search([("website_id", "=", self.website.id)])
         self.assertEqual(set(rows.mapped("state")), {"failed"})
         self.assertEqual(self._reports(self.incidents.report_incident)[0][0][0]["severity"], "high")
+
+    def test_02b_a_zone_that_is_gone_drops_the_rows_and_pages_medium(self):
+        # Tests [@ANCHOR: cloudflare:COMM_purge_zone_gone]
+        # [@ANCHOR: cloudflare:COMM_test_purge_zone_gone]
+        self.website.write({"cloudflare_api_token": "t", "cloudflare_zone_id": "z"})
+        self.safe_patch("odoo.addons.cloudflare.models.purge_queue.purge_urls", return_value=False)
+        gone = self.safe_patch("odoo.addons.cloudflare.models.purge_queue.zone_is_gone", return_value=True)
+        self._enqueue()
+        self.Queue.process_queue()
+        gone.assert_called_once_with("t", "z")
+        self.assertEqual(self.Queue.search_count([("website_id", "=", self.website.id)]), 0,
+                         "purges into a vanished zone must not be retried every hour")
+        vals = self._reports(self.incidents.report_incident)[0][0][0]
+        self.assertEqual(vals["severity"], "medium")
+        self.assertIn("no longer exists or has moved", vals["description"])
+        self.assertEqual(self.Queue.requeue_failed(), 0)
 
     def test_03_success_resolves_the_incident(self):
         # Tests [@ANCHOR: cloudflare:COMM_resolve_purge_failure]

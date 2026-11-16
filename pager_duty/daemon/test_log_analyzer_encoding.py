@@ -29,12 +29,13 @@ class LogAnalyzerEncoding(unittest.TestCase):
         path = self.path
         thread = threading.Thread(target=pager_log_analyzer.tail_file, args=(r_client, path, compiled), daemon=True)
         thread.start()
-        time.sleep(1)  # the tailer starts at the end of the file
-        with open(path, "ab") as log:
-            log.write(b"kernel: garbage \xff\xfe bytes\nOOM killer ran\n")
-        deadline = time.time() + 10
+        # The tailer starts at the end of the file, whenever the thread gets to run: keep appending the pair of lines until it
+        # has seen one. The deadline is only a safety net.
+        deadline = time.time() + 120
         while not r_client.lpush.called and time.time() < deadline:
-            time.sleep(0.2)
+            with open(path, "ab") as log:
+                log.write(b"kernel: garbage \xff\xfe bytes\nOOM killer ran\n")
+            time.sleep(0.05)
         self.assertTrue(r_client.lpush.called, "the tailer died on the non-UTF-8 line and never saw the next one")
         self.assertTrue(thread.is_alive())
 

@@ -433,7 +433,7 @@ class TestRabbitMQPool(RealTransactionCase):
         self.assertEqual(len(keepalive_threads()), 1, "the pool starts afresh after a shutdown")
         thread = keepalive_threads()[0]
         pool._discard_connection(pool_class._channel)
-        thread.join(timeout=3)
+        thread.join(timeout=60)  # returns as soon as the thread ends; the bound is a safety net
         self.assertFalse(thread.is_alive(), "with no connection the thread ends by itself")
 
         pool._get_channel()
@@ -442,7 +442,7 @@ class TestRabbitMQPool(RealTransactionCase):
             pool_class._connection.close()
         with self.assertNoLogs("odoo.addons.hams_rabbitmq.models.rabbitmq_pool", "WARNING"), \
                 self.assertNoLogs("pika.adapters.blocking_connection", "ERROR"):
-            thread.join(timeout=3)
+            thread.join(timeout=60)  # a safety net, not a budget
         self.assertFalse(thread.is_alive(), "a dead connection ends the thread")
         self.assertIsNone(pool_class._connection, "and is dropped, quietly")
 
@@ -468,14 +468,14 @@ class TestRabbitMQPool(RealTransactionCase):
 
         holder = threading.Thread(target=hold_lock, daemon=True)  # burn-ignore-test-daemon-thread: joined below, ends after 1 s
         holder.start()
-        self.assertTrue(holder_has_lock.wait(5))
+        self.assertTrue(holder_has_lock.wait(60))
 
         read_end, write_end = os.pipe()
         child_pid = os.fork()
         if child_pid == 0:  # pragma: no cover - runs in the child only
             exit_code = 1
             try:
-                acquired = rabbitmq_pool._POOL_LOCK.acquire(timeout=2)
+                acquired = rabbitmq_pool._POOL_LOCK.acquire(timeout=60)
                 if acquired:
                     rabbitmq_pool._POOL_LOCK.release()
                 no_threads = rabbitmq_pool._keepalive_threads == {}

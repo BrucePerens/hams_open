@@ -224,3 +224,19 @@ class TestCloudflareApiCalls(HamsTransactionCase):
         self.assertEqual(api.create_custom_hostname("", "t", ZONE), (False, "Missing credentials or hostname"))
         self.assertEqual(api.get_custom_hostname("", "t", ZONE), (False, "Missing credentials or hostname ID"))
         self.assertEqual(api.delete_custom_hostname("h1", "t", ""), (False, "Missing credentials or hostname ID"))
+
+    def test_zone_is_gone_only_for_a_404_or_a_moved_or_deleted_zone(self):
+        # Tests [@ANCHOR: cloudflare:COMM_cf_api_zone_is_gone]
+        # [@ANCHOR: COMM_test_cf_api_zone_is_gone]
+        self.mock.return_value = _Answer({}, status=404)
+        self.assertTrue(api.zone_is_gone("t", ZONE))
+        self.assertEqual(self._sent()[:2], ("GET", f"{BASE}/zones/{ZONE}"))
+        for status, gone in (("moved", True), ("deleted", True), ("active", False), ("pending", False), (None, False)):
+            self.mock.return_value = _Answer({"result": {"status": status}})
+            self.assertIs(api.zone_is_gone("t", ZONE), gone, status)
+        self.mock.return_value = _Answer({}, status=403)
+        self.assertFalse(api.zone_is_gone("t", ZONE))
+        self.mock.return_value = None
+        self.assertFalse(api.zone_is_gone("t", ZONE))
+        self.assertFalse(api.zone_is_gone("", ZONE))
+        self.assertFalse(api.zone_is_gone("t", ""))

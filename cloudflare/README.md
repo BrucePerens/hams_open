@@ -226,15 +226,72 @@ In `utils/dns_plan.py`. Returns True for an `NS` entry whose name is exactly one
 
 `cloudflare.zero.trust.policy` rows (name, action allow/block/bypass, identity-provider ids) are pushed to the account's reusable Access policies in two steps like the cache rules: a plan that only reads Cloudflare, then an explicit apply. Allow becomes decision `allow`, block `deny`; the identity providers become `login_method` include rules, and a block or bypass row with none applies to everyone. An allow row with no provider is refused, because it would let everyone in. A policy is managed when its name equals a row's name; each is created or updated on its own by id, a policy Odoo does not manage is never touched, and nothing is ever deleted. The policy list is read with a checked read: an unreadable list is refused, never taken for empty (the bug class of hams_open #2672), because a push of that would create duplicates. Apply reports OK or FAILED per policy, then plans again to confirm nothing is left to write. It needs the website's API token and account id; pushing twice writes nothing the second time. Tokens never appear in messages.
 
-- `[@ANCHOR: cloudflare:COMM_zero_trust_plan_desired]` `desired_from_row(name, policy_action, idps)` returns the Access policy a row wants, or `(None, problem)`. **Tests:** `test_row_to_policy`, `test_allow_without_provider_or_action_is_refused`.
-- `[@ANCHOR: cloudflare:COMM_zero_trust_plan_view]` `_view(policy)` is the decision and include, exclude and require lists (include sorted), compared to tell `update` from `unchanged`. **Tests:** `test_create_update_unchanged_and_nothing_deleted`.
-- `[@ANCHOR: cloudflare:COMM_zero_trust_plan_make]` `make(remote, desired)` returns the list of writes (create, or update by id), one entry per policy, `problems` (duplicate names on either side) and a SHA-256 `hash`. Pure. **Tests:** `test_create_update_unchanged_and_nothing_deleted`, `test_duplicates_are_refused_and_hash_follows_the_account`.
-- `[@ANCHOR: cloudflare:COMM_zero_trust_plan_render]` `render(plan)` gives the plan text. **Tests:** `test_render`.
-- `[@ANCHOR: cloudflare:COMM_access_api_list_policies_checked]` `list_access_policies_checked(account_id, token)` returns `("ok", policies)` across all pages or `("error", message)`. **Tests:** `test_list_reads_every_page_and_refuses_unreadable_answers`.
-- `[@ANCHOR: cloudflare:COMM_access_api_write_policy]` `write_access_policy(account_id, policy_id, payload, token)` creates (no id) or updates one policy and returns `(ok, message)`. **Tests:** `test_write_creates_or_updates`.
-- `[@ANCHOR: cloudflare:COMM_zero_trust_plan]` `plan_zero_trust_policies(website_id=None)` returns `ok`, `message`, `text`, `hash`, `writes`. **Tests:** `test_unreadable_list_is_refused_not_treated_as_empty`, `test_plan_writes_nothing_stale_hash_and_bad_rows_and_credentials_refused`.
-- `[@ANCHOR: cloudflare:COMM_zero_trust_push]` `action_push_zero_trust_policies(website_id=None, plan_hash=None)` applies the plan and returns `(ok, text)`. **Tests:** `test_push_creates_each_policy_then_second_push_has_nothing_to_do`, `test_changed_row_updates_only_that_policy_by_id`, `test_failed_write_is_reported_per_policy_and_others_still_tried`.
-- `[@ANCHOR: cloudflare:COMM_zero_trust_row_plan_push]` and `[@ANCHOR: cloudflare:COMM_zero_trust_row_push_to_cloudflare]` are the form buttons "Show plan (changes nothing)" and "Push Zero Trust policies to Cloudflare". **Tests:** `test_form_buttons_plan_then_push`.
+
+### `desired_from_row(name, policy_action, idps)` [@ANCHOR: cloudflare:COMM_zero_trust_plan_desired]
+
+**Purpose.** In `utils/zero_trust_plan.py`: turns one `cloudflare.zero.trust.policy` row into the Access policy it wants. **Arguments.** the row's `name`, its action (`allow`, `block` or `bypass`) and `idps`, a comma or space separated list of identity-provider ids. **Returns.** `(policy, None)` with `name`, `decision` (allow, deny or bypass), `include`, `exclude` and `require`, or `(None, problem)` when the row cannot be pushed. **Special concerns.** An allow row with no provider is refused, because it would let everyone in; a block or bypass row with none applies to everyone. Pure, no network.
+
+**Tests.** `test_row_to_policy`, `test_allow_without_provider_or_action_is_refused`.
+
+### `_view(policy)` [@ANCHOR: cloudflare:COMM_zero_trust_plan_view]
+
+**Purpose.** In `utils/zero_trust_plan.py`: picks out the part of an Access policy that decides what it does, so the planner can tell `update` from `unchanged`. **Arguments.** `policy`, one policy dict as Cloudflare returns it or as `desired_from_row` builds it. **Returns.** a dict of the decision and the include, exclude and require lists, with the include list sorted so order never counts as a change. **Special concerns.** Pure, no network; ids and timestamps are not compared.
+
+**Tests.** `test_create_update_unchanged_and_nothing_deleted`.
+
+### `make(remote, desired)` [@ANCHOR: cloudflare:COMM_zero_trust_plan_make]
+
+**Purpose.** In `utils/zero_trust_plan.py`: the planner that compares the account's Access policies with the rows' policies. **Arguments.** `remote`, the policies read from Cloudflare, and `desired`, the policies built from the rows. **Returns.** the list of writes (create, or update by id), one entry per policy, a `problems` list (duplicate names on either side) and a SHA-256 `hash`. **Special concerns.** Pure. A policy Odoo does not manage is never touched and nothing is ever deleted; the hash follows the account so the apply insists on the reviewed plan.
+
+**Tests.** `test_create_update_unchanged_and_nothing_deleted`, `test_duplicates_are_refused_and_hash_follows_the_account`.
+
+### `render(plan)` [@ANCHOR: cloudflare:COMM_zero_trust_plan_render]
+
+**Purpose.** In `utils/zero_trust_plan.py`: turns a Zero Trust plan into the text the administrator reviews before applying. **Arguments.** `plan`, the dict from `make`. **Returns.** a multi-line string with one line per policy entry and a closing summary of the writes the push would make. **Special concerns.** Pure, no network, and it never writes anything.
+
+**Tests.** `test_render`.
+
+### `list_access_policies_checked(account_id, token)` [@ANCHOR: cloudflare:COMM_access_api_list_policies_checked]
+
+**Purpose.** In `utils/access_api.py`: reads the account's reusable Access policies so that an unreadable list can be told from an empty one. **Arguments.** the Cloudflare account id and the API token. **Returns.** `("ok", policies)` across all result pages, or `("error", message)`. **Special concerns.** GET only. An unreadable or partly unreadable answer is an error and refuses the plan, because a push planned from a list wrongly taken for empty would create duplicates.
+
+**Tests.** `test_list_reads_every_page_and_refuses_unreadable_answers`.
+
+### `write_access_policy(account_id, policy_id, payload, token)` [@ANCHOR: cloudflare:COMM_access_api_write_policy]
+
+**Purpose.** In `utils/access_api.py`: creates or updates one reusable Access policy. **Arguments.** the account id, `policy_id` (empty to create, an id to update that policy), `payload` (the policy dict) and the API token. **Returns.** `(ok, message)`. **Special concerns.** The only write helper of the Zero Trust push. It never raises on an API error, so the push can report FAILED for one policy and still try the others; nothing is ever deleted.
+
+**Tests.** `test_write_creates_or_updates`.
+
+### `plan_zero_trust_policies(website_id=None)` [@ANCHOR: cloudflare:COMM_zero_trust_plan]
+
+**Purpose.** In `models/zero_trust_push.py`: step one of the push; it reads the account's Access policies and says what a push would change. **Arguments.** `website_id`, default the current website. **Returns.** a dict with `ok`, `message`, `text`, `hash` and `writes`. **Special concerns.** GET only; it writes nothing to Cloudflare. Missing credentials, a row that cannot be pushed or an unreadable policy list give `ok` False, and an unreadable list is never treated as empty.
+
+**Tests.** `test_unreadable_list_is_refused_not_treated_as_empty`, `test_plan_writes_nothing_stale_hash_and_bad_rows_and_credentials_refused`.
+
+### `action_push_zero_trust_policies(website_id=None, plan_hash=None)` [@ANCHOR: cloudflare:COMM_zero_trust_push]
+
+**Purpose.** In `models/zero_trust_push.py`: step two; it applies the plan. **Arguments.** `website_id`, default the current website; `plan_hash`, the hash the administrator reviewed, compared with a fresh plan. **Returns.** `(ok, text)` with one OK or FAILED line per written policy. **Special concerns.** A changed account since the review is refused. Each policy is created or updated on its own by id; a failed write is reported and the others are still tried. It then plans again to confirm nothing is left to do.
+
+**Tests.** `test_push_creates_each_policy_then_second_push_has_nothing_to_do`, `test_changed_row_updates_only_that_policy_by_id`, `test_failed_write_is_reported_per_policy_and_others_still_tried`.
+
+### `action_plan_zero_trust_push()` [@ANCHOR: cloudflare:COMM_zero_trust_row_plan_push]
+
+**Purpose.** The form button "Show plan (changes nothing)" on a `cloudflare.zero.trust.policy` row. **Arguments.** none besides the single row (`ensure_one`). **Returns.** a toast action showing the plan text, or the refusal message when the plan is not ok. **Special concerns.** Public RPC; it runs `plan_zero_trust_policies` as the WAF service user `cloudflare.user_cloudflare_waf`, for the row's website or the current one, and writes nothing to Cloudflare.
+
+**Tests.** `test_form_buttons_plan_then_push`.
+
+### `action_push_zero_trust_to_cloudflare()` [@ANCHOR: cloudflare:COMM_zero_trust_row_push_to_cloudflare]
+
+**Purpose.** The form button "Push Zero Trust policies to Cloudflare" on a `cloudflare.zero.trust.policy` row. **Arguments.** none besides the single row (`ensure_one`). **Returns.** a toast action: success, or a sticky danger message when the push failed. **Special concerns.** Public RPC; it pushes all of the row's website's Zero Trust policies through `action_push_zero_trust_policies` as the WAF service user, so one button applies the whole website's set, not only this row.
+
+**Tests.** `test_form_buttons_plan_then_push`.
+
+### `_zero_trust_toast(title, message, ok, sticky)` [@ANCHOR: cloudflare:COMM_zero_trust_toast]
+
+**Purpose.** In `models/zero_trust_push.py`: builds the pop-up message the two form buttons return. **Arguments.** `title` and `message` are the shown text, `ok` chooses the success or danger style, `sticky` keeps it on screen until dismissed. **Returns.** an `ir.actions.client` dict with tag `display_notification`. **Special concerns.** Pure; it only builds the dict and reads and writes no record.
+
+**Tests.** `test_zero_trust_toast_shape`.
 
 ## DNS API wrappers (`utils/cloudflare_api.py`)
 
@@ -263,6 +320,8 @@ In `utils/cloudflare_api.py`. Returns True only for a non-empty string that is e
 ### `find_zone_id(name, token)` [@ANCHOR: cloudflare:COMM_dns_api_find_zone_id]
 
 In `utils/cloudflare_api.py`. Looks up the zone called exactly `name` with `GET /zones?name=...`. Returns `(True, zone_id)` when the token sees it, `(True, None)` when it sees no zone of that name (the comparison is case-insensitive and exact, so a longer name containing `name` does not match), and `(False, message)` when `token` or `name` is empty (without a request) or when Cloudflare cannot be asked (an error status, a non-JSON body or a malformed result gives "API Error"). It only reads. The DNS push uses it to find a row's zone from its name. **Tests:** `TestDnsApiCalls.test_01_find_zone_matches_the_exact_name_and_reports_a_failed_read`.
+
+A zone whose `status` is `moved` or `deleted` (its domain's name servers now point elsewhere, so another server answers for the name) counts as no zone: `(True, None)`. A DNS push therefore plans nothing into it, as it plans nothing for a zone the token cannot see. Pinned by `test_01b_a_moved_or_deleted_zone_is_not_a_zone` in `tests/test_dns_push.py`.
 
 ### `list_dns_records_named(zone_id, name, token)` [@ANCHOR: cloudflare:COMM_dns_api_list_records_named]
 
@@ -451,6 +510,18 @@ Part of `action_apply_settings()`. The wizard sends the `browser_cache_ttl` sett
 ### Opening the purge pager incident [@ANCHOR: cloudflare:COMM_report_purge_failure]
 
 `_report_purge_failure(website, description, severity)` in `models/purge_queue.py` opens (or adds an occurrence to) the pager incident that says a website's purges are not reaching Cloudflare. `website` is the record, `description` the reason and `severity` is `medium` (no credentials) or `high` (API call failed). The incident source is the constant `PURGE_INCIDENT_SOURCE`, "Cloudflare purge queue", and the text names the website and its id. It returns what `report_incident` returns, or False when `pager_duty` is not installed. The call runs inside `_pager_default_env`. Called by `process_queue` once per failed batch. See also `test_01_no_credentials_drops_rows_and_pages_medium` and `test_02_api_failure_keeps_rows_failed_and_pages_high` in `tests/test_purge_queue.py`.
+
+### Purges into a zone that is gone [@ANCHOR: cloudflare:COMM_purge_zone_gone]
+
+When a batch of a website's purges fails, `process_queue` in `models/purge_queue.py` asks `zone_is_gone(token, zone_id)` whether Cloudflare still has the zone. If not (the zone was deleted, or moved after its domain's name servers went elsewhere) no retry can ever work, so the batch is dropped as it is for missing credentials, a `medium` pager incident says the zone is gone and where to set the new Zone ID, and `requeue_failed` has nothing to retry. Any other failure keeps the old behaviour: rows marked failed, retried hourly, `high` incident. See also `test_02b_a_zone_that_is_gone_drops_the_rows_and_pages_medium` in `tests/test_purge_queue.py`.
+
+### Manual Cache Purge into a zone that is gone [@ANCHOR: cloudflare:COMM_purge_wizard_zone_gone]
+
+`action_purge` in `models/purge_wizard.py` raises the generic "Failed to purge" message when Cloudflare refuses, except when `zone_is_gone` says the website's zone no longer exists or has moved: then the message says so and tells the administrator to set the Zone ID in Settings > Cloudflare. See also `test_a_failed_purge_into_a_zone_that_is_gone_says_so` in `tests/test_refusal_branches.py`.
+
+### `zone_is_gone(token, zone_id)` [@ANCHOR: cloudflare:COMM_cf_api_zone_is_gone]
+
+`zone_is_gone(token, zone_id)` in `utils/cloudflare_api.py` makes one GET of `/zones/{zone_id}` and returns True only for a 404 or a zone whose `status` is `moved` or `deleted`. Any other answer (an outage, a refused token, an active zone, missing arguments) returns False, so a passing failure never makes anyone drop purges. See also `test_zone_is_gone_only_for_a_404_or_a_moved_or_deleted_zone` in `tests/test_cloudflare_api_calls.py`.
 
 ### Retrying failed purges [@ANCHOR: cloudflare:COMM_requeue_failed_purges]
 

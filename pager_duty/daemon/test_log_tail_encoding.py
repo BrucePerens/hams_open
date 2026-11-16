@@ -26,12 +26,13 @@ class LogTailEncoding(unittest.TestCase):
                 mock.patch.object(gm.pagerduty_maintenance, "read_flag", return_value={"state": "off"}):
             thread = threading.Thread(target=gm.log_tail_thread, args=("client", check), daemon=True)
             thread.start()
-            time.sleep(1)  # the tailer starts at the end of the file
-            with open(path, "ab") as log:
-                log.write(b"garbage \xff\xfe bytes\nboom happened\n")
-            deadline = time.time() + 10
+            # The tailer starts at the end of the file, whenever the thread gets to run: keep appending the pair of lines
+            # until it has seen one. The deadline is only a safety net.
+            deadline = time.time() + 120
             while not report.called and time.time() < deadline:
-                time.sleep(0.2)
+                with open(path, "ab") as log:
+                    log.write(b"garbage \xff\xfe bytes\nboom happened\n")
+                time.sleep(0.05)
             self.assertTrue(report.called, "the tail thread died on the non-UTF-8 line and never saw the next one")
             self.assertTrue(thread.is_alive())
 

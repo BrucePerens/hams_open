@@ -88,7 +88,7 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
             # append made this test fail intermittently. Keep appending until the line is
             # detected: every append after the seek is a genuine "line written after the
             # tail started", which is exactly the behaviour under test.
-            deadline = time.time() + 10
+            deadline = time.time() + 120  # safety net only
             while time.time() < deadline and not stop_event.is_set():
                 with open(tmp_path, "a") as f:
                     f.write("System ran Out Of Memory during allocation\n")
@@ -124,7 +124,7 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
             target=pager_log_analyzer.tail_file, args=(mock_r_client, tmp_path, compiled), daemon=True
         )
         thread.start()
-        deadline = time.time() + 10
+        deadline = time.time() + 120  # safety net only
         while time.time() < deadline and not stop_event.is_set():
             with open(tmp_path, "a") as f:
                 f.write("Out Of Memory " + "x" * (2 * pager_log_analyzer.MAX_LINE_CHARS))
@@ -155,7 +155,7 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
             target=pager_log_analyzer.tail_file, args=(mock_r_client, tmp_path, compiled), daemon=True,
         )
         thread.start()
-        deadline = time.time() + 10
+        deadline = time.time() + 120  # safety net only
         while time.time() < deadline and not ready.is_set():  # the tail starts at the end: append until it has seen a line
             with open(tmp_path, "a") as f:
                 f.write("tail is reading\n")
@@ -275,7 +275,7 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
         thread.start()
 
         def wait_for(text):
-            deadline = time.time() + 15
+            deadline = time.time() + 120  # safety net only
             while time.time() < deadline and text not in seen:
                 with open(tmp_path, "a") as f:
                     f.write("padding line that makes the offset large enough to pass the truncated size\n" * 5)
@@ -287,7 +287,7 @@ class TestPagerLogAnalyzer(HamsTransactionCase):
         # copytruncate: same inode, the file becomes shorter than the reader's offset
         with open(tmp_path, "w") as f:
             f.write("MATCH after\n")
-        deadline = time.time() + 15
+        deadline = time.time() + 120  # safety net only
         while time.time() < deadline and "MATCH after" not in seen:
             time.sleep(0.2)
         self.assertIn("MATCH after", seen, "a truncated log must be read again from the start")

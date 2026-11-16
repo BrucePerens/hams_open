@@ -604,6 +604,16 @@ class TestDnsApiCalls(HamsTransactionCase):
         self.mock.return_value = None
         self.assertEqual(cloudflare_api.find_zone_id("hams.com", "t"), (False, "API Error"))
 
+    def test_01b_a_moved_or_deleted_zone_is_not_a_zone(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_api_find_zone_id]
+        zid = _id()
+        for status in ("moved", "deleted"):
+            self.mock.return_value = self._Response({"result": [{"name": "hams.com", "id": zid, "status": status}]})
+            self.assertEqual(cloudflare_api.find_zone_id("hams.com", "t"), (True, None), status)
+        for status in ("active", "pending", "initializing", None):
+            self.mock.return_value = self._Response({"result": [{"name": "hams.com", "id": zid, "status": status}]})
+            self.assertEqual(cloudflare_api.find_zone_id("hams.com", "t"), (True, zid), status)
+
     def test_02_listing_follows_pages_and_a_failed_page_is_not_an_empty_list(self):
         # Tests [@ANCHOR: cloudflare:COMM_dns_api_list_records_named]
         zone = _id()

@@ -127,6 +127,8 @@ class TestMemberNamesNeverReachCloudflare(HamsTransactionCase):
         allowed = {
             os.path.join("cloudflare", "utils", "cloudflare_api.py"),
             os.path.join("tools", "tenant_cloudflare.py"),
+            # The read-only DNS cut-over readiness checker: it only GETs /dns_records (TTL check) and never writes.
+            os.path.join("devbox_tools", "dns_cutover_readiness.py"),
         }
         skip_dirs = {".git", "node_modules", "tmp", "__pycache__", "tests", "archive", "docs", "claims", "hams_shared",
                      "target", "output"}

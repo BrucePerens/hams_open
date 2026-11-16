@@ -16,14 +16,14 @@ import generalized_monitor as gm  # noqa: E402
 
 def assert_scales_linearly(test, run, small, factor=8):
     """Fails when `run(n)` costs more than 3x `factor` times as much for `factor` times the input (linear is
-    `factor`x, quadratic `factor`^2 x). Compares this machine's own timings, so load does not fail it; best of
-    three on each side drops a one-off stall."""
+    `factor`x, quadratic `factor`^2 x). Measures this thread's CPU time (process_time), so load on the box does not
+    change it; best of three on each side drops a one-off stall."""
     def cost(n):
         costs = []
         for _ in range(3):
-            started = time.perf_counter()
+            started = time.process_time()
             run(n)
-            costs.append(time.perf_counter() - started)
+            costs.append(time.process_time() - started)
         return min(costs)
     small_cost = cost(small)
     test.assertLess(cost(small * factor), max(small_cost, 0.02) * factor * 3)

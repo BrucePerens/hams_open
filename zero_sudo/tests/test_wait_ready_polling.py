@@ -41,26 +41,48 @@ class _FakeBrowser:
         self.screenshots.append(prefix)
 
 
+class _FakeClock:
+    """An injected clock: sleep() advances it, nothing else does, so the polling is independent of real time and box load."""
+
+    def __init__(self):
+        self.now = 1000.0
+        self.sleeps = []
+
+    def time(self):
+        return self.now
+
+    def sleep(self, seconds):
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+    def __getattr__(self, name):
+        return getattr(time, name)
+
+
 @tagged("post_install", "-at_install")
 class TestWaitReadyPolling(HamsTransactionCase):
     # Tests [@ANCHOR: zero_sudo:patched_wait_ready]
+    def _fake_clock(self):
+        clock = _FakeClock()
+        self.safe_patch_object(common, "time", clock)
+        return clock
+
     def test_installed_on_chrome_browser(self):
         self.assertIs(ChromeBrowser._wait_ready, common._patched_wait_ready)
 
     def test_success_path_returns_true_immediately(self):
         browser = _FakeBrowser([_TRUE])
-        start = time.time()
+        clock = self._fake_clock()
         self.assertTrue(common._patched_wait_ready(browser, "1 === 1", timeout=60))
-        self.assertLess(time.time() - start, 30.0)
+        self.assertEqual(clock.sleeps, [], "a ready page is not waited on")
         self.assertEqual(len(browser.calls), 1)
         self.assertEqual(browser.screenshots, [])
 
     def test_falsy_ready_code_does_not_busy_loop(self):
         browser = _FakeBrowser([_FALSE])
-        start = time.time()
+        clock = self._fake_clock()
         self.assertFalse(common._patched_wait_ready(browser, "false", timeout=1))
-        elapsed = time.time() - start
-        self.assertGreaterEqual(elapsed, 0.9)
+        self.assertGreaterEqual(sum(clock.sleeps), 0.99, "it polls until the deadline, on the injected clock")
         # ~0.1s poll interval: about 10 calls a second, never thousands.
         self.assertLessEqual(len(browser.calls), 15, browser.calls[:5])
         self.assertEqual(browser.screenshots, ["sc_failed_ready_"])
@@ -69,22 +91,24 @@ class TestWaitReadyPolling(HamsTransactionCase):
         browser = _FakeBrowser(
             [TimeoutError("Runtime.evaluate(x)"), TimeoutError("y"), _TRUE]
         )
+        self._fake_clock()
         self.assertTrue(common._patched_wait_ready(browser, "x", timeout=5))
         self.assertEqual(len(browser.calls), 3)
 
     def test_overall_deadline_still_fails_when_calls_always_time_out(self):
         browser = _FakeBrowser([TimeoutError("Runtime.evaluate(x)")])
-        start = time.time()
+        clock = self._fake_clock()
         # Core returns False (browser_js then fails with 'ready code was
         # always falsy'); a TimeoutError must not escape.
         self.assertFalse(common._patched_wait_ready(browser, "x", timeout=1))
-        self.assertGreaterEqual(time.time() - start, 0.9)
+        self.assertGreaterEqual(sum(clock.sleeps), 0.99)
         self.assertLessEqual(len(browser.calls), 15)
         self.assertEqual(browser.screenshots, ["sc_failed_ready_"])
 
     def test_stored_websocket_exception_is_raised_like_core(self):
         browser = _FakeBrowser([_FALSE])
         browser._result.set_exception(RuntimeError("ws died"))
+        self._fake_clock()
         with self.assertRaisesRegex(RuntimeError, "ws died"):
             common._patched_wait_ready(browser, "false", timeout=0.3)
 

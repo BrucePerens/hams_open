@@ -2,7 +2,7 @@
 # Copyright © HAMS project. AGPL-3.0-or-later.
 from odoo import models, fields, _
 from odoo.exceptions import UserError
-from odoo.addons.cloudflare.utils.cloudflare_api import purge_everything, purge_hosts, purge_urls, purge_tags
+from odoo.addons.cloudflare.utils.cloudflare_api import purge_everything, purge_hosts, purge_urls, purge_tags, zone_is_gone
 from odoo.addons.zero_sudo import public_rpc
 
 
@@ -46,6 +46,16 @@ class CloudflarePurgeWizard(models.TransientModel):
                 _("Missing Cloudflare API Token or Zone ID for the selected website.")
             )
 
+        # [@ANCHOR: cloudflare:COMM_purge_wizard_zone_gone]
+        # Verified by [@ANCHOR: cloudflare:COMM_test_purge_wizard_zone_gone]
+        def refuse(message):
+            """The failure message, or the zone-gone one when Cloudflare no longer has the zone."""
+            if zone_is_gone(token, zone_id):
+                raise UserError(_(
+                    "The Cloudflare zone of this website no longer exists or has moved, so nothing can be purged. "
+                    "Set the Zone ID in Settings > Cloudflare to the zone that serves the website."))
+            raise UserError(message)
+
         close_action = {"type": "ir.actions.act_window_close"}
         msg_success_all = _("Purged everything from Cloudflare cache successfully.")
         msg_fail_all = _("Failed to purge everything from Cloudflare cache.")
@@ -66,7 +76,7 @@ class CloudflarePurgeWizard(models.TransientModel):
                     },
                 }
             else:
-                raise UserError(msg_fail_all)
+                refuse(msg_fail_all)
 
         items = [
             i.strip()
@@ -107,7 +117,7 @@ class CloudflarePurgeWizard(models.TransientModel):
                     },
                 }
             else:
-                raise UserError(msg_fail_urls)
+                refuse(msg_fail_urls)
 
         elif self.purge_type == "tags":
             success = purge_tags(items, token, zone_id)
@@ -128,4 +138,4 @@ class CloudflarePurgeWizard(models.TransientModel):
                     },
                 }
             else:
-                raise UserError(msg_fail_tags)
+                refuse(msg_fail_tags)
