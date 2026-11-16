@@ -657,6 +657,24 @@ mod tests {
         assert!(e.encode(&Op::SetLevel(Level::RfPower, 4)).is_err());
     }
 
+    // Tests [@ANCHOR: radioctl_yaesu_level_range]
+    // Tests [@ANCHOR: radioctl_yaesu_level_wire]
+    #[test]
+    fn the_ft_2000_claims_levels_with_mg_and_pc_000_255() {
+        // FT-2000 book PDF p. 12 (MG 000-255), p. 14 (PC 000-255).
+        let desc = shipped("yaesu-ft-2000");
+        assert!(desc
+            .capabilities
+            .has(radioctl_core::capability::Capability::Levels));
+        assert_eq!(level_range(&desc, Level::MicGain), Some((0, 255)));
+        assert_eq!(level_range(&desc, Level::RfPower), Some((0, 255)));
+        let mut e = YaesuEngine::new(desc).expect("engine");
+        let b = |e: &mut YaesuEngine, op: Op| e.encode(&op).expect("encodes").bytes;
+        assert_eq!(b(&mut e, Op::SetLevel(Level::MicGain, 255)), b"MG255;");
+        assert_eq!(b(&mut e, Op::SetLevel(Level::RfPower, 0)), b"PC000;");
+        assert!(e.encode(&Op::SetLevel(Level::RfPower, 256)).is_err());
+    }
+
     // Tests [@ANCHOR: radioctl_yaesu_engine_feed]
     // Tests [@ANCHOR: radioctl_yaesu_engine_decode]
     // Tests [@ANCHOR: radioctl_yaesu_engine_decode_if]
