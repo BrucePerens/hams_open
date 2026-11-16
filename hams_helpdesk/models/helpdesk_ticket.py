@@ -757,7 +757,8 @@ class HelpdeskTicket(models.Model):
 
             # Ensure customer is subscribed (not for a quarantined ticket: its "customer" is the From address of junk, and a follower
             # is mailed every message posted on the ticket)
-            if ticket_service.partner_id and ticket_service.stage != "spam":
+            # Nor for a mandatory-report ticket: its partner is the REPORTED member, who must not be told.
+            if ticket_service.partner_id and ticket_service.stage != "spam" and ticket_service.ticket_type != _CSAM_TICKET_TYPE:
                 ticket_service.message_subscribe(
                     partner_ids=[ticket_service.partner_id.id]
                 )
@@ -877,7 +878,8 @@ class HelpdeskTicket(models.Model):
         # phishing). Moving it back out of "spam" still mails as usual.
         if "stage" in vals and vals["stage"] != "spam":
             for ticket in self:
-                if ticket.partner_id:
+                # Never for a mandatory-report ticket: its partner is the REPORTED member, who must not be told.
+                if ticket.partner_id and ticket.ticket_type != _CSAM_TICKET_TYPE:
                     # Staff or a service account moved the ticket: write to the customer in the customer's language.
                     customer_lang = ticket.partner_id.lang
                     customer_env = (ticket.with_context(lang=customer_lang) if customer_lang else ticket).env

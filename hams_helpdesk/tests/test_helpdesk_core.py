@@ -285,6 +285,23 @@ class TestHelpdeskCore(HamsTransactionCase):
             "A stage transition MUST trigger a mail-back notification to the customer.",
         )
 
+    def test_04e_the_reported_member_of_a_mandatory_report_is_never_mailed_or_subscribed(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_helpdesk_no_mailback_on_spam_stage]
+        # The partner of a mandatory-report ticket is the REPORTED member: a status mail or a follower subscription tells them.
+        ticket = self.env["hams_helpdesk.ticket"].create(
+            {"name": "Reported Member Mail Test", "partner_id": self.portal_user.partner_id.id,
+             "ticket_type": "csam_enticement_trafficking"}
+        )
+        ticket.write({"stage": "in_progress"})
+        partner = self.portal_user.partner_id
+        self.assertNotIn(partner, ticket.message_partner_ids)
+        self.assertFalse(
+            self.env["mail.message"].search([("res_id", "=", ticket.id), ("model", "=", ticket._name),
+                                             ("partner_ids", "in", partner.id)]),
+            "nothing is addressed to the reported member",
+        )
+        self.assertFalse(ticket.message_ids.filtered(lambda m: "Your issue has been updated" in (m.body or "")))
+
     def test_04c_stage_mailback_is_marked_auto_generated_so_autoresponders_do_not_answer_it(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_helpdesk_mailback_auto_submitted]
         # An out-of-office or ticket-system reply to this mail would come back threaded onto the ticket as a "customer follow-up".
