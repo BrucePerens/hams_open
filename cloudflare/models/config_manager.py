@@ -211,7 +211,7 @@ class CloudflareConfigManager(models.AbstractModel):
             for website in websites_to_push:
                 self.action_push_waf_rules(website_id=website.id)
 
-    # [@ANCHOR: cloudflare:COMM_check_waf_caller_authorized]
+    # [@ANCHOR: cloudflare:COMM_waf_rule_vals_from_cloudflare]
     def _waf_rule_vals_from_cloudflare(self, website, rules):
         """Create-values for the Odoo rows of one website's Cloudflare custom-firewall rules.
 
@@ -242,6 +242,7 @@ class CloudflareConfigManager(models.AbstractModel):
             )
         return vals_list
 
+    # [@ANCHOR: cloudflare:COMM_check_waf_caller_authorized]
     def _check_waf_caller_authorized(self):
         # Adversarial security review, 2026-09-03: action_pull_waf_rules
         # and action_push_waf_rules are public (non-underscore-prefixed)

@@ -106,6 +106,7 @@ class TestWafManagement(HamsTransactionCase):
     def test_03b_pull_keeps_rules_that_share_or_lack_a_name(self):
         """The default rules pushed to Cloudflare read back as two "SECURITY" rules; the pull must not hit the unique name."""
         # Tests [@ANCHOR: cf_action_pull_waf_rules]
+        # Tests [@ANCHOR: cloudflare:COMM_waf_rule_vals_from_cloudflare]
         mock_get_ruleset = self.safe_patch("odoo.addons.cloudflare.models.config_manager.get_zone_ruleset")
         mock_get_ruleset.return_value = {
             "rules": [
