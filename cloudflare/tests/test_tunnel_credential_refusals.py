@@ -86,11 +86,22 @@ class TestTunnelCredentialRefusals(HamsTransactionCase):
     def test_05_edge_state_initialisation_skips_a_website_with_no_credentials(self):
         # Tests [@ANCHOR: cloudflare:COMM_initialize_cloudflare_state]
         self._tunnel("edgenone", False)
-        get_ruleset = self.safe_patch(MANAGER + "get_zone_ruleset")
-        get_ruleset.return_value = None
+        get_ruleset = self.safe_patch(MANAGER + "get_zone_ruleset_checked")
+        get_ruleset.return_value = ("absent", None)
         for name in ("create_zone_ruleset", "update_zone_ruleset"):
             self.safe_patch(MANAGER + name)
         self.env["cloudflare.config.manager"].initialize_cloudflare_state()
         for call in get_ruleset.call_args_list:
             self.assertTrue(call.args[1], "a Cloudflare call was made with an empty token")
             self.assertTrue(call.args[2], "a Cloudflare call was made with an empty zone id")
+
+    def test_06_edge_state_initialisation_leaves_a_zone_it_cannot_read_alone(self):
+        # Tests [@ANCHOR: cloudflare:COMM_initialize_cloudflare_state]
+        tunnel = self._tunnel("edgeerr", True)
+        website = tunnel.website_id
+        self.safe_patch(MANAGER + "get_zone_ruleset").return_value = None  # what an outage looked like before
+        self.safe_patch(MANAGER + "get_zone_ruleset_checked").return_value = ("error", "HTTP 500")
+        push = self.safe_patch_object(type(self.env["cloudflare.config.manager"]), "action_push_waf_rules")
+        self.env["cloudflare.config.manager"].initialize_cloudflare_state()
+        push.assert_not_called()
+        self.assertFalse(self.env["cloudflare.waf.rule"].search_count([("website_id", "=", website.id)]))
