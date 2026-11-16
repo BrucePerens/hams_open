@@ -47,6 +47,9 @@ use crate::kenwood::{parse_digits, Token, Tokenizer};
 /// Largest clarifier offset, in hertz.
 const MAX_OFFSET_HZ: u16 = 9_999;
 
+/// Largest `SM` and `RM` reading (P2 is 000-255 in the CAT manuals).
+const MAX_METER: u16 = 255;
+
 /// How a level is written on the wire.
 // [@ANCHOR: radioctl_yaesu_level_wire_struct]
 struct LevelWire {
@@ -320,11 +323,13 @@ impl YaesuEngine {
                 .get(1..)
                 .and_then(parse_digits)
                 .and_then(|v| u16::try_from(v).ok())
+                .filter(|v| *v <= MAX_METER)
                 .map(Observation::Signal),
             (Some("RM"), Some(rest)) if rest.len() >= 4 && rest.starts_with('5') => rest
                 .get(1..4)
                 .and_then(parse_digits)
                 .and_then(|v| u16::try_from(v).ok())
+                .filter(|v| *v <= MAX_METER)
                 .map(Observation::Power),
             (Some("ID"), Some(d)) if d.len() == 4 => parse_digits(d)
                 .and_then(|v| u16::try_from(v).ok())
@@ -958,6 +963,22 @@ mod tests {
                 "{bad:?}"
             );
         }
+    }
+
+    // Tests [@ANCHOR: radioctl_yaesu_engine_decode]
+    #[test]
+    fn a_meter_answer_above_255_is_unrecognised() {
+        let mut e = YaesuEngine::new(shipped("yaesu-ft-991a")).expect("engine");
+        for bad in [&b"SM0256;"[..], b"SM0999;", b"RM5256000;"] {
+            assert!(
+                matches!(e.feed(bad, T0).as_slice(), [Inbound::Unrecognised(_)]),
+                "{bad:?}"
+            );
+        }
+        assert_eq!(
+            e.feed(b"SM0255;", T0),
+            vec![Inbound::Observation(Observation::Signal(255))]
+        );
     }
 
     // Tests [@ANCHOR: radioctl_yaesu_engine_decode_if]
