@@ -2297,6 +2297,16 @@ def log_tail_thread(client, check):
     grace = int(check.get("grace", 0))
     thread_start_time = time.time()
 
+    # Compile once. A bad pattern used to raise re.error on every line, kill this thread and have the watchdog
+    # restart the whole daemon in a loop; now it is reported once and the file is still tailed (no matching).
+    pattern = None
+    if regex_str:
+        try:
+            pattern = re.compile(regex_str, re.IGNORECASE)
+        except re.error as bad_regex:
+            logger.error(f"[{name}] invalid log regex {regex_str!r}: {bad_regex}")
+            report(client, name, f"Invalid log regex in the check configuration: {bad_regex}", "high", website_id=website_id)
+
     THREAD_TIMEOUTS[key] = 120
     logger.info(
         f"Starting log tail thread for [{name}] on {filepath} (Grace: {grace}s)"
@@ -2324,7 +2334,7 @@ def log_tail_thread(client, check):
                 if not line:
                     time.sleep(0.5)  # audit-ignore-sleep
                     continue
-                if regex_str and re.search(regex_str, line, re.IGNORECASE):
+                if pattern and pattern.search(line):
                     if time.time() - thread_start_time < grace:
                         logger.info(
                             f"[{name}] Suppressed log alert during grace period."

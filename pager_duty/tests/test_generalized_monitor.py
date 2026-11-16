@@ -958,6 +958,32 @@ class TestMonitorExhaustive(HamsTransactionCase):
             generalized_monitor.log_tail_thread(mock_client, check)
         self.assertIn("Log Tail Test Check", generalized_monitor.THREAD_TIMEOUTS)
 
+    def test_21b_log_tail_thread_with_an_invalid_regex_reports_it_once_and_keeps_running(self):
+        # Tests [@ANCHOR: pager_duty:log_tail_thread]
+        class _StopLoop(Exception):
+            pass
+
+        with tempfile.NamedTemporaryFile("w", suffix=".log", delete=False) as log:
+            log_path = log.name
+        self.addCleanup(os.unlink, log_path)
+        sleeps = []
+
+        def fake_sleep(_seconds):
+            sleeps.append(1)
+            if len(sleeps) == 1:
+                with open(log_path, "a") as handle:
+                    handle.write("one line\nanother line\n")
+            elif len(sleeps) > 4:
+                raise _StopLoop
+
+        self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.time.sleep", side_effect=fake_sleep)
+        mock_report = self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.report")
+        check = {"name": "Bad Regex Check", "type": "log", "target": log_path, "regex": "(unclosed", "interval": 1}
+        with self.assertRaises(_StopLoop):
+            generalized_monitor.log_tail_thread(MagicMock(), check)
+        self.assertEqual(mock_report.call_count, 1)
+        self.assertIn("Invalid log regex", mock_report.call_args[0][2])
+
     def test_22b_extract_severity_prefix_ends_at_the_end_of_the_text(self):
         # Tests [@ANCHOR: pager_duty:extract_severity_prefix]
         # The pattern now ends with \Z (DOTALL, so the message keeps any trailing newline as before).
