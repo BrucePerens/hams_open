@@ -1,1 +1,0 @@
-{'name': 'm', 'version': '1.0', 'depends': [], 'license': 'AGPL-3'}
