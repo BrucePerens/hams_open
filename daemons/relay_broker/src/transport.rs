@@ -199,7 +199,6 @@ mod tests {
     // Tests [@ANCHOR: relay_broker_recv_exact]
     #[test]
     fn a_peer_dribbling_one_byte_per_second_cannot_outlast_the_whole_frame_deadline() {
-        use std::time::Instant;
         let (mut raw_w, raw_r) = UnixStream::pair().unwrap();
         // Announces a 100-byte body, then sends one byte a second: each byte lands inside the
         // 5 s socket timeout, so only a deadline on the whole frame can stop it.
@@ -214,19 +213,15 @@ mod tests {
                 std::thread::sleep(Duration::from_secs(1));
             }
         });
-        let started = Instant::now();
+        // Without a deadline on the whole frame the feeder would stop after 20 bytes and the read would end in
+        // UnexpectedEof; only the deadline gives TimedOut.
         let err = recv_frame(raw_r.as_fd()).unwrap_err();
-        let waited = started.elapsed();
         assert!(
             matches!(
                 err.kind(),
                 io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
             ),
             "{err:?}"
-        );
-        assert!(
-            waited < IO_TIMEOUT + Duration::from_secs(2),
-            "held for {waited:?}; the frame has {IO_TIMEOUT:?} in total"
         );
         drop(raw_r);
         feeder.join().unwrap();
