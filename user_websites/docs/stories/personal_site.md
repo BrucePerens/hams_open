@@ -343,6 +343,14 @@ READ snapshot predates the other's commit. Writing a row the other request chang
 serialization failure and Odoo runs the request again, so the second create sees the first and is refused. Verified by
 `[@ANCHOR: user_websites:test_page_quota_race]` (`tests/test_page_quota_race.py`, two real connections).
 
+### Blog Post Quota Lock: `post_quota_lock_rows` [@ANCHOR: user_websites:post_quota_lock_rows]
+
+Before it counts, the blog-post quota check writes (no value change) the owner's `res.users` row, or the group's row, through
+`blog.post._lock_quota_rows()`. Two simultaneous creates would otherwise both count N-1 and both pass: each REPEATABLE READ
+snapshot predates the other's commit. Writing a row the other request changed since the snapshot fails with a serialization
+failure and Odoo runs the request again, so the second create is refused. Verified by `[@ANCHOR: user_websites:test_post_quota_race]`
+(`tests/test_post_quota_race.py`, two real connections).
+
 ### Blog Quota: `user_websites_blog_quota_check` [@ANCHOR: user_websites_blog_quota_check]
 
 `blog.blog._check_blog_quota(self, vals_list)` (`models/blog_blog.py`) is called from `create`. It adds up, per owner user
