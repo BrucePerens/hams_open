@@ -196,3 +196,6 @@ class TestRateLimitPush(HamsTransactionCase):
         res = self.row.action_push_rate_limit_to_cloudflare()
         self.assertEqual(res["params"]["type"], "success")
         self.mock_create.assert_called_once()
+
+# Tests [@ANCHOR: cloudflare_rate_limit_push_cloudflare_config_manager_rate_limit]
+# Tests [@ANCHOR: cloudflare_rate_limit_push_cloudflare_rate_limit_buttons]

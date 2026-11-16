@@ -11,6 +11,7 @@ RATE_LIMIT_PHASE = "http_ratelimit"
 CHARACTERISTICS = ["cf.colo.id", "ip.src"]
 
 
+# [@ANCHOR: cloudflare_rate_limit_push_cloudflare_config_manager_rate_limit]
 class CloudflareConfigManagerRateLimit(models.AbstractModel):
     _inherit = "cloudflare.config.manager"
 
@@ -110,6 +111,7 @@ class CloudflareConfigManagerRateLimit(models.AbstractModel):
         return True, msg
 
 
+# [@ANCHOR: cloudflare_rate_limit_push_cloudflare_rate_limit_buttons]
 class CloudflareRateLimitButtons(models.Model):
     _inherit = "cloudflare.rate.limit"
 
