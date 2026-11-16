@@ -32,6 +32,9 @@ LRU_LOCK = threading.Lock()
 # cache on the same counter change; whichever call site polls first wins,
 # and the other sees latest == last_cache_counter and skips.
 _last_cache_counter = None
+# True after a poll that could not reach Redis: an invalidation published (or a Redis key deleted) during that outage
+# never bumped the counter, so the next successful poll flushes L1 whatever the counter says.
+_poll_missed = False
 _LAST_CACHE_COUNTER_LOCK = threading.Lock()
 
 
@@ -52,18 +55,22 @@ def poll_and_clear_local_cache(env):
     `@distributed_cache()`-decorated code -- e.g. `cloudflare`'s purge-queue
     cron -- without ever going through `_authenticate`) is the other.
     """
-    global _last_cache_counter
+    global _last_cache_counter, _poll_missed
     try:
         r = get_redis_connection(env)
         latest = r.get("global_cache_invalidation_counter")
         with _LAST_CACHE_COUNTER_LOCK:
-            if latest and latest != _last_cache_counter:
+            if (latest and latest != _last_cache_counter) or _poll_missed:
                 with LRU_LOCK:
                     _local_cache.clear()
                 clear_db_config_cache(env.cr.dbname)
-                _last_cache_counter = latest
+                _poll_missed = False
+                if latest:
+                    _last_cache_counter = latest
     except redis.RedisError as e:
         _logger.warning("Failed to execute stateless Redis poll: %s", e)
+        with _LAST_CACHE_COUNTER_LOCK:
+            _poll_missed = True
 
 
 # [@ANCHOR: distributed_redis_cache:COMM_should_poll_for_invalidation]
