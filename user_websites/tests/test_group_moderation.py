@@ -58,7 +58,7 @@ class TestGroupModeration(RealTransactionCase):
         # (including, on a cold thread, building a fresh registry), so
         # poll for the real committed state instead of guessing a
         # duration.
-        deadline = time.time() + 30.0
+        deadline = time.time() + 120.0  # safety net only
         while time.time() < deadline:
             # This transaction (RealTransactionCase) runs under PostgreSQL
             # REPEATABLE READ -- invalidate_recordset() only clears Odoo's
@@ -123,7 +123,7 @@ class TestGroupModeration(RealTransactionCase):
         # teardown can start deleting group/page/post rows while that thread
         # is still writing to them, which surfaces as a false "database
         # pollution" leak rather than as a real assertion failure here.
-        deadline = time.time() + 30.0
+        deadline = time.time() + 120.0  # safety net only
         while time.time() < deadline:
             self.env.cr.commit()
             self.group_page.invalidate_recordset(["is_published", "website_published"])
