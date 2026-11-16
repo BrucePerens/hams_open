@@ -33,6 +33,7 @@ from . import test_member_names_never_reach_cloudflare
 from . import test_cloudflare_api_calls
 from . import tunnel_simulator
 from . import test_zone_settings_always_https
+from . import test_zone_settings_push
 from . import test_rpc_exposure
 from . import test_cloudflare_api_unreadable_answers
 from . import test_analytics_hoot
