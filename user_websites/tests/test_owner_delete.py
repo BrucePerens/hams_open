@@ -148,6 +148,23 @@ class TestOwnerDelete(HamsHttpCase):
         self.authenticate("delother", "delother")
         self.assertEqual(self._post(f"/my/site/delowner/page/{self.about.id}/restore").status_code, 404)
 
+    def test_05a_restore_when_the_title_was_reused_gets_a_numbered_title(self):
+        # Tests [@ANCHOR: user_websites:COMM_owner_restore]
+        # A live title is unique per owner, but a deleted post keeps its title: restoring it after the owner wrote a
+        # new post with the same title must not be a database error.
+        self.authenticate("delowner", "delowner")
+        self._post(f"/my/site/delowner/post/{self.post.id}/delete")
+        blog = self.env["blog.blog"].create({"name": "B2", "owner_user_id": self.owner.id})
+        again = self.env["blog.post"].create({"name": "Post One", "blog_id": blog.id, "owner_user_id": self.owner.id})
+        done = self._post(f"/my/site/delowner/post/{self.post.id}/restore")
+        self.assertEqual(done.status_code, 303)
+        self.assertIn("saved=restored", done.headers["Location"])
+        self.env.invalidate_all()
+        restored = self.env["blog.post"].browse(self.post.id)
+        self.assertTrue(restored.active)
+        self.assertEqual(restored.name, "Post One (2)")
+        self.assertEqual(again.name, "Post One")
+
     def test_05b_restore_refuses_past_the_quota(self):
         # Tests [@ANCHOR: user_websites:fn_owner_restore_full]
         # [@ANCHOR: test_owner_restore_respects_the_quota]
