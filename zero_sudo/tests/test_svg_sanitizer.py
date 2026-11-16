@@ -83,27 +83,28 @@ def assert_output_is_safe(test, name, output):
 
 
 
-def assert_linear_cpu(case, make, small, large, label, repeats=3):
+def assert_linear_cpu(case, make, small, large, label, repeats=5):
     """Fail when sanitising `make(large)` costs far more than twice `make(small)` (linear is 2x, quadratic 4x).
 
-    CPU time (process_time), best of `repeats`, compared between two sizes in the same process: a busy box or a slow
-    machine scales both sides alike, so the verdict does not depend on the machine's speed or load, and there is no
-    absolute second budget to widen."""
+    CPU time (process_time) of the two sizes is taken back to back, `repeats` times, and the verdict is the best
+    (lowest) large/small ratio of those pairs: a load spike that hits one side of one pair cannot fail the test,
+    while a quadratic implementation is about 4x in every pair. No absolute second budget, so a busy or slow box
+    does not matter."""
+    small_value, large_value = make(small), make(large)
 
-    def cpu(count):
-        value = make(count)
-        best = None
-        for _ in range(repeats):
-            started = time.process_time()
-            html_sanitize(value)
-            spent = time.process_time() - started
-            best = spent if best is None else min(best, spent)
-        return best
+    def cpu(value):
+        started = time.process_time()
+        html_sanitize(value)
+        return time.process_time() - started
 
-    t_small = cpu(small)
-    t_large = cpu(large)
+    ratios = []
+    for _ in range(repeats):
+        t_small = cpu(small_value)
+        t_large = cpu(large_value)
+        ratios.append((t_large / max(t_small, 0.02), t_small, t_large))
+    ratio, t_small, t_large = min(ratios)
     case.assertLess(
-        t_large, 3.0 * max(t_small, 0.02), f"{label}: {large} took {t_large:.2f}s CPU, {small} took {t_small:.2f}s"
+        ratio, 3.0, f"{label}: {large} took {t_large:.2f}s CPU, {small} took {t_small:.2f}s (best of {repeats} pairs)"
     )
 
 
