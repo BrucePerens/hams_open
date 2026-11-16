@@ -384,34 +384,38 @@ def main():
 
     last_runs = {}
     spool_data = {}
+    running = {}  # check name -> future still running
 
-    while True:
-        now = time.time()
-        futures = {}
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
-            for c in checks:
-                name = c.get("name")
-                interval = int(c.get("interval", 60))
-
-                if now - last_runs.get(name, 0) >= interval:
-                    futures[executor.submit(execute_check, c)] = name
-                    last_runs[name] = now
-
-            for future in concurrent.futures.as_completed(futures):
+    # One pool for the daemon's life: a slow check no longer holds the whole 5 s cycle (the old per-cycle pool waited for
+    # every future), so the other checks run on their own intervals. A check is not started again while it is still running.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        while True:
+            now = time.time()
+            for name, future in list(running.items()):
+                if not future.done():
+                    continue
+                del running[name]
                 try:
-                    name, res = future.result()
-                    spool_data[name] = res
+                    done_name, res = future.result()
+                    spool_data[done_name] = res
                 except concurrent.futures.CancelledError as e:
                     logger.warning("Future result extraction error: %s", e)
 
-        if spool_data:
-            fd, tmp_file = tempfile.mkstemp(dir=os.path.dirname(SPOOL_FILE))
-            with os.fdopen(fd, "w") as f:
-                json.dump(spool_data, f)
-            os.chmod(tmp_file, 0o644)
-            os.rename(tmp_file, SPOOL_FILE)
+            for c in checks:
+                name = c.get("name")
+                interval = int(c.get("interval", 60))
+                if name not in running and now - last_runs.get(name, 0) >= interval:
+                    running[name] = executor.submit(execute_check, c)
+                    last_runs[name] = now
 
-        time.sleep(5)  # audit-ignore-sleep
+            if spool_data:
+                fd, tmp_file = tempfile.mkstemp(dir=os.path.dirname(SPOOL_FILE))
+                with os.fdopen(fd, "w") as f:
+                    json.dump(spool_data, f)
+                os.chmod(tmp_file, 0o644)
+                os.rename(tmp_file, SPOOL_FILE)
+
+            time.sleep(5)  # audit-ignore-sleep
 
 
 if __name__ == "__main__":

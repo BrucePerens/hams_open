@@ -6,6 +6,7 @@ import ipaddress
 import json
 import os
 import tempfile
+import threading
 import time
 
 from odoo.tests.common import tagged
@@ -249,7 +250,10 @@ class TestSyntheticSpooler(HamsTransactionCase):
 
                 @staticmethod
                 def sleep(_seconds):
-                    raise _StopLoop()
+                    # The check now runs beside the loop: let cycles pass until its result is in the spool file.
+                    if os.path.exists(spool_path):
+                        raise _StopLoop()
+                    time.sleep(0.1)  # audit-ignore-sleep
 
             self.safe_patch(
                 "odoo.addons.pager_duty.daemon.pager_synthetic_spooler.time",
@@ -263,6 +267,60 @@ class TestSyntheticSpooler(HamsTransactionCase):
                 data = json.load(f)
             self.assertTrue(data["main_test_bash"]["success"])
             self.assertIn("MAIN_LOOP_REAL_RUN", data["main_test_bash"].get("output", ""))
+
+    def test_03b_a_slow_check_does_not_hold_up_the_other_checks(self):
+        # Tests [@ANCHOR: pager_duty:synthetic_spooler_main]
+        class _StopLoop(Exception):
+            pass
+
+        order = []
+        slow_may_finish = threading.Event()
+
+        def fake_execute_check(check):
+            if check["name"] == "slow":
+                slow_may_finish.wait(timeout=3)
+                order.append("slow_end")
+            else:
+                order.append("fast_run")
+            return check["name"], {"success": True}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with open(os.path.join(tmpdir, "pager_config.json"), "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "checks": [
+                            {"type": "bash", "name": "slow", "interval": 3600},
+                            {"type": "bash", "name": "fast", "interval": 0},
+                        ]
+                    },
+                    f,
+                )
+            self.safe_patch(
+                "odoo.addons.pager_duty.daemon.pager_synthetic_spooler.__file__",
+                os.path.join(tmpdir, "pager_synthetic_spooler.py"),
+            )
+            self.safe_patch(
+                "odoo.addons.pager_duty.daemon.pager_synthetic_spooler.SPOOL_FILE",
+                os.path.join(tmpdir, "pager_synthetic_spool.json"),
+            )
+            self.safe_patch(
+                "odoo.addons.pager_duty.daemon.pager_synthetic_spooler.execute_check", new=fake_execute_check
+            )
+
+            class _LoopTime:
+                time = staticmethod(time.time)
+
+                @staticmethod
+                def sleep(_seconds):
+                    if order.count("fast_run") >= 2:
+                        slow_may_finish.set()
+                        raise _StopLoop()
+                    time.sleep(0.05)  # audit-ignore-sleep
+
+            self.safe_patch("odoo.addons.pager_duty.daemon.pager_synthetic_spooler.time", new=_LoopTime)
+            with self.assertRaises(_StopLoop):
+                pager_synthetic_spooler.main()
+        self.assertEqual(order[:2], ["fast_run", "fast_run"], "the fast check must run again before the slow one ends")
 
     def test_04_main_returns_1_when_no_config_file_exists(self):
         # Tests [@ANCHOR: pager_duty:synthetic_spooler_main]
