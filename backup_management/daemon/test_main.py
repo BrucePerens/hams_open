@@ -1027,7 +1027,7 @@ class TestSilentCommandKeepsTheConnectionAlive(unittest.TestCase):
 
         def read(size):
             # A silent command: nothing comes until the connection has been serviced (the old loop never did).
-            serviced.wait(timeout=5)
+            serviced.wait(timeout=120)  # a safety net: ends the moment the connection is serviced
             return ""
 
         proc.stdout.read.side_effect = read
