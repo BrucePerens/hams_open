@@ -1,0 +1,3 @@
+<odoo>
+<record id="r1" model="ir.rule"><field name="name">old</field></record>
+</odoo>
