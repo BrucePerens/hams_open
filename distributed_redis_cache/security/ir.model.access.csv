@@ -1,2 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_distributed_cache_config,distributed.cache.config,model_distributed_cache_config,distributed_redis_cache.group_distributed_cache_manager,1,1,1,1
