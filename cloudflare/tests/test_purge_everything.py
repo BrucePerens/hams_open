@@ -151,3 +151,40 @@ class TestPurgeEverything(RealTransactionCase):
         self.assertEqual(
             self.PurgeQueue.search_count([("website_id", "=", self.website_b.id)]), 0
         )
+
+    def test_a_website_in_a_shared_zone_purges_its_hosts_not_the_zone(self):
+        # Tests [@ANCHOR: COMM_cf_process_queue_logic]
+        # Tests [@ANCHOR: cloudflare:COMM_website_purge_hosts]
+        # [@ANCHOR: cloudflare:COMM_test_website_purge_hosts]
+        """With cloudflare_purge_hosts set, "everything" is a purge of those host names and never of the zone."""
+        self.website_a.write({"cloudflare_purge_hosts": "Hams.com, www.hams.com\nhams.com\n"})
+        self.assertEqual(self.website_a._cloudflare_purge_hosts(), ["hams.com", "www.hams.com"])
+        self.assertEqual(self.website_b._cloudflare_purge_hosts(), [])
+        everything = self.safe_patch("odoo.addons.cloudflare.models.purge_queue.purge_everything", return_value=True)
+        hosts = self.safe_patch("odoo.addons.cloudflare.models.purge_queue.purge_hosts", return_value=True)
+        self.safe_patch("odoo.addons.cloudflare.models.purge_queue.purge_urls", return_value=True)
+        self.safe_patch("odoo.addons.cloudflare.models.purge_queue.purge_tags", return_value=True)
+        self.PurgeQueue.search([]).unlink()
+        self.PurgeQueue.enqueue_everything(website_ids=self.website_a.ids)
+        self.PurgeQueue.process_queue()
+        hosts.assert_called_once_with(["hams.com", "www.hams.com"], "token_a", "zone_a")
+        everything.assert_not_called()
+        self.assertEqual(self.PurgeQueue.search_count([("website_id", "=", self.website_a.id)]), 0)
+        # A failed host purge is a failed purge like any other.
+        hosts.return_value = False
+        self.PurgeQueue.enqueue_everything(website_ids=self.website_a.ids)
+        self.PurgeQueue.process_queue()
+        self.assertEqual(self.PurgeQueue.search([("website_id", "=", self.website_a.id)]).mapped("state"), ["failed"])
+
+    def test_the_manual_purge_of_a_shared_zone_purges_its_hosts(self):
+        # Tests [@ANCHOR: cloudflare:COMM_purge_wizard_action_purge]
+        self.website_a.write({"cloudflare_purge_hosts": "hams.com"})
+        hosts = self.safe_patch("odoo.addons.cloudflare.models.purge_wizard.purge_hosts", return_value=True)
+        everything = self.safe_patch("odoo.addons.cloudflare.models.purge_wizard.purge_everything", return_value=True)
+        wizard = self.env["cloudflare.purge.wizard"].create({"website_id": self.website_a.id, "purge_type": "everything"})
+        self.assertEqual(wizard.action_purge()["tag"], "display_notification")
+        hosts.assert_called_once_with(["hams.com"], "token_a", "zone_a")
+        everything.assert_not_called()
+        self.website_a.write({"cloudflare_purge_hosts": False})
+        wizard.action_purge()
+        everything.assert_called_once_with("token_a", "zone_a")

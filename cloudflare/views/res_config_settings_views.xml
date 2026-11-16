@@ -27,6 +27,9 @@
                                     <field name="cloudflare_zone_id" placeholder="32-character Zone ID..."/>
                                 </div>
                                 <div class="mt8">
+                                    <field name="cloudflare_purge_hosts" placeholder="Shared zone only: hams.com, www.hams.com"/>
+                                </div>
+                                <div class="mt8">
                                     <field name="cloudflare_account_id" placeholder="32-character Account ID..."/>
                                 </div>
                             </div>

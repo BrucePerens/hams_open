@@ -384,6 +384,31 @@ def update_cfd_tunnel_configuration(account_id, token, tunnel_id, payload):
     return False, "API Error"
 
 
+# [@ANCHOR: cloudflare:COMM_cf_api_purge_hosts]
+def purge_hosts(hosts, token, zone_id):
+    """Purge everything cached for these host names (no scheme, no path) and nothing else in the zone."""
+    # # Verified by [@ANCHOR: COMM_test_cf_api_purge_hosts]
+    if not token or not zone_id:
+        return False
+    if not hosts:
+        return True
+
+    endpoint = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/purge_cache"
+    success = True
+    for i in range(0, len(hosts), 30):
+        response = _make_request(
+            "POST",
+            endpoint,
+            token,
+            "Cloudflare Host purge API failed for chunk",
+            json={"hosts": hosts[i : i + 30]},
+            timeout=10,
+        )
+        if not response or response.status_code != 200:
+            success = False
+    return success
+
+
 # [@ANCHOR: cloudflare:COMM_cf_api_purge_everything]
 def purge_everything(token, zone_id):
     # # Verified by [@ANCHOR: COMM_test_purge_everything_logic]

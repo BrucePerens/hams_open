@@ -27,6 +27,9 @@ class ResConfigSettings(models.TransientModel):
     cloudflare_zone_id = fields.Char(
         related="website_id.cloudflare_zone_id", readonly=False
     )
+    cloudflare_purge_hosts = fields.Text(
+        related="website_id.cloudflare_purge_hosts", readonly=False
+    )
     cloudflare_account_id = fields.Char(
         related="website_id.cloudflare_account_id", readonly=False
     )

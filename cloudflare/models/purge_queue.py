@@ -4,7 +4,7 @@ import logging
 import time
 from contextlib import contextmanager
 from odoo import models, fields, api
-from ..utils.cloudflare_api import purge_everything, purge_urls, purge_tags, zone_is_gone
+from ..utils.cloudflare_api import purge_everything, purge_hosts, purge_urls, purge_tags, zone_is_gone
 
 _logger = logging.getLogger(__name__)
 
@@ -297,7 +297,9 @@ class CloudflarePurgeQueue(models.Model):
                         (first_website.id,),
                     )
                     covered_up_to_id = self.env.cr.fetchone()[0]
-                    if not purge_everything(token, zone_id):
+                    # A website that shares its zone purges its own host names, never the whole zone.
+                    hosts = first_website._cloudflare_purge_hosts()
+                    if not (purge_hosts(hosts, token, zone_id) if hosts else purge_everything(token, zone_id)):
                         success = False
                         everything_records.write({"state": "failed"})
                     else:
