@@ -167,6 +167,9 @@ class CloudflareConfigManager(models.AbstractModel):
                 token, zone_id = website._get_cloudflare_credentials()
                 if not token or not zone_id:
                     continue
+                if website._cloudflare_shared_zone_refusal():
+                    _logger.info("[=] %s shares its Cloudflare zone; the edge state is not initialised from it.", website.name)
+                    continue
 
                 # A Cloudflare outage or a token that cannot read the zone must not look like "no ruleset":
                 # the default rules would then be pushed over the real ones.
@@ -326,6 +329,9 @@ class CloudflareConfigManager(models.AbstractModel):
         token, zone_id = website._get_cloudflare_credentials()
         if not token or not zone_id:
             return False, f"Missing API credentials for {website.name}."
+        refusal = website._cloudflare_shared_zone_refusal()
+        if refusal:
+            return False, refusal
 
         odoo_rules = self.env["cloudflare.waf.rule"].search(
             [("website_id", "=", website.id)], limit=1000
@@ -429,6 +435,9 @@ class CloudflareConfigManager(models.AbstractModel):
         token, zone_id = website._get_cloudflare_credentials()
         if not token or not zone_id:
             return {"ok": False, "message": f"Missing API credentials for {website.name}.", "text": "", "writes": 0}
+        refusal = website._cloudflare_shared_zone_refusal()
+        if refusal:
+            return {"ok": False, "message": refusal, "text": "", "writes": 0}
         state, ruleset = get_zone_ruleset_checked(CACHE_PHASE, token, zone_id)
         if state == "error":
             return {"ok": False, "message": f"REFUSED: Cloudflare's cache-settings ruleset could not be read ({ruleset}); "
@@ -506,6 +515,9 @@ class CloudflareConfigManager(models.AbstractModel):
         token, zone_id = website._get_cloudflare_credentials()
         if not token or not zone_id:
             return {"ok": False, "message": f"Missing API credentials for {website.name}.", "text": "", "writes": 0}
+        refusal = website._cloudflare_shared_zone_refusal()
+        if refusal:
+            return {"ok": False, "message": refusal, "text": "", "writes": 0}
         rows = self.env["cloudflare.zone.settings"].search(
             ["|", ("website_id", "=", website.id), ("website_id", "=", False)], limit=10
         )

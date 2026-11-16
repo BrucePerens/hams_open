@@ -137,6 +137,9 @@ class CloudflareZoneSettingsWizard(models.TransientModel):
             raise UserError(
                 _("Missing Cloudflare API Token or Zone ID for the selected website.")
             )
+        refusal = self.website_id._cloudflare_shared_zone_refusal()
+        if refusal:
+            raise UserError(refusal)
 
         errors = []
         if self.security_level:

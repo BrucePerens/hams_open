@@ -61,6 +61,9 @@ class CloudflareConfigManagerRateLimit(models.AbstractModel):
         token, zone_id = website._get_cloudflare_credentials()
         if not token or not zone_id:
             return {"ok": False, "message": f"Missing API credentials for {website.name}.", "text": "", "writes": 0}
+        refusal = website._cloudflare_shared_zone_refusal()
+        if refusal:
+            return {"ok": False, "message": refusal, "text": "", "writes": 0}
         desired, problems = self._build_rate_limit_rules(website)
         if problems:
             return {"ok": False, "message": "REFUSED: " + "; ".join(problems), "text": "", "writes": 0}
