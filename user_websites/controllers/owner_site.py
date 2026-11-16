@@ -820,7 +820,18 @@ class UserWebsitesOwnerController(http.Controller):
                 raise request.not_found()
             if self._restore_full(kind, profile_user, profile_group):
                 return self._back(site_slug, "error=limit")
-            post.write({"active": True, "deleted_by_owner": False})
+            vals = {"active": True, "deleted_by_owner": False}
+            # The owner may have written a new post under this title since the delete (a live title is unique per
+            # owner); the restored one then comes back with a number after it, not as a database error.
+            live = [("id", "!=", post.id), ("owner_user_id", "=", post.owner_user_id.id),
+                    ("user_websites_group_id", "=", post.user_websites_group_id.id)]
+            title, number = post.name, 1
+            while self._svc()["blog.post"].search_count(live + [("name", "=", title)]):
+                number += 1
+                title = f"{post.name} ({number})"
+            if title != post.name:
+                vals["name"] = title
+            post.write(vals)
         return self._back(site_slug, "saved=restored")
 
     # ------------------------------------------------------------------- images
