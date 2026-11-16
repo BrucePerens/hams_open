@@ -1086,10 +1086,9 @@ class TestSesWebhook(HamsHttpCase):
 
     def test_14_log_multi_company_isolation(self):
         """
-        ses_webhook_log_comp_rule got the identical base.group_user
-        scoping treatment as the domain rule -- prove ses.webhook.log
-        isolation the same way, both directions, which was untested
-        entirely before this fix.
+        ses.webhook.log (its raw_payload especially) is readable by the
+        administrators and the service account only, never by an ordinary
+        internal user of any company.
         """
         # Create the log records as the module's own real service account
         # (matches how webhook_api.py actually writes them), then check
@@ -1112,28 +1111,33 @@ class TestSesWebhook(HamsHttpCase):
             "status": "success",
         })
 
+        # Raw SNS payloads carry recipient addresses and message contents: only the administrators
+        # (and the service account) may read the log, not every internal user.
         user_a = self.env["res.users"].create({
-            "name": "SES Webhook Log User A",
+            "name": "SES Webhook Log Plain User A",
             "login": "ses_webhook_log_user_a",
             "company_id": self.company_a.id,
             "company_ids": [(6, 0, [self.company_a.id])],
             "group_ids": [(6, 0, [self.env.ref("base.group_user").id])],
         })
         user_b = self.env["res.users"].create({
-            "name": "SES Webhook Log User B",
+            "name": "SES Webhook Log Plain User B",
             "login": "ses_webhook_log_user_b",
             "company_id": self.company_b.id,
             "company_ids": [(6, 0, [self.company_b.id])],
             "group_ids": [(6, 0, [self.env.ref("base.group_user").id])],
         })
+        self._assert_log_unreadable(user_a, log_a)
+        self._assert_log_unreadable(user_b, log_b)
 
-        seen_by_a = self.env["ses.webhook.log"].with_user(user_a).search([])
-        self.assertIn(log_a, seen_by_a)
-        self.assertNotIn(log_b, seen_by_a)
+        self.assertIn(log_a, self.env["ses.webhook.log"].search([]))
+        self.assertIn(log_b, self.env["ses.webhook.log"].search([]))
 
-        seen_by_b = self.env["ses.webhook.log"].with_user(user_b).search([])
-        self.assertIn(log_b, seen_by_b)
-        self.assertNotIn(log_a, seen_by_b)
+    def _assert_log_unreadable(self, user, log):
+        with self.assertRaises(AccessError):
+            self.env["ses.webhook.log"].with_user(user).search([])
+        with self.assertRaises(AccessError):
+            log.with_user(user).read(["raw_payload"])
 
     def test_18_portal_and_public_denied_at_acl_layer(self):
         """
