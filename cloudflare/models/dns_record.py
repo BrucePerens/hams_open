@@ -259,7 +259,6 @@ class CloudflareDNSRecord(models.Model):
         return {"entries": entries, "problems": problems, "hash": dns_plan.plan_hash(entries),
                 "text": dns_plan.render(entries)}
 
-    # [@ANCHOR: cloudflare:COMM_dns_problem_entry]
     # [@ANCHOR: cloudflare:COMM_dns_gone_retire_entry]
     # Verified by [@ANCHOR: cloudflare:COMM_test_dns_gone_retire_entry]
     @staticmethod
@@ -273,6 +272,7 @@ class CloudflareDNSRecord(models.Model):
         entry = dns_plan.plan_row(plain, [])
         return entry if entry.get("already_gone") else None
 
+    # [@ANCHOR: cloudflare:COMM_dns_problem_entry]
     @staticmethod
     def _dns_problem_entry(plain, reason):
         return {"action": dns_plan.PROBLEM, "row_id": plain["id"], "type": plain["type"], "name": plain["name"],
