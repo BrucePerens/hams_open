@@ -79,3 +79,23 @@ class TestPortalTicketAccess(HamsHttpCase):
         tickets = self.env["hams_helpdesk.ticket"].search([("name", "in", ["Forged type %s" % f for f in forged_types])])
         self.assertEqual(len(tickets), 3)
         self.assertEqual(set(tickets.mapped("ticket_type")), {"general"})
+
+    # Tests [@ANCHOR: hams_helpdesk:COMM_portal_ticket_detail]
+    # Tests [@ANCHOR: hams_helpdesk:COMM_portal_ticket_close]
+    # Tests [@ANCHOR: hams_helpdesk:portal_my_tickets]
+    def test_the_reported_member_cannot_see_or_close_a_mandatory_report_ticket(self):
+        # The partner of a mandatory-report ticket is the REPORTED member: seeing, closing or being mailed about it tips them off.
+        report = self.env["hams_helpdesk.ticket"].create(
+            {"name": "Mandatory Report Subject", "description": "<p>x</p>", "partner_id": self.member.partner_id.id,
+             "ticket_type": "csam_enticement_trafficking"}
+        )
+        listing = self.url_open("/my/tickets").text
+        self.assertIn("Access Mine", listing)
+        self.assertNotIn("Mandatory Report Subject", listing)
+        detail = self.url_open("/my/ticket/%s" % report.id, allow_redirects=False)
+        self.assertEqual(detail.status_code, 303)
+        self.assertNotIn("Mandatory Report Subject", detail.text)
+        self._post("/my/ticket/%s/close" % report.id)
+        report.invalidate_recordset()
+        self.assertNotEqual(report.stage, "closed")
+        self.assertFalse(report.with_user(self.member).search_count([("id", "=", report.id)]), "the portal rule hides it")

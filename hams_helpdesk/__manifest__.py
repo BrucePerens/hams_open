@@ -1,6 +1,6 @@
 {
     "name": "Hams Helpdesk",
-    "version": "1.1",
+    "version": "1.2",
     "category": "Operations/Helpdesk",
     "summary": "Zero-Sudo compliant, lightweight helpdesk management.",
     "description": "Zero-Sudo compliant, lightweight helpdesk management.",
