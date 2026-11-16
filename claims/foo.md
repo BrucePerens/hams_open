@@ -1,6 +1,8 @@
 ---
-anchor: my_module:foo
-code_hash: sha256:162ed26d745beb177fc07f773ea7a293a69e4d2ec29065f5b726f30b416a295f
+anchor: t:x
+code_hash: sha256:8e872756a7f25d11cf9036e14fbac54cd27f56a0a9c2dcc18bc356e6fac78bc3
+hash_algorithm: v2
+review_tier: 1
 ---
 
-1. Claim.
+Body.
