@@ -58,14 +58,20 @@ class SesWebhookPendingSubmission(models.Model):
         Runs entirely under the caller's already-elevated ses_webhook
         service account -- no .sudo() here.
         """
+        # A sender already nudged in the last day is not nudged again: an auto-responder that answers the
+        # nudge would otherwise trade nudges with us for ever, and one address could be mailed without limit.
+        already_nudged = bool(sender_email) and bool(self.env['ses.webhook.pending_submission'].search_count([
+            ('sender_email', '=', sender_email),
+            ('create_date', '>', fields.Datetime.subtract(fields.Datetime.now(), days=1)),
+        ], limit=1))
         submission = self.env['ses.webhook.pending_submission'].create({
             'sender_email': sender_email,
             'raw_content': raw_content,
             'domain_id': domain.id,
         })
 
-        if not sender_email:
-            # No From: header: there is nobody to nudge, so keep the held submission and send nothing.
+        if not sender_email or already_nudged:
+            # No From: header (nobody to nudge) or nudged in the last day: keep the held submission, send nothing.
             return submission
 
         base_url = self.env['zero_sudo.security.utils']._get_system_param('web.base.url')
