@@ -5,6 +5,16 @@ from odoo import models, fields, _
 from odoo.addons.zero_sudo import public_rpc
 
 
+# [@ANCHOR: cloudflare:COMM_features_notification]
+def _notification(title, message, ok, sticky):
+    """The toast the plan and push buttons return."""
+    return {
+        "type": "ir.actions.client",
+        "tag": "display_notification",
+        "params": {"title": title, "message": message, "type": "success" if ok else "danger", "sticky": sticky},
+    }
+
+
 # [@ANCHOR: cloudflare_cloudflare_features_cloudflare_zone_settings]
 class CloudflareZoneSettings(models.Model):
     _name = "cloudflare.zone.settings"
@@ -27,6 +37,29 @@ class CloudflareZoneSettings(models.Model):
     _check_name_not_empty = models.Constraint(
         "CHECK(LENGTH(TRIM(name)) > 0)", "Name cannot be empty."
     )
+
+    # [@ANCHOR: cloudflare:COMM_zone_settings_row_plan_push]
+    @public_rpc
+    def action_plan_zone_settings_push(self):
+        """Show what a push would change (reads Cloudflare, writes nothing)."""
+        self.ensure_one()
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("cloudflare.user_cloudflare_waf")
+        website_id = self.website_id.id or self.env["website"].get_current_website().id
+        plan = self.env["cloudflare.config.manager"].with_user(svc_uid).plan_zone_settings(website_id=website_id)
+        return _notification(
+            _("Zone settings plan") if plan["ok"] else _("Zone settings plan refused"),
+            plan["text"] or plan["message"], plan["ok"], sticky=True,
+        )
+
+    # [@ANCHOR: cloudflare:COMM_zone_settings_row_push_to_cloudflare]
+    @public_rpc
+    def action_push_zone_settings_to_cloudflare(self):
+        """Push this website's zone settings to Cloudflare."""
+        self.ensure_one()
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("cloudflare.user_cloudflare_waf")
+        website_id = self.website_id.id or self.env["website"].get_current_website().id
+        ok, msg = self.env["cloudflare.config.manager"].with_user(svc_uid).action_push_zone_settings(website_id=website_id)
+        return _notification(_("Success") if ok else _("Cloudflare push failed"), msg, ok, sticky=not ok)
 
 
 # [@ANCHOR: cloudflare_cloudflare_features_cloudflare_rate_limit]

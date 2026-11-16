@@ -4,12 +4,16 @@ import json
 import logging
 from odoo import models, api, fields, _
 from odoo.exceptions import AccessError
-from ..utils import cache_plan
+from ..utils import cache_plan, zone_settings_plan
 from ..utils.cloudflare_api import (
     get_zone_ruleset,
     get_zone_ruleset_checked,
     update_zone_ruleset,
     create_zone_ruleset,
+    get_zone_setting_checked,
+    get_bot_fight_mode_checked,
+    update_zone_setting,
+    update_bot_fight_mode,
 )
 
 _logger = logging.getLogger(__name__)
@@ -479,3 +483,78 @@ class CloudflareConfigManager(models.AbstractModel):
             if state != "ok" or [r.get("id") for r in kept] != [r.get("id") for r in before]:
                 return False, "Pushed, but the read-back does not match the plan; check the zone's cache rules."
         return ok, msg
+
+    # [@ANCHOR: cloudflare:COMM_zone_settings_plan]
+    @api.private
+    @api.model
+    def plan_zone_settings(self, website_id=None):
+        """What pushing the website's `cloudflare.zone.settings` row would change. Reads Cloudflare (GET only).
+
+        Returns {"ok", "message", "text", "hash", "writes", "changes"}. `ok` is False (nothing to apply) when
+        credentials are missing, the website has more than one row, or any setting could not be read: an
+        unreadable setting is never taken for unset.
+        """
+        self._check_waf_caller_authorized()
+        website = (
+            self.env["website"].browse(website_id)
+            if website_id
+            else self.env["website"].get_current_website()
+        )
+        token, zone_id = website._get_cloudflare_credentials()
+        if not token or not zone_id:
+            return {"ok": False, "message": f"Missing API credentials for {website.name}.", "text": "", "writes": 0}
+        rows = self.env["cloudflare.zone.settings"].search(
+            ["|", ("website_id", "=", website.id), ("website_id", "=", False)], limit=10
+        )
+        if len(rows) != 1:
+            return {"ok": False, "writes": 0, "text": "",
+                    "message": f"REFUSED: {website.name} has {len(rows)} zone-settings rows; exactly one is needed."}
+        desired = zone_settings_plan.desired_from_row(rows.ssl_mode, rows.auto_minify, rows.bot_fight_mode)
+        remote = {}
+        for key in desired:
+            if key == "bot_fight_mode":
+                state, value = get_bot_fight_mode_checked(token, zone_id)
+            else:
+                state, value = get_zone_setting_checked(key, token, zone_id)
+            if state != "ok":
+                return {"ok": False, "writes": 0, "text": "",
+                        "message": f"REFUSED: Cloudflare's {key} setting could not be read ({value}); nothing is planned."}
+            remote[key] = value
+        plan = zone_settings_plan.make(remote, desired)
+        return {"ok": True, "message": "Planned.", "text": zone_settings_plan.render(plan), "hash": plan["hash"],
+                "writes": len(plan["changes"]), "changes": plan["changes"]}
+
+    # [@ANCHOR: cloudflare:COMM_zone_settings_push]
+    @api.private
+    @api.model
+    def action_push_zone_settings(self, website_id=None, plan_hash=None):
+        """Apply the zone-settings plan: write only the settings that differ, report each one.
+
+        With `plan_hash`, applies only if the plan is still exactly the reviewed one. Returns (ok, text).
+        """
+        plan = self.plan_zone_settings(website_id=website_id)
+        if not plan["ok"]:
+            return False, plan["message"]
+        if plan_hash and plan_hash != plan["hash"]:
+            return False, "REFUSED: Cloudflare or the Odoo row changed since the plan was shown; plan again."
+        if not plan["writes"]:
+            return True, "Nothing to do: Cloudflare already holds these zone settings."
+        website = (
+            self.env["website"].browse(website_id)
+            if website_id
+            else self.env["website"].get_current_website()
+        )
+        token, zone_id = website._get_cloudflare_credentials()
+        lines, all_ok = [], True
+        for key, value in plan["changes"].items():
+            if key == "bot_fight_mode":
+                ok, msg = update_bot_fight_mode(value, token, zone_id)
+            else:
+                ok, msg = update_zone_setting(key, value, token, zone_id)
+            all_ok = all_ok and ok
+            lines.append(f"{'OK' if ok else 'FAILED'} {key}: {msg}")
+        again = self.plan_zone_settings(website_id=website_id)
+        if all_ok and (not again["ok"] or again["writes"]):
+            all_ok = False
+            lines.append("Written, but the read-back does not match the plan; check the zone settings.")
+        return all_ok, "\n".join(lines)
