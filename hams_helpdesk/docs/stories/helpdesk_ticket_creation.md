@@ -175,6 +175,7 @@ No side effects. Mail from a member is never run through the spam filter (but se
 
 `failed_sender_authentication(signals)`: the reason (a string) when SES recorded a DMARC failure, or an SPF failure without a passing
 DKIM signature, else `''`. The same rule as ses_webhook's `_failed_sender_check`, for mail that arrives through `ingest_inbound_email`.
+`signals` is the dict `mail_signals()` parsed from the Authentication-Results header, with `spf`, `dkim` and `dmarc` verdicts; a missing or empty dict gives `''`. Pure: it reads nothing else and writes nothing, and it never raises.
 
 ### `inbound_reply_hold_reason` [@ANCHOR: hams_helpdesk:inbound_reply_hold_reason]
 
