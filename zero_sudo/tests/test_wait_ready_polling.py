@@ -8,7 +8,6 @@ drive our replacement with a fake browser object (no Chrome needed).
 """
 import logging
 import time
-from types import SimpleNamespace
 from concurrent.futures import Future
 
 from odoo.addons.zero_sudo.tests import common
