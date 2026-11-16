@@ -65,3 +65,22 @@ class TestDomainsApi(HamsHttpCase):
         domains = data["domains"]
 
         self.assertIn("testdomain1.com", domains)
+
+    # Tests [@ANCHOR: user_websites:COMM_api_domains]
+    # Tests [@ANCHOR: COMM_test_domains_api_refuses_a_partial_list]
+    def test_domains_api_refuses_a_list_without_the_dns_zones(self):
+        """When the DNS zones cannot be read the answer is a 503, not a 200 list that silently omits them."""
+        if "ham.dns.zone" not in self.env:
+            return  # a combined run with ham_dns covers this; the branch does not exist without it
+        utils_cls = type(self.env["zero_sudo.security.utils"])
+        real = utils_cls._get_service_env
+
+        def failing(this, xml_id, *args, **kwargs):
+            if xml_id == "ham_dns.user_dns_api_service":
+                raise RuntimeError("DNS zone lookup failed")
+            return real(this, xml_id, *args, **kwargs)
+
+        self.safe_patch_object(utils_cls, "_get_service_env", failing)
+        response = self.url_open("/api/v1/user_websites/domains")
+        self.assertEqual(response.status_code, 503)
+        self.assertNotIn("domains", response.json())
