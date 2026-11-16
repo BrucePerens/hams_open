@@ -138,6 +138,19 @@ The module enforces website-level isolation through the website's company: recor
 ## 6. External Dependencies
 * `python`: `[]`
 
+## Rate limit push (`utils/rate_limit_plan.py`, `models/rate_limit_push.py`)
+
+Active `cloudflare.rate.limit` rows (matching expression, mitigation action, requests per period, period, mitigation timeout; counted per IP and Cloudflare data centre) are pushed to the zone's rate-limiting ruleset (phase `http_ratelimit`) in two steps like the cache rules: a plan that only reads Cloudflare, then an explicit apply. A rule is managed when its description equals a row's name, active or not; rules Odoo does not manage are carried through untouched and stay ahead of the managed ones, and an inactive row's rule is deleted. A row without an expression or action refuses the plan (an empty expression would limit the whole site). The ruleset read is checked: an unreadable ruleset is refused, never taken for empty (the bug class of hams_open #2672). Apply does one ruleset write, reports its result, and plans again to confirm nothing is left to write. Pushing twice writes nothing the second time. Tokens never appear in messages.
+
+- `[@ANCHOR: cloudflare:COMM_rate_limit_plan_view]` `_view(rule)` is the part of a rule that decides what it does (action, expression, description, enabled and the rate-limit numbers), compared to tell `update` from `unchanged`. **Tests:** `test_update_by_id_unchanged_is_no_write_inactive_is_deleted`.
+- `[@ANCHOR: cloudflare:COMM_rate_limit_plan_summary]` `_summary(rule)` words one rule for the plan text. **Tests:** `test_empty_zone_creates_and_unmanaged_survive_first`.
+- `[@ANCHOR: cloudflare:COMM_rate_limit_plan_merge]` `merge(remote_rules, desired, managed_names)` returns `rules` (unmanaged first, then managed), one entry per create, update, unchanged, delete or keep, a `problems` list (duplicate names, or a failed proof that unmanaged rules are unchanged) and a SHA-256 `hash`. Pure. **Tests:** `test_empty_zone_creates_and_unmanaged_survive_first`, `test_duplicates_are_refused_and_hash_follows_the_zone`.
+- `[@ANCHOR: cloudflare:COMM_rate_limit_plan_render]` `render(plan, ruleset_state)` gives the plan text. **Tests:** `test_render`.
+- `[@ANCHOR: cloudflare:COMM_rate_limit_build_rules]` `_build_rate_limit_rules(website)` turns the website's active rows into Cloudflare rules and lists rows that cannot be pushed. **Tests:** `test_row_becomes_a_ratelimit_rule`.
+- `[@ANCHOR: cloudflare:COMM_rate_limit_plan]` `plan_rate_limits(website_id=None)` reads the zone (GET only) and returns `ok`, `message`, `text`, `hash`, `writes`, `rules`, `ruleset_id`, `ruleset_name`. **Tests:** `test_unreadable_ruleset_is_refused_not_treated_as_empty`, `test_plan_writes_nothing_stale_hash_refused_and_bad_rows_refused`.
+- `[@ANCHOR: cloudflare:COMM_rate_limit_push]` `action_push_rate_limits(website_id=None, plan_hash=None)` applies the plan and returns `(ok, text)`. **Tests:** `test_push_creates_then_second_push_has_nothing_to_do`, `test_unmanaged_rules_are_carried_through_by_update`, `test_missing_credentials_and_failed_write_are_reported`, `test_inactive_row_is_removed_from_the_zone`.
+- `[@ANCHOR: cloudflare:COMM_rate_limit_row_plan_push]` and `[@ANCHOR: cloudflare:COMM_rate_limit_row_push_to_cloudflare]` are the form buttons "Show plan (changes nothing)" and "Push rate limits to Cloudflare", run through the WAF service user. **Tests:** `test_form_buttons_plan_then_push`.
+
 ## Pure planner interface (`utils/cache_plan.py`, `utils/dns_plan.py`)
 
 Both modules are plain Python with no Odoo and no network: a model reads Cloudflare, passes the rows and what it found, and gets a plan back as data. Neither writes anything. The plan's hash is what the apply step compares, so an apply always writes the plan the administrator reviewed.

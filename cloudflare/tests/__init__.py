@@ -32,6 +32,7 @@ from . import test_dns_push
 from . import test_member_names_never_reach_cloudflare
 from . import test_cloudflare_api_calls
 from . import tunnel_simulator
+from . import test_rate_limit_push
 from . import test_zone_settings_always_https
 from . import test_rpc_exposure
 from . import test_cloudflare_api_unreadable_answers
