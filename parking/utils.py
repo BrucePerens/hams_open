@@ -82,6 +82,7 @@ def form_token(secret, host, now=None):
 
 # [@ANCHOR: parking:COMM_verify_form_token]
 # Verified by [@ANCHOR: parking:COMM_test_verify_form_token]
+# Verified by [@ANCHOR: parking:COMM_test_form_token_age_window]
 def verify_form_token(secret, host, token, now=None):
     """True when the token was made for this host, is at least TOKEN_MIN_AGE seconds old (a bot
     that posts instantly fails) and at most TOKEN_MAX_AGE seconds old."""
@@ -102,6 +103,7 @@ def verify_form_token(secret, host, token, now=None):
 
 # [@ANCHOR: parking:COMM_client_ip]
 # Verified by [@ANCHOR: parking:COMM_test_client_ip]
+# Verified by [@ANCHOR: parking:COMM_test_client_ip_hash_lengths]
 def client_ip(environ, headers):
     """The visitor's address. CF-Connecting-IP is trusted only when CF-Ray is also present: every
     request that came through Cloudflare carries both, and the tenant's only listener is reachable
@@ -113,6 +115,7 @@ def client_ip(environ, headers):
 
 # [@ANCHOR: parking:COMM_hash_ip]
 # Verified by [@ANCHOR: parking:COMM_test_hash_ip]
+# Verified by [@ANCHOR: parking:COMM_test_client_ip_hash_lengths]
 def hash_ip(secret, ip):
     return hmac.new(secret.encode(), ip.encode(), hashlib.sha256).hexdigest()[:32]
 
