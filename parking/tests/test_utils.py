@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+import types
+
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.tests import tagged
 
@@ -49,6 +51,52 @@ class TestParkingUtils(HamsTransactionCase):
         self.assertFalse(utils.verify_form_token("other", "a.example", token, now=1010))
         for junk in ("", "x", "1000.", "abc.def", None, "1000.\u00e9", "1000." + "\u0661" * 32):
             self.assertFalse(utils.verify_form_token("s3cret", "a.example", junk, now=1010))
+
+    # [@ANCHOR: parking:COMM_test_form_token_age_window]
+    def test_form_token_age_window_edges_and_clock(self):
+        # Tests [@ANCHOR: parking:COMM_verify_form_token]
+        # Tests [@ANCHOR: parking:COMM_form_token]
+        # Both ends of the window are inclusive: a token exactly TOKEN_MIN_AGE old and one exactly TOKEN_MAX_AGE old post.
+        token = utils.form_token("s3cret", "a.example", now=1000)
+        for age, expected in (
+            (utils.TOKEN_MIN_AGE - 1, False), (utils.TOKEN_MIN_AGE, True),
+            (utils.TOKEN_MAX_AGE, True), (utils.TOKEN_MAX_AGE + 1, False),
+        ):
+            self.assertIs(utils.verify_form_token("s3cret", "a.example", token, now=1000 + age), expected, age)
+        # A stamp in the future (a forged or clock-skewed token) is refused, not treated as old enough.
+        self.assertFalse(utils.verify_form_token("s3cret", "a.example", token, now=500))
+        # A stamp is part of what is signed: moving it forward in time keeps the old MAC and must fail.
+        _stamp, _, mac = token.partition(".")
+        self.assertFalse(utils.verify_form_token("s3cret", "a.example", f"900.{mac}", now=1010))
+        # A truncated MAC and a MAC with extra characters both fail (the whole 32 characters are compared).
+        self.assertFalse(utils.verify_form_token("s3cret", "a.example", f"1000.{mac[:-1]}", now=1010))
+        self.assertFalse(utils.verify_form_token("s3cret", "a.example", f"1000.{mac}0", now=1010))
+        self.assertEqual(len(mac), 32)
+        # A token with no integer stamp is answered with False itself, not another falsy value.
+        for junk in ("", "x", "abc.def", None):
+            self.assertIs(utils.verify_form_token("s3cret", "a.example", junk, now=1010), False)
+        # With no `now`, both sides read the real clock (utils.time): a fresh token is refused, an old enough one posts.
+        clock = types.SimpleNamespace(time=lambda: 5000.7)
+        self.safe_patch_object(utils, "time", new=clock)
+        fresh = utils.form_token("s3cret", "a.example")
+        self.assertEqual(fresh.partition(".")[0], "5000")
+        self.assertFalse(utils.verify_form_token("s3cret", "a.example", fresh))
+        clock.time = lambda: 5000.7 + utils.TOKEN_MIN_AGE
+        self.assertTrue(utils.verify_form_token("s3cret", "a.example", fresh))
+
+    # [@ANCHOR: parking:COMM_test_client_ip_hash_lengths]
+    def test_client_ip_and_hash_are_bounded(self):
+        # Tests [@ANCHOR: parking:COMM_client_ip]
+        # Tests [@ANCHOR: parking:COMM_hash_ip]
+        # A visitor-controlled header or address is cut to 64 characters before it is stored or logged.
+        long_ip = "1" * 100
+        both = {"CF-Connecting-IP": f"  {long_ip}  ", "CF-Ray": "abc"}
+        self.assertEqual(utils.client_ip({}, both), "1" * 64)
+        self.assertEqual(utils.client_ip({"REMOTE_ADDR": long_ip}, {}), "1" * 64)
+        self.assertEqual(utils.client_ip({}, {}), "")
+        # Either header alone is not proof of Cloudflare.
+        self.assertEqual(utils.client_ip({"REMOTE_ADDR": "::1"}, {"CF-Ray": "abc"}), "::1")
+        self.assertEqual(len(utils.hash_ip("secret", "9.9.9.9")), 32)
 
     # [@ANCHOR: parking:COMM_test_render_pages]
     # [@ANCHOR: parking:COMM_test_page]
