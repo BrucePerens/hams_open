@@ -98,7 +98,7 @@ pub fn level_range(desc: &RigDescription, level: Level) -> Option<(u16, u16)> {
 
 // [@ANCHOR: radioctl_yaesu_decode_level]
 /// A level answer: command name and digits (`AG0128` is name `AG`, digits `0128`).
-fn decode_level(name: &str, digits: &str) -> Option<Observation> {
+fn decode_level(desc: &RigDescription, name: &str, digits: &str) -> Option<Observation> {
     let level = [
         Level::AfGain,
         Level::RfGain,
@@ -118,7 +118,10 @@ fn decode_level(name: &str, digits: &str) -> Option<Observation> {
         return None;
     }
     let value = u16::try_from(parse_digits(number)?).ok()?;
-    Some(Observation::Level(level, value))
+    // A value above the model's range is a garbled answer, not a level (as the Kenwood and
+    // Elecraft engines treat it).
+    let (_, max) = level_range(desc, level)?;
+    (value <= max).then_some(Observation::Level(level, value))
 }
 
 // [@ANCHOR: radioctl_yaesu_parse_clarifier]
@@ -327,7 +330,7 @@ impl YaesuEngine {
                 .and_then(|v| u16::try_from(v).ok())
                 .map(Observation::ModelId),
             (Some(name @ ("RA" | "PA")), Some(digits)) => self.decode_front_end(name, digits),
-            (Some(name), Some(digits)) => decode_level(name, digits),
+            (Some(name), Some(digits)) => decode_level(&self.desc, name, digits),
             _ => None,
         };
         match observation {
@@ -938,6 +941,18 @@ mod tests {
             b"ZZ1;",
             b"SM123;",
         ] {
+            assert!(
+                matches!(e.feed(bad, T0).as_slice(), [Inbound::Unrecognised(_)]),
+                "{bad:?}"
+            );
+        }
+    }
+
+    // Tests [@ANCHOR: radioctl_yaesu_decode_level]
+    #[test]
+    fn a_level_answer_above_the_models_range_is_unrecognised() {
+        let mut e = YaesuEngine::new(shipped("yaesu-ft-991a")).expect("engine");
+        for bad in [&b"AG0999;"[..], b"RG0256;", b"MG101;", b"KS061;", b"PC999;"] {
             assert!(
                 matches!(e.feed(bad, T0).as_slice(), [Inbound::Unrecognised(_)]),
                 "{bad:?}"
