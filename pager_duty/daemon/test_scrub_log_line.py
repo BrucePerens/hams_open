@@ -90,5 +90,28 @@ class ScrubSubprocessOutput(unittest.TestCase):
             self.assertNotIn(secret, message)
 
 
+class ForwardLogAnomaly(unittest.TestCase):
+    def test_forward_log_anomaly_scrubs_the_line(self):
+        # Tests [@ANCHOR: pager_duty:test_forward_log_anomaly_scrubs_the_line]
+        # Tests [@ANCHOR: pager_duty:forward_log_anomaly]
+        payload = {"source": "Log Analyzer: Traceback", "severity": "high", "website_id": None,
+                   "description": "login failed for k6bp@example.com password=hunter2 https://x.example/a?k=1"}
+        with mock.patch.object(gm, "report") as report, \
+                mock.patch.object(gm, "log_anomaly_in_maintenance", return_value=False):
+            self.assertTrue(gm.forward_log_anomaly("client", payload))
+        sent = report.call_args.args[2]
+        for secret in ("k6bp@example.com", "hunter2", "x.example"):
+            self.assertNotIn(secret, sent)
+
+    def test_maintenance_drops_the_anomaly_and_logs_it_scrubbed(self):
+        payload = {"source": "Log Analyzer: x", "severity": "high", "description": "token=abc123 boom"}
+        seen = []
+        with mock.patch.object(gm, "report") as report, \
+                mock.patch.object(gm, "log_anomaly_in_maintenance", side_effect=lambda p: seen.append(p) or True):
+            self.assertFalse(gm.forward_log_anomaly("client", payload))
+        report.assert_not_called()
+        self.assertNotIn("abc123", seen[0]["description"])
+
+
 if __name__ == "__main__":
     unittest.main()
