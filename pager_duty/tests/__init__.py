@@ -44,3 +44,4 @@ from . import test_lets_encrypt_race
 from . import test_autodiscovery_race
 from . import test_report_incident_race
 from . import test_log_viewer_form_labels
+from . import test_refusal_branches
