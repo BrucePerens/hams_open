@@ -77,6 +77,17 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
             }
         )
 
+    # Tests [@ANCHOR: send_weekly_digest]
+    def test_01b_weekly_digest_reaches_the_follower_once(self):
+        """The digest names the follower once (recipient_ids); a second To: address would send it twice."""
+        self.env["blog.post"].send_weekly_digest()
+        mail_svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("zero_sudo.mail_service_internal")
+        mails = self.env["mail.mail"].with_user(mail_svc_uid).search(
+            [("recipient_ids", "in", [self.follower.partner_id.id]), ("subject", "ilike", "Weekly Update from Content Creator")]
+        )
+        self.assertTrue(mails)
+        self.assertFalse(any(mails.mapped("email_to")), "recipient_ids plus email_to makes Odoo send two copies")
+
     # Tests [@ANCHOR: user_websites_sql_views_user_websites_weekly_digest_view]
     def test_01_weekly_digest_and_unsubscribe_headers(self):
         """

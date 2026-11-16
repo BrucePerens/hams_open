@@ -570,7 +570,8 @@ class BlogPost(models.Model):
             email_vals = {
                 "headers": repr(headers),
                 "recipient_ids": [(4, partner.id)],
-                "email_to": partner.email,
+                # The template's own email_to is blanked: To plus recipient_ids sends the digest twice.
+                "email_to": False,
             }
             mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
                 "zero_sudo.mail_service_internal"
