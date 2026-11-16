@@ -17,10 +17,9 @@ class TestUserDeleteCleanup(HamsTransactionCase):
         user = self._member("uw_del_ann")
         blog = self.env["blog.blog"].create({"name": "Del Ann Blog", "owner_user_id": user.id})
         post = self.env["blog.post"].create({"name": "Del Ann Post", "blog_id": blog.id, "owner_user_id": user.id})
-        page_cls = type(self.env["website.page"])
         post_cls = type(post)
         seen = []
-        page_unlink, post_unlink = page_cls.unlink, post_cls.unlink
+        post_unlink = post_cls.unlink
 
         def post_spy(recs):
             seen.append(("post", recs.ids))
