@@ -25,6 +25,7 @@ from . import turnstile
 from . import waf
 from . import waf_rule
 from . import website
+from . import zero_trust_push
 from . import zone_settings_wizard
 # # Verified by [@ANCHOR: COMM_test_multi_website_purge_queue]
 # spacing
