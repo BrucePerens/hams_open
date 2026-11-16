@@ -401,10 +401,7 @@ esac"#,
             ..rq(&["sleep"], 20)
         })
         .unwrap();
-    assert!(
-        o.stopped && !o.timed_out && !o.stuck,
-        "{o:?}"
-    );
+    assert!(o.stopped && !o.timed_out && !o.stuck, "{o:?}");
     // The hard timeout ends it the same way and says so.
     let o = r.run(&rq(&["sleep"], 1)).unwrap();
     assert!(o.timed_out && !o.stopped && !o.stuck, "{o:?}");
