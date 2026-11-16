@@ -9,7 +9,7 @@
     "author": "Bruce Perens K6BP",
     "category": "Ham Radio",
     "license": "AGPL-3",
-    "version": "1.0",
+    "version": "1.1",
         "external_dependencies": {
         "bin": ["vacuumdb"],
     },
