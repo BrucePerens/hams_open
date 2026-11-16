@@ -1,0 +1,1 @@
+{'name': 'm', 'version': '1.0', 'depends': ['zero_sudo'], 'license': 'AGPL-3'}
