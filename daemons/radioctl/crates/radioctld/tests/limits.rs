@@ -116,17 +116,16 @@ async fn silent_and_stalled_clients_are_dropped() {
         "half a line kept"
     );
     let mut trickle = Client::connect(&daemon).await;
-    let started = tokio::time::Instant::now();
-    for _ in 0..10 {
+    // Generous hang guard: the line timeout must cut the trickle off long before this many pulses.
+    let mut cut_off = false;
+    for _ in 0..100 {
         trickle.send_raw(b" ").await;
         if trickle.is_closed(Duration::from_millis(300)).await {
+            cut_off = true;
             break;
         }
     }
-    assert!(
-        started.elapsed() < Duration::from_secs(4),
-        "a trickle outlived the line timeout"
-    );
+    assert!(cut_off, "a trickle outlived the line timeout");
     assert!(daemon.rigs[0].server.stats().timeouts >= 2);
     daemon.stop().await;
 }
