@@ -215,9 +215,9 @@ def assert_scales_linearly(test, run, small, factor=8):
     def cost(n):
         costs = []
         for _ in range(3):
-            started = time.perf_counter()
+            started = time.process_time()
             run(n)
-            costs.append(time.perf_counter() - started)
+            costs.append(time.process_time() - started)
         return min(costs)
     small_cost = cost(small)
     test.assertLess(cost(small * factor), max(small_cost, 0.02) * factor * 3)
@@ -838,23 +838,25 @@ class TestRedirectToSpam(BaseCase):
     def test_66_build_redirect_cost_is_linear_on_hostile_markup(self):
         # Tests [@ANCHOR: zero_sudo:club_spam_visible_text]
         # Tests [@ANCHOR: zero_sudo:club_spam_build_redirect]
-        # 100 kB of an unclosed opening tag took 7 to 10 s (every one rescanned to the end of the page). Linear code does
-        # it in a few hundredths of a second; the limit is 100 times that, so a loaded machine does not make it flaky but
-        # the quadratic code (seconds) fails. The scaling check (4x the input costs far less than 16x) fails it too.
+        # 100 kB of an unclosed opening tag took 7 to 10 s (every one rescanned to the end of the page). CPU time (not wall
+        # clock, so a loaded box does not fail it), best of three, compared between sizes in this process: 4x the input
+        # must cost far less than 16x. No absolute budget.
+        def cost(piece, size):
+            markup = piece * (size // len(piece))
+            best = None
+            for _ in range(3):
+                started = time.process_time()
+                redirect = spam.build_redirect("https://w9vcl.com/", "https://other.example.org/", markup)
+                spent = time.process_time() - started
+                best = spent if best is None else min(best, spent)
+                self.assertEqual(redirect["to"], "https://other.example.org/")
+            return best
         for piece in ("<script ", "<head ", "<style ", "<noscript ", "<"):
             with self.subTest(piece=piece):
-                costs = []
-                for size in (100_000, 400_000):
-                    markup = piece * (size // len(piece))
-                    started = time.perf_counter()
-                    redirect = spam.build_redirect("https://w9vcl.com/", "https://other.example.org/", markup)
-                    costs.append(time.perf_counter() - started)
-                    self.assertEqual(redirect["to"], "https://other.example.org/")
-                self.assertLess(costs[0], 2.0)
-                self.assertLess(costs[1], max(costs[0], 0.05) * 10)
-        started = time.perf_counter()
-        spam.build_redirect("https://w9vcl.com/", "https://other.example.org/", "<script " * 1_000_000)  # over the cap: cut
-        self.assertLess(time.perf_counter() - started, 5.0)
+                small, large = cost(piece, 100_000), cost(piece, 400_000)
+                self.assertLess(large, max(small, 0.05) * 10)
+        # 10x the input: linear is 10x, quadratic 100x.
+        self.assertLess(cost("<script ", 1_000_000), max(cost("<script ", 100_000), 0.05) * 30)
 
     def test_64_a_malformed_redirect_from_the_daemon_is_clean_not_an_error(self):
         # Tests [@ANCHOR: zero_sudo:club_spam_redirect_is_spam]
