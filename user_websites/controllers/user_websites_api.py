@@ -30,6 +30,16 @@ class UserWebsitesApi(http.Controller):
         if installed, ham DNS zones.
         """
         utils = request.env["zero_sudo.security.utils"]
+        # Decision 2026-11-16: the list names every custom domain and DNS zone, so the caller must present the same
+        # shared secret as pager_duty's update_domains, in the X-Api-Identity header (a query string ends up in logs).
+        stored_identity = utils._get_system_param("pager_duty.domain_api_identity")
+        presented = request.httprequest.headers.get("X-Api-Identity", "")
+        if not stored_identity or not hmac.compare_digest(presented.encode("utf-8", "replace"), stored_identity.encode()):
+            return request.make_response(
+                json.dumps({"error": "Unauthorized"}),
+                status=401,
+                headers=[("Content-Type", "application/json")],
+            )
         env_svc = utils._get_service_env("user_websites.user_websites_service_account")
 
         # A single search_read(..., limit=5000) silently dropped every
