@@ -39,3 +39,5 @@ from . import test_untrusted_text_api
 from . import test_daemon_reporter_unreadable_key
 from . import test_helpdesk_gdpr
 from . import test_portal_access
+from . import test_exception_reporter_refusals
+from . import test_untrusted_text_branches
