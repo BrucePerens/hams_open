@@ -335,6 +335,14 @@ when the total would exceed the limit. It reads counts through the service accou
 provisioned it falls back to `sys_provisioner`. Verified by `[@ANCHOR: test_page_quota_limit]`
 (`tests/test_page_limits.py`).
 
+### Page Quota Lock: `page_quota_lock_rows` [@ANCHOR: user_websites:page_quota_lock_rows]
+
+Before it counts, the page quota check writes (no value change) the owner's `res.users` row, or the group's row, through
+`website.page._lock_quota_rows()`. Two simultaneous creates would otherwise both count N-1 and both pass: each REPEATABLE
+READ snapshot predates the other's commit. Writing a row the other request changed since the snapshot fails with a
+serialization failure and Odoo runs the request again, so the second create sees the first and is refused. Verified by
+`[@ANCHOR: user_websites:test_page_quota_race]` (`tests/test_page_quota_race.py`, two real connections).
+
 ### Blog Quota: `user_websites_blog_quota_check` [@ANCHOR: user_websites_blog_quota_check]
 
 `blog.blog._check_blog_quota(self, vals_list)` (`models/blog_blog.py`) is called from `create`. It adds up, per owner user
