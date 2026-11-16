@@ -95,7 +95,7 @@ class SupportMatrixTests(unittest.TestCase):
         self.assertEqual(len(rows), 313)
         self.assertEqual(len({r["id"] for r in rows}), 313)
         row = next(r for r in rows if r["id"] == 3073)
-        self.assertEqual((row["status"], row["descriptions"], row["level"]), ("described", ["icom-ic-7300"], "unverified"))
+        self.assertEqual((row["status"], row["descriptions"], row["level"]), ("described", ["icom-ic-7300"], "manual-checked"))
 
     # Tests [@ANCHOR: radioctl_support_build_rows]
     def test_reporter_and_level_come_from_the_report_and_facts(self):

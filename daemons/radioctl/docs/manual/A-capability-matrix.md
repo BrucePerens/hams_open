@@ -64,12 +64,12 @@ The descriptions are the files `rigs/*.toml` (<!--count:description_files-->292<
 | `split` | split operation: the transmit VFO and the receive VFO differ | <!--count:cap_split-->87<!--/count--> |
 | `rit-xit` | RIT and XIT on and their offset | <!--count:cap_rit_xit-->47<!--/count--> |
 | `filter` | filter width or selection | <!--count:cap_filter-->32<!--/count--> |
-| `levels` | AF gain, RF gain, mic gain, keyer speed, power setting, attenuator, preamplifier and the like | <!--count:cap_levels-->82<!--/count--> |
+| `levels` | AF gain, RF gain, mic gain, keyer speed, power setting, attenuator, preamplifier and the like | <!--count:cap_levels-->83<!--/count--> |
 | `read-swr` | a calibrated standing-wave ratio, which the CI-V engine can derive only from a per-model table | <!--count:cap_read_swr-->6<!--/count--> |
 | `read-meters` | the raw Icom meter family (SWR, ALC, COMP, Vd, Id as a 0 to 255 deflection, read with command `15`) | <!--count:cap_read_meters-->10<!--/count--> |
 | `identify` | the model identifier can be read back | <!--count:cap_identify-->134<!--/count--> |
 | `scope` | bandscope or panadapter output (the `[scope]` block of the description) | <!--count:cap_scope-->5<!--/count--> |
-| `receivers` | a dual-receiver rig whose Main and Sub bands can be selected, given the transmitter and watched together (chapter [4](04-api.md#main-and-sub-receivers)) | <!--count:cap_receivers-->4<!--/count--> |
+| `receivers` | a dual-receiver rig whose Main and Sub bands can be selected, given the transmitter and watched together (chapter [4](04-api.md#main-and-sub-receivers)) | <!--count:cap_receivers-->5<!--/count--> |
 
 The ANAN files claim no mode, since an SDR's demodulation happens in the host. `read-meters` and `read-swr` differ: the first is the raw 0 to 255 deflection, the second is a ratio in tenths and needs a per-model calibration table (chapter [15](15-power.md)).
 
