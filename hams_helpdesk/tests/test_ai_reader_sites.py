@@ -123,3 +123,69 @@ class TestAiReaderSites(BaseCase):
             self._write(root, "mod/bad.py", bad)
             found = scan_tree(root)
             self.assertEqual(len(found), 1, found)
+
+    def test_12_a_syntax_error_source_reports_nothing_instead_of_raising(self):
+        # Tests [@ANCHOR: hams_helpdesk:ai_reader_check_source]
+        self.assertEqual(check_source("def broken(:\n"), [])
+
+    def test_13_an_inherit_list_naming_a_ticket_model_is_still_a_ticket_model(self):
+        # Tests [@ANCHOR: hams_helpdesk:ai_reader_check_source]
+        source = (
+            "class T(models.Model):\n"
+            "    _inherit = ['mail.thread', 'hams_helpdesk.ticket']\n"
+            "    def mcp_dump(self):\n"
+            "        return [t.body for t in self]\n"
+        )
+        self.assertEqual(len(check_source(source)), 1)
+
+    def test_14_an_mcp_method_on_an_unrelated_model_or_a_non_mcp_method_or_a_write_is_not_flagged(self):
+        # Tests [@ANCHOR: hams_helpdesk:ai_reader_check_source]
+        other = "class T(models.Model):\n    _name = 'res.partner'\n    def mcp_dump(self):\n        return [t.description for t in self]\n"
+        plain = "class T(models.Model):\n    _inherit = 'hams_helpdesk.ticket'\n    def dump(self):\n        return [t.description for t in self]\n"
+        store = "class T(models.Model):\n    _inherit = 'hams_helpdesk.ticket'\n    def mcp_set(self):\n        self.description = 'x'\n"
+        for source in (other, plain, store):
+            self.assertEqual(check_source(source), [])
+
+    def test_15_the_ignore_tag_on_the_line_above_a_def_silences_that_method_only(self):
+        # Tests [@ANCHOR: hams_helpdesk:ai_reader_ignored]
+        body = "class T(models.Model):\n    _inherit = 'hams_helpdesk.ticket'\n%s    def mcp_dump(self):\n        return [t.name for t in self]\n"
+        self.assertEqual(check_source(body % "    # ticket-ai-ignore: staff only\n"), [])
+        self.assertEqual(len(check_source(body % "    # an ordinary comment\n")), 1)
+
+    def test_16_a_fields_keyword_or_an_empty_field_list_is_read_as_text(self):
+        # Tests [@ANCHOR: hams_helpdesk:ai_reader_check_source]
+        kw = AI + "def run(client):\n    return client.execute_kw('pager.incident', 'search_read', [], fields=['description'])\n"
+        empty = AI + "def run(client):\n    return client.execute('pager.incident', 'search_read', [], [])\n"
+        ok = AI + "def run(client):\n    return client.execute('pager.incident', 'search_read', [], fields=['stage'])\n"
+        self.assertEqual(len(check_source(kw)), 1)
+        self.assertEqual(len(check_source(empty)), 1)
+        self.assertEqual(check_source(ok), [])
+
+    def test_17_other_calls_and_other_models_and_other_methods_are_not_reads(self):
+        # Tests [@ANCHOR: hams_helpdesk:ai_reader_check_source]
+        for call in (
+            "client.fetch('pager.incident', 'read', [1])",
+            "client.execute('pager.incident')",
+            "client.execute('res.partner', 'read', [1])",
+            "client.execute('pager.incident', 'write', [1], {'name': 'x'})",
+        ):
+            self.assertEqual(check_source(AI + "def run(client):\n    return %s\n" % call), [], call)
+
+    def test_18_skipped_directories_test_files_and_non_daemon_files_are_handled(self):
+        # Tests [@ANCHOR: hams_helpdesk:ai_reader_candidate_files]
+        # Tests [@ANCHOR: hams_helpdesk:ai_reader_py_files]
+        bad = AI + "def run(client):\n    return client.execute('pager.incident', 'read', [1])\n"
+        with tempfile.TemporaryDirectory() as root:
+            for rel in ("tests/bad.py", "node_modules/bad.py", ".hidden/bad.py", "mod/test_bad.py", "mod/notes.txt"):
+                self._write(root, rel, bad)
+            self._write(root, "mod/daemon/bad.py", bad)
+            self._write(root, "mod/other/bad.py", bad)
+            self.assertEqual(sorted(f.split(":")[0] for f in scan_tree(root)), ["mod/daemon/bad.py", "mod/other/bad.py"])
+            self.assertEqual([f.split(":")[0] for f in scan_tree(root, daemon_only=True)], ["mod/daemon/bad.py"])
+            # the same tree inside a git checkout takes the tracked-files path and skips the same directories
+            git = ["git", "-C", root, "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+            subprocess.run(git + ["init", "-q"], check=True)
+            subprocess.run(git + ["add", "-f", "."], check=True)
+            subprocess.run(git + ["commit", "-q", "-m", "x"], check=True)
+            self.assertEqual(sorted(f.split(":")[0] for f in scan_tree(root)), ["mod/daemon/bad.py", "mod/other/bad.py"])
+            self.assertEqual([f.split(":")[0] for f in scan_tree(root, daemon_only=True)], ["mod/daemon/bad.py"])
