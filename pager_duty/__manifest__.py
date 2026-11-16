@@ -45,7 +45,6 @@
         "views/schedule_views.xml",
         "views/pager_check_views.xml",
         "views/log_analyzer_views.xml",
-        "views/board_templates.xml",
         "data/procedures.xml",
         "data/pager_log_monitoring_data.xml",
     ],
