@@ -14,6 +14,7 @@ CHARACTERISTICS = ["cf.colo.id", "ip.src"]
 class CloudflareConfigManagerRateLimit(models.AbstractModel):
     _inherit = "cloudflare.config.manager"
 
+    # [@ANCHOR: cloudflare:COMM_rate_limit_website]
     def _rate_limit_website(self, website_id):
         return self.env["website"].browse(website_id) if website_id else self.env["website"].get_current_website()
 
@@ -112,6 +113,7 @@ class CloudflareConfigManagerRateLimit(models.AbstractModel):
 class CloudflareRateLimitButtons(models.Model):
     _inherit = "cloudflare.rate.limit"
 
+    # [@ANCHOR: cloudflare:COMM_rate_limit_toast]
     def _rate_limit_toast(self, title, message, ok, sticky):
         return {
             "type": "ir.actions.client",
