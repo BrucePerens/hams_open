@@ -639,6 +639,24 @@ mod tests {
         );
     }
 
+    // Tests [@ANCHOR: radioctl_yaesu_level_range]
+    // Tests [@ANCHOR: radioctl_yaesu_level_wire]
+    #[test]
+    fn the_ft_950_claims_levels_with_mg_000_255_and_pc_005_100() {
+        // FT-950 book PDF p. 12 (MG 000-255), p. 14 (PC 005-100).
+        let desc = shipped("yaesu-ft-950");
+        assert!(desc
+            .capabilities
+            .has(radioctl_core::capability::Capability::Levels));
+        assert_eq!(level_range(&desc, Level::MicGain), Some((0, 255)));
+        assert_eq!(level_range(&desc, Level::RfPower), Some((5, 100)));
+        let mut e = YaesuEngine::new(desc).expect("engine");
+        let b = |e: &mut YaesuEngine, op: Op| e.encode(&op).expect("encodes").bytes;
+        assert_eq!(b(&mut e, Op::SetLevel(Level::MicGain, 255)), b"MG255;");
+        assert!(e.encode(&Op::SetLevel(Level::MicGain, 256)).is_err());
+        assert!(e.encode(&Op::SetLevel(Level::RfPower, 4)).is_err());
+    }
+
     // Tests [@ANCHOR: radioctl_yaesu_engine_feed]
     // Tests [@ANCHOR: radioctl_yaesu_engine_decode]
     // Tests [@ANCHOR: radioctl_yaesu_engine_decode_if]
