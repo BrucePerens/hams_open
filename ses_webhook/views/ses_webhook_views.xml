@@ -81,6 +81,7 @@
             <list string="SES Webhook Logs" decoration-danger="status == 'failed'" decoration-success="status == 'success'" decoration-muted="status == 'ignored'">
                 <field name="create_date" string="Date"/>
                 <field name="domain_id"/>
+                <field name="domain_name" optional="show"/>
                 <field name="name" string="Message ID"/>
                 <field name="payload_type"/>
                 <field name="status"/>
@@ -101,6 +102,7 @@
                         <group>
                             <field name="create_date" string="Date"/>
                             <field name="domain_id"/>
+                            <field name="domain_name" invisible="domain_id"/>
                             <field name="name" string="Message ID"/>
                         </group>
                         <group>

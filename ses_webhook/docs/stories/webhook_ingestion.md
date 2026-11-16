@@ -40,3 +40,5 @@ Inbound support and community email reaches the right tenant's Helpdesk and
 mail threads without exposing SMTP credentials or a directly-reachable mail
 server, and a transient processing failure degrades to a logged error rather
 than an AWS retry storm.
+
+* **Story:** As an administrator, I want the webhook audit rows (rejected signature, rejected sender, failures) kept when a webhook domain is deleted, still saying which domain and company they were for -> [@ANCHOR: ses_webhook:log_compute_domain_name]; checked by [@ANCHOR: ses_webhook:test_log_survives_domain_delete].
