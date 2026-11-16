@@ -24,6 +24,10 @@ timeout_ms = 400
 retries = 3
 inter_command_ms = 0
 
+[frequency]
+min_hz = 100000
+max_hz = 30000000
+
 [defaults]
 frequency_hz = 10000000
 mode = "am"
@@ -76,4 +80,9 @@ verified = { state = "unverified" }
 [[facts]]
 key = "mode.*"
 provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/tentec/tentec2.c, rx350.c (mode character definitions)", note = "Mode characters as the backend defines them; modes with no entry in radioctl's vocabulary are not listed." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "frequency.*"
+provenance = { kind = "program-output", reference = "`rigctl --dump-caps` (Hamlib 4.6.2) frequency range lines for this model: receive 100 kHz to 30 MHz (1 range)", note = "The lowest and highest frequency Hamlib lists, so the gaps between its ranges are accepted; Hamlib's ranges, not a measurement of the radio." }
 verified = { state = "unverified" }
