@@ -176,11 +176,20 @@
             <field name="model">cloudflare.rate.limit</field>
             <field name="arch" type="xml">
                 <form>
+                    <header>
+                        <button name="action_plan_rate_limit_push" type="object" string="Show plan (changes nothing)"/>
+                        <button name="action_push_rate_limit_to_cloudflare" type="object" string="Push rate limits to Cloudflare" class="btn-primary"
+                                confirm="Write these rate limits to the live Cloudflare zone?"/>
+                    </header>
                     <sheet>
                         <group>
                             <field name="name"/>
                             <field name="match_criteria"/>
                             <field name="mitigation_action"/>
+                            <field name="requests_per_period"/>
+                            <field name="period"/>
+                            <field name="mitigation_timeout"/>
+                            <field name="active"/>
                             <field name="website_id" groups="website.group_multi_website"/>
                         </group>
                     </sheet>

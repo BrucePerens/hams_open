@@ -82,6 +82,13 @@ class CloudflareRateLimit(models.Model):
         ],
         string="Mitigation Action",
     )
+    requests_per_period = fields.Integer(string="Requests per period", default=100)
+    period = fields.Integer(
+        string="Period (seconds)", default=60,
+        help="Cloudflare accepts 10, 60, 120, 300, 600 or 3600 depending on the plan.",
+    )
+    mitigation_timeout = fields.Integer(string="Mitigation timeout (seconds)", default=600)
+    active = fields.Boolean(string="Active", default=True)
     website_id = fields.Many2one("website", string="Website")
 
 
