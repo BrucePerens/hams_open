@@ -53,6 +53,7 @@ from . import test_create_site_existing_home
 from . import test_owner_delete
 from . import test_user_blog_urls
 from . import test_owner_site
+from . import test_owner_ownership_refusals
 from . import test_report_shield
 from . import test_mail_sender_fallback
 from . import test_rpc_exposure
