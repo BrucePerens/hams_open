@@ -1,0 +1,1 @@
+window.fetch = () => 1;
