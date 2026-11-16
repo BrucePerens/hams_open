@@ -48,7 +48,10 @@ class TestDomainPush(HamsTransactionCase):
             self.env.ref("base.user_admin")
         )
 
-        # Create a domain
+        cron = self.env.ref("edge_routing.ir_cron_push_pager_duty")
+        Trigger = self.env["ir.cron.trigger"].with_user(self.env.ref("base.user_root"))
+        before = Trigger.search_count([("cron_id", "=", cron.id)])
+
         domain_model.create(
             {
                 "name": "manualpush.com",
@@ -57,9 +60,11 @@ class TestDomainPush(HamsTransactionCase):
         )
         self.env.flush_all()
 
-        # We can't easily mock the inner function `push_to_pager_duty`
-        # But we can call the outer function to ensure it doesn't crash.
-        domain_model._trigger_pager_duty_sync()
+        self.assertGreater(
+            Trigger.search_count([("cron_id", "=", cron.id)]),
+            before,
+            "creating a domain must schedule the PagerDuty push cron",
+        )
 
     # The value itself is irrelevant to what these tests prove (the endpoint's
     # own hmac.compare_digest is exercised by pager_duty's own suite); what
