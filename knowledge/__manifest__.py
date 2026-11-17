@@ -18,8 +18,11 @@ knowledge.article model. Includes frontend search, feedback, and dynamic TOC.
         "website",
         "zero_sudo",
     ],
+    # rate_limit.py reads the Redis pool of distributed_redis_cache, which itself depends on knowledge (through
+    # daemon_key_manager): a real 'depends' entry would close that loop.
+    "depends_cycle": ["distributed_redis_cache"],
     "external_dependencies": {
-        "python": ["markdown"],
+        "python": ["markdown", "redis"],
     },
     "data": [
         "security/knowledge_security.xml",
