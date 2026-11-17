@@ -36,6 +36,31 @@ class LogTailEncoding(unittest.TestCase):
             self.assertTrue(report.called, "the tail thread died on the non-UTF-8 line and never saw the next one")
             self.assertTrue(thread.is_alive())
 
+    def test_a_file_truncated_in_place_is_read_again_from_the_start(self):
+        # Tests [@ANCHOR: pager_duty:log_tail_thread]
+        handle, path = tempfile.mkstemp(suffix=".log")
+        os.close(handle)
+        self.addCleanup(os.remove, path)
+        check = {"name": "Truncate test log", "target": path, "regex": "boom", "grace": 0}
+        with mock.patch.object(gm, "report") as report, \
+                mock.patch.object(gm.pagerduty_maintenance, "read_flag", return_value={"state": "off"}):
+            thread = threading.Thread(target=gm.log_tail_thread, args=("client", check), daemon=True)
+            thread.start()
+            deadline = time.time() + 120
+            # First get past the start-at-end seek: keep appending until the tailer has read a line.
+            while not report.called and time.time() < deadline:
+                with open(path, "a") as log:
+                    log.write("boom one\n")
+                time.sleep(0.05)
+            self.assertTrue(report.called, "the tailer never read the file")
+            # Truncate in place (same inode) and write a shorter, distinct line than the tailer's read position.
+            report.reset_mock()
+            while not report.called and time.time() < deadline:
+                with open(path, "w") as log:
+                    log.write("boom\n")
+                time.sleep(0.05)
+            self.assertTrue(report.called, "alerts stopped after the log was truncated in place")
+
 
 if __name__ == "__main__":
     unittest.main()
