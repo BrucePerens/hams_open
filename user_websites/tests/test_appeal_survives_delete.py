@@ -35,3 +35,16 @@ class TestAppealSurvivesDelete(HamsTransactionCase):
         self.assertTrue(appeal.exists())
         self.assertFalse(appeal.group_id)
         self.assertEqual(appeal.target_label, "Appeal Gone Group")
+
+
+@tagged("post_install", "-at_install")
+class TestAppealStateOnCreate(HamsTransactionCase):
+    def test_portal_cannot_create_a_decided_appeal(self):
+        # Tests [@ANCHOR: user_websites:appeal_compute_target_label]
+        portal = self.env["res.users"].create(
+            {"name": "State Appellant", "login": "appeal_state_member", "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])]}
+        )
+        appeal = self.env["content.violation.appeal"].with_user(portal).create({"user_id": portal.id, "reason": "r", "state": "approved"})
+        self.assertEqual(self.env["content.violation.appeal"].browse(appeal.id).state, "new")
+        decided = self.env["content.violation.appeal"].create({"user_id": portal.id, "reason": "r", "state": "approved"})
+        self.assertEqual(decided.state, "approved", "internal and service callers may still set it")

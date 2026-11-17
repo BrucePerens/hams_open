@@ -66,6 +66,13 @@ class ContentViolationAppeal(models.Model):
         index=True,
     )
 
+    @api.model_create_multi
+    def create(self, vals_list):
+        if self.env.user.share:
+            # A portal caller cannot file an appeal that is already decided (F6, ODOO_ACCESS_CONTROL_AUDIT_2026-11-12).
+            vals_list = [{k: v for k, v in vals.items() if k != "state"} for vals in vals_list]
+        return super().create(vals_list)
+
     # [@ANCHOR: user_websites:appeal_compute_target_label]
     # Verified by [@ANCHOR: user_websites:test_appeal_survives_user_delete]
     @api.depends("user_id.name", "group_id.name")
