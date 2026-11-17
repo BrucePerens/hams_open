@@ -228,6 +228,10 @@ Records which systemd units caused this run's failure so `polling_thread` can se
 
 ## Helpers of the monitor and its check scripts
 
+### `proxy_retry_delay(failures)` [@ANCHOR: pager_duty:proxy_retry_delay]
+
+Seconds the Redis proxy loops (`log_anomaly_proxy`, `log_search_proxy`) wait after the Nth consecutive failure: 1, 2, 4 ... capped at 60, so a Redis outage logs about one warning a minute instead of one a second. `failures` below 1 counts as 1. The loops reset their counter on the first good `blpop`. Test: `ProxyRetryDelay.test_proxy_retry_delay_backs_off_and_caps`.
+
 ### `_utcnow()` [@ANCHOR: pager_duty:utcnow]
 
 Returns the current UTC time as a naive `datetime` (no `tzinfo`), the form Odoo stores and compares; it replaces `datetime.utcnow()`, deprecated since Python 3.12. No arguments, never raises. Used for `last_run` in `record_check_status` and for the maintenance window test in `is_in_maintenance`. Test: `ConfigurationTests.test_utcnow_is_a_naive_utc_datetime`.
