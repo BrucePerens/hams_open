@@ -91,21 +91,35 @@ class ResUsersSiteEligibility(models.Model):
         ids = user_ids if user_ids is not None else self._website_site_user_ids()
         changed = {}
         for user in env_svc["res.users"].browse(ids).exists():
-            ineligible = bool(user._website_eligibility_gaps())
-            if ineligible and not user.website_ineligible:
-                self._hide_site_content(env_svc, user)
-                user.write({"website_ineligible": True})
-                changed[user.id] = "hidden"
-            elif not ineligible and user.website_ineligible:
-                self._show_site_content(env_svc, user)
-                user.write({"website_ineligible": False})
-                changed[user.id] = "shown"
-            elif ineligible:
-                # New content published since the last run (a race with an in-flight request).
-                self._hide_site_content(env_svc, user)
+            if user_ids is not None:
+                self._reconcile_one_site(env_svc, user, changed)
+                continue
+            # The cron: one member whose answer cannot be computed is logged and skipped (retried next run); it must not
+            # roll back the members already reconciled in this run or keep every later member from being reconciled.
+            try:
+                with self.env.cr.savepoint():
+                    self._reconcile_one_site(env_svc, user, changed)
+            except Exception:  # audit-ignore-catch-all: one member's failure must not stop the sweep for the others; logged, retried next run
+                _logger.exception("user_websites: site eligibility of user %s could not be reconciled; retried next run", user.id)
         if changed:
             _logger.info("user_websites: site eligibility changed: %s", changed)
         return changed
+
+    @api.model
+    def _reconcile_one_site(self, env_svc, user, changed):
+        """The body of reconcile_website_eligibility for one member; records a change in `changed`."""
+        ineligible = bool(user._website_eligibility_gaps())
+        if ineligible and not user.website_ineligible:
+            self._hide_site_content(env_svc, user)
+            user.write({"website_ineligible": True})
+            changed[user.id] = "hidden"
+        elif not ineligible and user.website_ineligible:
+            self._show_site_content(env_svc, user)
+            user.write({"website_ineligible": False})
+            changed[user.id] = "shown"
+        elif ineligible:
+            # New content published since the last run (a race with an in-flight request).
+            self._hide_site_content(env_svc, user)
 
     @api.model
     # [@ANCHOR: user_websites:fn_eligibility_hide_site_content]

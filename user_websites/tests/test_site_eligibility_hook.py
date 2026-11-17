@@ -9,6 +9,7 @@ accepted the agreement and done the $1 verification. This module only provides t
 """
 import odoo.http
 from odoo.tests import tagged
+from odoo.tools import mute_logger
 
 from odoo.addons.user_websites.models.site_eligibility import ResUsersSiteEligibility
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
@@ -175,3 +176,19 @@ class TestSiteEligibilityHook(HamsHttpCase):
         self.home.invalidate_recordset()
         self.assertTrue(self.home.website_published)
 
+    def test_cron_one_failing_member_does_not_stop_the_others(self):
+        # Tests [@ANCHOR: user_websites:COMM_reconcile_website_eligibility]
+        other = self.owner.copy({"name": "Elig Other", "login": "eligother", "website_slug": "eligother"})
+        self.env.flush_all()
+        broken_id = self.owner.id
+
+        def gaps(user):
+            if user.id == broken_id:
+                raise ValueError("cannot compute")
+            return list(GAP)
+
+        with self.safe_patch_object_cm(ResUsersSiteEligibility, "_website_eligibility_gaps", gaps), \
+                mute_logger("odoo.addons.user_websites.models.site_eligibility"):
+            changed = self.env["res.users"]._cron_reconcile_website_eligibility()
+        self.assertEqual(changed.get(other.id), "hidden")
+        self.assertNotIn(broken_id, changed)
