@@ -88,6 +88,29 @@ class TestSecurityUtils(HamsTransactionCase):
         pattern = f"{self.env.cr.dbname}:distributed_cache:zero_sudo.security.utils:_get_crypto_secret*"
         self.assertEqual(list(redis_conn.scan_iter(match=pattern)), [])
 
+    def test_secret_system_params_are_not_stored_in_redis(self):
+        # Tests [@ANCHOR: zero_sudo:COMM_get_system_param]
+        utils = self.env["zero_sudo.security.utils"]
+        sentinel = "sentinel-not-a-real-secret-4f9c2a"
+        config = utils._get_service_env("zero_sudo.config_service_internal")["ir.config_parameter"]
+        redis_conn = get_redis_connection(self.env)
+        for key in ("rabbitmq.pass", "distributed_redis_cache.redis_password", "hams_helpdesk.github_webhook_secret"):
+            config.set_param(key, sentinel)
+            invalidate_model_cache(self.env, "zero_sudo.security.utils")
+            self.assertEqual(utils._get_system_param(key), sentinel)
+            self.assertEqual(utils._get_system_param(key), sentinel)
+            for redis_key in redis_conn.scan_iter(match=f"{self.env.cr.dbname}:distributed_cache:*"):
+                self.assertNotIn(sentinel.encode(), redis_key)
+                self.assertNotIn(sentinel.encode(), redis_conn.get(redis_key) or b"", f"{key} leaked into Redis")
+
+    def test_non_secret_system_params_are_still_cached(self):
+        # Tests [@ANCHOR: zero_sudo:COMM_get_system_param]
+        utils = self.env["zero_sudo.security.utils"]
+        invalidate_model_cache(self.env, "zero_sudo.security.utils")
+        utils._get_system_param("web.base.url", "x")
+        pattern = f"{self.env.cr.dbname}:distributed_cache:zero_sudo.security.utils:_read_system_param_cached*"
+        self.assertTrue(list(get_redis_connection(self.env).scan_iter(match=pattern)))
+
     def test_16_get_system_param_returns_the_real_configured_value(self):
         """
         _get_system_param/_set_system_param's own whitelist check IS their

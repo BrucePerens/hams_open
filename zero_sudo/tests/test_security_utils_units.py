@@ -576,8 +576,29 @@ class TestSecurityUtilsUnits(SafePatchMixin, BaseCase):
         self._stub('_get_service_env', lambda xml_id: asked.append(xml_id) or log)
         return util, log, asked
 
+    def _uncached_params(self):
+        """Run the cached reader without its Redis wrapper; return a list that records each call."""
+        inner = su.ZeroSudoSecurityUtils._read_system_param_cached.__wrapped__
+        calls = []
+        self.safe_patch_object(
+            su.ZeroSudoSecurityUtils, "_read_system_param_cached",
+            new=lambda _self, key, default=None: calls.append(key) or inner(_self, key, default),
+        )
+        return calls
+
+    def test_secret_params_skip_the_cached_reader(self):
+        # Tests [@ANCHOR: zero_sudo:COMM_get_system_param]
+        calls = self._uncached_params()
+        util, log, asked = self._param()
+        log.params["rabbitmq.pass"] = "value"
+        self.assertEqual(util._get_system_param("rabbitmq.pass"), "value")
+        self.assertEqual(util._get_system_param("hams_helpdesk.github_webhook_secret", "d"), "d")
+        self.assertEqual(util._get_system_param(READ_WHITELIST[0], "d"), "d")
+        self.assertEqual(calls, [READ_WHITELIST[0]])
+
     def test_get_system_param_returns_a_whitelisted_value_as_the_config_service(self):
-        raw = su.ZeroSudoSecurityUtils._get_system_param.__wrapped__
+        self._uncached_params()
+        raw = su.ZeroSudoSecurityUtils._get_system_param
         util, log, asked = self._param()
         key = READ_WHITELIST[0]
         log.params[key] = "value"
@@ -588,7 +609,7 @@ class TestSecurityUtilsUnits(SafePatchMixin, BaseCase):
         self.assertEqual(log.created, [])
 
     def test_get_system_param_refuses_and_logs_everything_else(self):
-        raw = su.ZeroSudoSecurityUtils._get_system_param.__wrapped__
+        raw = su.ZeroSudoSecurityUtils._get_system_param
         for banned in ("secret", "key", "password", "token", "auth", "crypt", "cert"):
             util, log, asked = self._param()
             key = "x.My_%s_y" % banned.upper()

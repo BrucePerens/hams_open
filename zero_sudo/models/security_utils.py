@@ -915,7 +915,6 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         ]
 
     @api.model
-    @distributed_cache()
     def _get_system_param(self, key, default=None):
         # [@ANCHOR: zero_sudo:COMM_get_system_param]
         # ---
@@ -981,8 +980,29 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # gate now also honors this whitelist directly (see
         # ham_base/models/ir_config_parameter.py), so there's one
         # authoritative list instead of two that can drift apart.
+        # A secret-bearing key is read fresh every time and never put in Redis or any shared cache.
+        if self._is_secret_param_key(key):
+            return self._read_system_param(key, default)
+        return self._read_system_param_cached(key, default)
+
+    # Substrings that mark a whitelisted parameter as holding a secret ("pass" also catches rabbitmq.pass).
+    _SECRET_PARAM_MARKERS = ("secret", "key", "pass", "token", "auth", "crypt", "cert", "credential")
+
+    @api.model
+    def _is_secret_param_key(self, key):
+        lower_key = key.lower()
+        return any(marker in lower_key for marker in self._SECRET_PARAM_MARKERS)
+
+    @api.model
+    def _read_system_param(self, key, default=None):
         env_svc = self._get_service_env("zero_sudo.config_service_internal")
         return env_svc["ir.config_parameter"].get_param(key, default)
+
+    @api.model
+    @distributed_cache()
+    def _read_system_param_cached(self, key, default=None):
+        # Only ever called for non-secret keys that passed the whitelist in _get_system_param().
+        return self._read_system_param(key, default)
 
     @api.model
     def _set_system_param(self, key, value):
