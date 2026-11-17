@@ -283,7 +283,7 @@ This section ensures all module functions and their developer usage are thorough
     *   `pending_reports()`: Plain HTTP GET endpoint returning JSON, used by the admin toast notifications.
     *   `subscribe()`, `unsubscribe()`: Handlers for weekly digest opt-in/opt-out.
 *   **`UserWebsitesApi`** (`controllers/user_websites_api.py`):
-    *   `api_domains()`: Public `GET /api/v1/user_websites/domains` returning `{"domains": [...]}`, every custom domain (`edge.routing.domain`) plus, if `ham_dns` is installed, every `ham.dns.zone` name, for Let's Encrypt certificate maintenance.
+    *   `api_domains()`: `GET /api/v1/user_websites/domains` (public route, no CSRF; the caller must send the shared secret `pager_duty.domain_api_identity` in the `X-Api-Identity` header, else 401) returning `{"domains": [...]}`, every custom domain (`edge.routing.domain`) plus, if `ham_dns` is installed, every `ham.dns.zone` name, for Let's Encrypt certificate maintenance.
 
 ### System Hooks (`hooks.py`)
 *   **`post_init_hook(env)`**: Triggered post-installation to execute initial setup routines: adds every existing real user (except the public user and service accounts) to `group_user_websites_user`, backfills empty `website_page.name` values from the linked view, creates partial indexes on published pages and posts, and flags the Cloudflare purge and User Websites service accounts as `is_service_account`.
