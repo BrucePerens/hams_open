@@ -14,9 +14,18 @@ from werkzeug.urls import url_parse
 from markupsafe import Markup
 from odoo.tools import lru
 
+from ..rate_limit import network_hits
+
 _logger = logging.getLogger(__name__)
 
 _md_cache = lru.LRU(1024)
+
+# [@ANCHOR: knowledge:feedback_rate_limit]
+# Verified by [@ANCHOR: test_manual_feedback_is_limited_per_network]
+# The once-per-session vote is reset by dropping the cookie, so votes are also counted per network (/24 or /48).
+# An hour of 60 leaves room for a classroom behind one address; a script does not get past it. Redis down refuses the
+# vote: a skipped vote costs nothing, an open counter is what the limit is there to stop.
+FEEDBACK_PER_HOUR_NETWORK = 60
 
 # Headings of the Help index, in the order readers meet them. A member
 # manual names its heading with "help_topic" in its knowledge_docs entry;
@@ -518,6 +527,13 @@ class ManualLibraryController(http.Controller):
         if request.session.get(session_key):
             # Block duplicate voting in same session
             return request.redirect(safe_redirect)
+        hits = network_hits(request.env, "manual_feedback", 3600)
+        if hits is None or hits > FEEDBACK_PER_HOUR_NETWORK:
+            return request.make_response(
+                "Too many ratings from your network. Please try again later.",
+                status=429,
+                headers=[("Content-Type", "text/plain; charset=utf-8")],
+            )
 
         try:
             # Fetch without sudo() first to ensure the user actually has Read access to the article.
