@@ -428,6 +428,15 @@ class PagerCheck(models.Model):
         )
         return os.path.join(base_dir, "pager_config.json")
 
+    def _unlink_all(self, model_name):
+        """Delete every record of a model, 1000 at a time (never loading them all)."""
+        model = self.env[model_name]
+        while True:
+            batch = model.search([], limit=1000)
+            if not batch:
+                return
+            batch.unlink()
+
     # [@ANCHOR: pager_duty:action_pull_from_json]
     @public_rpc
     def action_pull_from_json(self):
@@ -444,13 +453,13 @@ class PagerCheck(models.Model):
             _logger.error("IO error reading %s: %s", path, e)
             raise UserError(_("Failed to read configuration file: %s") % str(e))
 
-        self.env["pager.check"].search([], limit=1000).unlink()
+        self._unlink_all("pager.check")
 
         # Parse Log Analyzer Config
         if isinstance(data, dict) and "log_analyzer" in data:
             log_config = data["log_analyzer"]
-            self.env["pager.log.file"].search([], limit=1000).unlink()
-            self.env["pager.log.pattern"].search([], limit=1000).unlink()
+            self._unlink_all("pager.log.file")
+            self._unlink_all("pager.log.pattern")
 
             for fp in log_config.get("files", []):
                 self.env["pager.log.file"].create({"filepath": fp})
