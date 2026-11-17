@@ -114,7 +114,10 @@ class TestHeartbeatGrace(HamsTransactionCase):
     def test_heartbeat_has_grace_past_the_interval(self):
         # Tests [@ANCHOR: pager_duty:heartbeat_is_current]
         now = datetime(2026, 1, 1, 12, 0, 0)
-        beat = lambda seconds: now - timedelta(seconds=seconds)  # noqa: E731
+
+        def beat(seconds):
+            return now - timedelta(seconds=seconds)
+
         self.assertTrue(heartbeat_is_current(beat(60), now, 60))
         self.assertTrue(heartbeat_is_current(beat(61), now, 60), "just past the interval is still healthy")
         self.assertTrue(heartbeat_is_current(beat(90), now, 60))
