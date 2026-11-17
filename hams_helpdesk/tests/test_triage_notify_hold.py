@@ -263,6 +263,13 @@ class TestTriageNotifyHold(HamsTransactionCase):
         )
         self.assertEqual(forged.notify_state, "sent")
 
+    def test_15_a_huge_digit_string_for_the_hold_is_the_maximum(self):
+        # Tests [@ANCHOR: hams_helpdesk:triage_hold_seconds]
+        key = "hams_helpdesk.triage_notify_hold_seconds"
+        for value, expected in (("9" * 5000, 300), ("9" * 12, 300), ("30", 30), ("x", 0)):
+            self.settings[key] = value
+            self.assertEqual(self.Ticket._triage_hold_seconds(), expected, value[:12])
+
     def test_14_a_held_ticket_a_person_closed_is_never_announced(self):
         # Tests [@ANCHOR: hams_helpdesk:cron_release_held_notifications]
         # Tests [@ANCHOR: hams_helpdesk:triage_release_notification]
