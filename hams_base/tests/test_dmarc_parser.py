@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from unittest.mock import patch
 from odoo.tests import common, tagged
 import gzip
 import zipfile
@@ -56,6 +57,14 @@ class TestDmarcParser(common.TransactionCase):
         self.assertEqual(record.source_ip, "192.168.1.1")
         self.assertEqual(record.count, 5)
         self.assertEqual(record.dkim_alignment, "pass")
+
+    def test_the_number_of_record_rows_kept_is_capped(self):
+        # Tests [@ANCHOR: hams_base:COMM_parse_dmarc_xml]
+        one = self.sample_xml.split("<record>")[1].split("</record>")[0]
+        xml = self.sample_xml.replace("</feedback>", ("<record>" + one + "</record>") * 5 + "</feedback>")
+        with patch("odoo.addons.hams_base.models.dmarc_report._MAX_RECORDS", 3):
+            report = self.DmarcReport._parse_dmarc_xml(xml)
+        self.assertEqual(len(report.record_ids), 3)
 
     # [@ANCHOR: test_a_date_range_outside_the_supported_years_is_dropped_not_a_crash]
     def test_a_date_range_outside_the_supported_years_is_dropped_not_a_crash(self):
