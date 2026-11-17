@@ -147,8 +147,9 @@ class ResUsers(models.Model):
                             }
                             # The mail service account holds the mail.mail create ACL (the facility account does not)
                             svc_uid = self.env['zero_sudo.security.utils']._get_service_uid('zero_sudo.mail_service_internal')
-                            mail = self.env['mail.mail'].with_user(svc_uid).create(mail_values)
-                            mail.send()
+                            # Queued, not sent here: the queue sends it after this transaction commits, so
+                            # a rollback of the change also drops the alert (no alert for a change that never happened).
+                            self.env['mail.mail'].with_user(svc_uid).create(mail_values)
                     except Exception as e:  # audit-ignore-catch-all
                         # mail.mail.send() can raise
                         # a variety of delivery exceptions (SMTP errors,

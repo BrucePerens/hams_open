@@ -37,6 +37,24 @@ class TestResUsersEmailChangeAlert(HamsTransactionCase):
         self.assertEqual(mails_after.email_to, "email_change_test@example.com")
         self.assertIn("new_address@example.com", mails_after.body_html)
 
+    def test_the_alert_is_queued_not_sent_before_the_change_commits(self):
+        # Tests [@ANCHOR: hams_base:COMM_res_users_write]
+        user = self.env["res.users"].create(
+            {"name": "Queued Alert User", "login": "queued_alert@example.com", "email": "queued_alert@example.com"}
+        )
+        sent_now = []
+        self.safe_patch_object(
+            type(self.env["mail.mail"]), "send", new=lambda mails, *a, **k: sent_now.extend(mails.ids)
+        )
+        user.write({"email": "queued_alert_new@example.com"})
+        ours = self.env["mail.mail"].browse(sent_now).filtered(lambda m: "HAMS Email Address" in (m.subject or ""))
+        self.assertFalse(ours, "a rollback of the change must also drop the alert, so it is queued")
+        queued = self.env["mail.mail"].search(
+            [("email_to", "=", "queued_alert@example.com"), ("state", "=", "outgoing"),
+             ("subject", "ilike", "HAMS Email Address")]
+        )
+        self.assertTrue(queued)
+
     def test_an_unrelated_field_write_sends_no_alert(self):
         user = self.env["res.users"].create(
             {
