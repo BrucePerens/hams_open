@@ -106,6 +106,7 @@ class ResUsersSiteEligibility(models.Model):
         return changed
 
     @api.model
+    # [@ANCHOR: user_websites:fn_eligibility_reconcile_one_site]
     def _reconcile_one_site(self, env_svc, user, changed):
         """The body of reconcile_website_eligibility for one member; records a change in `changed`."""
         ineligible = bool(user._website_eligibility_gaps())

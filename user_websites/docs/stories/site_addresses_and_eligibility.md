@@ -78,6 +78,10 @@ The scheduled entry point on `res.users` (`@api.model`): it calls `reconcile_web
 
 `@api.model` helper returning the ids (list of int) of the members the reconciler should look at when no list is given: active users whose `website_slug` is set and non-empty and who are not service accounts, since only those can have a site to hide. It uses one static SQL query with no parameters (marked audit-ignore-sql), so it is fast on a large user table and does not load records. No arguments, no side effects. Test: `tests/test_site_eligibility_hook.py`.
 
+### `_reconcile_one_site(self, env_svc, user, changed)` [@ANCHOR: user_websites:fn_eligibility_reconcile_one_site]
+
+`@api.model` helper holding the per-member body of `reconcile_website_eligibility`. If the member's `_website_eligibility_gaps()` is non-empty and `website_ineligible` is not yet set, it hides their content, sets `website_ineligible` and records `"hidden"` in the `changed` dict under the user id. If the gaps are empty and the flag is set, it shows the content again, clears the flag and records `"shown"`. If the member is still ineligible and already flagged, it hides any content published since the last run and records nothing. Returns nothing. Test: `test_02_ineligible_public_site_is_404_and_content_is_kept_then_returns` in `tests/test_site_eligibility_hook.py`.
+
 ### `_hide_site_content(self, env_svc, user)` [@ANCHOR: user_websites:fn_eligibility_hide_site_content]
 
 `@api.model` helper. `env_svc` is the service-account environment, `user` the member. It finds every published `website.page` (`website_published`) and `blog.post` (`is_published`) owned by `owner_user_id == user.id`, and writes unpublished plus `hidden_by_eligibility = True` in one write per model. Nothing is deleted and nothing else changes; run again with nothing published it does nothing, so it is safe to repeat. Returns nothing. Called only by the reconciler. Writing as the service account bypasses the owner's own rights on purpose. Test: `tests/test_site_eligibility_hook.py`.
