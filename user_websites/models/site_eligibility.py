@@ -80,6 +80,7 @@ class ResUsersSiteEligibility(models.Model):
         return [row[0] for row in self.env.cr.fetchall()]
 
     # [@ANCHOR: user_websites:COMM_reconcile_website_eligibility]
+    # Verified by [@ANCHOR: test_cron_query_count_does_not_grow_with_members]
     # Verified by [@ANCHOR: test_site_eligibility_hook]
     @api.private
     @api.model
