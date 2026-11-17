@@ -22,7 +22,7 @@ from odoo.addons.ses_webhook.controllers.webhook_api import (
     _fetch_sns_signing_cert as _REAL_FETCH_SNS_SIGNING_CERT,
 )
 
-from odoo.addons.ses_webhook.controllers.webhook_api import SesWebhookController, _verdict
+from odoo.addons.ses_webhook.controllers.webhook_api import SesWebhookController, _processing_failure_description, _verdict
 from odoo.exceptions import AccessError
 from odoo.tests.common import tagged
 from odoo.tools import mute_logger
@@ -1455,6 +1455,15 @@ class TestSesWebhook(HamsHttpCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(reports, [(self.domain_a.name, 'msg-alert-failure', 'simulated processing failure')])
+
+    def test_12c_pager_incident_text_carries_no_error_text(self):
+        # Tests [@ANCHOR: ses_webhook:COMM_processing_failure_description]
+        error = RuntimeError("duplicate key DETAIL: Key (email)=(member@example.com) already exists")
+        text = _processing_failure_description("a.example", "msg-1", error)
+        self.assertNotIn("member@example.com", text)
+        self.assertNotIn("duplicate key", text)
+        self.assertIn("RuntimeError", text)
+        self.assertIn("msg-1", text)
 
     def test_19_unmatched_sender_is_gated_not_processed(self):
         # Tests [@ANCHOR: ses_webhook:COMM_create_and_notify]
