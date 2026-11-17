@@ -221,7 +221,9 @@ impl ProtocolEngine for GuoheEngine {
                 continue;
             };
             match (pending, command, data) {
-                (Pending::Status, 0x0b, [ptt, ma, mb, a0, a1, a2, a3, b0, b1, b2, b3, ..]) => {
+                (Pending::Status, 0x0b, [ptt, ma, mb, a0, a1, a2, a3, b0, b1, b2, b3, ..])
+                    if *ma <= 9 && *mb <= 9 =>
+                {
                     let a = u32::from_be_bytes([*a0, *a1, *a2, *a3]);
                     let b = u32::from_be_bytes([*b0, *b1, *b2, *b3]);
                     self.freq = [u64::from(a), u64::from(b)];
@@ -478,5 +480,16 @@ mod tests {
             e.feed(&build_frame(0x0c, &[1]), T0).as_slice(),
             [Inbound::Unrecognised(_)]
         ));
+    }
+
+    #[test]
+    fn a_status_with_a_wild_mode_byte_does_not_overflow() {
+        let mut e = GuoheEngine::new(shipped()).expect("engine");
+        e.encode(&Op::GetMode).expect("encodes");
+        // PTT, mode A 0xFF, mode B 0xFF, then two zero frequencies.
+        let mut data = vec![0, 0xFF, 0xFF];
+        data.extend_from_slice(&[0; 8]);
+        let seen = e.feed(&build_frame(0x0b, &data), T0);
+        assert!(matches!(seen.as_slice(), [Inbound::Unrecognised(_)]));
     }
 }
