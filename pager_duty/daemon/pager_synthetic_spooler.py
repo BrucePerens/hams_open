@@ -372,6 +372,16 @@ def resolve_config_path(environ=None):
 
 
 # [@ANCHOR: pager_duty:synthetic_spooler_main]
+# [@ANCHOR: pager_duty:synthetic_spooler_write_spool]
+def write_spool(spool_data, spool_file):
+    """Writes spool_data to spool_file through a temp file and rename; a failed write leaves no temp file behind."""
+    fd, tmp_file = tempfile.mkstemp(dir=os.path.dirname(spool_file))
+    with os.fdopen(fd, "w") as f:
+        json.dump(spool_data, f)
+    os.chmod(tmp_file, 0o644)
+    os.rename(tmp_file, spool_file)
+
+
 def main():
     config_path = resolve_config_path()
     if not os.path.exists(config_path):
@@ -426,11 +436,7 @@ def main():
                     last_runs[name] = now
 
             if spool_data:
-                fd, tmp_file = tempfile.mkstemp(dir=os.path.dirname(SPOOL_FILE))
-                with os.fdopen(fd, "w") as f:
-                    json.dump(spool_data, f)
-                os.chmod(tmp_file, 0o644)
-                os.rename(tmp_file, SPOOL_FILE)
+                write_spool(spool_data, SPOOL_FILE)
 
             time.sleep(5)  # audit-ignore-sleep
 

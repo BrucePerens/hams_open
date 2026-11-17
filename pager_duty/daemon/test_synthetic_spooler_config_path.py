@@ -13,6 +13,19 @@ import generalized_monitor  # noqa: E402
 import pager_synthetic_spooler  # noqa: E402
 
 
+class SyntheticSpoolerWrite(unittest.TestCase):
+    def test_a_failed_write_leaves_no_temp_file_and_keeps_the_old_spool(self):
+        # Tests [@ANCHOR: pager_duty:synthetic_spooler_write_spool]
+        with tempfile.TemporaryDirectory() as directory:
+            spool = os.path.join(directory, "spool.json")
+            pager_synthetic_spooler.write_spool({"a": 1}, spool)
+            with self.assertRaises(TypeError):
+                pager_synthetic_spooler.write_spool({"a": object()}, spool)  # not JSON: the write fails midway, like a full disk
+            self.assertEqual(os.listdir(directory), ["spool.json"])
+            with open(spool, encoding="utf-8") as handle:
+                self.assertEqual(handle.read(), '{"a": 1}')
+
+
 class SyntheticSpoolerConfigPath(unittest.TestCase):
     def test_synthetic_spooler_reads_the_same_config_file(self):
         # Tests [@ANCHOR: pager_duty:synthetic_spooler_resolve_config_path]
