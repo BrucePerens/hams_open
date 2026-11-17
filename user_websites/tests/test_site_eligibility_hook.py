@@ -78,7 +78,6 @@ class TestSiteEligibilityHook(HamsHttpCase):
         # Tests [@ANCHOR: user_websites:fn_ir_http_serve_page_eligibility]
         # Tests [@ANCHOR: user_websites:field_hidden_by_eligibility]
         # Tests [@ANCHOR: user_websites:fn_eligibility_hide_site_content]
-        # Tests [@ANCHOR: user_websites:fn_eligibility_reconcile_one_site]
         # Tests [@ANCHOR: user_websites:fn_eligibility_show_site_content]
         with self._gaps(GAP):
             self.assertEqual(self.url_open("/eligowner", allow_redirects=False).status_code, 404)
@@ -196,3 +195,40 @@ class TestSiteEligibilityHook(HamsHttpCase):
         self.assertIn(broken_id, visited, "the failing member was reached")
         self.assertEqual(changed.get(other.id), "hidden")
         self.assertNotIn(broken_id, changed)
+
+    # [@ANCHOR: test_cron_query_count_does_not_grow_with_members]
+    def test_cron_query_count_does_not_grow_with_members(self):
+        # Tests [@ANCHOR: user_websites:COMM_reconcile_website_eligibility]
+        # Tests [@ANCHOR: user_websites:fn_eligibility_hide_site_content]
+        # Tests [@ANCHOR: user_websites:fn_eligibility_show_site_content]
+        users = self.env["res.users"]
+
+        def add_members(count, first):
+            for i in range(first, first + count):
+                member = self.owner.copy({"name": f"Elig M{i}", "login": f"eligm{i}", "website_slug": f"eligm{i}"})
+                self.env["website.page"].create(
+                    {"url": f"/eligm{i}", "name": "p", "type": "qweb", "owner_user_id": member.id,
+                     "website_published": True, "arch": ARCH.format(key=f"m{i}", body="b")}
+                )
+            self.env.flush_all()
+            self.env.invalidate_all()
+
+        def queries(callback):
+            before = self.env.cr.sql_log_count
+            callback()
+            self.env.flush_all()
+            return self.env.cr.sql_log_count - before
+
+        add_members(2, 0)
+        with self._gaps(GAP):
+            hide_few = queries(users._cron_reconcile_website_eligibility)
+            add_members(6, 10)
+            hide_many = queries(users._cron_reconcile_website_eligibility)
+            self.env.invalidate_all()
+            steady = queries(users._cron_reconcile_website_eligibility)
+            flagged = users.search_count([("website_ineligible", "=", True)])
+        queries(users._cron_reconcile_website_eligibility)
+        self.assertLess(hide_many - hide_few, 6, "six more members add fewer queries than one each (it was several per member)")
+        self.assertEqual(flagged, 9)
+        self.assertLess(steady - hide_few, 6, "a sweep that changes nothing is not dearer per member")
+        self.assertEqual(users.search_count([("website_ineligible", "=", True)]), 0)
