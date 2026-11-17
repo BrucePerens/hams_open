@@ -5,11 +5,13 @@ on:
     paths:
       - 'requirements.txt'
       - 'daemons/cloudflared/component-tests/requirements.txt'
+      - 'daemons/bench_mcp/glasgow/requirements.txt'
       - '.github/workflows/pip-audit.yml'
   pull_request:
     paths:
       - 'requirements.txt'
       - 'daemons/cloudflared/component-tests/requirements.txt'
+      - 'daemons/bench_mcp/glasgow/requirements.txt'
       - '.github/workflows/pip-audit.yml'
   schedule:
     # A pinned requirements.txt doesn't change just because a new advisory
@@ -61,6 +63,7 @@ jobs:
         requirements_file:
           - requirements.txt
           - daemons/cloudflared/component-tests/requirements.txt
+          - daemons/bench_mcp/glasgow/requirements.txt
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
