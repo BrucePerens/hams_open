@@ -174,4 +174,23 @@ describe("pager_duty_log_viewer", () => {
         await finish(search);
         expect(viewer.state.error).toBe("Search timed out.");
     });
+
+    test("closing the page stops a search that is still polling", async () => {
+        // Tests [@ANCHOR: pager_duty:js_log_viewer_setup]
+        const requests = stubApi({
+            "/api/v1/pager/logs/files": { result: { files: ["a.log"] } },
+            "/api/v1/pager/logs/search": { result: { job_id: "j" } },
+            "/api/v1/pager/logs/search_poll": { result: { status: "running" } },
+        });
+        const viewer = await mountPlain(LogViewer, { orm: {} });
+        await animationFrame();
+        viewer.state.regexQuery = "ERROR";
+        const search = viewer.executeSearch();
+        await animationFrame();
+        await advanceTime(1000);
+        const before = requests.length;
+        viewer.__owl__.app.destroy();
+        await finish(search);
+        expect(requests.length).toBe(before);
+    });
 });
