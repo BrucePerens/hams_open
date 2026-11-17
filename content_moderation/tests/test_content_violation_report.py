@@ -198,3 +198,18 @@ class TestGuestReportDedupe(HamsTransactionCase):
         b = Report.create({"target_url": "/x", "description": "d"})
         self.assertNotEqual(a, b)
         self.assertFalse(a.guest_dedupe_key)
+
+
+@tagged("post_install", "-at_install")
+class TestReportStateOnCreate(HamsTransactionCase):
+    # [@ANCHOR: content_moderation:test_portal_cannot_create_a_resolved_report]
+    def test_portal_cannot_create_a_resolved_report(self):
+        # Tests [@ANCHOR: content_moderation:create_guest_dedupe]
+        portal = self.env["res.users"].create(
+            {"name": "State Reporter", "login": "cvr_state_reporter", "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])]}
+        )
+        Report = self.env["content.violation.report"]
+        report = Report.with_user(portal).create({"target_url": "/p", "description": "d", "state": "dismissed", "reported_by_user_id": portal.id})
+        self.assertEqual(report.sudo().state, "new")
+        resolved = Report.create({"target_url": "/q", "description": "d", "state": "dismissed"})
+        self.assertEqual(resolved.state, "dismissed", "internal and service callers may still set it")
