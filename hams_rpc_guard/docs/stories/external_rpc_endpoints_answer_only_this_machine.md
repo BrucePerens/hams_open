@@ -222,6 +222,14 @@ Returns the verified `Peer` of an accepted `AF_UNIX` connection. Argument `conne
 
 Returns `{uid: name}` from the passwd database, read whole with `pwd.getpwall()` (a uid without an entry is an ordinary answer, never an error). No arguments. It reads the database on every call, so a user added while the server runs is recognised, at the price of one scan per connection and per `open_listener`. Used by `peer_of` and to resolve the configured socket owner. No lock; read-only. Tests: `test_socket_permissions_and_peer_credentials`.
 
+### `_user_name(uid) -> str` [@ANCHOR: hams_rpc_guard:user_name]
+
+Returns the name the system gives the integer `uid` with one `pwd.getpwuid` lookup (the first entry when several names share the uid), or "" when the uid has no entry (the `KeyError` is an ordinary answer, never raised). Used by `peer_of` for every accepted connection, so it avoids the whole-database scan `_user_names` does. Read-only, no lock. Tests: `test_socket_permissions_and_peer_credentials`.
+
+### `_group_name(gid) -> str` [@ANCHOR: hams_rpc_guard:group_name]
+
+Returns the name the system gives the integer `gid` with one `grp.getgrgid` lookup, or "" when the gid has no entry (the `KeyError` is an ordinary answer, never raised). Used by `peer_of` to name the peer's primary group for `@group` rules in `unix_peers`. Read-only, no lock. Tests: `test_socket_permissions_and_peer_credentials`.
+
 ### `_group_names() -> dict` [@ANCHOR: hams_rpc_guard:group_names]
 
 Returns `{gid: name}` from the group database with `grp.getgrall()`. No arguments, read-only, a fresh scan on every call. Used by `peer_of` to name the peer's primary group (for `@group` rules in `unix_peers`) and by `open_listener` to resolve the configured socket group. A gid without an entry simply has no name. Tests: `test_socket_permissions_and_peer_credentials`.

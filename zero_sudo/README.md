@@ -122,6 +122,15 @@ Safely retrieves a whitelisted system configuration parameter, reading it as `ze
 * **Security:** the whitelist and the banned-substring check are this function's boundary; the read itself is done as `zero_sudo.config_service_internal`, never with `.sudo()`. A secret belongs in the secret store, never in a whitelisted parameter. Writing is `_set_system_param`, which has its own, shorter write whitelist and logs `param_write_denied`.
 * **Tests:** `tests/test_security_utils.py` (the whitelist and the secret block).
 
+#### `_is_secret_param_key(key)` `[@ANCHOR: zero_sudo:is_secret_param_key]`
+Decides whether a parameter key holds a secret. Argument `key`: the `ir.config_parameter` key (`str`). Returns `True` when the lower-cased key contains any of `_SECRET_PARAM_MARKERS` ("secret", "key", "pass", "token", "auth", "crypt", "cert", "credential"), else `False`. No errors for a string; no database access, no lock. Security: `_get_system_param` uses it to read a secret-bearing key fresh every time, never through the Redis or shared cache; the match is deliberately broad (a false positive only costs a cache miss). Tests: `test_secret_params_skip_the_cached_reader` in `tests/test_security_utils_units.py`.
+
+#### `_read_system_param(key, default=None)` `[@ANCHOR: zero_sudo:read_system_param]`
+Reads one parameter uncached. Arguments: `key` (`str`, already checked against the read whitelist by the caller) and `default` (returned when unset). It gets the `zero_sudo.config_service_internal` environment and calls `ir.config_parameter.get_param` there, never with `.sudo()`. Returns the stored `str` or `default`. Errors: whatever the service lookup raises (for example `AccessError` if the service account is missing). One database read, no lock. Security: the path every secret-bearing key takes. Tests: `test_secret_params_skip_the_cached_reader`.
+
+#### `_read_system_param_cached(key, default=None)` `[@ANCHOR: zero_sudo:read_system_param_cached]`
+The same read as `_read_system_param`, wrapped in `@distributed_cache()`. Arguments as above. Returns the stored `str` or `default`, possibly a value cached by another worker. Only called by `_get_system_param` for non-secret keys that passed the whitelist; secret keys never reach it. Errors as `_read_system_param`. Side effects: fills the shared cache. Tests: `test_secret_params_skip_the_cached_reader` (its patched inner reader records the keys that did use the cache).
+
 #### `_notify_cache_invalidation(model_name, key_value)` `[@ANCHOR: coherent_cache_signal]`
 Emits a PostgreSQL `NOTIFY` event to synchronize distributed caches. It delegates to `distributed_redis_cache`'s `notify_model_invalidation()`, which signals on the `distributed_cache_invalidation` channel that the `distributed_redis_cache` cache-manager daemon listens on. Invalidation is for the whole model; `key_value` must be non-empty but does not narrow it. What this signal does and does not reach on other workers is spelled out in [docs/stories/cache_signaling.md](docs/stories/cache_signaling.md).
 

@@ -988,16 +988,19 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
     # Substrings that mark a whitelisted parameter as holding a secret ("pass" also catches rabbitmq.pass).
     _SECRET_PARAM_MARKERS = ("secret", "key", "pass", "token", "auth", "crypt", "cert", "credential")
 
+    # [@ANCHOR: zero_sudo:is_secret_param_key]
     @api.model
     def _is_secret_param_key(self, key):
         lower_key = key.lower()
         return any(marker in lower_key for marker in self._SECRET_PARAM_MARKERS)
 
+    # [@ANCHOR: zero_sudo:read_system_param]
     @api.model
     def _read_system_param(self, key, default=None):
         env_svc = self._get_service_env("zero_sudo.config_service_internal")
         return env_svc["ir.config_parameter"].get_param(key, default)
 
+    # [@ANCHOR: zero_sudo:read_system_param_cached]
     @api.model
     @distributed_cache()
     def _read_system_param_cached(self, key, default=None):
