@@ -6,6 +6,7 @@
 
 from odoo.tests.common import tagged
 from odoo.addons.distributed_redis_cache.redis_cache import invalidate_model_cache
+from odoo.addons.distributed_redis_cache.redis_pool import get_redis_connection
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.zero_sudo.peer_address import is_loopback_peer, parse_peer_address
 from odoo.addons.zero_sudo.models import security_utils as security_utils_module
@@ -77,6 +78,15 @@ class TestSecurityUtils(HamsTransactionCase):
             msg="Extracting non-whitelisted param MUST raise an AccessError.",
         ):
             utils._get_system_param("some.unregistered.safe.param")
+
+    def test_crypto_secret_is_not_stored_in_redis(self):
+        # Tests [@ANCHOR: zero_sudo:COMM_get_crypto_secret]
+        utils = self.env["zero_sudo.security.utils"]
+        invalidate_model_cache(self.env, "zero_sudo.security.utils")
+        self.assertTrue(utils._get_crypto_secret())
+        redis_conn = get_redis_connection(self.env)
+        pattern = f"{self.env.cr.dbname}:distributed_cache:zero_sudo.security.utils:_get_crypto_secret*"
+        self.assertEqual(list(redis_conn.scan_iter(match=pattern)), [])
 
     def test_16_get_system_param_returns_the_real_configured_value(self):
         """

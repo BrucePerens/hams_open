@@ -665,20 +665,20 @@ class TestSecurityUtilsUnits(SafePatchMixin, BaseCase):
         return opened, checked
 
     def test_crypto_secret_environment_first(self):
-        raw = su.ZeroSudoSecurityUtils._get_crypto_secret.__wrapped__
+        raw = su.ZeroSudoSecurityUtils._get_crypto_secret
         opened, checked = self._secret(env="fromenv", file_text="fromfile", config="fromconfig")
         self.assertEqual(raw(_utils()), "fromenv")
         self.assertEqual((opened, checked), ([], []))
 
     def test_crypto_secret_file_second_stripped(self):
-        raw = su.ZeroSudoSecurityUtils._get_crypto_secret.__wrapped__
+        raw = su.ZeroSudoSecurityUtils._get_crypto_secret
         opened, checked = self._secret(env="", file_text="  fromfile\n", config="fromconfig")
         self.assertEqual(raw(_utils()), "fromfile")
         self.assertEqual(checked, ["/var/lib/odoo/hams_crypto.secret"])
         self.assertEqual(opened, [("/var/lib/odoo/hams_crypto.secret", "r")])
 
     def test_crypto_secret_config_last_and_never_the_default(self):
-        raw = su.ZeroSudoSecurityUtils._get_crypto_secret.__wrapped__
+        raw = su.ZeroSudoSecurityUtils._get_crypto_secret
         self._secret(file_text=None, config="fromconfig")
         self.assertEqual(raw(_utils()), "fromconfig")
         self._secret(file_text="   \n", config="fromconfig")
@@ -693,7 +693,7 @@ class TestSecurityUtilsUnits(SafePatchMixin, BaseCase):
             self.assertEqual(raw(_utils()), "")
 
     def test_crypto_secret_unreadable_file_warns_and_falls_back(self):
-        raw = su.ZeroSudoSecurityUtils._get_crypto_secret.__wrapped__
+        raw = su.ZeroSudoSecurityUtils._get_crypto_secret
         self._secret(file_text=None, config="fromconfig", read_error=True)
         with self.assertLogs(su._logger, level=logging.WARNING) as logs:
             self.assertEqual(raw(_utils()), "fromconfig")
