@@ -2346,6 +2346,9 @@ def log_tail_thread(client, check):
                 cur_inode = new_inode
                 logger.info(f"Tailing log file {filepath} (inode: {cur_inode})")
             if f:
+                if stat_obj.st_size < f.tell():
+                    # Truncated in place (copytruncate rotation): same inode, so read again from the start.
+                    f.seek(0, 0)
                 line = f.readline()
                 if not line:
                     time.sleep(0.5)  # audit-ignore-sleep
