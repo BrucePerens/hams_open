@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import glob
 import hashlib
+import json
 import os
 import sqlite3
 import sys
@@ -28,7 +29,8 @@ def make_snapshot(repo, name="20261117T000000Z", users=10, canary="K6BP-canary",
     con.close()
     for i in range(5):
         data = b"attachment %d" % i
-        with open(os.path.join(snap, "files", hashlib.sha1(data).hexdigest()), "wb") as f:  # noqa: S324
+        name = hashlib.sha1(data).hexdigest()  # burn-ignore-legacy-protocol-hash
+        with open(os.path.join(snap, "files", name), "wb") as f:
             f.write(data if not (flip and i == 0) else b"attachmenX 0")
     return snap
 
@@ -99,7 +101,6 @@ class TestRestoreDrill(unittest.TestCase):
             rd.run_drill(self.cfg)
 
     def test_main_exit_codes(self):
-        import json
         make_snapshot(self.repo)
         path = os.path.join(self.tmp.name, "c.json")
         with open(path, "w") as f:

@@ -17,7 +17,7 @@ Reuses b2_backup.restore_sample / sha1_file / sha256_file for the file check.
 """
 import json
 import os
-import random
+import random  # audit-ignore-weak-random: fixed seed picks which files to sample; not a security property
 import shutil
 import sqlite3
 import sys
@@ -81,14 +81,16 @@ def check_database(db_path, cfg, log):
                 if not table.isidentifier():
                     raise DrillError(f"check row_count: bad table name {table!r}")
                 try:
-                    n = con.execute(f"select count(*) from {table}").fetchone()[0]  # noqa: S608 identifier checked
+                    n = con.execute(f"select count(*) from {table}").fetchone()[0]
                 except sqlite3.Error:
                     raise DrillError(f"check row_count: table {table} missing or unreadable") from None
                 log(f"rows {table}={n} expected={expected}")
                 if n == 0 or n < expected * cfg.get("min_ratio", 0.9):
                     raise DrillError(f"check row_count: {table} has {n} rows, expected about {expected}")
             canary = cfg["canary"]
-            row = con.execute(f"select {canary['column']} from {canary['table']} limit 1").fetchone()  # noqa: S608
+            if not (canary["table"].isidentifier() and canary["column"].isidentifier()):
+                raise DrillError("check canary: bad table or column name")
+            row = con.execute(f"select {canary['column']} from {canary['table']} limit 1").fetchone()
             if row is None or str(row[0]) != canary["value"]:
                 raise DrillError("check canary: the canary row is missing or has the wrong value")
             log("canary ok")
