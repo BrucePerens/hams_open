@@ -9,7 +9,11 @@ from odoo.addons.user_websites.controllers.main import UserWebsitesController
 class UserWebsitesSEOController(UserWebsitesController):
 
     @http.route(
-        ["/<uwslug:website_slug>/blog", "/<uwslug:website_slug>/blog/"],
+        [
+            "/<uwslug:website_slug>/blog",
+            "/<uwslug:website_slug>/blog/",
+            "/<uwslug:website_slug>/blog/page/<int:page>",
+        ],
         type="http",
         auth="public",
         website=True,
