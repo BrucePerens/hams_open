@@ -16,6 +16,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from email.utils import parseaddr
 
+import psycopg2.errors
 import redis
 
 from markupsafe import Markup
@@ -1971,6 +1972,19 @@ class HelpdeskTicket(models.Model):
                     self.ncmec_report_state
                 )
             )
+
+        # Claim the row before anything is sent: a second press while the first is still talking to NCMEC (or emailing) finds
+        # the row locked and files nothing; one that arrives after the first committed sees the new state and is refused.
+        try:
+            self.flush_recordset(["ncmec_report_state"])
+            self.env.cr.execute(
+                "SELECT ncmec_report_state FROM hams_helpdesk_ticket WHERE id = %s FOR UPDATE NOWAIT", (self.id,)
+            )
+        except psycopg2.errors.LockNotAvailable:
+            raise UserError(_("This incident's report is already being filed by another press of the button.")) from None
+        locked_state = self.env.cr.fetchone()[0]
+        if locked_state in ("report_submitted", "report_confirmed"):
+            raise UserError(_("This incident was already reported to NCMEC."))
 
         utils = self.env["zero_sudo.security.utils"]
         base_url = utils._get_system_param(_NCMEC_PARAM_BASE_URL, "")
