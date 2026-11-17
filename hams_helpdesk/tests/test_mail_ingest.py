@@ -564,6 +564,15 @@ class TestMailIngest(HamsTransactionCase):
         self.assertFalse(reply.author_id)
         self.assertIn("not a participant", reply.body)
 
+    def test_18b_a_held_stranger_reply_does_not_make_the_stranger_a_participant(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_reply_hold_reason]
+        _member, ticket, original_id = self._member_ticket_and_original_id("stranger_twice", "Stranger twice ticket")
+        first = self._reply_message(ticket, "intruder@elsewhere.example.net", original_id, SES_PASS_HEADERS)
+        second = self._reply_message(ticket, "intruder@elsewhere.example.net", original_id, SES_PASS_HEADERS + "X-Second: 1\r\n")
+        self.assertEqual(first.subtype_id, self.env.ref("mail.mt_note"))
+        self.assertEqual(second.subtype_id, self.env.ref("mail.mt_note"), "the earlier held note must not vouch for the sender")
+        self.assertFalse(second.author_id)
+
     def _stage_after_ingest(self, subject, from_addr):
         self._ingest(raw_message("support@hams.com", subject, from_addr=from_addr, html=False))
         return self.env["hams_helpdesk.ticket"].search([("name", "=", subject)], order="id desc", limit=1).stage
