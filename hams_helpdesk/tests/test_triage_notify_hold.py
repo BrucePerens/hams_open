@@ -155,6 +155,19 @@ class TestTriageNotifyHold(HamsTransactionCase):
         self.assertEqual(self.Ticket._cron_release_held_notifications(), 1)
         self.assertEqual((bad.notify_state, good.notify_state), ("held", "sent"))
 
+    def test_06c_a_failing_stale_sweep_does_not_keep_every_held_ticket_held(self):
+        # Tests [@ANCHOR: hams_helpdesk:cron_release_held_notifications]
+        self._hold(20)
+        ticket = self._new_ticket("Held while the sweep fails")
+        ticket.write({"notify_release_at": fields.Datetime.now() - timedelta(seconds=1)})
+
+        def sweep(_model):
+            raise ValueError("sweep boom")
+
+        self.safe_patch_object(type(self.Ticket), "_triage_sweep_stale", sweep)
+        self.assertEqual(self.Ticket._cron_release_held_notifications(), 1, "the sweep is housekeeping; the release still runs")
+        self.assertEqual(ticket.notify_state, "sent")
+
     def test_07_a_held_ticket_a_person_puts_in_spam_is_never_announced(self):
         # Tests [@ANCHOR: hams_helpdesk:cron_release_held_notifications]
         self._hold(20)
