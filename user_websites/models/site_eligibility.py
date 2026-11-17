@@ -89,58 +89,63 @@ class ResUsersSiteEligibility(models.Model):
         the hams.com state-change hooks, and lazily by the owner dashboard."""
         env_svc = self.env["zero_sudo.security.utils"]._get_service_env(SVC)
         ids = user_ids if user_ids is not None else self._website_site_user_ids()
-        changed = {}
-        for user in env_svc["res.users"].browse(ids).exists():
+        users = env_svc["res.users"].browse(ids).exists()
+        # The answer is asked of each member (a deployment's override may be costly or fail), the content is then touched for all
+        # members at once: a handful of queries per run, not several per member.
+        ineligible_now = env_svc["res.users"]
+        eligible_now = env_svc["res.users"]
+        for user in users:
             if user_ids is not None:
-                self._reconcile_one_site(env_svc, user, changed)
-                continue
-            # The cron: one member whose answer cannot be computed is logged and skipped (retried next run); it must not
-            # roll back the members already reconciled in this run or keep every later member from being reconciled.
-            try:
-                with self.env.cr.savepoint():
-                    self._reconcile_one_site(env_svc, user, changed)
-            except Exception:  # audit-ignore-catch-all: one member's failure must not stop the sweep for the others; logged, retried next run
-                _logger.exception("user_websites: site eligibility of user %s could not be reconciled; retried next run", user.id)
+                ineligible = bool(user._website_eligibility_gaps())
+            else:
+                # The cron: one member whose answer cannot be computed is logged and skipped (retried next run); it must not
+                # keep every later member from being reconciled.
+                try:
+                    with self.env.cr.savepoint():
+                        ineligible = bool(user._website_eligibility_gaps())
+                except Exception:  # audit-ignore-catch-all: one member's failure must not stop the sweep for the others; logged, retried next run
+                    _logger.exception("user_websites: site eligibility of user %s could not be reconciled; retried next run", user.id)
+                    continue
+            if ineligible:
+                ineligible_now |= user
+            else:
+                eligible_now |= user
+        # Also for members already flagged: new content published since the last run (a race with an in-flight request) is hidden.
+        self._hide_site_content(env_svc, ineligible_now)
+        newly_hidden = ineligible_now.filtered(lambda u: not u.website_ineligible)
+        newly_shown = eligible_now.filtered("website_ineligible")
+        self._show_site_content(env_svc, newly_shown)
+        newly_hidden.write({"website_ineligible": True})
+        newly_shown.write({"website_ineligible": False})
+        changed = {**{uid: "hidden" for uid in newly_hidden.ids}, **{uid: "shown" for uid in newly_shown.ids}}
         if changed:
             _logger.info("user_websites: site eligibility changed: %s", changed)
         return changed
 
     @api.model
-    # [@ANCHOR: user_websites:fn_eligibility_reconcile_one_site]
-    def _reconcile_one_site(self, env_svc, user, changed):
-        """The body of reconcile_website_eligibility for one member; records a change in `changed`."""
-        ineligible = bool(user._website_eligibility_gaps())
-        if ineligible and not user.website_ineligible:
-            self._hide_site_content(env_svc, user)
-            user.write({"website_ineligible": True})
-            changed[user.id] = "hidden"
-        elif not ineligible and user.website_ineligible:
-            self._show_site_content(env_svc, user)
-            user.write({"website_ineligible": False})
-            changed[user.id] = "shown"
-        elif ineligible:
-            # New content published since the last run (a race with an in-flight request).
-            self._hide_site_content(env_svc, user)
-
-    @api.model
     # [@ANCHOR: user_websites:fn_eligibility_hide_site_content]
-    def _hide_site_content(self, env_svc, user):
-        pages = env_svc["website.page"].search([("owner_user_id", "=", user.id), ("website_published", "=", True)])
+    def _hide_site_content(self, env_svc, users):
+        """Unpublish the pages and posts of `users` (a recordset), marking them hidden_by_eligibility: two searches in all."""
+        if not users:
+            return
+        pages = env_svc["website.page"].search([("owner_user_id", "in", users.ids), ("website_published", "=", True)])
         if pages:
             pages.write({"website_published": False, "hidden_by_eligibility": True})
-        posts = env_svc["blog.post"].search([("owner_user_id", "=", user.id), ("is_published", "=", True)])
+        posts = env_svc["blog.post"].search([("owner_user_id", "in", users.ids), ("is_published", "=", True)])
         if posts:
             posts.write({"is_published": False, "hidden_by_eligibility": True})
 
     @api.model
     # [@ANCHOR: user_websites:fn_eligibility_show_site_content]
-    def _show_site_content(self, env_svc, user):
-        if user.is_suspended_from_websites:
+    def _show_site_content(self, env_svc, users):
+        """Republish the pages and posts hidden by eligibility for `users` (a recordset), except those of suspended members."""
+        users = users.filtered(lambda u: not u.is_suspended_from_websites)
+        if not users:
             return
-        pages = env_svc["website.page"].search([("owner_user_id", "=", user.id), ("hidden_by_eligibility", "=", True)])
+        pages = env_svc["website.page"].search([("owner_user_id", "in", users.ids), ("hidden_by_eligibility", "=", True)])
         if pages:
             pages.write({"website_published": True, "hidden_by_eligibility": False})
-        posts = env_svc["blog.post"].search([("owner_user_id", "=", user.id), ("hidden_by_eligibility", "=", True)])
+        posts = env_svc["blog.post"].search([("owner_user_id", "in", users.ids), ("hidden_by_eligibility", "=", True)])
         if posts:
             posts.write({"is_published": True, "hidden_by_eligibility": False})
 
