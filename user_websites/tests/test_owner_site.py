@@ -448,6 +448,14 @@ class TestOwnerSite(HamsHttpCase):
         self.sub.invalidate_recordset()
         self.assertEqual(self.sub.name, "About")
 
+    def test_10a_a_title_with_an_xml_invalid_character_is_refused_not_a_500(self):
+        # Tests [@ANCHOR: user_websites:COMM_owner_page_save]
+        self.authenticate("ownerone", "ownerone")
+        for bad in ("Bad\x0btitle", "Nul\x00title", "Esc\x1btitle"):
+            response = self._post("/my/site/ownerone/page/save", title=bad, page_slug="ctl", content="<p>x</p>")
+            self.assertLess(response.status_code, 500)
+            self.assertFalse(self.env["website.page"].search([("url", "=", "/ownerone/ctl")]))
+
     def test_10b_a_page_id_that_is_not_ascii_digits_is_a_404_not_a_500(self):
         # Tests [@ANCHOR: user_websites:COMM_owner_page_save]
         # Tests [@ANCHOR: user_websites:COMM_owner_ascii_digits]
