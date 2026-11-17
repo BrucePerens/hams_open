@@ -12,7 +12,6 @@ SVC = "user_websites.user_websites_service_account"
 
 @tagged("post_install", "-at_install")
 class TestViewCounterFlushFailure(RealTransactionCase):
-    # [@ANCHOR: user_websites:test_view_counter_flush_failure]
     def _page(self):
         page = self.env["website.page"].create({
             "name": "Flush Failure", "website_id": 1, "url": "/flush-failure", "type": "qweb",
