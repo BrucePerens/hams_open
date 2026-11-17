@@ -368,6 +368,18 @@ class TestBulkMailSignals(HamsTransactionCase):
             self.assertTrue(inbound_spam_reasons(subject, "<p>x</p>", {}), subject)
         self.assertTrue(inbound_spam_reasons("Question", "<p>x</p>", {}, {"spam": "FAIL"}))
 
+    def test_29b_no_subject_pattern_has_an_unbounded_wildcard(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_detect_spam_signals]
+        # Structural, not timed: an unbounded ".*" re-scans the rest of the subject at every start, quadratic on a long hostile one.
+        from odoo.addons.hams_helpdesk.models.inbound_spam_filter import SPAM_SUBJECT_PATTERNS
+        for regex, _reason in SPAM_SUBJECT_PATTERNS:
+            self.assertNotIn(".*", regex.pattern)
+            self.assertNotIn(".+", regex.pattern)
+        self.assertTrue(inbound_spam_reasons("Balance confirmation for the audit of K", "<p>x</p>", {}))
+        self.assertFalse(
+            [r for rx, r in SPAM_SUBJECT_PATTERNS if rx.search("balance confirmation" + " x" * 300 + " audit")]
+        )
+
     # Tests [@ANCHOR: hams_helpdesk_mail_thread_untrusted_mail_thread]
     def test_28b_reply_headers_never_exempt_bulk_mail(self):
         # Tests [@ANCHOR: hams_helpdesk:inbound_mail_signals]

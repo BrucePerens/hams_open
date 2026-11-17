@@ -99,7 +99,7 @@ SPAM_SUBJECT_PATTERNS = [
         "fake account security-alert lure",
     ),
     (
-        re.compile(r"\bbalance\s+confirmation\b.*\baudit\b", re.IGNORECASE),
+        re.compile(r"\bbalance\s+confirmation\b.{0,200}\baudit\b", re.IGNORECASE),
         "fake audit balance-confirmation lure",
     ),
 ]
