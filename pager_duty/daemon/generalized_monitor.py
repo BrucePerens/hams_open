@@ -203,6 +203,14 @@ logger = logging.getLogger("generalized_monitor")
 MAX_CHECK_BODY_BYTES = 1 << 20
 
 
+# [@ANCHOR: pager_duty:proxy_retry_delay]
+# Verified by [@ANCHOR: pager_duty:test_proxy_retry_delay_backs_off_and_caps]
+def proxy_retry_delay(failures):
+    """Seconds to wait after the Nth consecutive failure of a Redis proxy loop: 1, 2, 4 ... capped at 60, so an outage logs
+    about one warning a minute instead of one a second."""
+    return min(60, 2 ** (max(1, failures) - 1))
+
+
 # [@ANCHOR: pager_duty:utcnow]
 def _utcnow():
     """The current UTC time as a naive datetime, what Odoo stores and what `utcnow()` (deprecated since Python 3.12) returned."""
@@ -2487,10 +2495,12 @@ if __name__ == "__main__":
         # adds real risk of a false-positive full-daemon kill on a
         # slow-but-alive RPC burst.
         THREAD_TIMEOUTS["log_anomaly_proxy"] = 300
+        failures = 0
         while True:
             THREAD_HEARTBEATS["log_anomaly_proxy"] = time.time()
             try:
                 res = r.blpop("pager_log_anomalies", timeout=5)
+                failures = 0
                 if res:
                     _, data = res
                     forward_log_anomaly(cl, json.loads(data))
@@ -2499,8 +2509,9 @@ if __name__ == "__main__":
                 socket.timeout,
                 Exception,
             ) as e:  # audit-ignore-catch-all
+                failures += 1
                 logger.warning("Anomaly proxy loop error: %s", e)
-                time.sleep(1)  # audit-ignore-sleep
+                time.sleep(proxy_retry_delay(failures))  # audit-ignore-sleep
 
     def log_search_proxy(cl):
         r = redis_lib.Redis(
@@ -2515,10 +2526,12 @@ if __name__ == "__main__":
         # log_anomaly_proxy above -- see its own comment, including why
         # this uses the file's own 300s floor rather than a tighter bound.
         THREAD_TIMEOUTS["log_search_proxy"] = 300
+        failures = 0
         while True:
             THREAD_HEARTBEATS["log_search_proxy"] = time.time()
             try:
                 res = r.blpop("pager_log_search_res_queue", timeout=5)
+                failures = 0
                 if res:
                     _, data = res
                     data_dict = json.loads(data)
@@ -2537,8 +2550,9 @@ if __name__ == "__main__":
                 socket.timeout,
                 Exception,
             ) as e:  # audit-ignore-catch-all
+                failures += 1
                 logger.warning("Search proxy loop error: %s", e)
-                time.sleep(1)  # audit-ignore-sleep
+                time.sleep(proxy_retry_delay(failures))  # audit-ignore-sleep
 
     futures.append(executor.submit(log_anomaly_proxy, client))
     futures.append(executor.submit(log_search_proxy, client))
