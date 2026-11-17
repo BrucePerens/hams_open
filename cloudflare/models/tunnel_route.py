@@ -1,10 +1,17 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0-or-later.
 
+import re
+
 from odoo import api, models, fields, _
 from odoo.exceptions import ValidationError
 
 from ..utils import dns_plan
+
+# What cloudflared accepts as an ingress service: a URL with one of these schemes, a unix socket, http_status:<code>,
+# or one of its two built-in services.
+SERVICE_PATTERN = re.compile(r"(https?|wss?|tcp|ssh|rdp|smb)://\S+|unix(\+tls)?:\S+|http_status:\d{3}|hello_world|bastion")
+HOSTNAME_PATTERN = re.compile(r"(\*\.)?([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?", re.IGNORECASE)
 
 
 # [@ANCHOR: cloudflare_tunnel_route_cloudflare_tunnel_route]
@@ -71,3 +78,23 @@ class CloudflareTunnelRoute(models.Model):
                 raise ValidationError(_(
                     "%(hostname)s names a callsign (%(label)s). Names for members are never entered at Cloudflare.",
                     hostname=route.hostname, label=label))
+
+    # [@ANCHOR: cloudflare:COMM_tunnel_route_format]
+    # Verified by [@ANCHOR: cloudflare:COMM_test_tunnel_route_format]
+    @api.constrains("hostname", "path", "service_url")
+    def _check_route_format(self):
+        """Cloudflare rejects a push whose rules are malformed, late and for the whole tunnel; refuse them on save."""
+        for route in self:
+            hostname = route.hostname or ""
+            if hostname and (len(hostname) > 253 or not HOSTNAME_PATTERN.fullmatch(hostname)):
+                raise ValidationError(_("%(hostname)r is not a host name (such as api.hams.com or *.hams.com).",
+                                        hostname=hostname))
+            if route.path:
+                try:
+                    re.compile(route.path)
+                except re.error as error:
+                    raise ValidationError(_("The path %(path)r is not a valid regular expression: %(error)s",
+                                            path=route.path, error=error)) from None
+            if not SERVICE_PATTERN.fullmatch(route.service_url or ""):
+                raise ValidationError(_(
+                    "The service %(service)r must be a URL such as http://odoo:8070 or tcp://odoo:22, or http_status:404.", service=route.service_url))
