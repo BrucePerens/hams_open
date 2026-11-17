@@ -26,7 +26,9 @@
             <field name="group_ids" eval="[(4, ref('user_websites.group_user_websites_service_account')), (3, ref('user_websites.group_user_websites_administrator')), (4, ref('website.group_multi_website'))]"/>
         </record>
     </data>
-    <data noupdate="1">
+    <!-- The three mail templates sit in this ordinary block, not the noupdate one below, so that `-u user_websites` rewrites them
+         (migrations/0.10 clears the flag their existing ir_model_data rows carry; hams_prod kept the pre-#1323 sender and body). -->
+    <data>
         <!-- seq_content_violation_report moved to content_moderation's own
              data/content_moderation_data.xml on 2026-09-23 (the model it's
              keyed to moved there too). -->
@@ -70,6 +72,30 @@
             </field>
         </record>
 
+        <record id="email_template_weekly_digest" model="mail.template">
+            <field name="name">User Websites: Weekly Digest</field>
+            <field name="model_id" ref="website_blog.model_blog_post"/>
+            <field name="subject">Weekly Update from {{ ctx.get('author_name') }}</field>
+            <field name="email_from">{{ user.company_id.email or object.env['ir.mail_server']._get_default_from_address() or '' }}</field>
+            <field name="email_to">{{ ctx.get('email_to') }}</field>
+            <field name="body_html" type="html">
+                <div style="margin: 0px; padding: 0px; font-family: Arial, sans-serif;">
+                    <h2>Weekly Update from <t t-out="ctx.get('author_name')"/></h2>
+                    <p>Here are the latest posts published this week:</p>
+                    <ul>
+                        <t t-out="ctx.get('post_links')"/>
+                    </ul>
+                    <hr style="margin-top: 30px; border: none; border-top: 1px solid #eee;" />
+                    <p style="color: #888; font-size: 12px;">
+                        You are receiving this email because you subscribed to updates from this user or group.<br/>
+                        <a t-attf-href="{{ ctx.get('unsub_url') }}" style="color: #888; text-decoration: underline;">Unsubscribe from these updates</a>
+                    </p>
+                </div>
+            </field>
+        </record>
+    </data>
+    <data noupdate="1">
+
         <record id="ir_cron_notify_pending_reports" model="ir.cron">
             <!-- [@ANCHOR: ir_cron_notify_pending_reports] -->
 
@@ -110,28 +136,6 @@
             <field name="interval_number">10</field>
             <field name="interval_type">minutes</field>
             <field name="active" eval="True"/>
-        </record>
-
-        <record id="email_template_weekly_digest" model="mail.template">
-            <field name="name">User Websites: Weekly Digest</field>
-            <field name="model_id" ref="website_blog.model_blog_post"/>
-            <field name="subject">Weekly Update from {{ ctx.get('author_name') }}</field>
-            <field name="email_from">{{ user.company_id.email or object.env['ir.mail_server']._get_default_from_address() or '' }}</field>
-            <field name="email_to">{{ ctx.get('email_to') }}</field>
-            <field name="body_html" type="html">
-                <div style="margin: 0px; padding: 0px; font-family: Arial, sans-serif;">
-                    <h2>Weekly Update from <t t-out="ctx.get('author_name')"/></h2>
-                    <p>Here are the latest posts published this week:</p>
-                    <ul>
-                        <t t-out="ctx.get('post_links')"/>
-                    </ul>
-                    <hr style="margin-top: 30px; border: none; border-top: 1px solid #eee;" />
-                    <p style="color: #888; font-size: 12px;">
-                        You are receiving this email because you subscribed to updates from this user or group.<br/>
-                        <a t-attf-href="{{ ctx.get('unsub_url') }}" style="color: #888; text-decoration: underline;">Unsubscribe from these updates</a>
-                    </p>
-                </div>
-            </field>
         </record>
 
         <record id="ir_cron_send_weekly_digest" model="ir.cron">

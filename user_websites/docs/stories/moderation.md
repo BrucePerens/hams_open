@@ -105,3 +105,7 @@ Odoo translates template text but not a string literal inside `t-out`. The owner
 
 ### `test_appeal_survives_user_delete` [@ANCHOR: user_websites:test_appeal_survives_user_delete]
 In `tests/test_appeal_survives_delete.py`. It creates a user and an appeal for them, deletes the user, and checks that the appeal still exists with no `user_id` and the same `target_label`, that `action_approve` refuses it with `UserError` because nobody is left to pardon, and that `action_reject` still works. A sibling test does the same for a deleted group. It exercises `_compute_target_label`.
+
+## The mail templates reach installed databases
+
+The Content Violation Report, Pending Violations Summary and Weekly Digest templates are loaded outside the noupdate block, so `-u user_websites` rewrites them. The 0.10 pre-migration (`[@ANCHOR: user_websites:migrate_clear_mail_template_noupdate_flags]`) clears the stale `noupdate` flag their existing rows carry, so the sender and recipient fallbacks reach a database installed before they changed. Idempotent, plain SQL, nothing on a fresh install. Its test is `test_migration_clear_mail_template_noupdate_flags`.
