@@ -167,7 +167,9 @@ def _is_ascii_digits(value):
     """True for a non-empty string of ASCII digits: what int() accepts. `str.isdigit()` is also true for
     digits such as the superscript two, which int() refuses (the route answered 500 instead of 404)."""
     text = str(value)
-    return text.isascii() and text.isdigit() and int(text) < 2**31  # a larger id overflows the database column
+    # More than ten digits is already past 2**31 (a larger id overflows the database column); int() of thousands of
+    # digits raises ValueError (Python's int string limit), which answered 500 instead of 404.
+    return text.isascii() and text.isdigit() and len(text) <= 10 and int(text) < 2**31
 
 
 def _escape(text):
