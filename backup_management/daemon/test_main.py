@@ -1233,6 +1233,34 @@ class _RedirectProbe:
             server.server_close()
 
 
+class TestSidecarWaitOutlastsTheSidecarTimeout(unittest.TestCase):
+    # Tests [@ANCHOR: backup_management:COMM_test_run_pgbackrest_via_sidecar]
+    # The worker must not abandon (and delete the request of) a backup the sidecar is still allowed to run.
+
+    def test_default_wait_exceeds_the_sidecar_run_timeout(self):
+        self.assertGreater(backup_worker.PGBACKREST_SIDECAR_TIMEOUT, pgbackrest_sidecar.PGBACKREST_RUN_TIMEOUT)
+
+    def test_a_backup_finishing_after_an_hour_is_still_collected(self):
+        # Fake clock: each time.time() call advances 60 s; the sidecar's result shows up at 2 h.
+        tmp = tempfile.mkdtemp(prefix="pgbackrest_wait_test_")
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        clock = {"now": 0.0}
+        result_path = os.path.join(tmp, "result-98.json")
+
+        def fake_time():
+            clock["now"] += 60
+            if clock["now"] >= 7200 and not os.path.exists(result_path):
+                with open(result_path, "w") as f:
+                    json.dump({"return_code": 0, "output": "done"}, f)
+            return clock["now"]
+
+        mock_time = MagicMock()
+        mock_time.time.side_effect = fake_time
+        with patch.object(backup_worker, "PGBACKREST_SPOOL_DIR", tmp), patch.object(backup_worker, "time", mock_time):
+            rc, out = backup_worker._run_pgbackrest_via_sidecar(["pgbackrest", "--stanza=main", "backup"], {}, 98)
+        self.assertEqual((rc, out), (0, "done"))
+
+
 class TestJson2CallRefusesARedirect(unittest.TestCase):
     # Tests [@ANCHOR: backup_management_main_no_redirect]
     def test_a_redirect_from_odoo_is_refused_and_the_key_never_reaches_the_second_host(self):

@@ -81,7 +81,9 @@ RMQ_PASS = os.environ.get("RMQ_PASS")  # Tested by [@ANCHOR: backup_management:C
 # directory, the same "airgapped spooling" shape the ADR already mandates for
 # privileged hardware telemetry.
 PGBACKREST_SPOOL_DIR = os.environ.get("PGBACKREST_SPOOL_DIR", "/opt/hams/backup_requests")
-PGBACKREST_SIDECAR_TIMEOUT = int(os.environ.get("PGBACKREST_SIDECAR_TIMEOUT", "3600"))
+# Must exceed the sidecar's own run timeout (pgbackrest_sidecar.PGBACKREST_RUN_TIMEOUT, 4 h): the sidecar kills a hung pgbackrest and
+# writes a result, so this worker should wait for that result, not give up on a slow backup (longest seen 53 min) that is still running.
+PGBACKREST_SIDECAR_TIMEOUT = int(os.environ.get("PGBACKREST_SIDECAR_TIMEOUT", str(4 * 3600 + 600)))
 PGBACKREST_SIDECAR_POLL_INTERVAL = float(os.environ.get("PGBACKREST_SIDECAR_POLL_INTERVAL", "2"))
 _STANZA_RE = re.compile(r"^[a-zA-Z0-9_]+\Z")
 
