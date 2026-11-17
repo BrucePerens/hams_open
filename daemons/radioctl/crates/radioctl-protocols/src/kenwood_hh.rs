@@ -30,6 +30,9 @@ use std::time::Duration;
 
 use radioctl_core::description::{Family, HhDialect, RigDescription};
 use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind, Request, PARTIAL_FRAME_TIMEOUT};
+
+/// Most bytes held while waiting for a CR; a line that never ends is junk.
+const MAX_RX_BYTES: usize = 8192;
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::{Field, Observation, Op};
 use radioctl_core::units::{Hz, Vfo};
@@ -378,6 +381,9 @@ impl ProtocolEngine for KenwoodHhEngine {
                 Ok(line) => out.extend(self.decode_line(line)),
                 Err(_) => out.push(Inbound::Unrecognised(body.to_vec())),
             }
+        }
+        if self.buffer.len() > MAX_RX_BYTES {
+            out.push(Inbound::Unrecognised(std::mem::take(&mut self.buffer)));
         }
         out
     }
