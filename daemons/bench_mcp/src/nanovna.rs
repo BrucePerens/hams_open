@@ -590,17 +590,24 @@ pub fn sweep_args(args: &Value, id: &Identity, cfg: &Config) -> Result<(f64, f64
     Ok((start, stop, points))
 }
 
+/// The stamp in a sweep's file names: unique per sweep, so two sweeps in one second keep both files.
+fn sweep_stamp() -> String {
+    crate::vna::unique_stamp()
+}
+
+fn sweep_file(out_dir: &std::path::Path, stamp: &str, calibrated: bool) -> std::path::PathBuf {
+    let suffix = if calibrated { "_calibrated" } else { "" };
+    out_dir.join(format!("vna_sweep_{stamp}{suffix}.csv"))
+}
+
 fn sweep_tool(cfg: &Config, args: &Value, out_dir: &std::path::Path) -> Result<Value, String> {
     // [@ANCHOR: bench_nanovna_sweep_tool]
     let mut sh = open_shell(cfg)?;
     let id = identify(&mut sh)?;
     let (start, stop, points) = sweep_args(args, &id, cfg)?;
     let pts = measure(&mut sh, &id, cfg, start, stop, points)?;
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let file = out_dir.join(format!("vna_sweep_{stamp}.csv"));
+    let stamp = sweep_stamp();
+    let file = sweep_file(out_dir, &stamp, false);
     std::fs::write(&file, crate::vna::csv(&pts)).map_err(|e| format!("{}: {e}", file.display()))?;
     let setup = vnwa_open::cal::Setup {
         cable: args
@@ -615,7 +622,7 @@ fn sweep_tool(cfg: &Config, args: &Value, out_dir: &std::path::Path) -> Result<V
         Some(f) => {
             args.get("cable").and_then(|c| c.as_str()).ok_or("cable is required with calibration (the text given when the standards were measured)")?;
             let (_, corrected) = crate::vna_tools::apply_calibration_setup(f, &setup, &pts)?;
-            let cf = out_dir.join(format!("vna_sweep_{stamp}_calibrated.csv"));
+            let cf = sweep_file(out_dir, &stamp, true);
             std::fs::write(&cf, crate::vna::calibrated_csv(&pts, &corrected))
                 .map_err(|e| format!("{}: {e}", cf.display()))?;
             Some(cf)
@@ -1168,6 +1175,15 @@ mod tests {
         assert!(parse_config(&json!({"serial": "/dev/x", "max_points": 1.5})).is_err());
         assert!(parse_config(&json!({"serial": "/dev/x", "settle_ms": -1})).is_err());
         assert!(parse_config(&json!({"serial": "/dev/x", "use_scan": "y"})).is_err());
+    }
+
+    // Tests [@ANCHOR: bench_nanovna_sweep_tool]
+    #[test]
+    fn two_sweeps_get_different_file_names() {
+        let dir = std::path::Path::new("out");
+        let a = sweep_file(dir, &sweep_stamp(), false);
+        let b = sweep_file(dir, &sweep_stamp(), false);
+        assert_ne!(a, b);
     }
 
     // Tests [@ANCHOR: bench_nanovna_call]
