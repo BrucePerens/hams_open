@@ -94,6 +94,8 @@ pub const MAX_LINE: usize = 16 * 1024;
 pub const MAX_CW_CHARS: usize = 100;
 /// Commands awaiting a reply before the oldest is forgotten.
 pub const MAX_PENDING: usize = 64;
+/// Panadapters remembered; the radio makes a new stream id for every one a client opens.
+pub const MAX_PANS: usize = 64;
 /// Largest value of a percentage level (`audio_level`, `miclevel`, `rfpower`).
 pub const MAX_PERCENT: u16 = 100;
 
@@ -799,6 +801,9 @@ impl FlexEngine {
 
     // [@ANCHOR: radioctl_flex_apply_pan]
     fn apply_pan(&mut self, id: u32, pairs: &[(&str, &str)]) {
+        if !self.pans.contains_key(&id) && self.pans.len() >= MAX_PANS {
+            self.pans.pop_first();
+        }
         let pan = self.pans.entry(id).or_default();
         for (key, value) in pairs {
             match *key {
@@ -1452,6 +1457,20 @@ mod tests {
         let pan = e.panadapter(0x4000_0000).expect("pan");
         assert_eq!(pan.center, Some(Hz(14_100_000)));
         assert_eq!((pan.x_pixels, pan.fps), (Some(500), Some(20)));
+    }
+
+    // Tests [@ANCHOR: radioctl_flex_apply_pan]
+    #[test]
+    fn panadapter_memory_is_bounded() {
+        let mut e = engine();
+        for id in 0..(MAX_PANS as u32 * 3) {
+            let line = format!("S0|display pan 0x{:X} center=14.1\n", 0x4000_0000 + id);
+            e.feed(line.as_bytes(), T0);
+        }
+        assert_eq!(e.pans.len(), MAX_PANS);
+        assert!(e
+            .panadapter(0x4000_0000 + MAX_PANS as u32 * 3 - 1)
+            .is_some());
     }
 
     // Tests [@ANCHOR: radioctl_flex_interlock_keyed]
