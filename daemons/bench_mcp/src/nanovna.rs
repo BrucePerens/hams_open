@@ -595,6 +595,7 @@ fn sweep_stamp() -> String {
     crate::vna::unique_stamp()
 }
 
+// [@ANCHOR: bench_nanovna_sweep_file]
 fn sweep_file(out_dir: &std::path::Path, stamp: &str, calibrated: bool) -> std::path::PathBuf {
     let suffix = if calibrated { "_calibrated" } else { "" };
     out_dir.join(format!("vna_sweep_{stamp}{suffix}.csv"))
@@ -1178,6 +1179,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: bench_nanovna_sweep_tool]
+    // Tests [@ANCHOR: bench_nanovna_sweep_file]
     #[test]
     fn two_sweeps_get_different_file_names() {
         let dir = std::path::Path::new("out");

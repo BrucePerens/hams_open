@@ -543,6 +543,7 @@ impl Splitter {
         outcome
     }
 
+    // [@ANCHOR: radioctl_splitter_release_when_off_air]
     /// Gives `client`'s claim up once the rig no longer transmits (the message ended or the rig
     /// stopped answering), so a client that stays connected does not hold the transmitter for
     /// good. Ends early if the claim went elsewhere (an unkey, a disconnect).
