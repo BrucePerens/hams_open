@@ -419,6 +419,22 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
         )
         self.assertEqual(response.status_code, 200)
 
+    def test_03b_a_site_that_is_not_public_cannot_be_subscribed_to(self):
+        # Tests [@ANCHOR: UX_SUBSCRIBE]
+        """A suspended member's site answers 404 everywhere; subscribe must not confirm it exists or add a follower."""
+        self.creator.partner_id.message_unsubscribe([self.follower.partner_id.id])  # setUp subscribed the follower
+        self.creator.is_suspended_from_websites = True
+        self.env.flush_all()
+        self.authenticate(self.follower.login, self.follower.login)
+        response = self.url_open(
+            f"/{self.creator.website_slug}/subscribe",
+            data={"csrf_token": odoo.http.Request.csrf_token(self)},
+            method="POST",
+        )
+        self.assertEqual(response.status_code, 404)
+        self.creator.partner_id.invalidate_recordset(["message_follower_ids"])
+        self.assertNotIn(self.follower.partner_id, self.creator.partner_id.message_follower_ids.partner_id)
+
     def test_unsubscribe_route_takes_a_ten_digit_timestamp_but_no_oversized_id(self):
         # Tests [@ANCHOR: user_websites:COMM_unsubscribe]
         # Every <int:x> route refuses a number past a database id (hams_base BoundedIntConverter); the signed link's
