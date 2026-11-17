@@ -15,7 +15,7 @@ HARNESS = os.path.join(HERE, "test_osk_extension_harness.cjs")
 
 
 @unittest.skipUnless(shutil.which("node"), "node is not installed")
-class TestOskExtension(unittest.TestCase):
+class OskExtensionTests(unittest.TestCase):
     def run_harness(self, name):
         result = subprocess.run(["node", HARNESS, EXTENSION, name], capture_output=True, text=True, timeout=60, check=False)
         self.assertEqual(result.returncode, 0, f"{name} failed:\n{result.stdout}\n{result.stderr}")
