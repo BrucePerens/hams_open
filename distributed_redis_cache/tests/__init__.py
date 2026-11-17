@@ -26,3 +26,4 @@ __all__ = [
     "test_expiring_counter",
     "test_crypto_secret_refusals",
 ]
+from . import test_invalidate_counter_order

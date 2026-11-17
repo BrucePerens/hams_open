@@ -143,6 +143,17 @@ async def broadcast_to_redis(payload):
         logger.exception("Redis publish failed: %s", e)
 
 
+# [@ANCHOR: distributed_redis_cache:COMM_cache_manager_bump_counter_on_connect]
+async def _bump_invalidation_counter():
+    """NOTIFYs sent while this daemon was not listening (a daemon restart, a dropped Postgres connection) were never
+    published, so no worker knows its L1 cache may hold stale entries. Bumping the shared counter makes every worker
+    flush its L1 on its next poll."""
+    try:
+        await redis_client.incr("global_cache_invalidation_counter")
+    except redis.exceptions.RedisError as e:
+        logger.warning("Could not bump the cache invalidation counter after connecting: %s", e)
+
+
 _background_tasks = set()
 
 # [@ANCHOR: distributed_redis_cache:COMM_postgres_notify_handler]
@@ -228,6 +239,7 @@ async def main():
             )
             await conn.add_listener(PG_CHANNEL, postgres_notify_handler)
             db_conns.append(conn)
+            await _bump_invalidation_counter()
             logger.info("Listening to PostgreSQL channel '%s' on database '%s'...", PG_CHANNEL, DB_NAME)
         except Exception as e:  # audit-ignore-catch-all: # Tested by [@ANCHOR: COMM_test_cache_manager_exception_handling]
             # A daemon that can never reach Postgres in the first place
