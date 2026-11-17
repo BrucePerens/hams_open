@@ -462,7 +462,10 @@ class SesWebhookController(http.Controller):
                         "AWS SNS host for domain %s: %s", domain.name, subscribe_url,
                     )
                     log_vals.update({'status': 'rejected_subscribe_url'})
-                    
+                else:
+                    _logger.warning("SES Webhook: SubscriptionConfirmation with an empty SubscribeURL for domain %s.", domain.name)
+                    log_vals.update({'status': 'rejected_subscribe_url', 'error_message': 'No SubscribeURL in the confirmation.'})
+
             elif payload_type == 'Notification':
                 ses_message_str = payload.get('Message', '{}')
                 ses_message = json.loads(ses_message_str)
