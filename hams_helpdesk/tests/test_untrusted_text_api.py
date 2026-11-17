@@ -8,7 +8,7 @@ pins what each returns, so a change to one of them fails here with the function 
 import base64
 import email
 import email.policy
-import random
+import random  # audit-ignore-weak-random: seeded, reproducible test input, not security
 import re
 from email.message import EmailMessage
 
@@ -303,10 +303,10 @@ class TestUntrustedTextMailAndAiHelpers(BaseCase):
                 return getattr(re, name)
 
             def search(self, pattern, text, *args, **kwargs):
-                used.append(getattr(pattern, "pattern", pattern))
+                used.append(pattern.pattern if isinstance(pattern, re.Pattern) else pattern)
                 return re.search(pattern, text, *args, **kwargs)
 
-        real_re, real_tag = ut.re, getattr(ut, "_TAG_START", None)
+        real_re, real_tag = ut.re, vars(ut).get("_TAG_START")
         ut.re = ReSpy()
         if real_tag is not None:
             ut._TAG_START = Spy(real_tag)
@@ -327,7 +327,7 @@ class TestUntrustedTextMailAndAiHelpers(BaseCase):
         alphabet = ["<", ">", "a", "!", "-", "/", " ", "x", "<!--", "\n"]
         for _ in range(200_000):
             text = "".join(rng.choice(alphabet) for _ in range(rng.randint(0, 12)))
-            self.assertEqual(ut.looks_like_html(text), bool(old.search(text)), repr(text))
+            self.assertEqual(ut.looks_like_html(text), bool(old.findall(text)), repr(text))
         run = "<a" * 2_000
         self.assertFalse(ut.looks_like_html(run))
         self.assertTrue(ut.looks_like_html(run + ">"))
