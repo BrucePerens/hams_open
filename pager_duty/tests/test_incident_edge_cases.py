@@ -57,3 +57,16 @@ class TestIncidentEdgeCases(HamsTransactionCase):
         self.assertTrue(
             res, "Auto resolve MUST return True gracefully if no incidents exist."
         )
+
+    def test_04_acknowledge_does_not_reopen_a_resolved_incident(self):
+        """A stale board click on an incident the monitor already resolved leaves it resolved."""
+        self.safe_patch_object(type(self.env["bus.bus"]), "_sendone", create=True)
+        incident = self.incident_model.browse(
+            self.incident_model.report_incident(
+                {"source": "ack_resolved_test", "severity": "high", "description": "d"}
+            )
+        )
+        incident.write({"status": "resolved"})
+        incident.action_acknowledge()
+        self.assertEqual(incident.status, "resolved")
+        self.assertFalse(incident.time_acknowledged)

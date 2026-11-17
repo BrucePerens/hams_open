@@ -691,7 +691,9 @@ class PagerIncident(models.Model):
     @public_rpc
     def action_acknowledge(self):
         # [@ANCHOR: action_acknowledge_incident]
-        self.write({"status": "acknowledged"})
+        # Only an open incident can be acknowledged: a stale board click on one the monitor already resolved
+        # must not bring it back as acknowledged (it would absorb the source's next report and keep a stale MTTR).
+        self.filtered(lambda incident: incident.status == "open").write({"status": "acknowledged"})
         return True
 
     @public_rpc
