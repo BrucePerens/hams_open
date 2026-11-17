@@ -274,7 +274,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
 
     @api.model
     # [@ANCHOR: zero_sudo:ground_truth_ids]
-    def _ground_truth_ids(self, model_name, domain):
+    def _ground_truth_ids(self, model_name, domain, svc_uid):
         """
         Returns the literal set of ids matching `domain` on `model_name`,
         bypassing both ir.model.access and ir.rule entirely -- used ONLY as
@@ -297,7 +297,9 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         any model that (correctly) has no public/groupless access grant,
         which is most of the models this utility is called for.
         """
-        return set(self.env[model_name]._search(domain, bypass_access=True).get_result_ids())
+        # Run as the service account: `bypass_access` skips model and rule checks but not the field-group check, so
+        # a caller without a restricted field's groups (a cron, a public-user test) must not break the baseline.
+        return set(self.env[model_name].with_user(svc_uid)._search(domain, bypass_access=True).get_result_ids())
 
     @api.model
     # [@ANCHOR: zero_sudo:erase_via_service_account]
@@ -338,7 +340,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         # silently under-delete, exactly the failure mode this function
         # exists to catch loudly instead. See the docstring above.
         scoped = self.env[model_name].with_user(svc_uid).search(domain)  # audit-ignore-search
-        real_ids = self._ground_truth_ids(model_name, domain)
+        real_ids = self._ground_truth_ids(model_name, domain, svc_uid)
         scoped_ids = set(scoped.ids)
         if scoped_ids != real_ids:
             missing_ids = sorted(real_ids - scoped_ids)
