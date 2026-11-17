@@ -5,6 +5,9 @@
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 import odoo.http
+import secrets
+
+from odoo.addons.knowledge.controllers import main as manual_controller
 
 
 @tagged("post_install", "-at_install")
@@ -157,6 +160,31 @@ class TestManualControllers(HamsHttpCase):
             initial_helpful,
             "Honeypot must block mutation.",
         )
+
+    # [@ANCHOR: test_manual_feedback_is_limited_per_network]
+    def test_manual_feedback_is_limited_per_network(self):
+        # Tests [@ANCHOR: knowledge:feedback_rate_limit]
+        # Tests [@ANCHOR: knowledge:network_hits]
+        """Dropping the session cookie must not reset the vote: a network gets a fixed number of votes an hour."""
+        self.safe_patch_object(manual_controller, "FEEDBACK_PER_HOUR_NETWORK", 2)
+        articles = [self.root_public.copy({"name": "Vote target %d" % number}) for number in range(4)]
+        # A counter lives an hour in Redis, so each run draws its own networks.
+        mine = "198.18.%d" % (secrets.randbelow(200) + 1)
+        other = "198.19.%d.9" % (secrets.randbelow(200) + 1)
+
+        def vote(article, address):
+            return self.url_open(
+                "/manual/feedback",
+                data={"csrf_token": odoo.http.Request.csrf_token(self), "article_id": article.id, "is_helpful": "1"},
+                headers={"CF-Connecting-IP": address},
+                method="POST",
+                allow_redirects=False,
+            ).status_code
+
+        self.authenticate(None, None)
+        statuses = [vote(article, "%s.%d" % (mine, 10 + number)) for number, article in enumerate(articles)]
+        self.assertEqual(statuses, [303, 303, 429, 429], "one /24 shares a budget, whatever the host")
+        self.assertEqual(vote(self.root_public, other), 303)
 
     def test_04b_feedback_refused_for_internal_audience_article(self):
         """A published internal-audience article answers 404 to the public, so a public visitor must not move its counters."""
