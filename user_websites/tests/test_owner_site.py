@@ -454,7 +454,7 @@ class TestOwnerSite(HamsHttpCase):
         for bad in ("Bad\x0btitle", "Nul\x00title", "Esc\x1btitle"):
             response = self._post("/my/site/ownerone/page/save", title=bad, page_slug="ctl", content="<p>x</p>")
             self.assertLess(response.status_code, 500)
-            self.assertFalse(self.env["website.page"].search([("url", "=", "/ownerone/ctl")]))
+        self.assertEqual(self.env["website.page"].search_count([("url", "=", "/ownerone/ctl")]), 0, "none of the refused titles made a page")
 
     def test_10b_a_page_id_that_is_not_ascii_digits_is_a_404_not_a_500(self):
         # Tests [@ANCHOR: user_websites:COMM_owner_page_save]
