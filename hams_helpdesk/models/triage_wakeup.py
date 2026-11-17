@@ -51,22 +51,26 @@ def spool_dir():
 def write_triage_wakeups(ticket_ids):
     """Writes one wake-up file per id. Never raises; returns how many files it wrote."""
     written = 0
+    ticket_ids = list(ticket_ids)
     try:
         directory = spool_dir()
         if not os.path.isdir(directory):
-            _logger.debug("Triage spool %s does not exist: no wake-up written (not provisioned here).", directory)
+            _logger.info(
+                "triage_wakeup skipped reason=spool_missing tickets=%s (not provisioned here)", len(list(ticket_ids)),
+            )
             return 0
         waiting = sum(1 for name in os.listdir(directory) if _WAKEUP_NAME_RE.match(name))
-        for ticket_id in ticket_ids:
+        for index, ticket_id in enumerate(ticket_ids):
             if waiting >= MAX_SPOOL_FILES:
                 _logger.warning(
-                    "Triage spool already holds %s wake-ups: not adding more (the fallback timer will "
-                    "find the remaining new tickets).", waiting,
+                    "triage_wakeup skipped reason=flood_cap waiting=%s cap=%s dropped=%s (the fallback timer "
+                    "will find the remaining new tickets)", waiting, MAX_SPOOL_FILES, len(ticket_ids) - index,
                 )
                 break
             ticket_id = int(ticket_id)
             final = os.path.join(directory, f"ticket-{ticket_id}.json")
             if os.path.lexists(final):
+                _logger.info("triage_wakeup skipped ticket=%s reason=already_announced", ticket_id)
                 continue  # already announced; the same ticket never counts twice
             # A dot-name temporary file does not match the path unit's glob, so the daemon never
             # sees a half-written file; os.replace publishes it atomically.
@@ -83,6 +87,7 @@ def write_triage_wakeups(ticket_ids):
                 raise
             waiting += 1
             written += 1
+            _logger.info("triage_wakeup written ticket=%s waiting=%s", ticket_id, waiting)
     except Exception:  # audit-ignore-catch-all: a notification failure must never reach the ticket create, which has already committed
         _logger.exception("Could not write the ticket-triage wake-up (the fallback timer will find the ticket).")
     return written

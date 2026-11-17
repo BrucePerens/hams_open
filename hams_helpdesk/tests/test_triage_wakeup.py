@@ -165,3 +165,38 @@ class TestTriageWakeup(HamsTransactionCase):
 
     def test_13_the_default_spool_directory_is_the_one_the_path_unit_watches(self):
         self.assertEqual(triage_wakeup.DEFAULT_SPOOL_DIR, "/opt/hams/spool/ticket_triage")
+
+    # Journal visibility (ids, counts, reasons and stages only; never ticket text).
+    _WAKEUP_LOGGER = "odoo.addons.hams_helpdesk.models.triage_wakeup"
+    _TICKET_LOGGER = "odoo.addons.hams_helpdesk.models.helpdesk_ticket"
+
+    def test_14_a_written_wakeup_is_logged_with_id_only(self):
+        with self.assertLogs(self._WAKEUP_LOGGER, "INFO") as logs:
+            self.assertEqual(triage_wakeup.write_triage_wakeups([42]), 1)
+        self.assertIn("triage_wakeup written ticket=42 waiting=1", "\n".join(logs.output))
+
+    def test_15_a_repeated_wakeup_is_logged_as_skipped_already_announced(self):
+        triage_wakeup.write_triage_wakeups([42])
+        with self.assertLogs(self._WAKEUP_LOGGER, "INFO") as logs:
+            triage_wakeup.write_triage_wakeups([42])
+        self.assertIn("triage_wakeup skipped ticket=42 reason=already_announced", "\n".join(logs.output))
+
+    def test_16_the_flood_cap_is_logged_as_a_warning_with_counts(self):
+        self.safe_patch_object(triage_wakeup, "MAX_SPOOL_FILES", 2)
+        with self.assertLogs(self._WAKEUP_LOGGER, "WARNING") as logs:
+            self.assertEqual(triage_wakeup.write_triage_wakeups([1, 2, 3, 4]), 2)
+        self.assertIn("triage_wakeup skipped reason=flood_cap waiting=2 cap=2 dropped=2", "\n".join(logs.output))
+
+    def test_17_a_missing_spool_is_logged_as_skipped(self):
+        missing = os.path.join(self.spool, "not-provisioned")
+        with patch.dict(os.environ, {triage_wakeup.SPOOL_DIR_ENV: missing}), \
+                self.assertLogs(self._WAKEUP_LOGGER, "INFO") as logs:
+            triage_wakeup.write_triage_wakeups([7, 8])
+        self.assertIn("triage_wakeup skipped reason=spool_missing tickets=2", "\n".join(logs.output))
+
+    def test_18_a_non_new_stage_ticket_is_logged_as_skipped_with_its_stage_and_no_text(self):
+        with self.assertLogs(self._TICKET_LOGGER, "INFO") as logs:
+            ticket = self.Ticket.create({"name": "Secret subject text", "stage": "in_progress"})
+        text = "\n".join(logs.output)
+        self.assertIn(f"triage_wakeup skipped ticket={ticket.id} reason=stage_not_new stage=in_progress", text)
+        self.assertNotIn("Secret subject", text)

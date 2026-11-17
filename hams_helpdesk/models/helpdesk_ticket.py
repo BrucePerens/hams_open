@@ -563,6 +563,11 @@ class HelpdeskTicket(models.Model):
         # The stage comes from vals, not from reading the record, so a create-only service account
         # (which cannot read) behaves the same and no sudo() or service env is needed. See
         # models/triage_wakeup.py for why only the id travels and why nothing here can raise.
+        for ticket, vals in zip(tickets, vals_list):
+            if (vals.get("stage") or "new") != "new":
+                _logger.info(
+                    "triage_wakeup skipped ticket=%s reason=stage_not_new stage=%s", ticket.id, vals.get("stage"),
+                )
         self._schedule_triage_wakeup(
             [
                 ticket.id
