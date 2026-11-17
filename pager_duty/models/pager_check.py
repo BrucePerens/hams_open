@@ -22,6 +22,8 @@ HEARTBEAT_GRACE_FACTOR = 1.5
 
 
 def heartbeat_is_current(last_heartbeat, now, interval_sec):
+    # [@ANCHOR: pager_duty:heartbeat_is_current]
+    # Verified by [@ANCHOR: test_heartbeat_is_current]
     """True when the last beat is no older than the interval plus its grace; `now` is passed in."""
     return (now - last_heartbeat).total_seconds() <= interval_sec * HEARTBEAT_GRACE_FACTOR
 
