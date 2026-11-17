@@ -16,6 +16,16 @@ from odoo.addons.distributed_redis_cache.redis_cache import (
 )
 from odoo.addons.zero_sudo import public_rpc
 
+# The daemon polls at the sender's own interval, so a healthy sender reads as late near the boundary (sender
+# jitter, poll phase). A beat counts as current until one and a half intervals have passed.
+HEARTBEAT_GRACE_FACTOR = 1.5
+
+
+def heartbeat_is_current(last_heartbeat, now, interval_sec):
+    """True when the last beat is no older than the interval plus its grace; `now` is passed in."""
+    return (now - last_heartbeat).total_seconds() <= interval_sec * HEARTBEAT_GRACE_FACTOR
+
+
 _logger = logging.getLogger(__name__)
 
 
@@ -408,8 +418,7 @@ class PagerCheck(models.Model):
         check = self.env["pager.check"].browse(check_id)
         if not check.last_heartbeat:
             return False
-        delta = (fields.Datetime.now() - check.last_heartbeat).total_seconds()
-        return delta <= interval_sec
+        return heartbeat_is_current(check.last_heartbeat, fields.Datetime.now(), interval_sec)
 
     @api.model
     def _get_config_path(self):

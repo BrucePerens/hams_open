@@ -1,7 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
+from datetime import datetime, timedelta
+
 from odoo.exceptions import ValidationError
+from odoo.addons.pager_duty.models.pager_check import heartbeat_is_current
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
@@ -104,3 +107,16 @@ class TestPagerCheckEdgeCases(HamsTransactionCase):
         action = check.action_trigger_check()
         self.assertEqual(action["type"], "ir.actions.client")
         self.assertEqual(action["tag"], "display_notification")
+
+
+@tagged("post_install", "-at_install")
+class TestHeartbeatGrace(HamsTransactionCase):
+    def test_heartbeat_has_grace_past_the_interval(self):
+        # Tests [@ANCHOR: pager_duty:check_heartbeat_rpc]
+        now = datetime(2026, 1, 1, 12, 0, 0)
+        beat = lambda seconds: now - timedelta(seconds=seconds)  # noqa: E731
+        self.assertTrue(heartbeat_is_current(beat(60), now, 60))
+        self.assertTrue(heartbeat_is_current(beat(61), now, 60), "just past the interval is still healthy")
+        self.assertTrue(heartbeat_is_current(beat(90), now, 60))
+        self.assertFalse(heartbeat_is_current(beat(91), now, 60))
+        self.assertFalse(heartbeat_is_current(beat(3600), now, 60))
