@@ -61,6 +61,20 @@ board acknowledged the write but cannot report its state; the state is the drive
   server's certificate (verification is never off);
 - every service call and session event goes to an `AuditLog`.
 
+### Install note: an amplifier behind Home Assistant
+
+Home Assistant sits between the station and the plug, so radioctl cannot stop the amplifier itself if the
+host, the network or Home Assistant goes down while the transmitter is keyed. Before you list an amplifier
+on a Home Assistant channel:
+
+1. Put an independent stop in front of the amplifier: a smart plug whose own firmware switches off after
+   a fixed time (set the auto-off a little longer than your longest transmission), or an amplifier with its
+   own timeout or SWR and drive protection.
+2. Test it: key the rig, pull the network cable from the Home Assistant host, and confirm the amplifier
+   drops out on its own.
+3. Only then set `external_deadman = true` on the device. That line is your statement that step 1 exists;
+   radioctl cannot check it, and without it `Station::new` refuses the amplifier.
+
 ### Relay boards whose status is not readable (SainSmart 16-channel)
 
 Decided by Bruce on 2026-11-01: assume the SainSmart module cannot report its state, so set it to a
