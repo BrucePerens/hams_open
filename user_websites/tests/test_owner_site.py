@@ -182,7 +182,13 @@ class TestMemberHtmlSanitizer(BaseCase):
         huge = _picture("PNG", size=(5000, 5000), compress_level=9)
         self.assertLess(len(huge), owner_site.MAX_IMAGE_BYTES)
         self.assertIsNone(owner_site.clean_member_image(huge, "image/png"))
-        self.assertEqual(owner_site.clean_member_image(b"GIF89a-as-sent", "image/gif"), b"GIF89a-as-sent")
+        gif = _picture("GIF", size=(4, 4))
+        self.assertEqual(owner_site.clean_member_image(gif, "image/gif"), gif)
+        self.assertIsNone(owner_site.clean_member_image(b"GIF89a-garbage", "image/gif"))
+        # A tiny file that declares a 5000x5000 canvas is refused on the header size alone.
+        big_gif = _picture("GIF", size=(5000, 5000))
+        self.assertLess(len(big_gif), owner_site.MAX_IMAGE_BYTES)
+        self.assertIsNone(owner_site.clean_member_image(big_gif, "image/gif"))
 
     def test_image_src_cannot_climb_out_of_web_image(self):
         # Tests [@ANCHOR: user_websites:fn_hmtl_clean_url]

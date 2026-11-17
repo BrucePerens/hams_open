@@ -119,10 +119,15 @@ def clean_member_image(data, mimetype):
 
     A phone photo carries the GPS position of the place it was taken, often a member's home, and the
     image is served publicly. JPEG, PNG and WebP are decoded and written out again, which drops EXIF,
-    comments and anything appended after the picture. GIF has no location metadata and is kept as sent.
+    comments and anything appended after the picture. GIF has no location metadata and is kept as sent,
+    but its declared size is checked against the same pixel cap.
     """
     if mimetype == "image/gif":
-        return data
+        try:
+            width, height = Image.open(io.BytesIO(data)).size
+        except (UnidentifiedImageError, OSError, ValueError, SyntaxError):
+            return None
+        return data if width * height <= MAX_IMAGE_PIXELS else None
     try:
         picture = Image.open(io.BytesIO(data))
         width, height = picture.size
