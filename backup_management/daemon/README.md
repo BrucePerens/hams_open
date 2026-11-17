@@ -18,3 +18,5 @@ This directory contains the backup worker daemon for `hams_open`. It is an async
 - `RABBITMQ_HOST`: RabbitMQ host (default `rabbitmq`).
 - `ODOO_URL` (or `ODOO_HOST`), `DB_NAME`: Where the JSON-2 API calls go.
 - `ODOO_RPC_KEY`: API key for the `backup_service_internal` account.
+
+- **Content-checking drill** (`scripts/restore_drill.py CONFIG.json`, install into `BACKUP_WORKER_SCRIPTS_DIR`): restores the newest complete snapshot into a scratch directory, checks row counts, a canary and sampled file hashes, names each failing check on stderr, always removes the scratch. Only the plaintext engine is built; kopia/pgbackrest/B2/crypto-canary steps are stubs failing with `needs Bruce: key step`. `DrillError` carries only the failing check's name and counts (no fields). `LocalRunner` has no fields; it answers `ls -r` and `restore` over a plain directory so `b2_backup.restore_sample` can be reused.
