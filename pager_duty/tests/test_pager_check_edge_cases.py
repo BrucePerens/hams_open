@@ -66,6 +66,13 @@ class TestPagerCheckEdgeCases(HamsTransactionCase):
         self.assertEqual(child.parent_check_id, root)
         self.assertFalse(root.parent_check_id)
 
+    def test_04a_unlink_all_removes_every_record_in_batches(self):
+        # Tests [@ANCHOR: pager_duty:pager_check_unlink_all]
+        self.env["pager.log.file"].create({"filepath": "/var/log/unlink_all_a.log"})
+        self.env["pager.log.file"].create({"filepath": "/var/log/unlink_all_b.log"})
+        self.env["pager.check"]._unlink_all("pager.log.file")
+        self.assertFalse(self.env["pager.log.file"].search([]))
+
     def test_04_create_write_unlink_all_trigger_cache_invalidation(self):
         # Tests [@ANCHOR: pager_duty:pager_check_create]
 

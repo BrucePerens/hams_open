@@ -97,6 +97,10 @@ Overrides `write`. After `super().write`, it always sends the cache invalidation
 
 Overrides `unlink`. It sends the model cache invalidation first, calls `super().unlink()`, then schedules the post-commit config export, so a deleted check also disappears from the daemon's file (a check removed by a migration or from a shell used to stay in the file and keep paging, incident 39). No arguments; returns the parent's result. If the export fails afterwards the failure is logged and the delete stays committed. Tests: `test_08_unlinking_a_check_rewrites_the_daemon_config` and `test_11_a_failing_export_does_not_break_the_committed_change` in `tests/test_generalized_config.py`.
 
+### `_unlink_all(self, model_name)` [@ANCHOR: pager_duty:pager_check_unlink_all]
+
+Deletes every record of the named model, 1000 at a time, so a config reload never loads a whole table into memory. Used by `action_pull_from_json` reloads to clear `pager.check`, `pager.log.file` and `pager.log.pattern` before re-creating them from the JSON file. Argument: the model name. Returns nothing. Test: `test_04a_unlink_all_removes_every_record_in_batches` in `tests/test_pager_check_edge_cases.py`.
+
 ### `_run_autodiscovery(self)` [@ANCHOR: run_autodiscovery]
 
 Builds a baseline set of checks from the host and creates the missing ones (`@api.model`). No arguments, no return value. It proposes fixed checks (system memory, CPU and load, the systemd failed-units tracker, provisioned units, IPv4 and IPv6 root DNS, the local WSGI ping with a 120 s grace), a disk check per mounted `ext4`, `xfs`, `btrfs`, `zfs` or `vfat` partition from `psutil`, and service checks (PostgreSQL, Redis, RabbitMQ, nginx, Docker) for each of those units that `systemctl list-units` shows active. A check whose name already exists is skipped, so it is safe to repeat. It ends with `action_push_to_json`. `systemctl` runs without a shell; failures reading partitions or units are logged and skipped. Also run at install when no check exists. Test: `test_02_autodiscovery` in `tests/test_generalized_config.py`.
