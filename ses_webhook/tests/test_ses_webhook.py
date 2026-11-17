@@ -295,8 +295,8 @@ class TestSesWebhook(HamsHttpCase):
         self.assertEqual(log.status, 'rejected_subscribe_url')
 
     def test_03c_subscription_confirmation_without_subscribe_url_is_logged_rejected(self):
-        """A confirmation with no SubscribeURL used to be logged with no status at all."""
-        payload = self._sign({"Type": "SubscriptionConfirmation", "MessageId": "msg-sub-no-url"})
+        """A signed confirmation with an empty SubscribeURL used to be logged with no status at all."""
+        payload = self._sign({"Type": "SubscriptionConfirmation", "MessageId": "msg-sub-no-url", "SubscribeURL": ""})
         mock_urlopen = self.safe_patch('odoo.addons.ses_webhook.controllers.webhook_api.urlopen_ssrf_safe')
         response = self.url_open(
             f'/mail/webhook/sns?token={self.domain_a.secret_token}',

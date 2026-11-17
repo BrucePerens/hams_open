@@ -463,7 +463,7 @@ class SesWebhookController(http.Controller):
                     )
                     log_vals.update({'status': 'rejected_subscribe_url'})
                 else:
-                    _logger.warning("SES Webhook: SubscriptionConfirmation without a SubscribeURL for domain %s.", domain.name)
+                    _logger.warning("SES Webhook: SubscriptionConfirmation with an empty SubscribeURL for domain %s.", domain.name)
                     log_vals.update({'status': 'rejected_subscribe_url', 'error_message': 'No SubscribeURL in the confirmation.'})
 
             elif payload_type == 'Notification':
