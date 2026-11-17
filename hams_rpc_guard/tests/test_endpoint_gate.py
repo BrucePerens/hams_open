@@ -43,17 +43,17 @@ class TestEndpointFamily(HamsTransactionCase):
     def test_the_real_routes_are_recognised(self):
         for path in ("/jsonrpc", "/jsonrpc/", "/xmlrpc/common", "/xmlrpc/2/object"):
             self.assertEqual(gate.endpoint_family(path), gate.FAMILY_LEGACY, path)
-        for path in ("/json/2", "/json/2/res.partner/search"):
+        for path in ("/json/2", "/json/2/res.partner/search", "/json/1/contacts", "/json/1/contacts/"):
             self.assertEqual(gate.endpoint_family(path), gate.FAMILY_JSON2, path)
 
     def test_every_spelling_the_router_sends_to_an_rpc_controller_is_gated(self):
         # Odoo's routing map has strict_slashes=False, so /jsonrpc/ reaches the same controller as /jsonrpc. Whatever
         # the router maps to one of the RPC controllers' routes must be a path the gate classifies.
         rpc_rules = {"/jsonrpc", "/xmlrpc/<service>", "/xmlrpc/2/<service>", "/json/2", "/json/2/<path:subpath>",
-                     "/json/2/<__model__>/<__method__>"}
+                     "/json/2/<__model__>/<__method__>", "/json/1/<path:subpath>"}
         adapter = self.env["ir.http"].routing_map().bind("hams.test")
         spellings = []
-        for base in ("/jsonrpc", "/xmlrpc/common", "/xmlrpc/2/object", "/json/2", "/json/2/res.partner/search",
+        for base in ("/jsonrpc", "/xmlrpc/common", "/xmlrpc/2/object", "/json/2", "/json/2/res.partner/search", "/json/1/contacts",
                      "/JSONRPC", "/Json/2/res.partner/search", "/jsonrpc/db", "/jsonrpc//", "/xmlrpc/2/", "/xmlrpc"):
             spellings += [base, base + "/", base.upper(), base.replace("/", "//", 1)]
         reached = 0
