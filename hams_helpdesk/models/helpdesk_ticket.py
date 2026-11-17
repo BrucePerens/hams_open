@@ -60,6 +60,8 @@ _INBOUND_CREATE_WINDOW = 3600
 _TRIAGE_QUARANTINE_DEFAULT = "spam,phishing"
 _TRIAGE_PARAM_HOLD = "hams_helpdesk.triage_notify_hold_seconds"
 _TRIAGE_PARAM_ON_LEAVING_SPAM = "hams_helpdesk.triage_notify_on_leaving_spam"
+# A ticket in one of these stages is never announced as new: spam is quarantined, and a person has already dealt with the others.
+_NO_ANNOUNCE_STAGES = ("spam", "resolved", "closed")
 _TRIAGE_PARAM_STALL = "hams_helpdesk.triage_stall_seconds"
 # A ticket older than this is not the stall alarm's business (it would otherwise alarm for the whole backlog the day the
 # agent is first switched on); the daemon's fallback timer and a person handle those.
@@ -861,10 +863,12 @@ class HelpdeskTicket(models.Model):
                 )
 
         leaving_spam = self.filtered(lambda t: t.stage == "spam") if vals.get("stage") not in (None, "spam") else self.browse()
-        entering_spam = self.filtered(lambda t: t.notify_state == "held") if vals.get("stage") == "spam" else self.browse()
+        entering_spam = (
+            self.filtered(lambda t: t.notify_state == "held") if vals.get("stage") in _NO_ANNOUNCE_STAGES else self.browse()
+        )
         res = super().write(vals)
         if entering_spam:
-            # A held ticket a person (or the agent) puts in the Spam stage is not announced, now or when the hold would end.
+            # A held ticket a person (or the agent) puts in the Spam, Resolved or Closed stage is not announced, now or when the hold would end.
             entering_spam.with_env(
                 self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
             ).write({"notify_state": "suppressed", "notify_release_at": False})
@@ -1046,13 +1050,13 @@ class HelpdeskTicket(models.Model):
         email and toast, shift CC, customer subscription). Tickets already "sent" and tickets in the Spam stage are left alone,
         so it is safe to call twice."""
         hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
-        due = self.with_env(hd_env).filtered(lambda t: t.notify_state != "sent" and t.stage != "spam")
+        due = self.with_env(hd_env).filtered(lambda t: t.notify_state != "sent" and t.stage not in _NO_ANNOUNCE_STAGES)
         if due:
             # Claim the rows in the database: a release running in another transaction (the cron against a triage verdict)
             # has either committed "sent" already or holds the row lock, and either way this one must send nothing for it.
             due.flush_recordset(["notify_state", "stage"])
             self.env.cr.execute(
-                "SELECT id FROM hams_helpdesk_ticket WHERE id IN %s AND notify_state != 'sent' AND stage != 'spam' "
+                "SELECT id FROM hams_helpdesk_ticket WHERE id IN %s AND notify_state != 'sent' AND stage NOT IN ('spam', 'resolved', 'closed') "
                 "FOR UPDATE SKIP LOCKED",
                 (tuple(due.ids),),
             )
@@ -1081,7 +1085,7 @@ class HelpdeskTicket(models.Model):
         held = self.search(
             [("notify_state", "=", "held"), ("notify_release_at", "<=", fields.Datetime.now())], limit=500
         )
-        in_spam = held.filtered(lambda t: t.stage == "spam")
+        in_spam = held.filtered(lambda t: t.stage in _NO_ANNOUNCE_STAGES)
         in_spam.write({"notify_state": "suppressed", "notify_release_at": False})
         due = held - in_spam
         if due:
