@@ -500,6 +500,36 @@ class TestBackupManagement(RealTransactionCase):
         )
         self.assertEqual(stale_alerts(), [])
 
+    def test_cron_sync_all_backups_a_partial_snapshot_does_not_count_as_fresh(self):
+        # Tests [@ANCHOR: backup_management:COMM_cron_sync_all_backups]
+        # A kopia snapshot with unreadable files (status "partial") is not a complete copy: it must not hide staleness.
+        config = self.config_kopia
+        now = fields.Datetime.now()
+        self.env["backup.job"].search([("config_id", "=", config.id)]).unlink()
+        self.env["backup.snapshot"].search([("config_id", "=", config.id)]).unlink()
+        self.env.cr.execute(
+            "UPDATE backup_config SET create_date = %s WHERE id = %s", (now - datetime.timedelta(hours=40), config.id)
+        )
+        config.invalidate_recordset(["create_date"])
+        reported = self.safe_patch_object(type(config), "report_backup_failure")
+        self.safe_patch_object(type(config), "action_sync_snapshots")
+
+        def stale_alerts():
+            reported.reset_mock()
+            self.env["backup.config"].cron_sync_all_backups()
+            return [c for c in reported.call_args_list if "Stale Backup Alert" in c.args[0] and config.name in c.args[0]]
+
+        self.env["backup.snapshot"].create(
+            {"config_id": config.id, "snapshot_id": "snap_part", "status": "partial",
+             "start_time": now - datetime.timedelta(hours=1)}
+        )
+        self.assertEqual(len(stale_alerts()), 1)
+        self.env["backup.snapshot"].create(
+            {"config_id": config.id, "snapshot_id": "snap_ok", "status": "completed",
+             "start_time": now - datetime.timedelta(hours=2)}
+        )
+        self.assertEqual(stale_alerts(), [])
+
     def test_backup_job_problems_ignore_sync_and_other_non_backup_jobs(self):
         # Tests [@ANCHOR: backup_management:backup_job_problems]
         # Hourly sync_snapshots jobs succeed while every real backup job fails: they must not hide the failure.
