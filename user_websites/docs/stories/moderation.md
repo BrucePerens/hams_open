@@ -93,6 +93,10 @@ A rule for the three mail templates in `data/user_websites_data.xml` (content vi
 
 `content.violation.appeal._create_if_none_open(vals)`. Called by `/website/submit_appeal` once the target is known to be suspended: it writes the target's row (the user's, or the group's) with no value change, then creates the appeal only if that target has no appeal in state `new`. Returns the appeal, or an empty recordset when one is waiting. The write is what makes two simultaneous submissions safe: the second sees a serialization failure and Odoo runs it again on a fresh snapshot, where it counts the first's appeal. Test: `test_appeal_race`.
 
+### `create(vals_list)` [@ANCHOR: user_websites:appeal_create]
+
+`content.violation.appeal.create(vals_list)` (`@api.model_create_multi`). When the caller is a portal (share) user it drops any `state` key from each values dict, so a member cannot file an appeal that is already decided; the appeal starts in `new`. Internal and service-account callers may still set `state`. Returns the new appeals. Test: `test_portal_cannot_create_a_decided_appeal` in `tests/test_appeal_survives_delete.py`.
+
 ### `_lock_for_resolution()` [@ANCHOR: user_websites:appeal_lock_for_resolution]
 
 `content.violation.appeal._lock_for_resolution()`. Called first by `action_approve` and `action_reject`: it row-locks the appeals (`SELECT ... FOR UPDATE NOWAIT`, inside a savepoint) and re-reads `state`, so two moderators cannot both see `new` and then approve and reject the same appeal. A row another moderator holds raises `UserError` at once instead of waiting. Test: `test_appeal_resolution_refuses_a_row_being_resolved`.
