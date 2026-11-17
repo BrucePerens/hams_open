@@ -4,6 +4,8 @@
 # -*- coding: utf-8 -*-
 from odoo.tests.common import tagged
 from cryptography.fernet import Fernet
+from odoo.addons.distributed_redis_cache.redis_cache import invalidate_model_cache
+from odoo.addons.distributed_redis_cache.redis_pool import get_redis_connection
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 
@@ -198,6 +200,20 @@ class TestMultiWebsiteCloudflare(RealTransactionCase):
         args = mock_ban_ip.call_args
         self.assertEqual(args[0][3], "token_b")  # token
         self.assertEqual(args[0][4], "zone_b")  # zone_id
+
+    def test_credentials_are_not_stored_in_redis(self):
+        # Tests [@ANCHOR: cloudflare:COMM_get_cloudflare_credentials]
+        sentinel = "sentinel-not-a-real-token-7d3e1b"
+        self.website_a.write({"cloudflare_api_token": sentinel})
+        invalidate_model_cache(self.env, "website")
+        self.assertEqual(self.website_a._get_cloudflare_credentials()[0], sentinel)
+        redis_conn = get_redis_connection(self.env)
+        for redis_key in redis_conn.scan_iter(match=f"{self.env.cr.dbname}:distributed_cache:*"):
+            stored = redis_conn.get(redis_key) or ""
+            if isinstance(stored, bytes):
+                stored = stored.decode("utf-8", "replace")
+            self.assertNotIn(sentinel, str(redis_key))
+            self.assertNotIn(sentinel, stored)
 
     # Tests [@ANCHOR: cloudflare:COMM_website_write_busts_credential_cache]
     def test_credential_write_busts_distributed_cache(self):
