@@ -178,6 +178,21 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
             "'AccessError' -- only a real 401/403 should.",
         )
 
+    def test_call_raises_on_an_odoo_json2_error_body(self):
+        # Odoo's JSON-2 error body is {name, message, arguments, context, debug} with no "error" key; the call used to
+        # hand it back as if it were the method's result.
+        mock_session_class = self.safe_patch("odoo.addons.zero_sudo.daemon.json_rpc_client.requests.Session")
+        mock_session = MagicMock()
+        mock_session_class.return_value = mock_session
+        not_found = MagicMock()
+        not_found.status_code = 404
+        not_found.json.return_value = {"name": "odoo.exceptions.MissingError", "message": "Record does not exist"}
+        mock_session.post.return_value = not_found
+
+        client = SecureJSONRPCClient(self.env_path, self.base_url, self.db_name)
+        with self.assertRaisesRegex(RuntimeError, "404"):
+            client.call("res.users", "read", ids=[999999])
+
     def test_missing_env_file(self):
         non_existent = os.path.join(self.test_dir, "non_existent.env")
         with self.assertRaises(FileNotFoundError):
