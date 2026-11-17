@@ -110,11 +110,12 @@ class ConfigError(ValueError):
 def endpoint_family(path):
     """`legacy-rpc`, `json2` or None for the request path.
 
-    The real routes are exactly `/jsonrpc`, anything under `/xmlrpc/` (with the separator: `/xmlrpc.php`, the
-    WordPress probe scanners send, is not one) and anything under `/json/2`."""
+    The real routes are `/jsonrpc` (also `/jsonrpc/`: Odoo's routing map is built with `strict_slashes=False`, so the
+    trailing-slash spelling reaches the same controller), anything under `/xmlrpc/` (with the separator: `/xmlrpc.php`,
+    the WordPress probe scanners send, is not one) and anything under `/json/2`."""
     if not isinstance(path, str):
         return None
-    if path == "/jsonrpc" or path.startswith("/xmlrpc/"):
+    if path in ("/jsonrpc", "/jsonrpc/") or path.startswith("/xmlrpc/"):
         return FAMILY_LEGACY
     if path == "/json/2" or path.startswith("/json/2/"):
         return FAMILY_JSON2

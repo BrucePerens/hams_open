@@ -5,6 +5,7 @@ import contextlib
 import ipaddress
 
 from werkzeug.datastructures import Headers
+from werkzeug.exceptions import HTTPException
 
 from odoo.addons.zero_sudo.models.security_utils import ZeroSudoSecurityUtils
 from odoo.exceptions import ValidationError
@@ -40,10 +41,34 @@ class TestEndpointFamily(HamsTransactionCase):
     # Tests [@ANCHOR: hams_rpc_guard:endpoint_family]
 
     def test_the_real_routes_are_recognised(self):
-        for path in ("/jsonrpc", "/xmlrpc/common", "/xmlrpc/2/object"):
+        for path in ("/jsonrpc", "/jsonrpc/", "/xmlrpc/common", "/xmlrpc/2/object"):
             self.assertEqual(gate.endpoint_family(path), gate.FAMILY_LEGACY, path)
         for path in ("/json/2", "/json/2/res.partner/search"):
             self.assertEqual(gate.endpoint_family(path), gate.FAMILY_JSON2, path)
+
+    def test_every_spelling_the_router_sends_to_an_rpc_controller_is_gated(self):
+        # Odoo's routing map has strict_slashes=False, so /jsonrpc/ reaches the same controller as /jsonrpc. Whatever
+        # the router maps to one of the RPC controllers' routes must be a path the gate classifies.
+        rpc_rules = {"/jsonrpc", "/xmlrpc/<service>", "/xmlrpc/2/<service>", "/json/2", "/json/2/<path:subpath>",
+                     "/json/2/<__model__>/<__method__>"}
+        adapter = self.env["ir.http"].routing_map().bind("hams.test")
+        spellings = []
+        for base in ("/jsonrpc", "/xmlrpc/common", "/xmlrpc/2/object", "/json/2", "/json/2/res.partner/search",
+                     "/JSONRPC", "/Json/2/res.partner/search", "/jsonrpc/db", "/jsonrpc//", "/xmlrpc/2/", "/xmlrpc"):
+            spellings += [base, base + "/", base.upper(), base.replace("/", "//", 1)]
+        reached = 0
+        for path in spellings:
+            for method in ("POST", "GET"):
+                try:
+                    rule, _arguments = adapter.match(path, method=method, return_rule=True)
+                except HTTPException:  # NotFound, MethodNotAllowed, RequestRedirect: not a route
+                    continue
+                if rule.rule in rpc_rules:
+                    reached += 1
+                    # the gate reads request.httprequest.path, which werkzeug has already stripped of extra leading slashes
+                    seen_by_the_gate = "/" + path.lstrip("/")
+                    self.assertIsNotNone(gate.endpoint_family(seen_by_the_gate), "%s reaches %s but is not gated" % (path, rule.rule))
+        self.assertGreaterEqual(reached, 8)  # the loop really exercised the router
 
     def test_lookalikes_and_the_web_client_are_not_gated(self):
         for path in ("/xmlrpc.php", "/jsonrpc2", "/json/version", "/json/20", "/web/dataset/call_kw", None, b"/jsonrpc"):
