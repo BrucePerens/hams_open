@@ -192,7 +192,8 @@ class CloudflareTunnel(models.Model):
         # networking mistake. Gated by the tunnel's ssh_route_enabled switch.
         if self.ssh_route_enabled and self.website_id.domain:
             parsed = urlparse(self.website_id.domain)
-            hostname = parsed.netloc or parsed.path
+            # `hostname` has no port: "ssh.example.com:8069" is not a host name Cloudflare accepts.
+            hostname = parsed.hostname or parsed.path
             if hostname:
                 ingress.append({"hostname": f"ssh.{hostname}", "service": "ssh://localhost:22"})  # burn-ignore-cloudflared-ingress
 
