@@ -115,6 +115,17 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
         self.assertGreaterEqual(len(calls), 2, "the failing subscriber must not stop the later ones")
 
     # Tests [@ANCHOR: user_websites_sql_views_user_websites_weekly_digest_view]
+    def test_01f_weekly_digest_skips_a_deactivated_or_erased_subscriber(self):
+        """An erased member keeps the partner and its follower rows; the digest must not mail them."""
+        self.follower.write({"active": False})
+        self.env["blog.post"].send_weekly_digest()
+        mail_svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("zero_sudo.mail_service_internal")
+        mails = self.env["mail.mail"].with_user(mail_svc_uid).search(
+            [("recipient_ids", "in", [self.follower.partner_id.id])]
+        )
+        self.assertFalse(mails, "a deactivated subscriber must get no digest")
+
+    # Tests [@ANCHOR: user_websites_sql_views_user_websites_weekly_digest_view]
     def test_01_weekly_digest_and_unsubscribe_headers(self):
         """
         Verify that the cron correctly generates emails, successfully injects the
