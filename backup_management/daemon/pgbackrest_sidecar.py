@@ -39,6 +39,9 @@ logger = logging.getLogger("pgbackrest_sidecar")
 
 SPOOL_DIR = os.environ.get("PGBACKREST_SPOOL_DIR", "/opt/hams/backup_requests")
 RUN_AS_USER = os.environ.get("PGBACKREST_SIDECAR_RUN_AS", "postgres")
+# Backups run 37 to 53 minutes; a pgbackrest that has not finished in 4 hours is hung. subprocess.run kills it on timeout and the
+# catch-all in _process_one turns the TimeoutExpired into a failed result for backup_worker.
+PGBACKREST_RUN_TIMEOUT = 4 * 3600
 PGBACKREST_BIN = os.environ.get("PGBACKREST_BIN", "pgbackrest")
 
 _STANZA_RE = re.compile(r"^[a-zA-Z0-9_]+\Z")
@@ -157,6 +160,7 @@ def _process_one(request_path):
             text=True,
             env=full_env,
             check=False,
+            timeout=PGBACKREST_RUN_TIMEOUT,
         )
         result = {"return_code": proc.returncode, "output": proc.stdout}
     except Exception as e:  # audit-ignore-catch-all: one malformed/invalid request must fail only that job, writing a result backup_worker can read, not crash this oneshot run and leave backup_worker polling until its own timeout  # fmt: skip
