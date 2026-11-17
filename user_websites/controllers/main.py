@@ -51,6 +51,8 @@ redis_pool = redis.ConnectionPool(
 redis_client = redis.Redis(connection_pool=redis_pool)
 
 
+BLOG_PAGE_SIZE = 100  # posts on one page of /<slug>/blog
+
 BLOG_TITLE_MAX_CHARS = 120  # the form's own maxlength, and a page's title limit
 
 # [@ANCHOR: user_websites:report_limits]
@@ -568,7 +570,18 @@ class UserWebsitesController(http.Controller):
         # in the controller rather than relying on the service account's
         # own (intentionally permissive, backend-CRUD-oriented) ir.rule.
         post_domain = domain if is_owner else domain + [("is_published", "=", True)]
-        posts = env_svc["blog.post"].search(post_domain, limit=100)
+        blog_url = f"/{website_slug}/blog"
+        post_count = env_svc["blog.post"].search_count(post_domain)
+        try:
+            page_number = int(page)  # ?page=2 arrives as the string; the /page/<int> route as an int
+        except (TypeError, ValueError):
+            page_number = 1
+        pager = request.website.pager(
+            url=blog_url, total=post_count, page=page_number, step=BLOG_PAGE_SIZE
+        )
+        posts = env_svc["blog.post"].search(
+            post_domain, limit=BLOG_PAGE_SIZE, offset=pager["offset"]
+        )
 
         # Fallback to placeholder if no blog AND no posts exists
         if not blogs and not posts:
@@ -582,12 +595,6 @@ class UserWebsitesController(http.Controller):
             }
             return request.render("user_websites.placeholder_page", values)
 
-        pager = {
-            "page_count": 0,
-            "page": dict(),
-            "page_previous": dict(),
-            "page_next": dict(),
-        }
         values = {
             "profile_user": profile_user,
             "profile_group": profile_group,
@@ -595,7 +602,7 @@ class UserWebsitesController(http.Controller):
             "pager": pager,
             "blogs": blogs,
             "posts": posts,
-            "blog_url": f"/{website_slug}/blog",
+            "blog_url": blog_url,
             "resolved_slug": website_slug,
             "page_type": "blog",
             "is_owner": is_owner,
