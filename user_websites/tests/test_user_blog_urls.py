@@ -12,7 +12,7 @@ import re
 import odoo.http
 from odoo.tests import tagged
 
-from odoo.addons.user_websites.controllers import blog_urls
+from odoo.addons.user_websites.controllers import blog_urls, main as site_main
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
 
@@ -243,3 +243,28 @@ class TestUserBlogUrls(HamsHttpCase):
         second = self.env["blog.blog"].create({"name": "Admin Blog Two", "owner_user_id": self.env.ref("base.user_admin").id})
         self._only_blogs(first, second)
         self.assertEqual(self.url_open("/blog", allow_redirects=False).status_code, 200)
+
+    def test_99_blog_index_pages_reach_every_post(self):
+        # Tests [@ANCHOR: user_websites:COMM_user_blog_index]
+        """Page 2 of /<slug>/blog used to show page 1 again: the page number was ignored, so a member
+        with more posts than one page held could not reach the rest."""
+        self.env["blog.post"].create(
+            {
+                "name": "Second Notes",
+                "blog_id": self.blog.id,
+                "owner_user_id": self.owner.id,
+                "is_published": True,
+                "content": "<p>More</p>",
+            }
+        )
+        self.env.flush_all()
+        self.safe_patch_object(site_main, "BLOG_PAGE_SIZE", 1)
+        titles = ("Dipole Notes", "Second Notes")
+        first = self.url_open("/burlowner/blog")
+        second = self.url_open("/burlowner/blog?page=2")
+        self.assertEqual(second.status_code, 200)
+        on_first = {title for title in titles if title in first.text}
+        on_second = {title for title in titles if title in second.text}
+        self.assertEqual(len(on_first), 1)
+        self.assertEqual(on_first | on_second, set(titles))
+        self.assertFalse(on_first & on_second)
