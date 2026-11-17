@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
 <odoo>
-    <data noupdate="1">
-
+    <!-- The template sits outside the noupdate block so -u rewrites it (migrations/1.4); the page and document stay noupdate. -->
+    <data>
         <template id="intellectual_property_template" name="Intellectual Property: Filed Patent Applications and Open Source Publication">
             <!-- [@ANCHOR: compliance:intellectual_property_page] -->
             <t t-call="website.layout">
@@ -132,6 +132,9 @@
                 </div>
             </t>
         </template>
+    </data>
+
+    <data noupdate="1">
 
         <record id="intellectual_property_page" model="website.page">
             <field name="name">Intellectual Property</field>

@@ -160,3 +160,11 @@ class TestNoupdateMigration13(_NoupdateMigrationChecks, HamsTransactionCase):
     allow_inherited_tests_method = True
     MIGRATION_VERSION = "1.3"
     CONTROL_XMLID = "compliance_page_accessibility_statement"
+
+
+@tagged("post_install", "-at_install")
+class TestNoupdateMigration14(_NoupdateMigrationChecks, HamsTransactionCase):
+    # Tests [@ANCHOR: compliance:clear_stale_legal_templates_noupdate_flag]
+    allow_inherited_tests_method = True
+    MIGRATION_VERSION = "1.4"
+    CONTROL_XMLID = "compliance_page_privacy_policy"
