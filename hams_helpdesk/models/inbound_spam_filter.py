@@ -349,7 +349,7 @@ _SIGNAL_TEXT_LIMIT = 400000  # characters of HTML the shape parser reads; a host
 
 
 _SHAPE_TAG_RE = re.compile(r"<(/?)(table|img)\b([^>]*)>", re.IGNORECASE)
-_SIZE_ATTR_RE = re.compile(r"""\b(?:width|height)\s*=\s*["']?\s*([0-9]+)\s*(?:px)?\s*["'\s/>]""", re.IGNORECASE)
+_SIZE_ATTR_RE = re.compile(r"""\b(?:width|height)\s*=\s*(?:["']\s*)?([0-9]+)\s*(?:px)?\s*["'\s/>]""", re.IGNORECASE)
 
 
 # [@ANCHOR: hams_helpdesk:inbound_html_shape]

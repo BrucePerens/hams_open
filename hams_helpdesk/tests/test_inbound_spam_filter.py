@@ -22,6 +22,7 @@ from odoo.addons.hams_helpdesk.models.inbound_spam_filter import (
     detect_bulk_mail_signals,
     detect_inbound_spam_signals,
     html_shape,
+    _SIZE_ATTR_RE,
     inbound_spam_reasons,
     mail_signals,
     own_authenticated_sender,
@@ -418,6 +419,16 @@ class TestBulkMailSignals(HamsTransactionCase):
         self.assertEqual(mail_signals(message_from_bytes(b"\xff\xfe not a message")).get("tables", 0), 0)
         self.assertEqual(inbound_spam_reasons(None, None, None, None), [])
         self.assertLessEqual(html_shape("<table>" * 200000)["tables"], 400000 // len("<table>") + 1)
+
+    def test_30c_the_size_attribute_pattern_has_no_two_adjacent_whitespace_runs(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_html_shape]
+        # Structural, not timed: two adjacent \s* around an optional quote is quadratic on a long run of spaces after "width=".
+        self.assertNotIn("\\s*[\"']?\\s*", _SIZE_ATTR_RE.pattern)
+        for html, expected in (
+            ('<img width="1">', 1), ("<img height = ' 0 px'>", 1), ("<img width=1>", 1), ("<img width=0 >", 1),
+            ('<img width="600">', 0), ("<img width=>", 0),
+        ):
+            self.assertEqual(html_shape(html)["tracking_pixels"], expected, html)
 
     def test_31_a_convention_hotel_booking_offer_to_exhibitors_is_flagged(self):
         # Tests [@ANCHOR: hams_helpdesk:inbound_housing_solicitation]
