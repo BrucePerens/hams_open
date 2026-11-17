@@ -111,3 +111,15 @@ class TestSEOController(HamsTransactionCase):
             "must actually differ, or this assertion proves nothing.",
         )
         self.assertEqual(main_obj, self.regular_user)
+
+    def test_blog_index_keeps_its_page_route(self):
+        # Tests [@ANCHOR: COMM_controller_user_blog_index_seo_override]
+        """Odoo merges a re-declared route by replacing the whole list, so this override once dropped
+        the base controller's /<slug>/blog/page/<n> route and every second page was a 404."""
+        _endpoint, args = (
+            self.env["ir.http"]
+            .routing_map()
+            .bind("example.test")
+            .match("/seo-test-user/blog/page/2", method="GET")
+        )
+        self.assertEqual(args, {"website_slug": "seo-test-user", "page": 2})
