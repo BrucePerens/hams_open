@@ -509,7 +509,12 @@ class ManualLibraryController(http.Controller):
         if website_feedback_honeypot:
             return request.redirect(safe_redirect)
             
-        session_key = f"feedback_submitted_{article_id}"
+        # "01" and "1" are the same article: key the once-per-session vote on the integer id.
+        try:
+            key_id = int(article_id)
+        except (TypeError, ValueError):
+            key_id = article_id
+        session_key = f"feedback_submitted_{key_id}"
         if request.session.get(session_key):
             # Block duplicate voting in same session
             return request.redirect(safe_redirect)

@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
+import odoo.http
 from odoo.tests.common import tagged
 from odoo.addons.knowledge.controllers.main import ManualLibraryController
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
@@ -143,6 +144,20 @@ class TestManualRobustness(HamsHttpCase):
         response = self.url_open(url)
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.url.endswith(article.website_url))
+
+    def test_06b_vote_key_ignores_leading_zeros(self):
+        """"01" and "1" are one article: a second vote in the same session is blocked."""
+        article = self.article_active
+        self.authenticate(None, None)
+        csrf_token = odoo.http.Request.csrf_token(self)
+        for raw_id in (str(article.id), "0" + str(article.id)):
+            self.url_open(
+                "/manual/feedback",
+                data={"csrf_token": csrf_token, "article_id": raw_id, "is_helpful": "1"},
+                method="POST",
+            )
+        article.invalidate_recordset(["helpful_count"])
+        self.assertEqual(article.helpful_count, 1)
 
     def test_06_honeypot_blocking(self):
         """Verify that the honeypot field blocks feedback submission."""
