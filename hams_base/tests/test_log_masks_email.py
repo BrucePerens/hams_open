@@ -30,7 +30,16 @@ class TestLogMasksEmail(HamsTransactionCase):
 
     def test_old_email_send_failure_log_has_no_full_address(self):
         user = self.env["res.users"].create({"name": "Mask Test", "login": "mask_old@example.com", "email": "mask_old_secret@example.com"})
-        self.safe_patch_object(type(self.env["mail.mail"]), "send", _boom)
+        mail_cls = type(self.env["mail.mail"])
+        real_create = mail_cls.create
+
+        def failing_alert_create(model, vals, *args, **kwargs):
+            # Only the HAMS alert fails; Odoo's own security notice still goes through.
+            if "Email Address was Changed" in str(vals):
+                raise ValueError("queue failed")
+            return real_create(model, vals, *args, **kwargs)
+
+        self.safe_patch_object(mail_cls, "create", failing_alert_create)
         with self.assertLogs(LOGGER_PREFIX, level="ERROR") as logs:
             user.write({"email": "mask_new@example.com"})
         self.assertNotIn("mask_old_secret", "\n".join(logs.output), "[!] DIAGNOSTIC FOR AI: the failure log must mask the old address.")
