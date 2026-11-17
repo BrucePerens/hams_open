@@ -400,6 +400,16 @@ class TestEnsureKopiaS3Repository(unittest.TestCase):
 
     @patch("main.os.makedirs")
     @patch("main.subprocess.run")
+    def test_00_connect_and_create_both_have_a_timeout(self, mock_run, mock_makedirs):
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="x")
+        with self.assertRaises(ValueError):
+            backup_worker._ensure_kopia_s3_repository(self.config, self.env_vars, self.config_file)
+        self.assertEqual(mock_run.call_count, 2)
+        for call in mock_run.call_args_list:
+            self.assertEqual(call.kwargs.get("timeout"), backup_worker.KOPIA_REPOSITORY_TIMEOUT_SECONDS)
+
+    @patch("main.os.makedirs")
+    @patch("main.subprocess.run")
     def test_01_already_connected_no_create_attempted(self, mock_run, mock_makedirs):
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
         backup_worker._ensure_kopia_s3_repository(

@@ -181,6 +181,11 @@ _KOPIA_CONFIG_DIR = os.environ.get(
 )
 
 
+# A kopia connect/create against an unreachable bucket must not hold this consumer forever (it would stop heartbeating and
+# every later job would wait behind it). subprocess.TimeoutExpired is a SubprocessError, which execute_job reports as a failed job.
+KOPIA_REPOSITORY_TIMEOUT_SECONDS = 300
+
+
 # [@ANCHOR: backup_management:kopia_config_file]
 def _kopia_config_file(config_id):
     return os.path.join(_KOPIA_CONFIG_DIR, f"config_{config_id}.config")
@@ -224,7 +229,8 @@ def _ensure_kopia_s3_repository(config, env_vars, config_file):
 
     connect_cmd = ["kopia", "repository", "connect", "s3"] + base_args
     connect_result = subprocess.run(
-        connect_cmd, capture_output=True, text=True, env=env_vars, check=False
+        connect_cmd, capture_output=True, text=True, env=env_vars, check=False,
+        timeout=KOPIA_REPOSITORY_TIMEOUT_SECONDS,
     )
     if connect_result.returncode == 0:
         logger.info("Kopia S3/B2 repository already connected (bucket=%s)", bucket)
@@ -239,7 +245,8 @@ def _ensure_kopia_s3_repository(config, env_vars, config_file):
 
     create_cmd = ["kopia", "repository", "create", "s3"] + base_args
     create_result = subprocess.run(
-        create_cmd, capture_output=True, text=True, env=env_vars, check=False
+        create_cmd, capture_output=True, text=True, env=env_vars, check=False,
+        timeout=KOPIA_REPOSITORY_TIMEOUT_SECONDS,
     )
     if create_result.returncode != 0:
         # ValueError, not RuntimeError: execute_job's own except tuple
