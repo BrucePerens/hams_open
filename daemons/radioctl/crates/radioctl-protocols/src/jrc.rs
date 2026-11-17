@@ -285,7 +285,11 @@ impl JrcTwin {
         if let Some(digits) = line.strip_prefix('F') {
             let digits = digits.trim_end_matches(['A', 'B']);
             if let Ok(n) = digits.parse::<u64>() {
-                state.freq_a = Hz(if kind == Kind::Nrd525 { n * 10 } else { n });
+                state.freq_a = Hz(if kind == Kind::Nrd525 {
+                    n.saturating_mul(10)
+                } else {
+                    n
+                });
             }
         } else if let Some(code) = line.strip_prefix('D') {
             if let Some(mode) = code
@@ -444,5 +448,16 @@ mod tests {
             "unknown mode ignored"
         );
         assert!(JrcTwin::new(&shipped("aor-ar8000")).is_err());
+    }
+
+    #[test]
+    fn the_twin_survives_a_frequency_that_overflows_when_scaled() {
+        let desc = shipped("jrc-nrd-525");
+        let mut twin = JrcTwin::new(&desc).expect("twin");
+        let mut state = crate::virtual_rig::VirtualRig::from_description(&desc)
+            .expect("rig")
+            .state()
+            .clone();
+        assert!(twin.line(&mut state, "F18446744073709551615").is_empty());
     }
 }
