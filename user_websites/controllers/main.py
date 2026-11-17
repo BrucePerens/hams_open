@@ -1051,6 +1051,15 @@ class UserWebsitesController(http.Controller):
         if not is_owner and not is_group_member and not request.env.is_admin():
             return False
 
+        # A suspended or ineligible site is hidden from visitors and its member cannot publish into it: suspension
+        # unpublishes once, so without this the editor could publish again (the stock /blog index would list it).
+        # Every /my/site route already refuses such an owner the same way. An administrator may still moderate.
+        if not request.env.is_admin():
+            if post_svc.owner_user_id and not post_svc.owner_user_id._website_publicly_visible():
+                return False
+            if post_svc.user_websites_group_id and post_svc.user_websites_group_id.is_suspended_from_websites:
+                return False
+
         # Browsed again through the caller's OWN env (not the elevated service account) --
         # every write below goes through this record, so blog_post.py's own write()
         # override (check_access, the proxy-ownership guard, and the non-admin allowed-
