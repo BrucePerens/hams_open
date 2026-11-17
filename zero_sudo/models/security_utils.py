@@ -1055,7 +1055,6 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         notify_model_invalidation(self.env, "zero_sudo.security.utils")
 
     @api.model
-    @distributed_cache()
     def _get_crypto_secret(self):
         # [@ANCHOR: zero_sudo:COMM_get_crypto_secret]
         # ---
@@ -1063,7 +1062,7 @@ class ZeroSudoSecurityUtils(models.AbstractModel):
         """
         Retrieves the cryptographic secret without requiring .sudo() or database access.
         Checks environment variables first, then a local file, and falls back to config.
-        RAM-cached for performance and to avoid redundant filesystem I/O.
+        Deliberately not @distributed_cache(): that decorator stores the result in Redis, and this is the master key.
         """
         secret = os.environ.get("HAMS_CRYPTO_KEY")  # burn-ignore-env
         if not secret:
