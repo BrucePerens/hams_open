@@ -54,6 +54,15 @@ def _csrf(case):
 
 
 @tagged("post_install", "-at_install")
+class TestOwnerAsciiDigits(BaseCase):
+    def test_huge_digit_strings_are_not_ids_and_do_not_raise(self):
+        # Tests [@ANCHOR: user_websites:COMM_owner_ascii_digits]
+        self.assertTrue(owner_site._is_ascii_digits("2147483647"))
+        self.assertFalse(owner_site._is_ascii_digits("2147483648"))
+        self.assertFalse(owner_site._is_ascii_digits("1" * 5000))
+        self.assertFalse(owner_site._is_ascii_digits("\u00b2"))
+
+
 class TestMemberHtmlSanitizer(BaseCase):
     # [@ANCHOR: test_member_html_sanitize_strips_hostile_markup]
 
