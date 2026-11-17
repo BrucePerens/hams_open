@@ -573,6 +573,12 @@ Parses and checks the sweep arguments of a NanoVNA tool call.
 Returns `Ok((start, stop, points))`. Errors: `Error::Args` for `<k> must be a number`, `start_hz is required`, `stop_hz is required (...)`, `points <p> must be a whole number`, and every `check_range`
 message. Pure. A call with no `stop_hz` is refused at once with its own message (an earlier version defaulted it to `start_hz` and then failed in `check_range`).
 
+### `sweep_file` [@ANCHOR: bench_nanovna_sweep_file]
+
+`fn sweep_file(out_dir: &Path, stamp: &str, calibrated: bool) -> PathBuf`: the path of a sweep's CSV, `<out_dir>/vna_sweep_<stamp>.csv`, or
+`vna_sweep_<stamp>_calibrated.csv` when `calibrated` is true. Pure; it touches no file. `sweep_tool` calls it with one stamp for both files of a sweep, and
+the stamp is unique per sweep, so two sweeps in the same second keep different files.
+
 ### `sweep_tool` [@ANCHOR: bench_nanovna_sweep_tool]
 
 The tool `bench_vna_sweep` for a NanoVNA: sweeps, writes a CSV, and optionally corrects it with a stored calibration.

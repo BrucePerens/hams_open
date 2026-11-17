@@ -591,6 +591,7 @@ async fn a_morse_sender_owns_the_transmitter_and_its_departure_unkeys_the_rig() 
 }
 
 // Tests [@ANCHOR: radioctl_splitter_send_cw]
+// Tests [@ANCHOR: radioctl_splitter_release_when_off_air]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_morse_sender_gives_the_transmitter_up_when_the_message_ends() {
     let (rig, control) = virtual_kx3().await;

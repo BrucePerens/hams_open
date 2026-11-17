@@ -61,6 +61,10 @@ Carries out one parsed client request and returns its outcome. It counts a `requ
 
 Sends Morse `text` on behalf of `client`. Morse puts RF (radio frequency) on the air, so it is treated like a key: the arbiter claim is taken first (`try_key`), and if another client owns the transmitter the call counts a `ptt_conflicts` and returns `Refused` without contacting the rig. Then `Op::SendCw` goes to the rig; if the rig refuses (gate closed, unsupported, link down, no frequency known) the claim is given back with `release`, so a refused send never strands ownership. If it is done, the client keeps ownership, and when that client goes away `cleanup` unkeys the rig. `text` is borrowed and copied into the op. The rig's own transmit watchdog still limits the transmission.
 
+### `async fn release_when_off_air(&self, client: ClientId)` [@ANCHOR: radioctl:radioctl_splitter_release_when_off_air]
+
+Spawned by `send_cw` once the rig accepted the Morse. Every `CW_POLL` (250 ms) it checks the arbiter: if `client` no longer owns the transmitter (an unkey or a disconnect took it) it returns; otherwise it reads the rig's PTT fresh, and when the rig no longer transmits (the message ended, or the rig stopped answering) it releases `client`'s claim and returns. A client that stays connected therefore does not hold the transmitter after its message. It sends nothing to the rig and never keys.
+
 ### `async fn key(&self, client: ClientId) -> Outcome` [@ANCHOR: radioctl:radioctl_splitter_key]
 
 Keys the transmitter for `client` if no other client owns it. It takes the arbiter claim (`try_key`) first; a different current owner gives `Refused` and counts a `ptt_conflicts`, with no traffic to the rig. Then it sends `Op::SetPtt(true)` through the rig handle with source `Splitter`; the rig applies the transmit gate, the permit, the transmit frequency and band checks and the lock. If the rig refuses or fails the claim is released again, so a closed gate or down link leaves no phantom owner. On success the client stays owner until it unkeys, disconnects, or the rig is unkeyed by anyone (the watchdog, another client). Returns `Done` or `Refused`.
