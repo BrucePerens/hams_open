@@ -28,11 +28,40 @@ registry.category("web_tour.tours").add("daemon_key_manager_tour", {
             content: 'Type service account name',
             run: 'edit facility',
         },
-        TourUtils.waitForElement('.o-autocomplete--dropdown-item', 'autocomplete dropdown'),
         {
-            trigger: '.o-autocomplete--dropdown-item',
-            content: 'Click the autocomplete item',
-            run: 'click',
+            // The dropdown first lists the unfiltered results and re-renders when the
+            // search for "facility" returns; clicking the first item races that
+            // re-render under load and can leave the required field empty (save
+            // then never settles). Wait (DOM-mutation driven, no timer) for the
+            // filtered item, click it, then wait for the field to hold the value.
+            trigger: 'div[name="user_id"] input',
+            content: 'Click the filtered autocomplete item once it is rendered',
+            run: function () {
+                return new Promise((resolve) => {
+                    const find = () => Array.from(
+                        document.querySelectorAll('.o-autocomplete--dropdown-item')
+                    ).find((el) => el.textContent.toLowerCase().includes('facility'));
+                    const observer = new MutationObserver(() => {
+                        const item = find();
+                        if (item) {
+                            observer.disconnect();
+                            item.click();
+                            resolve();
+                        }
+                    });
+                    observer.observe(document.body, {childList: true, subtree: true, characterData: true});
+                    const item = find();
+                    if (item) {
+                        observer.disconnect();
+                        item.click();
+                        resolve();
+                    }
+                });
+            },
+        },
+        {
+            trigger: 'div[name="user_id"] input:value("Odoo Facility Service Account")',
+            content: 'Wait until the service account is actually set on the field',
         },
         {
             trigger: 'div[name="env_file_path"] input',
