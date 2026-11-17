@@ -209,7 +209,14 @@ class CloudflareTunnel(models.Model):
         would expose its hostnames to a daemon port) so one guard runs on every push.
         """
         self.ensure_one()
-        return []
+        # cloudflared refuses a list whose catch-all (no hostname or "*", and no path) is not the last rule, and
+        # every rule after one could never match; refuse before the push so the message names the route.
+        return [
+            f"rule {index + 1} ({rule['service']}) matches every request but is not the last rule, so the rules "
+            "after it would never apply; give it a hostname or a path"
+            for index, rule in enumerate(ingress[:-1])
+            if rule.get("hostname", "*") == "*" and not rule.get("path")
+        ]
 
     # [@ANCHOR: cloudflare:COMM_tunnel_action_push_configuration]
     @public_rpc

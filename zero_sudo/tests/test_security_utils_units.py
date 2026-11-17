@@ -588,6 +588,9 @@ class TestSecurityUtilsUnits(SafePatchMixin, BaseCase):
 
     def test_secret_params_skip_the_cached_reader(self):
         # Tests [@ANCHOR: zero_sudo:COMM_get_system_param]
+        # Tests [@ANCHOR: zero_sudo:is_secret_param_key]
+        # Tests [@ANCHOR: zero_sudo:read_system_param]
+        # Tests [@ANCHOR: zero_sudo:read_system_param_cached]
         calls = self._uncached_params()
         util, log, asked = self._param()
         log.params["rabbitmq.pass"] = "value"

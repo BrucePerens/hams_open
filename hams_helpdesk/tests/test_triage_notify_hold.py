@@ -263,9 +263,25 @@ class TestTriageNotifyHold(HamsTransactionCase):
         )
         self.assertEqual(forged.notify_state, "sent")
 
-    def test_14_a_huge_digit_string_for_the_hold_is_the_maximum(self):
+    def test_15_a_huge_digit_string_for_the_hold_is_the_maximum(self):
         # Tests [@ANCHOR: hams_helpdesk:triage_hold_seconds]
         key = "hams_helpdesk.triage_notify_hold_seconds"
         for value, expected in (("9" * 5000, 300), ("9" * 12, 300), ("30", 30), ("x", 0)):
             self.settings[key] = value
             self.assertEqual(self.Ticket._triage_hold_seconds(), expected, value[:12])
+
+    def test_14_a_held_ticket_a_person_closed_is_never_announced(self):
+        # Tests [@ANCHOR: hams_helpdesk:cron_release_held_notifications]
+        # Tests [@ANCHOR: hams_helpdesk:triage_release_notification]
+        self._hold(20)
+        for stage in ("resolved", "closed"):
+            ticket = self._new_ticket("Closed by a person: %s" % stage)
+            ticket.write({"stage": stage})
+            self.assertEqual(ticket.notify_state, "suppressed", "no longer re-selected by the release cron")
+            watch = NotificationWatch(self)
+            ticket.write({"notify_state": "held", "notify_release_at": fields.Datetime.now() - timedelta(seconds=1)})
+            self.assertEqual(self.Ticket._cron_release_held_notifications(), 0)
+            self.assertEqual(ticket.notify_state, "suppressed")
+            self._assert_silent(watch, "a ticket a person already closed is not announced when the hold ends")
+            ticket._triage_release_notification()
+            self._assert_silent(watch, "an explicit release leaves it alone too")

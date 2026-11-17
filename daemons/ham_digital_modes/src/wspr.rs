@@ -951,6 +951,37 @@ mod tests {
     }
 
     #[test]
+    // Tests [@ANCHOR: SplitMix64::next_u64]
+    // Tests [@ANCHOR: wspr_split_mix64_struct]
+    fn splitmix64_matches_the_published_outputs_for_seed_zero() {
+        // The reference splitmix64 (Vigna) from seed 0: its first three outputs.
+        let mut rng = SplitMix64(0);
+        assert_eq!(rng.next_u64(), 0xE220A8397B1DCDAF);
+        assert_eq!(rng.next_u64(), 0x6E789E6AA1B965F4);
+        assert_eq!(rng.next_u64(), 0x06C45D188009454F);
+    }
+
+    #[test]
+    // Tests [@ANCHOR: SplitMix64::next_gaussian]
+    fn next_gaussian_is_finite_with_mean_zero_and_unit_deviation() {
+        let mut rng = SplitMix64(12345);
+        let n = 20_000;
+        let draws: Vec<f64> = (0..n).map(|_| rng.next_gaussian()).collect();
+        assert!(draws.iter().all(|x| x.is_finite()));
+        let mean = draws.iter().sum::<f64>() / n as f64;
+        let variance = draws.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / n as f64;
+        assert!(mean.abs() < 0.05, "mean {mean}");
+        assert!(
+            (variance.sqrt() - 1.0).abs() < 0.05,
+            "deviation {}",
+            variance.sqrt()
+        );
+        // The same seed is the same sequence.
+        let mut again = SplitMix64(12345);
+        assert_eq!(again.next_gaussian(), draws[0]);
+    }
+
+    #[test]
     // Tests [@ANCHOR: add_awgn]
     // Tests [@ANCHOR: SplitMix64::next_u64]
     // Tests [@ANCHOR: SplitMix64::next_gaussian]

@@ -46,6 +46,8 @@ class TestListenerConfigAndSocket(HamsTransactionCase):
     # Tests [@ANCHOR: hams_rpc_guard:peer_of]
     # Tests [@ANCHOR: hams_rpc_guard:user_names]
     # Tests [@ANCHOR: hams_rpc_guard:group_names]
+    # Tests [@ANCHOR: hams_rpc_guard:user_name]
+    # Tests [@ANCHOR: hams_rpc_guard:group_name]
 
     def test_listener_config_values_and_messages(self):
         cfg = unix_listener.listener_config

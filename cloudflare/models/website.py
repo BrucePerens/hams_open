@@ -1,24 +1,13 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0-or-later.
 from odoo import models, fields, api, _
-from odoo.addons.distributed_redis_cache.redis_cache import (
-    distributed_cache,
-    notify_model_invalidation,
-)
+from odoo.addons.distributed_redis_cache.redis_cache import notify_model_invalidation
 from odoo.exceptions import UserError
 import logging
 from cryptography.fernet import InvalidToken
 
-# Fields whose value _get_cloudflare_credentials() (a @distributed_cache()'d
-# method) reads, directly or via the encrypted-field compute chain above it.
-# A plain website.write() bypasses that decorator entirely -- it has no idea
-# these particular fields feed a cross-worker Redis-backed cache with a 24h
-# TTL (see redis_cache.py's `r.setex(cache_key, 86400, ...)`), so without the
-# explicit bust below, a credential change here is invisible to every OTHER
-# worker (and to a fresh `odoo shell` once Redis is reachable) for up to a
-# day, or until the process restarts -- exactly the kind of "looks like it
-# worked, silently didn't" failure this module's own write path already got
-# fixed for once (see _crypt_field's history above).
+# Fields whose value _get_cloudflare_credentials() reads, directly or via the encrypted-field compute chain above it.
+# That method is no longer cached in Redis, so the notify below only drops other cached results for the website model.
 _CLOUDFLARE_CREDENTIAL_FIELDS = frozenset({
     "cloudflare_api_token",
     "cloudflare_api_token_crypt",
@@ -251,7 +240,7 @@ class WebsiteCloudflare(models.Model):
         self._inverse_encrypted_field("cloudflare_turnstile_secret", "cloudflare_turnstile_secret_crypt")
 
     # [@ANCHOR: cloudflare:COMM_get_cloudflare_credentials]
-    @distributed_cache()
+    # Deliberately not @distributed_cache(): that stores the result in Redis for 24 hours, and this returns the API token.
     def _get_cloudflare_credentials(self, override_svc_uid=None):
         """
         Returns the API Token and Zone ID for this specific website.

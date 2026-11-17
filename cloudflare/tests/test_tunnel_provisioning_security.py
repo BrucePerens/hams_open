@@ -569,3 +569,18 @@ class TestTunnelProvisioningSecurity(HamsTransactionCase):
                 with self.assertRaises(ValidationError), self.env.cr.savepoint():
                     tunnel.catch_all_service = bad
                     tunnel.flush_recordset()
+
+    def test_a_route_that_matches_everything_before_the_end_is_refused(self):
+        # Tests [@ANCHOR: cloudflare:COMM_tunnel_ingress_problems]
+        tunnel = self._make_push_test_tunnel("Early Catch All", "https://early-catch-all.example.com")
+        self.env["cloudflare.tunnel.route"].create(
+            {"tunnel_id": tunnel.id, "service_url": "http://localhost:8070", "sequence": 1}  # burn-ignore-cloudflared-ingress
+        )
+        mock_push = self.safe_patch(
+            "odoo.addons.cloudflare.models.tunnel.update_cfd_tunnel_configuration",
+            return_value=(True, "ok"),
+        )
+        with self.assertRaises(UserError) as caught:
+            tunnel.action_push_configuration()
+        self.assertIn("not the last rule", str(caught.exception))
+        mock_push.assert_not_called()
