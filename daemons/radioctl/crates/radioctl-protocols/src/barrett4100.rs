@@ -68,6 +68,8 @@ enum Expect {
     Writes(u8),
     /// The receive frequency.
     Frequency,
+    /// This many answers to the rest of a refused write, to be dropped.
+    Discard(u8),
 }
 
 /// The Barrett 4100 client engine.
@@ -155,6 +157,9 @@ impl ProtocolEngine for Barrett4100Engine {
                     if !text.starts_with('s') {
                         // The refusal ends the operation; the answers still owed to it go.
                         out.push(Inbound::Nak);
+                        if n > 1 {
+                            self.expect.push_front(Expect::Discard(n - 1));
+                        }
                     } else if n > 1 {
                         self.expect.push_front(Expect::Writes(n - 1));
                     } else {
@@ -170,6 +175,11 @@ impl ProtocolEngine for Barrett4100Engine {
                             out.push(Inbound::Observation(Observation::Frequency(Vfo::A, Hz(hz))))
                         }
                         None => out.push(Inbound::Unrecognised(raw)),
+                    }
+                }
+                Some(Expect::Discard(n)) => {
+                    if n > 1 {
+                        self.expect.push_front(Expect::Discard(n - 1));
                     }
                 }
                 None => out.push(Inbound::Unrecognised(raw)),
@@ -408,5 +418,25 @@ mod tests {
             .expect("tunes");
         t.front_panel(Panel::Ptt(false)).expect("ptt");
         assert!(t.front_panel(Panel::Signal(3)).is_err());
+    }
+
+    #[test]
+    fn a_refused_frequency_write_drops_the_answer_to_its_second_command() {
+        let desc = shipped();
+        let mut e = Barrett4100Engine::new(desc).expect("engine");
+        e.encode(&Op::SetFrequency(Vfo::A, Hz(7_100_000)))
+            .expect("encodes");
+        // The session answer, then a refusal of the first write and of the second.
+        assert!(e.feed(&frame("s"), T0).is_empty());
+        assert_eq!(e.feed(&frame("e"), T0), vec![Inbound::Nak]);
+        assert!(e.feed(&frame("e"), T0).is_empty(), "owed answer is dropped");
+        e.encode(&Op::GetFrequency(Vfo::A)).expect("encodes");
+        assert_eq!(
+            e.feed(&frame("gRF7100000"), T0),
+            vec![Inbound::Observation(Observation::Frequency(
+                Vfo::A,
+                Hz(7_100_000)
+            ))]
+        );
     }
 }
