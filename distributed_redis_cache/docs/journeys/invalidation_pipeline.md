@@ -38,3 +38,11 @@ Full entries for the anchors named in steps 1 and 4.
 **Effects.** One pipeline (MULTI/EXEC) does `PUBLISH odoo_cache_invalidation_bus <payload>` and `INCR global_cache_invalidation_counter`. No Odoo worker subscribes to the channel (only the daemon's tests do); workers notice the counter change when they poll it. Runs as its own asyncio task per notification (see `distributed_redis_cache:COMM_postgres_notify_handler`); Redis calls time out after 10 seconds. Security: the payload is validated before use and never executed.
 
 **See also.** Test `tests/test_cache_manager_real.py`; `distributed_redis_cache:COMM_poll_and_clear_local_cache` for the reader.
+
+### `distributed_redis_cache:COMM_cache_manager_bump_counter_on_connect` [@ANCHOR: distributed_redis_cache:COMM_cache_manager_bump_counter_on_connect]
+
+**Purpose.** Notifications sent while the daemon was not listening (a restart, a dropped Postgres connection) were never published, so no worker would know its process-local cache may be stale.
+
+**Call interface.** `async _bump_invalidation_counter()` in `daemons/cache_manager.py`, called after every successful LISTEN registration. It `INCR`s `global_cache_invalidation_counter`; a Redis error is logged and ignored.
+
+**Effects.** Every worker flushes its L1 cache on its next poll after the daemon (re)connects. `invalidate_model_cache` also bumps the counter after deleting the Redis keys, so a worker that polled between the writer's commit and that delete flushes again.

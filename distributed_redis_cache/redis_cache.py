@@ -375,6 +375,11 @@ def invalidate_model_cache(env, model_name, local_only=False):
                         keys = []
                 if keys:
                     r.delete(*keys)
+                # Bump the counter AFTER the delete. The cache manager bumps it when the writer's pg_notify
+                # arrives, which can be before this post-commit delete has run: a worker that polls in between
+                # flushes its L1, re-reads the still-present Redis entry, and keeps the stale value in L1
+                # until the next invalidation. This bump makes every worker flush again once the delete is done.
+                r.incr("global_cache_invalidation_counter")
             except redis.AuthenticationError as e:
                 # [@ANCHOR: distributed_redis_cache:COMM_invalidation_auth_failure_aborts_upgrade]
                 # A hand-run `odoo -u` on production without the service's Redis credentials

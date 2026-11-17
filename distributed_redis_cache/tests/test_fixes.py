@@ -314,6 +314,8 @@ class TestDistributedRedisCacheFixes(HamsTransactionCase):
         class FakeRedisClient:
             async def ping(self):
                 return True
+            async def incr(self, key):
+                return 1
             async def aclose(self):
                 pass
 
