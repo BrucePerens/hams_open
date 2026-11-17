@@ -135,16 +135,19 @@ class TestCloudflareTenantKey(HamsTransactionCase):
         return str(cm.exception)
 
     def test_missing_key_error(self):
+        # Tests [@ANCHOR: cloudflare:COMM_tenant_key_fernet_failure]
         msg = self._store_error("")
         self.assertIn("no deployment-wide", msg)
 
     def test_malformed_key_error(self):
+        # Tests [@ANCHOR: cloudflare:COMM_tenant_key_fernet_failure]
         msg = self._store_error("not-a-fernet-key")
         self.assertIn("malformed", msg)
         self.assertNotIn("no deployment-wide", msg)
         self.assertNotIn("not-a-fernet-key", msg)
 
     def test_unwrap_failed_error(self):
+        # Tests [@ANCHOR: cloudflare:COMM_tenant_key_fernet_failure]
         self.env["cloudflare.tenant.key"].create({
             "company_id": self.company_a.id,
             "wrapped_key": Fernet(Fernet.generate_key()).encrypt(b"x").decode(),

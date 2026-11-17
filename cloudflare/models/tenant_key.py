@@ -100,6 +100,7 @@ class CloudflareTenantKey(models.Model):
             )
             return None
 
+    # [@ANCHOR: cloudflare:COMM_tenant_key_fernet_failure]
     @api.model
     def _fernet_failure(self, company):
         """Why `_get_or_create_fernet` returned None: "missing" (no deployment-wide secret), "malformed" (secret is
