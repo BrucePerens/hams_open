@@ -208,7 +208,7 @@ impl AorDialect {
             SignalStyle::StatusHex => u16::from_str_radix(digits(3)?, 16).ok(),
             SignalStyle::Lb => {
                 let db: i32 = digits(3)?.parse().ok()?;
-                u16::try_from((db + SR2200_OFFSET).max(0)).ok()
+                u16::try_from(db.saturating_add(SR2200_OFFSET).max(0)).ok()
             }
         }
     }
@@ -439,5 +439,16 @@ mod tests {
         assert_eq!(twin.line(&mut state, "RF0145500050"), b"\n\r");
         assert_eq!(state.freq_a, Hz(145_500_050));
         assert!(AorTwin::new(&shipped("yaesu-ft-817")).is_err());
+    }
+
+    #[test]
+    fn an_sr2200_signal_at_the_integer_limit_does_not_overflow() {
+        let mut sr = engine(shipped("aor-sr2200")).expect("engine");
+        sr.encode(&Op::GetSignal).expect("get");
+        // 2147483647 dB offset by 73 must not wrap or panic; it is out of range, so unrecognised.
+        assert!(matches!(
+            sr.feed(b"\nLB 2147483647\r", T0).as_slice(),
+            [Inbound::Unrecognised(_)]
+        ));
     }
 }
