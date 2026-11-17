@@ -281,6 +281,16 @@ class TestUntrustedTextHtmlSanitizer(BaseCase):
 
 @tagged("post_install", "-at_install")
 class TestUntrustedTextMailAndAiHelpers(BaseCase):
+    def test_html_detection_is_linear_on_a_long_run_of_unclosed_tags(self):
+        # Tests [@ANCHOR: hams_helpdesk:untrusted_looks_like_html]
+        # A stranger's plain-text mail of "<a<a<a..." made the old pattern rescan to the end of the text from every "<":
+        # quadratic, hours for a few MB. No ">" anywhere, so it is not HTML; one ">" at the end, so it is.
+        run = "<a" * 2_000_000
+        self.assertFalse(ut.looks_like_html(run))
+        self.assertTrue(ut.looks_like_html(run + ">"))
+        self.assertTrue(ut.looks_like_html("< / b >"))
+        self.assertFalse(ut.looks_like_html("<" * 400_000))
+
     def test_01_html_detection_headers_filenames_and_findings_json(self):
         # Tests [@ANCHOR: hams_helpdesk:untrusted_looks_like_html]
         # Tests [@ANCHOR: hams_helpdesk:untrusted_sanitize_any]
