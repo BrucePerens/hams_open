@@ -1,5 +1,5 @@
 /** @odoo-module **/
-import { Component, useState, onMounted } from "@odoo/owl";
+import { Component, useState, onMounted, onWillUnmount } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
 
@@ -19,6 +19,11 @@ export class LogViewer extends Component {
 
         onMounted(async () => {
             await this.fetchFiles();
+        });
+
+        // Closing the page ends a search still polling: a newer sequence number makes it stop at its next check.
+        onWillUnmount(() => {
+            this.searchSeq = (this.searchSeq || 0) + 1;
         });
     }
 
