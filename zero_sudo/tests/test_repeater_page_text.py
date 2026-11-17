@@ -192,6 +192,7 @@ class TestUnitAmounts(BaseCase):
         assert_scales_linearly(self, lambda n: list(_unit_amounts("1" * n + " W")), 2000)
 
 
+@tagged("post_install", "-at_install")
 class TestRepeaterPageStructure(BaseCase):
     # Tests [@ANCHOR: zero_sudo:repeater_page_text_section_scope_for_frequency]
 
