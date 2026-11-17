@@ -78,7 +78,6 @@ class TestSiteEligibilityHook(HamsHttpCase):
         # Tests [@ANCHOR: user_websites:fn_ir_http_serve_page_eligibility]
         # Tests [@ANCHOR: user_websites:field_hidden_by_eligibility]
         # Tests [@ANCHOR: user_websites:fn_eligibility_hide_site_content]
-        # Tests [@ANCHOR: user_websites:fn_eligibility_reconcile_one_site]
         # Tests [@ANCHOR: user_websites:fn_eligibility_show_site_content]
         with self._gaps(GAP):
             self.assertEqual(self.url_open("/eligowner", allow_redirects=False).status_code, 404)
