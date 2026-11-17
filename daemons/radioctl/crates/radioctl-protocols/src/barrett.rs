@@ -122,6 +122,8 @@ enum Pending {
     Ptt,
     /// This many `OK` answers.
     Ack(usize),
+    /// This many answers to the rest of a refused write, to be dropped.
+    Discard(usize),
 }
 
 /// The Barrett client engine.
@@ -271,13 +273,24 @@ impl ProtocolEngine for BarrettEngine {
                         vec![Inbound::Ack]
                     }
                 }
-                (Pending::Ack(_), _) => {
+                (Pending::Ack(n), _) => {
                     self.pending = Pending::Nothing;
                     // A refused write is not on the radio: forget it.
                     if let Some(chan) = self.writing.take() {
                         self.written.remove(&chan);
                     }
+                    if n > 1 {
+                        self.pending = Pending::Discard(n - 1);
+                    }
                     vec![Inbound::Nak]
+                }
+                (Pending::Discard(n), _) => {
+                    self.pending = if n > 1 {
+                        Pending::Discard(n - 1)
+                    } else {
+                        Pending::Nothing
+                    };
+                    Vec::new()
                 }
                 (Pending::Frequency(vfo), t) => {
                     self.pending = Pending::Nothing;
@@ -616,5 +629,25 @@ mod tests {
             ));
             assert_eq!(t.feed(b"ZZ\r\r", T0), frame("ERROR"));
         }
+    }
+
+    #[test]
+    fn a_refused_first_write_drops_the_answer_owed_to_the_second() {
+        let mut e = BarrettEngine::new(shipped("barrett-2050")).expect("engine");
+        e.encode(&Op::SetFrequency(Vfo::A, Hz(7_100_000)))
+            .expect("encodes");
+        assert_eq!(e.feed(&frame("ERROR"), T0), vec![Inbound::Nak]);
+        assert!(
+            e.feed(&frame("ERROR"), T0).is_empty(),
+            "owed answer dropped"
+        );
+        e.encode(&Op::GetFrequency(Vfo::A)).expect("encodes");
+        assert_eq!(
+            e.feed(&frame("7100000"), T0),
+            vec![Inbound::Observation(Observation::Frequency(
+                Vfo::A,
+                Hz(7_100_000)
+            ))]
+        );
     }
 }
