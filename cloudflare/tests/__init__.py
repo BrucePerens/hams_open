@@ -19,6 +19,7 @@ from . import test_tunnel_provisioning_security
 from . import test_tunnel_multi_website
 from . import test_tunnel_credential_refusals
 from . import test_tunnel_unique
+from . import test_tunnel_ssh_hostname
 from . import test_cloudflare_systemd
 from . import test_waf_management
 from . import test_hooks
