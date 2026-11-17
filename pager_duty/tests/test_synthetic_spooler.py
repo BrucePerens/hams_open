@@ -300,6 +300,11 @@ class TestSyntheticSpooler(HamsTransactionCase):
                     },
                     f,
                 )
+            # main() prefers PAGER_CONFIG_PATH, then /opt/hams/etc/pager_config.json (present on the gate box): point it at this
+            # throwaway config or the loop never sees a "fast" check and spins forever.
+            env_patch = patch.dict(os.environ, {"PAGER_CONFIG_PATH": os.path.join(tmpdir, "pager_config.json")})
+            env_patch.start()
+            self.addCleanup(env_patch.stop)
             self.safe_patch(
                 "odoo.addons.pager_duty.daemon.pager_synthetic_spooler.__file__",
                 os.path.join(tmpdir, "pager_synthetic_spooler.py"),
