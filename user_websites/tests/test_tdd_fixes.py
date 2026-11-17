@@ -39,16 +39,17 @@ class TestTDDFixesORM(HamsTransactionCase):
         self.addCleanup(redis_client.delete, key)
         redis_client.set(key, 7)
         before = page.view_count
-        redis_gone_at_sql = []
+        redis_present_at_sql = []
         real_execute = type(self.env.cr).execute
 
         def spy(cr, query, *args, **kwargs):
             if "user_websites_flush_view_counters" in str(query):
-                redis_gone_at_sql.append(redis_client.exists(key) == 0)
+                redis_present_at_sql.append(redis_client.exists(key) == 1)
             return real_execute(cr, query, *args, **kwargs)
 
         self.safe_patch_object(type(self.env.cr), "execute", spy)
         self.env["website.page"]._flush_redis_view_counters()
-        self.assertEqual(redis_gone_at_sql, [True], "the Redis counter is drained before PostgreSQL is written")
+        self.assertEqual(redis_present_at_sql, [True], "the Redis counter is drained only after PostgreSQL is written")
+        self.assertEqual(redis_client.exists(key), 0)
         page.invalidate_recordset(["view_count"])
         self.assertEqual(page.view_count, before + 7)

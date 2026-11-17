@@ -61,6 +61,7 @@ from . import test_open_source_defaults
 from . import test_image_cap_race
 from . import test_post_quota_race
 from . import test_page_quota_race
+from . import test_view_counter_flush_failure
 from . import test_appeal_race
 from . import test_user_delete_cleanup
 from . import test_appeal_survives_delete
