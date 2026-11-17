@@ -236,7 +236,9 @@ request by `ir.http._authenticate` and by the Unix-socket application.
 
 **Returns.** `"legacy-rpc"` for `/jsonrpc` and `/jsonrpc/` (Odoo's routing map has `strict_slashes=False`, so the
 trailing-slash spelling reaches the same controller and must be gated) and anything under `/xmlrpc/`; `"json2"` for
-`/json/2` and anything under `/json/2/`; `None` otherwise (`/xmlrpc.php`, `/jsonrpc2`, `/json/21`, `/json/version`, `/web/dataset/...`).
+`/json/2`, `/json/1` and anything under `/json/2/` or `/json/1/` (`/json/1/...` is the bearer-key route of Odoo's web addon:
+it returns record data of an action, and is off unless the system parameter `web.json.enabled` is set; gated here as
+defence in depth); `None` otherwise (`/xmlrpc.php`, `/jsonrpc2`, `/json/21`, `/json/version`, `/web/dataset/...`).
 **Errors.** None. **Concurrency.** Pure. **Test:** `test_endpoint_gate.TestEndpointFamily`.
 
 ### `hams_rpc_guard:parse_address`

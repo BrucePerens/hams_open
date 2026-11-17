@@ -112,12 +112,13 @@ def endpoint_family(path):
 
     The real routes are `/jsonrpc` (also `/jsonrpc/`: Odoo's routing map is built with `strict_slashes=False`, so the
     trailing-slash spelling reaches the same controller), anything under `/xmlrpc/` (with the separator: `/xmlrpc.php`,
-    the WordPress probe scanners send, is not one) and anything under `/json/2`."""
+    the WordPress probe scanners send, is not one), and anything under `/json/2` or `/json/1` (the bearer-key route of
+    Odoo's web addon, which returns record data and is off unless `web.json.enabled` is set)."""
     if not isinstance(path, str):
         return None
     if path in ("/jsonrpc", "/jsonrpc/") or path.startswith("/xmlrpc/"):
         return FAMILY_LEGACY
-    if path == "/json/2" or path.startswith("/json/2/"):
+    if path in ("/json/2", "/json/1") or path.startswith(("/json/2/", "/json/1/")):
         return FAMILY_JSON2
     return None
 
