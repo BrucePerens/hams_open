@@ -6,6 +6,7 @@ Nothing here contacts a real service: urlopen and SMTP are replaced.
 """
 # Tests [@ANCHOR: daemon_report_incident]
 # Tests [@ANCHOR: pager_duty:fallback_notify]
+# Tests [@ANCHOR: daemon_execute_check]
 # Tests [@ANCHOR: pager_duty:outbound_due]
 # Tests [@ANCHOR: pager_duty:outbound_failed]
 # Tests [@ANCHOR: pager_duty:outbound_recovered]
@@ -86,6 +87,24 @@ class OutboundThrottle(unittest.TestCase):
             for _ in range(4):
                 gm.report(client, "Disk", "full")
         self.assertEqual(smtp.call_count, 1)
+
+    def test_smtp_fallback_on_port_465_uses_implicit_tls(self):
+        client = mock.Mock()
+        client.execute.side_effect = ConnectionError("odoo down")
+        with mock.patch.dict(os.environ, {"SMTP_PORT": "465"}), mock.patch.object(gm.smtplib, "SMTP") as plain, mock.patch.object(
+            gm.smtplib, "SMTP_SSL"
+        ) as tls, mock.patch.object(gm.urllib.request, "urlopen"):
+            gm.report(client, "Disk", "full")
+        plain.assert_not_called()
+        self.assertEqual(tls.call_count, 1)
+        tls.return_value.__enter__.return_value.starttls.assert_not_called()
+
+    def test_smtp_dryrun_on_port_465_uses_implicit_tls(self):
+        with mock.patch.object(gm.smtplib, "SMTP") as plain, mock.patch.object(gm.smtplib, "SMTP_SSL") as tls:
+            ok, _msg = gm.execute_check({"type": "smtp_dryrun", "target": "smtp.invalid", "port": 465})
+        self.assertTrue(ok)
+        plain.assert_not_called()
+        tls.return_value.__enter__.return_value.starttls.assert_not_called()
 
 
 if __name__ == "__main__":
