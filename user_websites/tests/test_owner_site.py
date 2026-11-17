@@ -63,6 +63,7 @@ class TestOwnerAsciiDigits(BaseCase):
         self.assertFalse(owner_site._is_ascii_digits("\u00b2"))
 
 
+@tagged("post_install", "-at_install")
 class TestMemberHtmlSanitizer(BaseCase):
     # [@ANCHOR: test_member_html_sanitize_strips_hostile_markup]
 
