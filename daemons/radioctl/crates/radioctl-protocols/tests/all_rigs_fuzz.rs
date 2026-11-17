@@ -21,6 +21,9 @@ use radioctl_protocols::virtual_rig::VirtualRig;
 
 const NOW: Duration = Duration::from_secs(5);
 
+/// Longest mutated reply or request a case feeds (the runs-of-one-byte test already goes to 70 000).
+const MAX_MUTATED: usize = 70_000;
+
 fn rigs() -> &'static Vec<RigDescription> {
     static CACHE: OnceLock<Vec<RigDescription>> = OnceLock::new();
     CACHE.get_or_init(|| {
@@ -87,8 +90,13 @@ fn mutate(mut bytes: Vec<u8>, m: &Mutation) -> Vec<u8> {
             bytes.splice(i..i, extra.iter().copied());
         }
         Mutation::Duplicate(times) => {
+            // Up to three of these stack (200 x 200 x 200 copies); the total is capped so a
+            // case costs milliseconds, not minutes, whatever the seed.
             let once = bytes.clone();
             for _ in 0..*times {
+                if bytes.len() + once.len() > MAX_MUTATED || once.is_empty() {
+                    break;
+                }
                 bytes.extend_from_slice(&once);
             }
         }
