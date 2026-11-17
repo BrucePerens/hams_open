@@ -1073,7 +1073,11 @@ class HelpdeskTicket(models.Model):
         """The end of the hold window, run every minute by the helpdesk service account. A held ticket whose window has
         ended is released whatever the agent did (fail open: the agent may be down, and a real request must not be lost);
         one that has meanwhile been put in the Spam stage is suppressed instead. Returns the number released."""
-        self._triage_sweep_stale()
+        try:
+            with self.env.cr.savepoint():
+                self._triage_sweep_stale()
+        except Exception:  # audit-ignore-catch-all: housekeeping must not keep real requests held; logged every minute until fixed; Tested by [@ANCHOR: hams_helpdesk:cron_release_held_notifications]
+            _logger.exception("The stale-ticket sweep failed; releasing the held notifications anyway.")
         held = self.search(
             [("notify_state", "=", "held"), ("notify_release_at", "<=", fields.Datetime.now())], limit=500
         )
