@@ -303,7 +303,11 @@ impl RsHfTwin {
             return self.status_line(state);
         }
         if let Some(digits) = line.strip_prefix("*F") {
-            if let Ok(units) = digits.parse::<u64>() {
+            if let Some(units) = digits
+                .parse::<u64>()
+                .ok()
+                .filter(|units| *units <= XK852_MAX_UNITS)
+            {
                 state.freq_a = Hz(units * 10);
             }
             return self.status_line(state);
@@ -457,6 +461,23 @@ mod tests {
     // Tests [@ANCHOR: radioctl_rshf_twin_reply]
     // Tests [@ANCHOR: radioctl_rshf_twin_status_line]
     // Tests [@ANCHOR: radioctl_rshf_twin_line]
+    // Tests [@ANCHOR: radioctl_rshf_twin_xk852_line]
+    #[test]
+    fn the_xk852_twin_ignores_a_frequency_too_big_to_be_one() {
+        let desc = shipped("rs-xk852");
+        let mut twin = RsHfTwin::new(&desc).expect("twin");
+        let mut state = fresh_state(&desc);
+        twin.line(&mut state, "*F0707400");
+        for line in [
+            "*F99999999999999999999",
+            "*F18446744073709551615",
+            "*F10000000",
+        ] {
+            twin.line(&mut state, line);
+            assert_eq!(state.freq_a, Hz(7_074_000), "{line} is ignored");
+        }
+    }
+
     // Tests [@ANCHOR: radioctl_rshf_twin_xk852_line]
     #[test]
     fn the_twins_answer_as_the_radios_are_documented_to() {
