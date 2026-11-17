@@ -885,9 +885,19 @@ def sanitize_html(value, limit=None, location="html"):
     return Result(html_out, plain, findings, removed, _score(findings))
 
 
+_TAG_START = re.compile(r"<\s*/?\s*[a-zA-Z!]")
+
+
 # [@ANCHOR: hams_helpdesk:untrusted_looks_like_html]
 def looks_like_html(value):
-    return isinstance(value, str) and bool(re.search(r"<\s*/?\s*[a-zA-Z!][^>]*>|<!--", value))
+    if not isinstance(value, str):
+        return False
+    # Same test as the one pattern `<\s*/?\s*[a-zA-Z!][^>]*>|<!--`, in two linear steps: that pattern rescanned to the end of the
+    # text from every "<", so a long run of "<a<a<a" took hours. The first tag start decides: when no ">" follows it, none does.
+    if "<!--" in value:
+        return True
+    start = _TAG_START.search(value)
+    return start is not None and ">" in value[start.end():]
 
 
 # [@ANCHOR: hams_helpdesk:untrusted_sanitize_any]

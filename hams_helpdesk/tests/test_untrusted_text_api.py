@@ -8,6 +8,8 @@ pins what each returns, so a change to one of them fails here with the function 
 import base64
 import email
 import email.policy
+import random
+import re
 from email.message import EmailMessage
 
 from odoo.tests.common import BaseCase, tagged
@@ -281,6 +283,57 @@ class TestUntrustedTextHtmlSanitizer(BaseCase):
 
 @tagged("post_install", "-at_install")
 class TestUntrustedTextMailAndAiHelpers(BaseCase):
+    def test_html_detection_does_one_linear_pass_not_a_rescan_per_tag(self):
+        # Tests [@ANCHOR: hams_helpdesk:untrusted_looks_like_html]
+        # A stranger's plain-text mail of "<a<a<a..." made the old pattern rescan to the end of the text from every "<":
+        # quadratic, hours for a few MB. Deterministic structural check, no clock: record every regex use inside the function
+        # and require at most one, with no "[^>]*" tail (the construct that rescans from each tag start).
+        used = []
+
+        class Spy:
+            def __init__(self, real):
+                self.real = real
+
+            def search(self, text, *args, **kwargs):  # a compiled pattern
+                used.append(self.real.pattern)
+                return self.real.search(text, *args, **kwargs)
+
+        class ReSpy:  # the re module
+            def __getattr__(self, name):
+                return getattr(re, name)
+
+            def search(self, pattern, text, *args, **kwargs):
+                used.append(getattr(pattern, "pattern", pattern))
+                return re.search(pattern, text, *args, **kwargs)
+
+        real_re, real_tag = ut.re, getattr(ut, "_TAG_START", None)
+        ut.re = ReSpy()
+        if real_tag is not None:
+            ut._TAG_START = Spy(real_tag)
+        try:
+            ut.looks_like_html("<a" * 1000)
+        finally:
+            ut.re = real_re
+            if real_tag is not None:
+                ut._TAG_START = real_tag
+        self.assertLessEqual(len(used), 1, used)
+        for pattern in used:
+            self.assertNotIn("[^>]*", pattern)
+
+    def test_html_detection_matches_the_old_pattern_on_random_text(self):
+        # Tests [@ANCHOR: hams_helpdesk:untrusted_looks_like_html]
+        old = re.compile(r"<\s*/?\s*[a-zA-Z!][^>]*>|<!--")
+        rng = random.Random(2787)
+        alphabet = ["<", ">", "a", "!", "-", "/", " ", "x", "<!--", "\n"]
+        for _ in range(200_000):
+            text = "".join(rng.choice(alphabet) for _ in range(rng.randint(0, 12)))
+            self.assertEqual(ut.looks_like_html(text), bool(old.search(text)), repr(text))
+        run = "<a" * 2_000
+        self.assertFalse(ut.looks_like_html(run))
+        self.assertTrue(ut.looks_like_html(run + ">"))
+        self.assertFalse(ut.looks_like_html("<" * 400))
+        self.assertFalse(ut.looks_like_html(None))
+
     def test_01_html_detection_headers_filenames_and_findings_json(self):
         # Tests [@ANCHOR: hams_helpdesk:untrusted_looks_like_html]
         # Tests [@ANCHOR: hams_helpdesk:untrusted_sanitize_any]
