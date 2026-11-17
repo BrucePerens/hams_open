@@ -30,7 +30,7 @@ function stubApi(replies) {
 /** Lets the search's one-second waits pass on the fake clock until it has finished. */
 async function finish(promise) {
     let done = false;
-    promise.then(() => { done = true; });
+    promise.then(() => { done = true; return true; }).catch(() => { done = true; });
     for (let second = 0; second < 40 && !done; second++) {
         await animationFrame();
         await advanceTime(1000);

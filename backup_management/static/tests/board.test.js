@@ -39,7 +39,7 @@ async function mountPlain(Component, services = {}, props = {}) {
     try {
         return await app.mount(target);
     } catch (error) {
-        throw new Error("mount failed: " + String((error.cause && error.cause.stack) || error));
+        throw new Error("mount failed: " + String((error.cause && error.cause.stack) || error), { cause: error });
     }
 }
 const cleanups = [];
