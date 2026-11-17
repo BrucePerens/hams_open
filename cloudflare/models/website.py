@@ -180,13 +180,18 @@ class WebsiteCloudflare(models.Model):
             # for, rather than inventing a second distinct failure shape.
             if decrypt:
                 return "***ERROR***"
-            if self.env["zero_sudo.security.utils"]._get_crypto_secret():
-                # A secret exists but the key is unusable: say so, distinct
-                # from "missing". The warning log has the exact cause.
+            company = self.company_id or self.env.company
+            reason = self.env["cloudflare.tenant.key"]._fernet_failure(company)
+            if reason == "malformed":
                 raise UserError(_(
                     "Cannot store this Cloudflare secret: the deployment-wide "
-                    "cryptographic secret is malformed, or the stored tenant "
-                    "key cannot be unwrapped with it (see the server log)."
+                    "cryptographic secret is malformed (not a valid Fernet key)."
+                ))
+            if reason == "unwrap":
+                raise UserError(_(
+                    "Cannot store this Cloudflare secret: the stored tenant key "
+                    "cannot be unwrapped with the deployment-wide cryptographic "
+                    "secret (has the secret changed?)."
                 ))
             raise UserError(_(
                 "Cannot store this Cloudflare secret: no deployment-wide "

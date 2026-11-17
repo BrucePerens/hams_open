@@ -99,3 +99,16 @@ class CloudflareTenantKey(models.Model):
                 e,
             )
             return None
+
+    @api.model
+    def _fernet_failure(self, company):
+        """Why `_get_or_create_fernet` returned None: "missing" (no deployment-wide secret), "malformed" (secret is
+        not a Fernet key) or "unwrap" (the company's stored key does not unwrap with it). Never returns key material."""
+        kek_material = self.env["zero_sudo.security.utils"]._get_crypto_secret()
+        if not kek_material:
+            return "missing"
+        try:
+            Fernet(kek_material.encode("utf-8"))
+        except ValueError:
+            return "malformed"
+        return "unwrap"
