@@ -1122,13 +1122,6 @@ class WebsitePage(models.Model):
 
         if drained:
             try:
-                # RACE CONDITION FIX: Delete from Redis first. If PostgreSQL commits, state is perfect.
-                # If PostgreSQL fails and rolls back, we lose views (acceptable), avoiding double-counting (unacceptable).
-                del_pipe = redis_client.pipeline()
-                for key, increment in drained:
-                    del_pipe.eval(self._FLUSH_DECREMENT_LUA, 1, key, increment)
-                del_pipe.execute()
-
                 if updates:
                     # Optimized multi-record update using Postgres Procedure
                     # Reduces round-trips to exactly one.
@@ -1141,15 +1134,25 @@ class WebsitePage(models.Model):
                 is_test = self.env["zero_sudo.security.utils"]._is_test_mode()
                 if not is_test:
                     self.env.cr.commit()
-            # The real failure modes here are
-            # `redis.exceptions.RedisError` (a dropped Redis connection) and `self.env.cr.execute(...)` raising a
-            # `psycopg2.Error` (e.g. the stored procedure itself failing); both are logged, rolled back, and the
-            # cron picks up the rest on its next scheduled run.
-            except (redis.exceptions.RedisError, psycopg2.Error):  # audit-ignore-catch-all
+            # A failed SQL write (a `psycopg2.Error`, e.g. the stored procedure failing, or the commit) is logged and
+            # rolled back with the Redis counters untouched, so the next run flushes the same views again.
+            except psycopg2.Error:  # audit-ignore-catch-all
                 is_test = self.env["zero_sudo.security.utils"]._is_test_mode()
                 if not is_test:
                     self.env.cr.rollback()
                 _logger.exception("Error updating PostgreSQL view counts")
+                return
+
+            # Drain Redis only after the SQL write is in: a failed write loses nothing. Each key loses exactly the
+            # amount just written, so views that arrived meanwhile stay counted. If Redis fails here the same views are
+            # counted again next run (rare); the old drain-first order lost them whenever the write failed.
+            try:
+                del_pipe = redis_client.pipeline()
+                for key, increment in drained:
+                    del_pipe.eval(self._FLUSH_DECREMENT_LUA, 1, key, increment)
+                del_pipe.execute()
+            except redis.exceptions.RedisError:
+                _logger.exception("Failed to drain Redis view counters after the SQL write")
                 return
 
             if batch_full:
