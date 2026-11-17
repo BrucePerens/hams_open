@@ -7,4 +7,6 @@ After=dev-input-%i.device
 
 [Service]
 ExecStart=/usr/lib/panasonic-cf19-support/cf19-touch-relay /dev/input/%I
+Restart=on-failure
+RestartSec=2
 NoNewPrivileges=yes
