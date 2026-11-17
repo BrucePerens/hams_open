@@ -143,6 +143,9 @@ class TestProcessOne(unittest.TestCase):
             result = json.load(f)
         self.assertEqual(result, {"return_code": 0, "output": "backup ok"})
         self.assertFalse(os.path.exists(request_path))
+        # Backups take up to about an hour: the limit must be generous, but a hung pgbackrest must not run forever.
+        self.assertEqual(mock_run.call_args.kwargs["timeout"], sidecar.PGBACKREST_RUN_TIMEOUT)
+        self.assertGreaterEqual(sidecar.PGBACKREST_RUN_TIMEOUT, 2 * 3600)
 
     @patch("pgbackrest_sidecar.subprocess.run")
     def test_passes_s3_secrets_as_env_not_argv(self, mock_run):
