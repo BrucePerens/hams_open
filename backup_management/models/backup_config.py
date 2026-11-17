@@ -722,7 +722,7 @@ class BackupConfig(models.Model):
             self.env.cr.execute("""
                 SELECT config_id, MAX(start_time)
                 FROM backup_snapshot
-                WHERE config_id IN %s AND start_time <= %s
+                WHERE config_id IN %s AND start_time <= %s AND status IS DISTINCT FROM 'partial'
                 GROUP BY config_id
             """, (tuple(configs.ids), now))  # audit-ignore-sql: Tested by [@ANCHOR: backup_management:COMM_test_backup_cron]  # fmt: skip
             start_times = {row[0]: row[1] for row in self.env.cr.fetchall()}
@@ -743,6 +743,7 @@ class BackupConfig(models.Model):
                 conf.report_backup_failure(_("Backup sync refused: %s", exc))
                 continue
 
+            # A kopia snapshot with unreadable files (status "partial") is not a complete copy and does not count as fresh.
             # A snapshot dated in the future (clock skew) is ignored by the query above. A configuration with no usable
             # snapshot is judged by its own age instead, so one that never produced a snapshot still alerts.
             latest_start_time = start_times.get(conf.id) or conf.create_date
