@@ -301,6 +301,18 @@ _UNPINNED_TOPIC_LOGGED = set()
 
 
 # [@ANCHOR: ses_webhook_webhook_api_ses_webhook_controller]
+# [@ANCHOR: ses_webhook:COMM_processing_failure_description]
+# The pager incident text reaches the helpdesk ticket, its chatter and the paging channels, so it names the error TYPE
+# only: the error's own text can carry the member's address or a database row (a unique-key DETAIL line). The full
+# message stays in the server log and in the failed ses.webhook.log row.
+def _processing_failure_description(domain_name, message_id, error):
+    return (
+        f"SNS message {message_id} for domain {domain_name} failed ({type(error).__name__}). "
+        "SNS was answered 200 so it will not retry; the error text and the raw payload are in the failed "
+        "ses.webhook.log row."
+    )
+
+
 class SesWebhookController(http.Controller):
     
     @http.route('/mail/webhook/sns', type='http', auth='public', methods=['POST'], csrf=False, max_content_length=_MAX_WEBHOOK_BODY_BYTES)
@@ -644,10 +656,7 @@ class SesWebhookController(http.Controller):
                 incidents.report_incident({
                     "source": "SES webhook: inbound mail not processed",
                     "severity": "high",
-                    "description": (
-                        f"SNS message {message_id} for domain {domain_name} failed ({type(error).__name__}: {error}). "
-                        "SNS was answered 200 so it will not retry; the raw payload is in the failed ses.webhook.log row."
-                    ),
+                    "description": _processing_failure_description(domain_name, message_id, error),
                 })
             finally:
                 transaction.default_env = previous
