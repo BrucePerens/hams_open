@@ -56,6 +56,21 @@ impl ProtocolEngine for AnyEngine {
     fn feed(&mut self, bytes: &[u8], now: Duration) -> Vec<Inbound> {
         self.0.feed(bytes, now)
     }
+
+    fn encode_lines(
+        &mut self,
+        op: &Op,
+    ) -> Result<Option<Vec<radioctl_core::engine::LineStep>>, RigError> {
+        self.0.encode_lines(op)
+    }
+
+    fn link_restored(&mut self) -> Vec<Request> {
+        self.0.link_restored()
+    }
+
+    fn open_requests(&mut self) -> Vec<Request> {
+        self.0.open_requests()
+    }
 }
 
 /// Prints a line with the time since start and copies it to the log file.
@@ -578,5 +593,18 @@ mod tests {
             log: Arc::new(Mutex::new(None)),
         };
         quiet.line("no log file");
+    }
+
+    #[test]
+    fn the_wrapper_forwards_the_open_and_restore_hooks() {
+        // An Icom PCR needs its power-on requests at open; a wrapper that drops them never
+        // powers the receiver on.
+        let description = rigfile::load("icom-ic-pcr1000").unwrap().description;
+        let mut direct = engine_for(&description).unwrap();
+        let mut wrapped = AnyEngine(engine_for(&description).unwrap());
+        let wanted = direct.open_requests();
+        assert!(!wanted.is_empty());
+        assert_eq!(wrapped.open_requests().len(), wanted.len());
+        assert_eq!(wrapped.link_restored().len(), direct.link_restored().len());
     }
 }
