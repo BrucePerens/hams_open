@@ -83,6 +83,7 @@ def peer_of(connection):
     return gate.Peer(pid, uid, gid, _user_name(uid), _group_name(gid))
 
 
+# [@ANCHOR: hams_rpc_guard:user_name]
 def _user_name(uid):
     """The name the system gives `uid` (`pwd.getpwuid`: the first entry when several names share it), or "" when it has
     none. One lookup, not a scan of every account."""
@@ -92,6 +93,7 @@ def _user_name(uid):
         return ""
 
 
+# [@ANCHOR: hams_rpc_guard:group_name]
 def _group_name(gid):
     """The name the system gives `gid` (`grp.getgrgid`), or "" when it has none."""
     try:
