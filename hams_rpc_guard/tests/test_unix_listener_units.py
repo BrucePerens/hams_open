@@ -6,8 +6,10 @@ the mutants the end-to-end tests left alive (mutation run 2026-11-13). No Odoo H
 import errno
 import fcntl
 import gc
+import grp
 import ipaddress
 import os
+import pwd
 import shutil
 import socket
 import struct
@@ -230,6 +232,19 @@ class TestListenerConfigAndSocket(HamsTransactionCase):
         stranger = unix_listener.peer_of(Fake())
         self.assertEqual((stranger.pid, stranger.uid, stranger.gid, stranger.user, stranger.group),
                          (7, 4242424, 4242425, "", ""))
+
+    def test_peer_of_looks_up_one_uid_and_one_gid_and_never_scans_the_account_databases(self):
+        def refuse_scan():
+            raise AssertionError("peer_of must not read every account")
+        self.safe_patch_object(unix_listener.pwd, "getpwall", new=refuse_scan)
+        self.safe_patch_object(unix_listener.grp, "getgrall", new=refuse_scan)
+        left, right = socket.socketpair()
+        self.addCleanup(left.close)
+        self.addCleanup(right.close)
+        peer = unix_listener.peer_of(left)
+        self.assertEqual(peer.user, pwd.getpwuid(os.getuid()).pw_name)
+        self.assertEqual(peer.group, grp.getgrgid(os.getgid()).gr_name)
+        self.assertEqual((unix_listener._user_name(4242424), unix_listener._group_name(4242425)), ("", ""))
 
     def test_name_tables(self):
         users = unix_listener._user_names()
