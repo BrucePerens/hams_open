@@ -212,8 +212,8 @@ impl KachinaTwin {
                 self.tx_hz = frequency_of([*a, *b, *c, *d]);
                 GOOD
             }
-            (b'M', [m]) if self.codes.contains(&(m + b'0')) => {
-                self.mode = m + b'0';
+            (b'M', [m]) if m.checked_add(b'0').is_some_and(|c| self.codes.contains(&c)) => {
+                self.mode = m.saturating_add(b'0');
                 GOOD
             }
             (b'x', [p @ (0 | 1)]) => {
@@ -367,5 +367,11 @@ mod tests {
             e.feed(&[0x01], T0).as_slice(),
             [Inbound::Unrecognised(_)]
         ));
+    }
+
+    #[test]
+    fn the_twin_refuses_a_wild_mode_byte_without_overflowing() {
+        let mut t = KachinaTwin::new(&shipped()).expect("twin");
+        assert_eq!(t.feed(&[STX, b'M', 0xFF, ETX], T0), vec![ERROR]);
     }
 }
