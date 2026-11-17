@@ -192,10 +192,9 @@ if (!run) {
     console.error(`no test named ${process.argv[3]}`);
     process.exit(2);
 }
-run().then(
-    () => process.exit(0),
-    (error) => {
+run()
+    .then(() => process.exit(0))
+    .catch((error) => {
         console.error(error && error.stack ? error.stack : error);
         process.exit(1);
-    }
-);
+    });
