@@ -198,7 +198,9 @@ class EdgeRoutingDomain(models.Model):
             # Trigger cron to run asynchronously, avoiding thread exhaustion and batching O(N) fetches
             cron = self.env.ref('edge_routing.ir_cron_push_pager_duty', raise_if_not_found=False)
             if cron:
-                cron._trigger()
+                # A failed INSERT aborts the whole transaction: the savepoint keeps the caller's create/write/unlink usable.
+                with self.env.cr.savepoint():
+                    cron._trigger()
         except Exception as e:  # audit-ignore-catch-all
             # cron._trigger() is a DB write (ir.cron.trigger)
             # that can fail for reasons beyond KeyError/ValueError; this path

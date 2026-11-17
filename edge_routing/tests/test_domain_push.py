@@ -66,6 +66,22 @@ class TestDomainPush(HamsTransactionCase):
             "creating a domain must schedule the PagerDuty push cron",
         )
 
+    # Verified by [@ANCHOR: edge_routing:COMM_domain_crud_cycle]
+    def test_a_failed_cron_trigger_leaves_the_transaction_usable(self):
+        """cron._trigger() failing in SQL is logged and swallowed, and must not leave the cursor aborted for the create."""
+        cr = self.env.cr
+        cron_cls = type(self.env.ref("edge_routing.ir_cron_push_pager_duty"))
+
+        def broken_trigger(cron, at=None):
+            cr.execute("SELECT 1 FROM no_such_table_for_this_test")
+
+        self.safe_patch_object(cron_cls, "_trigger", broken_trigger)
+        domain = self.env["edge.routing.domain"].with_user(self.env.ref("base.user_admin")).create(
+            {"name": "abortedtx.com", "target_slug": "abortedtx"}
+        )
+        cr.execute("SELECT 1")
+        self.assertTrue(domain.exists())
+
     # The value itself is irrelevant to what these tests prove (the endpoint's
     # own hmac.compare_digest is exercised by pager_duty's own suite); what
     # matters is that push_all_to_pager_duty actually transmits whatever is
