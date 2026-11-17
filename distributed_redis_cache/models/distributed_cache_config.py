@@ -52,8 +52,7 @@ class DistributedCacheConfig(models.TransientModel):
         # [@ANCHOR: COMM_check_redis_status_logic]
         use_redis = bool(redis and redis_pool)
 
-        fallback_msg = """Redis connection is not configured or unavailable. Local fallback cache is active."""
-        status_msg = _(fallback_msg)
+        status_msg = _("""Redis connection is not configured or unavailable. Local fallback cache is active.""")
         msg_type = "warning"
 
         if use_redis:
