@@ -535,8 +535,10 @@ def fallback_notify(source, msg, severity):
         em["From"] = from_email
         em["To"] = fallback_email
 
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as server:
-            if smtp_port in (587, 465):
+        # Port 465 is implicit TLS (the handshake comes first, no STARTTLS); plain SMTP on it never gets a banner.
+        smtp_class = smtplib.SMTP_SSL if smtp_port == 465 else smtplib.SMTP
+        with smtp_class(smtp_host, smtp_port, timeout=10) as server:
+            if smtp_port == 587:
                 server.starttls()
             if smtp_user and smtp_pass:
                 server.login(smtp_user, smtp_pass)
@@ -1765,9 +1767,11 @@ def execute_check(check, client=None):
         if not target:
             return False, "SMTP dry-run requires target host"
         try:
-            with smtplib.SMTP(target, port, timeout=10) as server:
+            # Port 465 is implicit TLS: connect with SMTP_SSL and do not issue STARTTLS.
+            smtp_class = smtplib.SMTP_SSL if port == 465 else smtplib.SMTP
+            with smtp_class(target, port, timeout=10) as server:
                 server.ehlo()
-                if port in (587, 465) or server.has_extn("STARTTLS"):
+                if port != 465 and (port == 587 or server.has_extn("STARTTLS")):
                     server.starttls()
                     server.ehlo()
                 if user and password:
