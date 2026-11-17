@@ -1201,7 +1201,7 @@ def execute_check(check, client=None):
         port = int(parse_env(check.get("port", 123)))
         try:
             client_ntp = ntplib.NTPClient()
-            response = client_ntp.request(target, version=3, timeout=5)
+            response = client_ntp.request(target, version=3, port=port, timeout=5)
             return True, f"OK (Offset: {response.offset:.4f}s)"
         except (
             ConnectionError,
