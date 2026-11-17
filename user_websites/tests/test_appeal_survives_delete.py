@@ -40,6 +40,7 @@ class TestAppealSurvivesDelete(HamsTransactionCase):
 @tagged("post_install", "-at_install")
 class TestAppealStateOnCreate(HamsTransactionCase):
     def test_portal_cannot_create_a_decided_appeal(self):
+        # Tests [@ANCHOR: user_websites:appeal_create]
         # Tests [@ANCHOR: user_websites:appeal_compute_target_label]
         portal = self.env["res.users"].create(
             {"name": "State Appellant", "login": "appeal_state_member", "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])]}
