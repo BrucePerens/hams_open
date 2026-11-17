@@ -13,6 +13,7 @@ from email import message_from_bytes
 
 from odoo.addons.hams_helpdesk.models.inbound_spam_filter import (
     BULK_SCORE_THRESHOLD,
+    SPAM_SUBJECT_PATTERNS,
     STORED_TICKET_SCORE_THRESHOLD,
     _brand_mentioned,
     _domain_matches_brand,
@@ -371,7 +372,6 @@ class TestBulkMailSignals(HamsTransactionCase):
     def test_29b_no_subject_pattern_has_an_unbounded_wildcard(self):
         # Tests [@ANCHOR: hams_helpdesk:inbound_detect_spam_signals]
         # Structural, not timed: an unbounded ".*" re-scans the rest of the subject at every start, quadratic on a long hostile one.
-        from odoo.addons.hams_helpdesk.models.inbound_spam_filter import SPAM_SUBJECT_PATTERNS
         for regex, _reason in SPAM_SUBJECT_PATTERNS:
             self.assertNotIn(".*", regex.pattern)
             self.assertNotIn(".+", regex.pattern)
