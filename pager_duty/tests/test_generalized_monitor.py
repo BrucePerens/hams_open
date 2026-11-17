@@ -835,6 +835,23 @@ class TestMonitorExhaustive(HamsTransactionCase):
             called_req.full_url, "http://odoo:8069/json/2/pager.check/check_heartbeat_rpc"
         )
 
+    def test_18b_malformed_webhook_url_is_not_written_to_the_log(self):
+        # Tests [@ANCHOR: daemon_report_incident]
+        secret_url = "hooks.example.invalid/SECRETTOKEN123"  # no scheme: urllib raises ValueError quoting it
+        self.addCleanup(os.environ.pop, "PAGER_WEBHOOK_URL", None)
+        os.environ["PAGER_WEBHOOK_URL"] = secret_url
+        self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.outbound_due", return_value=True)
+        self.safe_patch("odoo.addons.pager_duty.daemon.generalized_monitor.outbound_failed")
+        self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.pagerduty_maintenance.read_flag",
+            return_value={"state": "off"},
+        )
+        with self.assertLogs(generalized_monitor.logger, level="WARNING") as logs:
+            generalized_monitor.report(MagicMock(), "src", "msg")
+        text = "\n".join(logs.output)
+        self.assertIn("Webhook dispatch failed", text)
+        self.assertNotIn("SECRETTOKEN123", text)
+
     def test_19_get_odoo_client_reads_env_and_falls_back_to_odoo_db(self):
         # Tests [@ANCHOR: pager_duty:get_odoo_client]
         orig_env = dict(os.environ)

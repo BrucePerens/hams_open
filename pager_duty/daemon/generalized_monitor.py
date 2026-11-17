@@ -603,7 +603,9 @@ def report(client, source, msg, severity="high", website_id=False, units=()):
             socket.timeout,
             Exception,
         ) as e:  # audit-ignore-catch-all
-            logger.warning("Webhook dispatch failed: %s", e)
+            # Only the exception class: a malformed PAGER_WEBHOOK_URL makes urllib raise ValueError
+            # whose text is the secret webhook URL itself.
+            logger.warning("Webhook dispatch failed: %s", type(e).__name__)
             outbound_failed("webhook", source, severity)
 
     try:
