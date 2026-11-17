@@ -47,6 +47,7 @@ class TestGeneralizedConfig(HamsTransactionCase):
     def test_01b_pull_from_json_deletes_more_than_one_batch(self):
         """Pulling an empty config removes every old check, not just the first 1000."""
         # Tests [@ANCHOR: pager_duty:action_pull_from_json]
+        # Tests [@ANCHOR: pager_duty:unlink_all_in_batches]
         check_model = self.env["pager.check"].with_user(self.admin)
         check_model.search([]).unlink()
         check_model.create([{"name": f"old {i}", "check_type": "system"} for i in range(1005)])

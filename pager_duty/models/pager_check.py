@@ -428,6 +428,7 @@ class PagerCheck(models.Model):
         )
         return os.path.join(base_dir, "pager_config.json")
 
+    # [@ANCHOR: pager_duty:unlink_all_in_batches]
     def _unlink_all(self, model_name):
         """Delete every record of a model, 1000 at a time (never loading them all)."""
         model = self.env[model_name]
