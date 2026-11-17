@@ -20,6 +20,9 @@ use radioctl_core::op::Op;
 
 use crate::virtual_rig::RigState;
 
+/// Most bytes held while waiting for a line terminator; a line that never ends is junk.
+const MAX_RX_BYTES: usize = 8192;
+
 /// How one family spells commands and reads answers.
 pub trait Dialect: Debug + Send + 'static {
     /// The dialect of a description, or why it has none.
@@ -156,6 +159,11 @@ impl<D: Dialect> ProtocolEngine for LineEngine<D> {
         }
         self.last_byte_at = now;
         self.buffer.extend_from_slice(bytes);
+        if !self.buffer.iter().any(|b| *b == self.dialect.terminator())
+            && self.buffer.len() > MAX_RX_BYTES
+        {
+            out.push(Inbound::Unrecognised(std::mem::take(&mut self.buffer)));
+        }
         for line in self.split_lines() {
             let expecting = self.expecting;
             match self.dialect.status(expecting, &line) {

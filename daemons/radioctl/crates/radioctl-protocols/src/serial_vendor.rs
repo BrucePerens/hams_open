@@ -41,6 +41,9 @@ pub trait VendorTwin: Send {
     fn front_panel(&mut self, panel: Panel) -> Result<Vec<u8>, String>;
 }
 
+/// Most bytes held while waiting for a terminator; a line that never ends is dropped as junk.
+const MAX_RX_BYTES: usize = 8192;
+
 /// Receive buffer that drops a partial frame older than [`PARTIAL_FRAME_TIMEOUT`].
 // [@ANCHOR: radioctl_serial_vendor_rx_buffer]
 #[derive(Debug, Default)]
@@ -62,6 +65,9 @@ impl RxBuffer {
             };
         self.last_at = now;
         self.bytes.extend_from_slice(bytes);
+        if stale.is_none() && self.bytes.len() > MAX_RX_BYTES {
+            return Some(std::mem::take(&mut self.bytes));
+        }
         stale
     }
 
