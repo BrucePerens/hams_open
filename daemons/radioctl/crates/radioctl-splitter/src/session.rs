@@ -17,7 +17,7 @@ use std::time::Duration;
 
 use radioctl_core::event::Source;
 use radioctl_core::op::{Field, Observation, Op};
-use radioctl_core::rig::{Cached, RigHandle};
+use radioctl_core::rig::{Cached, Freshness, RigHandle};
 use radioctl_core::transport::Transport;
 use radioctl_core::units::{Hz, Vfo};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -34,6 +34,8 @@ use crate::ts2000_personality::Ts2000Personality;
 
 const CHANNEL: usize = 64;
 const READ_BUFFER: usize = 256;
+/// How often a Morse sender's claim checks that the rig still transmits.
+const CW_POLL: Duration = Duration::from_millis(250);
 
 // [@ANCHOR: radioctl_splitter_session_protocol]
 /// The protocol a splitter endpoint speaks.
@@ -523,7 +525,7 @@ impl Splitter {
 
     // [@ANCHOR: radioctl_splitter_send_cw]
     /// Sends Morse for `client`. Morse puts RF on the air, so the sender claims the transmitter
-    /// like a key does: the claim is given back if the rig refuses, and a sender that goes away
+    /// like a key does: the claim is given back if the rig refuses or once the message ends, and a sender that goes away
     /// unkeys the rig.
     async fn send_cw(&self, client: ClientId, text: &str) -> Outcome {
         let claim = locked(&self.inner.owner).try_key(client);
@@ -532,10 +534,29 @@ impl Splitter {
             return Outcome::Refused;
         }
         let outcome = self.set(Op::SendCw(text.to_string())).await;
-        if outcome != Outcome::Done {
+        if outcome == Outcome::Done {
+            let splitter = self.clone();
+            tokio::spawn(async move { splitter.release_when_off_air(client).await });
+        } else {
             locked(&self.inner.owner).release(client);
         }
         outcome
+    }
+
+    /// Gives `client`'s claim up once the rig no longer transmits (the message ended or the rig
+    /// stopped answering), so a client that stays connected does not hold the transmitter for
+    /// good. Ends early if the claim went elsewhere (an unkey, a disconnect).
+    async fn release_when_off_air(&self, client: ClientId) {
+        loop {
+            tokio::time::sleep(CW_POLL).await;
+            if locked(&self.inner.owner).owner() != Some(client) {
+                return;
+            }
+            if !matches!(self.inner.rig.ptt(Freshness::Fresh).await, Ok(c) if c.value) {
+                locked(&self.inner.owner).release(client);
+                return;
+            }
+        }
     }
 
     // [@ANCHOR: radioctl_splitter_key]
