@@ -100,8 +100,11 @@ class TestSecurityUtils(HamsTransactionCase):
             self.assertEqual(utils._get_system_param(key), sentinel)
             self.assertEqual(utils._get_system_param(key), sentinel)
             for redis_key in redis_conn.scan_iter(match=f"{self.env.cr.dbname}:distributed_cache:*"):
-                self.assertNotIn(sentinel.encode(), redis_key)
-                self.assertNotIn(sentinel.encode(), redis_conn.get(redis_key) or b"", f"{key} leaked into Redis")
+                stored = redis_conn.get(redis_key) or ""
+                if isinstance(stored, bytes):
+                    stored = stored.decode("utf-8", "replace")
+                self.assertNotIn(sentinel, str(redis_key))
+                self.assertNotIn(sentinel, stored, f"{key} leaked into Redis")
 
     def test_non_secret_system_params_are_still_cached(self):
         # Tests [@ANCHOR: zero_sudo:COMM_get_system_param]
