@@ -36,6 +36,7 @@ import functools
 import io
 import json
 import logging
+import re
 from urllib.parse import quote
 
 import redis
@@ -63,6 +64,8 @@ SVC = "user_websites.user_websites_service_account"
 MAX_TITLE_CHARS = 120
 MAX_IMAGE_BYTES = 2 * 1024 * 1024
 MAX_IMAGE_PIXELS = 16_000_000
+# Characters XML 1.0 cannot hold; in a title they end up in the page arch attribute and the page write fails.
+XML_INVALID_CHARS = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")
 # odoo.tools.image turns off Pillow's lazy plugin loading, so WebP is unknown unless its plugin is imported.
 WEBP_READER = WebPImagePlugin.WebPImageFile
 MAX_IMAGES_PER_SITE = 100
@@ -520,7 +523,7 @@ class UserWebsitesOwnerController(http.Controller):
                 profile_user, profile_group, page_id, code, title, page_slug, content, is_published
             )
 
-        if not title or len(title) > MAX_TITLE_CHARS:
+        if not title or len(title) > MAX_TITLE_CHARS or XML_INVALID_CHARS.search(title):
             return refused("title")
         if body is None:
             return refused("too_long")
