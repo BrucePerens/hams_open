@@ -1706,9 +1706,6 @@ mod tests {
     /// Run with: `cargo test --release fixed_decoder_char_yield_vs_mismatch -- --nocapture --ignored`
     #[test]
     #[ignore]
-    // Tests [@ANCHOR: RttyDecoder::new_fixed]
-    // Tests [@ANCHOR: TrigBank::new_with_offsets]
-    // Tests [@ANCHOR: ScanState::new]
     fn fixed_decoder_char_yield_vs_mismatch() {
         // Real, found gap (an `advisor` consult flagged this before it shipped unverified): the
         // original version of this test only ever ran at 48kHz, but `digital_decoder.rs`'s own
@@ -2152,6 +2149,60 @@ mod tests {
         eprintln!(
             "characterize_rtty_signature: {per_call_us:.2}us/call for a 960-sample (20ms) chunk \
              at one candidate frequency"
+        );
+    }
+
+    /// A fixed decoder (`new_fixed`: one correlator table at offset 0, no AFC search) decodes a signal
+    /// on its own mark frequency at both the full and the decimated sample rate the channel-scanning
+    /// bank uses, reports a locked offset of 0.0 Hz (not the -40.0 Hz a table index of 0 would give
+    /// if read from the nine-entry AFC list), and starts that way before anything is decoded. The
+    /// probe `fixed_decoder_char_yield_vs_mismatch` only prints and is ignored; this one asserts.
+    #[test]
+    // Tests [@ANCHOR: RttyDecoder::new_fixed]
+    // Tests [@ANCHOR: TrigBank::new_with_offsets]
+    // Tests [@ANCHOR: ScanState::new]
+    // Tests [@ANCHOR: RttyDecoder::locked_frequency_offset_hz]
+    fn fixed_decoder_decodes_on_frequency_and_reports_a_zero_offset() {
+        let text = "CQ CQ DE K6BP PSE K";
+        for sample_rate in [48000u32, 12000u32] {
+            let modulation_rate = 48000u32;
+            let mut mono = idle_mark_audio(RTTY_DEFAULT_MARK_HZ, modulation_rate, 0.4);
+            mono.extend(rtty_modulate(text, RTTY_DEFAULT_MARK_HZ, modulation_rate));
+            mono.extend(idle_mark_audio(RTTY_DEFAULT_MARK_HZ, modulation_rate, 0.05));
+            let mono: Vec<i16> = if sample_rate == modulation_rate {
+                mono
+            } else {
+                mono.chunks_exact(4)
+                    .map(|c| (c.iter().map(|&s| s as i32).sum::<i32>() / 4) as i16)
+                    .collect()
+            };
+            let mut decoder = RttyDecoder::new_fixed(RTTY_DEFAULT_MARK_HZ, sample_rate);
+            assert_eq!(decoder.locked_frequency_offset_hz(), 0.0);
+            let mut got = String::new();
+            for chunk in mono.chunks((sample_rate as usize * 960) / modulation_rate as usize) {
+                got.push_str(&decoder.feed(chunk));
+            }
+            assert_eq!(got, text, "at {sample_rate} Hz");
+            assert_eq!(
+                decoder.locked_frequency_offset_hz(),
+                0.0,
+                "at {sample_rate} Hz"
+            );
+        }
+        // A fixed decoder has one table; the full decoder has the nine-entry AFC bank.
+        assert_eq!(
+            RttyDecoder::new_fixed(RTTY_DEFAULT_MARK_HZ, 48000)
+                .bank
+                .tables
+                .len(),
+            1
+        );
+        assert_eq!(
+            RttyDecoder::new(RTTY_DEFAULT_MARK_HZ, 48000)
+                .bank
+                .tables
+                .len(),
+            AFC_OFFSETS_HZ.len()
         );
     }
 }
