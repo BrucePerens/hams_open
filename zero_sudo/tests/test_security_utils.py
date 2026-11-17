@@ -92,10 +92,9 @@ class TestSecurityUtils(HamsTransactionCase):
         # Tests [@ANCHOR: zero_sudo:COMM_get_system_param]
         utils = self.env["zero_sudo.security.utils"]
         sentinel = "sentinel-not-a-real-secret-4f9c2a"
-        config = utils._get_service_env("zero_sudo.config_service_internal")["ir.config_parameter"]
         redis_conn = get_redis_connection(self.env)
         for key in ("rabbitmq.pass", "distributed_redis_cache.redis_password", "hams_helpdesk.github_webhook_secret"):
-            config.set_param(key, sentinel)
+            self.env["ir.config_parameter"].set_param(key, sentinel)
             invalidate_model_cache(self.env, "zero_sudo.security.utils")
             self.assertEqual(utils._get_system_param(key), sentinel)
             self.assertEqual(utils._get_system_param(key), sentinel)
