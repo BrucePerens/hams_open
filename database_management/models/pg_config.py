@@ -238,7 +238,10 @@ class PgHaWizard(models.TransientModel):
             re.search(r"[\x00-\x1f\x7f]", pw)
             or re.search(r":(\s|$)", pw)
             or re.search(r"\s#", pw)
-            or pw != pw.rstrip()
+            or pw != pw.strip()
+            # A leading "- " or "? " is a YAML sequence/key indicator and fails the parse; leading
+            # whitespace is silently dropped, so the config would carry a different password.
+            or re.match(r"[-?](\s|$)", pw)
             or pw[0] in yaml_unsafe_leading_chars
         ):
             raise UserError(

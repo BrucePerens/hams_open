@@ -129,7 +129,7 @@ class TestDatabaseManagementTDD(HamsTransactionCase):
         # the whole value into a comment (parses as no password at all), and
         # ': ' mid-value reopens a mapping context.
         admin = self.env.ref("base.user_admin")
-        for bad_pass in ["#hashfirst123", "goodpass: withcolon", "trailingspace123 "]:
+        for bad_pass in ["#hashfirst123", "goodpass: withcolon", "trailingspace123 ", " leadingspace123", "- dash12345678", "? key123456789"]:
             wizard = self.env["pg.ha.wizard"].with_user(admin).create({
                 "primary_ip": "10.0.0.1",
                 "secondary_ip": "10.0.0.2",
