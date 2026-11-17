@@ -116,6 +116,11 @@ Failed to decode JSON response on retry: {e}
 """.strip()
                 raise RuntimeError(err_msg)
 
+        # Odoo's JSON-2 answers an error with an HTTP status of 400 or more and a body of {name, message, arguments,
+        # context, debug}, which has no "error" key, so the status decides.
+        if response.status_code >= 400:
+            message = result.get("message") if isinstance(result, dict) else None
+            raise RuntimeError(f"JSON-2 Error: HTTP {response.status_code}: {message or result}")
         if isinstance(result, dict) and result.get("error"):
             raise RuntimeError(f"JSON-2 Error: {result['error']}")
 
