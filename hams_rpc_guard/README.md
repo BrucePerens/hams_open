@@ -234,8 +234,9 @@ request by `ir.http._authenticate` and by the Unix-socket application.
 |---|---|---|
 | `path` | `str` | The request path without the query string. Anything that is not a `str` is "neither". |
 
-**Returns.** `"legacy-rpc"` for exactly `/jsonrpc` and anything under `/xmlrpc/`; `"json2"` for `/json/2` and anything
-under `/json/2/`; `None` otherwise (`/xmlrpc.php`, `/jsonrpc/`, `/json/21`, `/json/version`, `/web/dataset/...`).
+**Returns.** `"legacy-rpc"` for `/jsonrpc` and `/jsonrpc/` (Odoo's routing map has `strict_slashes=False`, so the
+trailing-slash spelling reaches the same controller and must be gated) and anything under `/xmlrpc/`; `"json2"` for
+`/json/2` and anything under `/json/2/`; `None` otherwise (`/xmlrpc.php`, `/jsonrpc2`, `/json/21`, `/json/version`, `/web/dataset/...`).
 **Errors.** None. **Concurrency.** Pure. **Test:** `test_endpoint_gate.TestEndpointFamily`.
 
 ### `hams_rpc_guard:parse_address`
