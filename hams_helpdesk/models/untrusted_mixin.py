@@ -242,7 +242,8 @@ class HamsHelpdeskUntrustedMixin(models.AbstractModel):
         hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
         ticket = self.with_env(hd_env)
         known = (ticket.partner_id | ticket.message_partner_ids).mapped("email")
-        known += [m.email_from for m in ticket.message_ids if m.message_type == "email"]
+        # Not the held notes: a stranger's earlier reply landed as an internal note, and that must not vouch for their next one.
+        known += [m.email_from for m in ticket.message_ids if m.message_type == "email" and not m.subtype_id.internal]
         wanted = parseaddr(email_from or "")[1].lower()
         if wanted and wanted in {parseaddr(k or "")[1].lower() for k in known if k}:
             return ""
