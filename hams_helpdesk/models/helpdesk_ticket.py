@@ -1028,7 +1028,10 @@ class HelpdeskTicket(models.Model):
         ``hams_helpdesk.triage_notify_hold_seconds``. 0 (the default, and anything that is not a whole number) holds nothing, so
         nothing changes until Bruce picks a window; a value over 300 is cut to 300, so a real request is never held for long."""
         raw = str(self.env["zero_sudo.security.utils"]._get_system_param(_TRIAGE_PARAM_HOLD, "0") or "0").strip()
-        return min(int(raw), _TRIAGE_MAX_HOLD_SECONDS) if raw.isascii() and raw.isdigit() else 0
+        if not (raw.isascii() and raw.isdigit()):
+            return 0
+        # int() refuses a digit string over 4300 digits: a huge request is a long hold, so it is the maximum without int().
+        return _TRIAGE_MAX_HOLD_SECONDS if len(raw) > 20 else min(int(raw), _TRIAGE_MAX_HOLD_SECONDS)
 
     @api.model
     # [@ANCHOR: hams_helpdesk:triage_notify_on_leaving_spam]
