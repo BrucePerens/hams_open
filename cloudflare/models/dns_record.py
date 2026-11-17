@@ -113,7 +113,7 @@ class CloudflareDNSRecord(models.Model):
         # Archived rows are not pushed, so they never clash, whatever active_test the caller carries.
         same_keys = self.env["cloudflare.dns.record"].with_context(active_test=True).search([("name", "in", self.mapped("name"))], limit=10000)
         for rec in self:
-            if not NAME_PATTERN.fullmatch(rec.name or ""):
+            if len(rec.name or "") > 253 or len(rec.content or "") > 2048 or not NAME_PATTERN.fullmatch(rec.name or ""):
                 raise ValidationError(_(
                     "%(name)r is not a DNS name Odoo can push: use the full name in lower case, with no trailing dot "
                     "and at least two labels (callbook.hams.com).", name=rec.name))
@@ -137,6 +137,14 @@ class CloudflareDNSRecord(models.Model):
             if clash:
                 raise ValidationError(_("%(type)s %(name)s -> %(content)s already exists.",
                                         type=rec.type, name=rec.name, content=rec.content))
+            # A name that holds a CNAME holds nothing else, and Cloudflare refuses the push of the other row.
+            sharing = same_keys.filtered(lambda other: rec.active and other.id != rec.id and other.name == rec.name)
+            if rec.type == "CNAME" and sharing:
+                raise ValidationError(_("%(name)s already has other records, and a CNAME cannot share a name with any "
+                                        "other record.", name=rec.name))
+            if rec.type != "CNAME" and sharing.filtered(lambda other: other.type == "CNAME"):
+                raise ValidationError(_("%(name)s is a CNAME, and a CNAME cannot share a name with any other record.",
+                                        name=rec.name))
             self._check_glue(rec)
 
     # [@ANCHOR: cloudflare:COMM_dns_record_no_member_names]
