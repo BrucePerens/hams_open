@@ -47,7 +47,7 @@ class LocalRunner:
     """Stands in for kopia over a plaintext directory repository: handles only `ls -r ROOT` and `restore SRC DEST`."""
 
     def run(self, argv, env=None, capture=False, **_kw):
-        _kopia, verb = argv[0], argv[1]
+        verb = argv[1]
         if verb == "ls":
             root = argv[3]
             out = [os.path.join(d, f) for d, _s, fs in os.walk(root) for f in fs]
