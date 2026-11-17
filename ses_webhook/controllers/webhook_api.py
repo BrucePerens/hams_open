@@ -300,7 +300,6 @@ def _failed_sender_check(ses_message):
 _UNPINNED_TOPIC_LOGGED = set()
 
 
-# [@ANCHOR: ses_webhook_webhook_api_ses_webhook_controller]
 # [@ANCHOR: ses_webhook:COMM_processing_failure_description]
 # The pager incident text reaches the helpdesk ticket, its chatter and the paging channels, so it names the error TYPE
 # only: the error's own text can carry the member's address or a database row (a unique-key DETAIL line). The full
@@ -313,6 +312,7 @@ def _processing_failure_description(domain_name, message_id, error):
     )
 
 
+# [@ANCHOR: ses_webhook_webhook_api_ses_webhook_controller]
 class SesWebhookController(http.Controller):
     
     @http.route('/mail/webhook/sns', type='http', auth='public', methods=['POST'], csrf=False, max_content_length=_MAX_WEBHOOK_BODY_BYTES)
