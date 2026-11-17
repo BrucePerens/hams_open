@@ -294,6 +294,21 @@ class TestSesWebhook(HamsHttpCase):
         self.assertEqual(len(log), 1)
         self.assertEqual(log.status, 'rejected_subscribe_url')
 
+    def test_03c_subscription_confirmation_without_subscribe_url_is_logged_rejected(self):
+        """A confirmation with no SubscribeURL used to be logged with no status at all."""
+        payload = self._sign({"Type": "SubscriptionConfirmation", "MessageId": "msg-sub-no-url"})
+        mock_urlopen = self.safe_patch('odoo.addons.ses_webhook.controllers.webhook_api.urlopen_ssrf_safe')
+        response = self.url_open(
+            f'/mail/webhook/sns?token={self.domain_a.secret_token}',
+            data=json.dumps(payload).encode('utf-8'),
+        )
+        self.assertEqual(response.status_code, 200)
+        mock_urlopen.assert_not_called()
+        log = self.env['ses.webhook.log'].search([('name', '=', 'msg-sub-no-url')])
+        self.assertEqual(len(log), 1)
+        self.assertEqual(log.status, 'rejected_subscribe_url')
+        self.assertIn('SubscribeURL', log.error_message)
+
     def test_04_webhook_notification_processed_company_a(self):
         """Verify Notification extracts content and passes to mail.thread in Company A context."""
         raw_email = b"From: a@test-a.com\nTo: c@d.com\nSubject: Test A\n\nTest"
