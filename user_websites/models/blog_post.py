@@ -568,29 +568,34 @@ class BlogPost(models.Model):
                 "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
             }
 
-            post_ids = [int(pid) for pid in digest.post_ids_string.split(",") if pid]
-            posts = self.env["blog.post"].with_user(svc_uid).browse(post_ids)
-            post_links_html = "".join(
-                Markup("<li><a href='{}'>{}</a></li>").format(f"{base_url}{p.website_url}", p.name)
-                for p in posts
-            )
+            try:
+                with self.env.cr.savepoint():
+                    post_ids = [int(pid) for pid in digest.post_ids_string.split(",") if pid]
+                    posts = self.env["blog.post"].with_user(svc_uid).browse(post_ids)
+                    post_links_html = "".join(
+                        Markup("<li><a href='{}'>{}</a></li>").format(f"{base_url}{p.website_url}", p.name)
+                        for p in posts
+                    )
 
-            ctx = {
-                "author_name": digest.author_name,
-                "post_links": Markup(post_links_html),
-                "email_to": partner.email,
-                "unsub_url": unsub_url,
-            }
-            email_vals = {
-                "headers": repr(headers),
-                "recipient_ids": [(4, partner.id)],
-                # The template's own email_to is blanked: To plus recipient_ids sends the digest twice.
-                "email_to": False,
-            }
-            mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
-                "zero_sudo.mail_service_internal"
-            )
-            template.with_user(mail_svc).with_context(**ctx).send_mail(digest.first_post_id, force_send=False, email_values=email_vals)   # audit-ignore-mail: Tested by [@ANCHOR: COMM_test_weekly_digest_mail_template]  # fmt: skip
+                    ctx = {
+                        "author_name": digest.author_name,
+                        "post_links": Markup(post_links_html),
+                        "email_to": partner.email,
+                        "unsub_url": unsub_url,
+                    }
+                    email_vals = {
+                        "headers": repr(headers),
+                        "recipient_ids": [(4, partner.id)],
+                        # The template's own email_to is blanked: To plus recipient_ids sends the digest twice.
+                        "email_to": False,
+                    }
+                    mail_svc = self.env["zero_sudo.security.utils"]._get_service_uid(
+                        "zero_sudo.mail_service_internal"
+                    )
+                    template.with_user(mail_svc).with_context(**ctx).send_mail(digest.first_post_id, force_send=False, email_values=email_vals)   # audit-ignore-mail: Tested by [@ANCHOR: COMM_test_weekly_digest_mail_template]  # fmt: skip
+            except Exception as exc:  # audit-ignore-catch-all: one failing subscriber must not block the rest; Tested by [@ANCHOR: user_websites:test_weekly_digest_one_bad_subscriber]
+                # Only the row id and exception type are logged: messages and the row can name a subscriber (PII).
+                _logger.warning("Weekly digest failed for digest row %s (%s); continuing", digest.id, type(exc).__name__)
 
         if len(digests) == 50:
             self.env["zero_sudo.security.utils"]._set_system_param(

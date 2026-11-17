@@ -88,6 +88,32 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
         self.assertTrue(mails)
         self.assertFalse(any(mails.mapped("email_to")), "recipient_ids plus email_to makes Odoo send two copies")
 
+    # [@ANCHOR: user_websites:test_weekly_digest_one_bad_subscriber]
+    # Tests [@ANCHOR: send_weekly_digest]
+    def test_01e_weekly_digest_one_bad_subscriber_does_not_block_the_rest(self):
+        """A send_mail failure for one subscriber is skipped; the others are still attempted."""
+        second = self.env["res.users"].create(
+            {
+                "name": "Second Follower",
+                "login": "follower2_test",
+                "email": "follower2@example.com",
+                "website_slug": "follower2-test",
+                "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
+            }
+        )
+        self.creator.partner_id.message_subscribe(partner_ids=[second.partner_id.id])
+        calls = []
+
+        def fail_first(*args, **kwargs):
+            calls.append(1)
+            if len(calls) == 1:
+                raise ValueError("boom")
+            return True
+
+        self.safe_patch("odoo.addons.mail.models.mail_template.MailTemplate.send_mail", side_effect=fail_first)
+        self.env["blog.post"].send_weekly_digest()
+        self.assertGreaterEqual(len(calls), 2, "the failing subscriber must not stop the later ones")
+
     # Tests [@ANCHOR: user_websites_sql_views_user_websites_weekly_digest_view]
     def test_01_weekly_digest_and_unsubscribe_headers(self):
         """
