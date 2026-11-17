@@ -1626,8 +1626,37 @@ mod tests {
         // comment for why the power check is real, not redundant), this
         // particular case just didn't need the second one.
         assert!(
-            message_result.is_err(),
-            "independent noise must not surface as a plausible-looking decoded message, got {message_result:?}"
+            matches!(message_result, Err(WsprMessageError::LowConfidence { .. })),
+            "independent noise must be rejected by the confidence gate (carried through WsprMessageError::from), got {message_result:?}"
+        );
+    }
+
+    #[test]
+    // Tests [@ANCHOR: WsprMessageError::from]
+    // Tests [@ANCHOR: wspr_sync_wspr_message_error_enum]
+    fn confidence_gate_errors_convert_into_the_matching_message_errors() {
+        use crate::wspr_decode::ConfidenceGateError;
+        assert_eq!(
+            WsprMessageError::from(ConfidenceGateError::GaveUp { cycles: 7 }),
+            WsprMessageError::GaveUp { cycles: 7 }
+        );
+        assert_eq!(
+            WsprMessageError::from(ConfidenceGateError::LowConfidence {
+                bits: 5,
+                metric: -1.5
+            }),
+            WsprMessageError::LowConfidence {
+                bits: 5,
+                metric: -1.5
+            }
+        );
+        // The third outcome has no gate error behind it and is its own variant.
+        assert_ne!(
+            WsprMessageError::UnpackFailed { bits: 5 },
+            WsprMessageError::from(ConfidenceGateError::LowConfidence {
+                bits: 5,
+                metric: 0.0
+            })
         );
     }
 
