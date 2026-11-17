@@ -80,7 +80,24 @@ class ListenerError(RuntimeError):
 def peer_of(connection):
     """The `Peer` of an accepted `AF_UNIX` connection (reads `SO_PEERCRED`; names from the passwd and group databases)."""
     pid, uid, gid = _PEERCRED.unpack(connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, _PEERCRED.size))
-    return gate.Peer(pid, uid, gid, _user_names().get(uid, ""), _group_names().get(gid, ""))
+    return gate.Peer(pid, uid, gid, _user_name(uid), _group_name(gid))
+
+
+def _user_name(uid):
+    """The name the system gives `uid` (`pwd.getpwuid`: the first entry when several names share it), or "" when it has
+    none. One lookup, not a scan of every account."""
+    try:
+        return pwd.getpwuid(uid).pw_name
+    except KeyError:  # burn-ignore-os-account-probe
+        return ""
+
+
+def _group_name(gid):
+    """The name the system gives `gid` (`grp.getgrgid`), or "" when it has none."""
+    try:
+        return grp.getgrgid(gid).gr_name
+    except KeyError:  # burn-ignore-os-account-probe
+        return ""
 
 
 # [@ANCHOR: hams_rpc_guard:user_names]

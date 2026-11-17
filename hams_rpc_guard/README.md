@@ -365,8 +365,8 @@ under umask 0177, then chown and chmod. **Test:** `test_unix_listener.TestListen
 
 ### `hams_rpc_guard:peer_of`
 
-`peer_of(connection)`: the `Peer` of an accepted `AF_UNIX` connection (`SO_PEERCRED`; names from the whole passwd and
-group databases, `""` when absent). **Test:** `test_unix_listener.TestListenerSocket`.
+`peer_of(connection)`: the `Peer` of an accepted `AF_UNIX` connection (`SO_PEERCRED`; names from one `pwd.getpwuid` and one
+`grp.getgrgid` lookup (the first name when several share an id), `""` when absent). **Test:** `test_unix_listener.TestListenerSocket`.
 
 ### `hams_rpc_guard:rpc_only_app`, `unix_request_handler`, `unix_wsgi_server`, `serve_unix_connection`
 
