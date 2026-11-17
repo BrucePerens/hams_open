@@ -45,6 +45,14 @@ class TestParkingModels(HamsTransactionCase):
         )
         self.assertEqual(ok.redirect_code, "301")
 
+    def test_a_redirect_without_a_code_is_refused(self):
+        record = self.Domain.create(
+            {"name": "nocode.example", "behavior": "redirect", "redirect_url": "https://t.example/"}
+        )
+        with self.assertRaises(ValidationError):
+            record.write({"redirect_code": False})
+            self.env.flush_all()
+
     def test_a_redirect_to_the_own_www_name_loops_and_is_refused_only_when_www_is_answered(self):
         www = {"name": "loop.example", "behavior": "redirect", "redirect_url": "https://www.loop.example/"}
         with self.assertRaises(ValidationError):

@@ -96,10 +96,13 @@ class ParkingDomain(models.Model):
 
     # [@ANCHOR: parking:COMM_domain_constraints]
     # Verified by [@ANCHOR: parking:COMM_test_domain_constraints]
-    @api.constrains("behavior", "redirect_url", "name", "cache_ttl", "include_www")
+    @api.constrains("behavior", "redirect_url", "redirect_code", "name", "cache_ttl", "include_www")
     def _check_behavior(self):
         for record in self:
             if record.behavior == "redirect":
+                if not record.redirect_code:
+                    # The page answers with int(redirect_code); an empty code would 500 every visit.
+                    raise ValidationError(self.env._("A redirect needs a redirect code (301 or 302)."))
                 reason = utils.validate_redirect_url(record.redirect_url, record.name)
                 if not reason and record.include_www:
                     # www.<name> is answered by this same record, so a target there loops forever.
