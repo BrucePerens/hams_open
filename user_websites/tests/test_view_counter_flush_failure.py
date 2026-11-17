@@ -48,7 +48,7 @@ class TestViewCounterFlushFailure(RealTransactionCase):
         before = self._count(page.id)
         redis_client.set(key, 7)
         self._flush(page.id, lock=True)
-        self.assertEqual(redis_client.get(key), b"7", "the counts survive a failed write")
+        self.assertEqual(redis_client.get(key), "7", "the counts survive a failed write")
         self.assertEqual(self._count(page.id), before)
         self._flush(page.id, lock=False)
         self.assertEqual(self._count(page.id), before + 7)
