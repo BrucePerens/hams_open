@@ -482,9 +482,9 @@ class TestSecurityUtilsUnits(SafePatchMixin, BaseCase):
     # ---- _is_test_mode -----------------------------------------------------------------------------------------
 
     def test_is_test_mode(self):
-        class TestCursor:
-            def commit(self):
-                pass
+        # Named like Odoo's own TestCursor, which _is_test_mode recognises by class name; built with type() because a
+        # `class Test...` statement here would be taken for a test class that needs @tagged.
+        TestCursor = type("TestCursor", (), {"commit": lambda self: None})
 
         class Plain:
             def commit(self):
