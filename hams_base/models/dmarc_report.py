@@ -27,9 +27,11 @@ def _safe_int(text, default=0):
     non-numeric <begin>/<end>/<pct>/<count> value used to crash
     _parse_dmarc_xml() with an uncaught ValueError."""
     try:
-        return int(text)
+        value = int(text)
     except (TypeError, ValueError):
         return default
+    # The Integer columns are int4: a value past it would abort the insert and lose the whole report.
+    return value if -(2**31) <= value < 2**31 else default
 
 _MAX_REPORT_EPOCH = 4_102_444_800  # 2100-01-01
 
