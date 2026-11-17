@@ -10,6 +10,8 @@ from odoo.addons.distributed_redis_cache.redis_pool import expiring_counter, red
 _logger = logging.getLogger(__name__)
 
 
+# [@ANCHOR: knowledge:network_of]
+# Verified by [@ANCHOR: test_manual_feedback_is_limited_per_network]
 def network_of(address):
     """The /24 (IPv4) or /48 (IPv6) network of `address` as text; "none" when it is missing or unparseable."""
     try:

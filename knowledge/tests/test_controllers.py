@@ -165,6 +165,7 @@ class TestManualControllers(HamsHttpCase):
     def test_manual_feedback_is_limited_per_network(self):
         # Tests [@ANCHOR: knowledge:feedback_rate_limit]
         # Tests [@ANCHOR: knowledge:network_hits]
+        # Tests [@ANCHOR: knowledge:network_of]
         """Dropping the session cookie must not reset the vote: a network gets a fixed number of votes an hour."""
         self.safe_patch_object(manual_controller, "FEEDBACK_PER_HOUR_NETWORK", 2)
         articles = [self.root_public.copy({"name": "Vote target %d" % number}) for number in range(4)]
