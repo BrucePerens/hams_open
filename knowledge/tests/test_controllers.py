@@ -187,6 +187,21 @@ class TestManualControllers(HamsHttpCase):
         self.assertEqual(statuses, [303, 303, 429, 429], "one /24 shares a budget, whatever the host")
         self.assertEqual(vote(self.root_public, other), 303)
 
+    # [@ANCHOR: test_manual_search_is_limited_per_network]
+    def test_manual_search_is_limited_per_network(self):
+        # Tests [@ANCHOR: knowledge:search_rate_limit]
+        """A network gets a fixed number of searches an hour; another network is unaffected."""
+        self.safe_patch_object(manual_controller, "SEARCHES_PER_HOUR_NETWORK", 2)
+        mine = "198.18.%d" % (secrets.randbelow(200) + 1)
+        other = "198.19.%d.9" % (secrets.randbelow(200) + 1)
+
+        def search(address):
+            return self.url_open("/manual/search?search=radio", headers={"CF-Connecting-IP": address}).status_code
+
+        statuses = [search("%s.%d" % (mine, host)) for host in (10, 11, 12, 13)]
+        self.assertEqual(statuses, [200, 200, 429, 429], "one /24 shares a budget, whatever the host")
+        self.assertEqual(search(other), 200)
+
     def test_04b_feedback_refused_for_internal_audience_article(self):
         """A published internal-audience article answers 404 to the public, so a public visitor must not move its counters."""
         article = self.env["knowledge.article"].create(
