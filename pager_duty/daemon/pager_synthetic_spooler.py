@@ -371,17 +371,22 @@ def resolve_config_path(environ=None):
     return os.path.join(os.path.dirname(__file__), "pager_config.json")
 
 
-# [@ANCHOR: pager_duty:synthetic_spooler_main]
 # [@ANCHOR: pager_duty:synthetic_spooler_write_spool]
+# Verified by [@ANCHOR: pager_duty:test_synthetic_spooler_failed_write_leaves_no_temp_file]
 def write_spool(spool_data, spool_file):
     """Writes spool_data to spool_file through a temp file and rename; a failed write leaves no temp file behind."""
     fd, tmp_file = tempfile.mkstemp(dir=os.path.dirname(spool_file))
-    with os.fdopen(fd, "w") as f:
-        json.dump(spool_data, f)
-    os.chmod(tmp_file, 0o644)
-    os.rename(tmp_file, spool_file)
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(spool_data, f)
+        os.chmod(tmp_file, 0o644)
+        os.rename(tmp_file, spool_file)
+    finally:
+        if os.path.exists(tmp_file):
+            os.remove(tmp_file)
 
 
+# [@ANCHOR: pager_duty:synthetic_spooler_main]
 def main():
     config_path = resolve_config_path()
     if not os.path.exists(config_path):

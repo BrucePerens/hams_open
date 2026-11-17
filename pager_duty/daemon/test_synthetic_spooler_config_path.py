@@ -16,6 +16,7 @@ import pager_synthetic_spooler  # noqa: E402
 class SyntheticSpoolerWrite(unittest.TestCase):
     def test_a_failed_write_leaves_no_temp_file_and_keeps_the_old_spool(self):
         # Tests [@ANCHOR: pager_duty:synthetic_spooler_write_spool]
+        # Tests [@ANCHOR: pager_duty:test_synthetic_spooler_failed_write_leaves_no_temp_file]
         with tempfile.TemporaryDirectory() as directory:
             spool = os.path.join(directory, "spool.json")
             pager_synthetic_spooler.write_spool({"a": 1}, spool)
