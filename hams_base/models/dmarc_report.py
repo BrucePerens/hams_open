@@ -4,6 +4,7 @@ import logging
 import zipfile
 import gzip
 import io
+import itertools
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from odoo.addons.zero_sudo import public_rpc
@@ -19,6 +20,8 @@ _logger = logging.getLogger(__name__)
 # expanding ~1000:1 in memory (a classic zip-bomb) -- real DMARC reports
 # are legitimately small (KBs to low single-digit MBs).
 _MAX_DECOMPRESSED_BYTES = 50 * 1024 * 1024
+# Rows kept from one report: 50 MB of XML holds hundreds of thousands, and they go into one create().
+_MAX_RECORDS = 10000
 
 
 # [@ANCHOR: hams_base:COMM_safe_int]
@@ -263,7 +266,7 @@ class DmarcReport(models.Model):
         report = self.env['hams_base.dmarc.report'].create(report_vals)
 
         record_vals_list = []
-        for record in root.findall("record"):
+        for record in itertools.islice(root.iterfind("record"), _MAX_RECORDS):
             row = record.find("row")
             source_ip = row.findtext("source_ip") if row is not None else False
             count = _safe_int(row.findtext("count")) if row is not None else 0
