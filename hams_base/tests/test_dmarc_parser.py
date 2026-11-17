@@ -166,6 +166,17 @@ class TestDmarcParser(common.TransactionCase):
         self.assertTrue(report)
         self.assertEqual(report.record_ids[0].count, 0)
 
+    def test_a_count_or_pct_past_the_database_integer_range_does_not_lose_the_report(self):
+        # Tests [@ANCHOR: hams_base:COMM_safe_int]
+        # int() accepts 99999999999 but the Integer columns do not: the insert raised NumberOutOfRange and the whole
+        # inbound mail was lost to failed/.
+        xml = self.sample_xml.replace("<count>5</count>", "<count>99999999999</count>").replace(
+            "<pct>100</pct>", "<pct>99999999999</pct>")
+        report = self.DmarcReport._parse_dmarc_xml(xml)
+        self.assertTrue(report)
+        self.assertEqual(report.record_ids[0].count, 0)
+        self.assertEqual(report.pct, 100)
+
     def test_zip_declaring_an_oversized_xml_member_is_refused(self):
         # Real cap against a crafted zip whose XML member is larger than
         # this codebase's own decompressed-size limit -- a classic
