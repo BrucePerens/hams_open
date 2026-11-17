@@ -44,6 +44,17 @@ class TestGeneralizedConfig(HamsTransactionCase):
         }
         """
 
+    def test_01b_pull_from_json_deletes_more_than_one_batch(self):
+        """Pulling an empty config removes every old check, not just the first 1000."""
+        # Tests [@ANCHOR: pager_duty:action_pull_from_json]
+        check_model = self.env["pager.check"].with_user(self.admin)
+        check_model.search([]).unlink()
+        check_model.create([{"name": f"old {i}", "check_type": "system"} for i in range(1005)])
+        self.safe_patch("builtins.open", mock_open(read_data="{}"))
+        self.safe_patch("os.path.exists", return_value=True)
+        check_model.action_pull_from_json()
+        self.assertEqual(check_model.search_count([]), 0)
+
     # Tests [@ANCHOR: pager_duty_incident_ticket_adapter_pager_duty_incident_ticket_adapter]
     def test_01_bdd_json_parsing_and_db_sync(self):
         """
