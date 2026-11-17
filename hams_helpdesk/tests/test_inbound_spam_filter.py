@@ -442,6 +442,13 @@ class TestBulkMailSignals(HamsTransactionCase):
         ):
             self.assertEqual(html_shape(html)["tracking_pixels"], expected, html)
 
+    def test_30b_an_unclosed_tag_does_not_swallow_the_tags_after_it(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_html_shape]
+        # Structural, not timed: a tag's attributes stop at the next "<" (an unclosed "<table" is no tag). Running to the next ">" made every
+        # unclosed "<table" scan to the end of the text, which is quadratic on hostile mail.
+        shape = html_shape("<table " * 5 + "<img width=1>")
+        self.assertEqual((shape["tables"], shape["images"], shape["tracking_pixels"]), (0, 1, 1))
+
     def test_31_a_convention_hotel_booking_offer_to_exhibitors_is_flagged(self):
         # Tests [@ANCHOR: hams_helpdesk:inbound_housing_solicitation]
         # Real ticket 141: "Hotel Booking Team" mail to the admin@ alias.

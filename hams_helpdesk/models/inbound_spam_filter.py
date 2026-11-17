@@ -348,7 +348,7 @@ _PREFERENCES_RE = re.compile(
 _SIGNAL_TEXT_LIMIT = 400000  # characters of HTML the shape parser reads; a hostile message may be far larger
 
 
-_SHAPE_TAG_RE = re.compile(r"<(/?)(table|img)\b([^>]*)>", re.IGNORECASE)
+_SHAPE_TAG_RE = re.compile(r"<(/?)(table|img)\b([^<>]*)>", re.IGNORECASE)
 _SIZE_ATTR_RE = re.compile(r"""\b(?:width|height)\s*=\s*(?:["']\s*)?([0-9]+)\s*(?:px)?\s*["'\s/>]""", re.IGNORECASE)
 
 
