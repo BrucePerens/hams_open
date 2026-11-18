@@ -8,7 +8,6 @@ import os
 import tempfile
 import threading
 import time
-from unittest.mock import patch
 
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
@@ -215,9 +214,7 @@ class TestSyntheticSpooler(HamsTransactionCase):
             config_path = os.path.join(tmpdir, "pager_config.json")
             spool_path = os.path.join(tmpdir, "pager_synthetic_spool.json")
             # main() prefers PAGER_CONFIG_PATH, so point it at this throwaway config, not the real one in /opt/hams/etc.
-            env_patch = patch.dict(os.environ, {"PAGER_CONFIG_PATH": config_path})
-            env_patch.start()
-            self.addCleanup(env_patch.stop)
+            self.safe_patch_object(os, "environ", {**os.environ, "PAGER_CONFIG_PATH": config_path})
             with open(config_path, "w", encoding="utf-8") as f:
                 json.dump(
                     {
@@ -250,13 +247,15 @@ class TestSyntheticSpooler(HamsTransactionCase):
             # under load) raised _StopLoop, whose str() is empty, and the
             # bash check reported success=False. Replace only the daemon
             # module's `time` name with a proxy so nothing else is affected.
+            deadline = time.monotonic() + 60
+
             class _LoopStopTime:
                 time = staticmethod(time.time)
 
                 @staticmethod
                 def sleep(_seconds):
                     # The check now runs beside the loop: let cycles pass until its result is in the spool file.
-                    if os.path.exists(spool_path):
+                    if os.path.exists(spool_path) or time.monotonic() > deadline:
                         raise _StopLoop()
                     time.sleep(0.1)  # audit-ignore-sleep
 
@@ -280,17 +279,24 @@ class TestSyntheticSpooler(HamsTransactionCase):
 
         order = []
         slow_may_finish = threading.Event()
+        # Bounded: the loop is stopped by a deadline too, so a check that never completes fails the test instead of
+        # hanging the run (round-130 shard 2 was force-killed with no output for 60 s here).
+        deadline = time.monotonic() + 20
 
         def fake_execute_check(check):
             if check["name"] == "slow":
-                slow_may_finish.wait(timeout=3)
+                slow_may_finish.wait(timeout=10)
                 order.append("slow_end")
             else:
                 order.append("fast_run")
             return check["name"], {"success": True}
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            with open(os.path.join(tmpdir, "pager_config.json"), "w", encoding="utf-8") as f:
+            config_path = os.path.join(tmpdir, "pager_config.json")
+            # main() prefers PAGER_CONFIG_PATH, then /opt/hams/etc/pager_config.json when present (it is on the dev box and
+            # the gate): without this the test read that real file, ran none of its own checks, and looped forever.
+            self.safe_patch_object(os, "environ", {**os.environ, "PAGER_CONFIG_PATH": config_path})
+            with open(config_path, "w", encoding="utf-8") as f:
                 json.dump(
                     {
                         "checks": [
@@ -322,7 +328,7 @@ class TestSyntheticSpooler(HamsTransactionCase):
 
                 @staticmethod
                 def sleep(_seconds):
-                    if order.count("fast_run") >= 2:
+                    if order.count("fast_run") >= 2 or time.monotonic() > deadline:
                         slow_may_finish.set()
                         raise _StopLoop()
                     time.sleep(0.05)  # audit-ignore-sleep
