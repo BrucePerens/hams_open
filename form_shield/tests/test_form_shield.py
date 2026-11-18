@@ -5,6 +5,7 @@ from datetime import timedelta
 import redis
 
 from odoo import fields
+from odoo.exceptions import AccessError
 from odoo.addons.distributed_redis_cache.redis_pool import get_redis_connection
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.tests import tagged
@@ -250,7 +251,7 @@ class TestFormShield(HamsTransactionCase):
             for fragment in ("203.0.113", "203-0-113"):
                 self.assertNotIn(fragment, key)
         # Only the shield's own service account and administrators can touch the table.
-        with self.assertRaises(Exception):
+        with self.assertRaises(AccessError):
             self.env["form.shield.rejection"].with_user(self.public).search([])
 
     def test_counter_day_is_utc_whatever_the_context_time_zone(self):
