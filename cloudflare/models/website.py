@@ -5,6 +5,21 @@ from odoo.addons.distributed_redis_cache.redis_cache import notify_model_invalid
 from odoo.exceptions import UserError
 import logging
 from cryptography.fernet import InvalidToken
+import hmac
+
+from odoo.addons.zero_sudo.models.module_secrets import group_enabled, optional_store_secret, store_secret
+
+# Group "cloudflare" of the host option hams_module_secrets_from_store: the API token and the Turnstile secret
+# come from the secret store, host-wide, under these names, and the encrypted columns are cleared.
+STORE_GROUP = "cloudflare"
+STORE_NAMES = {
+    "cloudflare_api_token": "cloudflare.api_token",
+    "cloudflare_turnstile_secret": "cloudflare.turnstile_secret",
+}
+CRYPT_FIELDS = {
+    "cloudflare_api_token": "cloudflare_api_token_crypt",
+    "cloudflare_turnstile_secret": "cloudflare_turnstile_secret_crypt",
+}
 
 # Fields whose value _get_cloudflare_credentials() reads, directly or via the encrypted-field compute chain above it.
 # That method is no longer cached in Redis, so the notify below only drops other cached results for the website model.
@@ -213,11 +228,24 @@ class WebsiteCloudflare(models.Model):
 
     # [@ANCHOR: cloudflare:COMM_compute_encrypted_field]
     def _compute_encrypted_field(self, plain_field, crypt_field):
+        if group_enabled(STORE_GROUP):
+            value = optional_store_secret(STORE_NAMES[plain_field]) or False
+            for rec in self:
+                setattr(rec, plain_field, value)
+            return
         for rec in self:
             setattr(rec, plain_field, rec._crypt_field(getattr(rec, crypt_field), decrypt=True))
 
     # [@ANCHOR: cloudflare:COMM_inverse_encrypted_field]
     def _inverse_encrypted_field(self, plain_field, crypt_field):
+        if group_enabled(STORE_GROUP):
+            # Store only: a typed secret is refused (put it in the store); clearing is a no-op, the store owns it.
+            if any(getattr(rec, plain_field) for rec in self):
+                raise UserError(_(
+                    "The Cloudflare secrets are served from the secret store on this host "
+                    "(hams_module_secrets_from_store). Put the new value in the store, name %(name)s.",
+                    name=STORE_NAMES[plain_field]))
+            return
         for rec in self:
             setattr(rec, crypt_field, rec._crypt_field(getattr(rec, plain_field)))
 
@@ -265,3 +293,47 @@ class WebsiteCloudflare(models.Model):
         if token == "***ERROR***":
             token = False
         return token, zone
+
+    # [@ANCHOR: cloudflare:store_check_secrets]
+    @api.model
+    def _check_cloudflare_secrets_in_store(self):
+        """With the group on: every secret a website still has an encrypted copy of must be in the store, else
+        SecretNotFound (names only). A website without a secret needs nothing."""
+        if not group_enabled(STORE_GROUP):
+            return
+        websites = self.search([], limit=10000)
+        for plain, crypt in CRYPT_FIELDS.items():
+            if any(websites.mapped(crypt)):
+                store_secret(STORE_NAMES[plain])
+
+    # [@ANCHOR: cloudflare:store_register_hook]
+    def _register_hook(self):
+        """A host that lists the group but has an incomplete store refuses to load the registry."""
+        super()._register_hook()
+        self._check_cloudflare_secrets_in_store()
+
+    # [@ANCHOR: cloudflare:store_clear_from_database]
+    @api.model
+    def _hams_cloudflare_clear_secrets_from_database(self):
+        """Rollout step after the flip: empties the encrypted columns. Refuses (writing nothing) unless the group
+        is on, the store holds each secret that has an encrypted copy, and every website's copy equals the store
+        value (the store is host-wide, so a website with a different token would otherwise lose it). Returns the
+        field names it cleared (names only)."""
+        if not group_enabled(STORE_GROUP):
+            raise UserError(_("List the group %s in hams_module_secrets_from_store first.", STORE_GROUP))
+        websites = self.search([], limit=10000)
+        cleared = []
+        for plain, crypt in CRYPT_FIELDS.items():
+            holders = websites.filtered(crypt)
+            if not holders:
+                continue
+            wanted = store_secret(STORE_NAMES[plain]).encode("utf-8")
+            for site in holders:
+                have = site._crypt_field(site[crypt], decrypt=True).encode("utf-8")
+                if not hmac.compare_digest(have, wanted):
+                    raise UserError(_(
+                        "Website %(site)s holds a different %(field)s than the secret store; the store is "
+                        "host-wide. Nothing was cleared.", site=site.name, field=plain))
+            holders.write({crypt: False})
+            cleared.append(crypt)
+        return cleared
