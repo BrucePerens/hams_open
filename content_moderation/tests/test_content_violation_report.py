@@ -23,6 +23,7 @@ crash or a silently-skipped consequence.
 from types import SimpleNamespace
 
 from odoo.exceptions import UserError
+from psycopg2 import IntegrityError
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
@@ -60,11 +61,11 @@ class TestContentViolationReport(HamsTransactionCase):
         self.assertEqual(report.state, "new")
 
     def test_02_target_url_and_description_required_non_empty(self):
-        with self.assertRaises(Exception):
+        with self.assertRaises(IntegrityError):
             self.env["content.violation.report"].create(
                 {"target_url": "   ", "description": "Has a description"}
             )
-        with self.assertRaises(Exception):
+        with self.assertRaises(IntegrityError):
             self.env["content.violation.report"].create(
                 {"target_url": "/some/page", "description": "   "}
             )
@@ -77,7 +78,7 @@ class TestContentViolationReport(HamsTransactionCase):
                 "reported_by_user_id": self.reporter.id,
             }
         )
-        with self.assertRaises(Exception):
+        with self.assertRaises(IntegrityError):
             self.env["content.violation.report"].create(
                 {
                     "target_url": "/dup/page",
