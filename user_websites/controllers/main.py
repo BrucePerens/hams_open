@@ -1451,6 +1451,13 @@ class UserWebsitesController(http.Controller):
         if not profile_user and not profile_group:
             raise request.not_found()
 
+        # Same answer as the site's own pages: a hidden or suspended site is not there, so it takes no follower
+        # (a follower of the member's partner record) and does not confirm that the address exists.
+        if profile_user and not profile_user._website_publicly_visible():
+            raise request.not_found()
+        if profile_group and profile_group.is_suspended_from_websites:
+            raise request.not_found()
+
         record_id = profile_user.partner_id.id if profile_user else profile_group.id
         model = "res.partner" if profile_user else "user.websites.group"
 
