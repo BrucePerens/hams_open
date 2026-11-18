@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import restore_drill as rd  # noqa: E402
@@ -202,6 +203,17 @@ class TestRestoreDrillPostgres(unittest.TestCase):
             self.assertEqual(self.scratch_dbs(), before)
             shutil.rmtree(self.repo)
             os.makedirs(self.repo)
+
+    def test_missing_postgres_tools_report_postgres_tools_failed_not_a_second_error(self):
+        # Tests [@ANCHOR: backup_management:restore_drill_check_postgres]
+        # The scratch-database drop in the finally also runs the missing tool: its OSError used to replace the DrillError.
+        def no_tools(argv, **_kw):
+            raise FileNotFoundError(argv[0])
+        messages = []
+        with unittest.mock.patch.object(rd.subprocess, "run", side_effect=no_tools):
+            with self.assertRaisesRegex(rd.DrillError, "postgres tools failed"):
+                rd.check_postgres("/nonexistent.dump", self.cfg, messages.append)
+        self.assertTrue(any("was not dropped" in m for m in messages))
 
 
 if __name__ == "__main__":
