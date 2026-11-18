@@ -30,6 +30,8 @@ import json
 import logging
 import os
 import urllib.error
+import http.client
+import socket
 import urllib.request
 
 from mcp.server.mcpserver import MCPServer
@@ -46,6 +48,34 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 _OPENER = urllib.request.build_opener(_NoRedirect)
+UNIX_URL_PREFIX = "unix://"
+
+
+# [@ANCHOR: pager_duty:unix_opener_mcp]
+# Verified by [@ANCHOR: pager_duty:test_mcp_a_unix_url_reaches_odoo_over_the_socket]
+def _opener_for(url):
+    """`(opener, base)` for `url`. `unix:///run/odoo/rpc.sock` (the RPC guard's Unix socket) gives an opener that sends
+    every request over that socket (no redirects, no proxies) and the base `http://unix-socket`; any other URL gives
+    the plain no-redirect opener and itself."""
+    if not url.startswith(UNIX_URL_PREFIX):
+        return _OPENER, url
+    socket_path = url[len(UNIX_URL_PREFIX):]
+    def connect(host, timeout):
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            sock.settimeout(timeout)
+            sock.connect(socket_path)
+        except OSError as error:
+            sock.close()
+            raise urllib.error.URLError(error) from error  # like a refused TCP connection
+        connection = http.client.HTTPConnection("unix-socket", timeout=timeout)
+        connection.sock = sock  # http.client only connects by itself when it has no socket
+        return connection
+
+    handler = urllib.request.HTTPHandler()
+    handler.http_open = lambda req: handler.do_open(connect, req)
+    return urllib.request.build_opener(_NoRedirect, urllib.request.ProxyHandler({}), handler), "http://unix-socket"
+
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s"
@@ -80,14 +110,15 @@ class OdooClient:
 
     # [@ANCHOR: pager_duty:mcp_odoo_client_execute]
     def execute(self, model, method, **kwargs):
+        opener, base = _opener_for(self.url)
         req = urllib.request.Request(
-            f"{self.url}/json/2/{model}/{method}",
+            f"{base}/json/2/{model}/{method}",
             data=json.dumps(kwargs).encode("utf-8"),
             headers=self.headers,
             method="POST",
         )
         try:
-            with _OPENER.open(req, timeout=15) as response:
+            with opener.open(req, timeout=15) as response:
                 return json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             err_body = e.read().decode("utf-8")
