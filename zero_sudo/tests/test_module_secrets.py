@@ -106,6 +106,23 @@ class TestModuleSecrets(TransactionCase, SafePatchMixin):
         self.env.cr.execute("SELECT key FROM ir_config_parameter WHERE value = ANY(%s)", [[STORE_KEY, STORE_WH]])
         self.assertEqual(self.env.cr.fetchall(), [])
 
+    def test_renaming_a_row_to_a_store_served_key_cannot_carry_a_real_value_into_the_database(self):
+        # Tests [@ANCHOR: zero_sudo:module_secrets_write]
+        self._groups("stripe")
+        plain = self.icp.create({"key": "test.module_secrets.plain", "value": "sk_test_typed_elsewhere"})
+        with self.assertRaises(UserError):
+            plain.write({"key": "stripe.webhook_secret"})  # the row's own real value would land on a guarded key
+        with self.assertRaises(UserError):
+            plain.write({"key": "stripe.webhook_secret", "value": "whsec_test_typed"})
+        self.assertEqual(plain.key, "test.module_secrets.plain")
+        self.assertEqual(self._row("stripe.webhook_secret"), None)
+        # The value the store already holds may still be recorded as the marker, and an ordinary rename is untouched.
+        plain.write({"key": "stripe.webhook_secret", "value": STORE_WH})
+        self.assertEqual(self._row("stripe.webhook_secret"), MOVED_MARKER)
+        other = self.icp.create({"key": "test.module_secrets.other", "value": "plain"})
+        other.write({"key": "test.module_secrets.renamed"})
+        self.assertEqual(self._row("test.module_secrets.renamed"), "plain")
+
     def test_clear_step_replaces_the_copies_and_refuses_without_the_store_value(self):
         # Tests [@ANCHOR: zero_sudo:module_secrets_clear_from_database]
         self._groups("stripe")
