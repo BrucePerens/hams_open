@@ -72,7 +72,10 @@ class CloudflarePurgeMixin(models.AbstractModel):
         """
         if not str(url).startswith("/") or not website_id:
             return [url]
-        website = self.env["website"].browse(website_id)
+        # The caller may be any service account (a page write runs as the websites one), none of which may
+        # read languages: read them as the purge service, which has read-only access to websites and languages.
+        svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid("cloudflare.user_cloudflare_purge")
+        website = self.env["website"].with_user(svc_uid).browse(website_id)
         prefixes = [
             lang.url_code
             for lang in website.language_ids
