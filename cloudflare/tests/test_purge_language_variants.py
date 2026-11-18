@@ -8,8 +8,8 @@ from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
 @tagged("post_install", "-at_install")
 class TestPurgeCoversLanguageVariants(RealTransactionCase):
-    # [@ANCHOR: cloudflare:test_purge_covers_language_variants]
-    # Tests [@ANCHOR: cloudflare:COMM_language_variants]
+    # [@ANCHOR: COMM_test_purge_covers_language_variants]
+    # Tests [@ANCHOR: COMM_language_variants]
     def test_unpublishing_a_page_purges_each_language_address(self):
         """A page is cached at the edge per language address; all of them must be purged."""
         french = self.env["res.lang"].with_context(active_test=False).search([("code", "=", "fr_FR")], limit=1)

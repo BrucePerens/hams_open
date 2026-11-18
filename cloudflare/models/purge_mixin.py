@@ -62,8 +62,8 @@ class CloudflarePurgeMixin(models.AbstractModel):
             QueueModel = self.env["cloudflare.purge.queue"].with_user(svc_uid)
             QueueModel.enqueue_urls_batch(purge_map)
 
-    # [@ANCHOR: cloudflare:COMM_language_variants]
-    # Verified by [@ANCHOR: cloudflare:test_purge_covers_language_variants]
+    # [@ANCHOR: COMM_language_variants]
+    # Verified by [@ANCHOR: COMM_test_purge_covers_language_variants]
     def _cloudflare_language_variants(self, website_id, url):
         """The address itself plus its copy under each non-default language prefix of the website.
 
