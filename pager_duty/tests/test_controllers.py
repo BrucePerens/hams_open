@@ -57,7 +57,6 @@ class TestPagerControllers(HamsHttpCase):
         response = self.url_open("/api/v1/pager/heartbeat/no-such-uuid")
         self.assertEqual(response.status_code, 404)
 
-    # [@ANCHOR: test_heartbeat_fails_open_when_redis_is_down]
     def test_heartbeat_fails_open_when_redis_is_down(self):
         # Tests [@ANCHOR: pager_duty:heartbeat_miss_limit]
         """A Redis outage fails OPEN: an unknown uuid is a plain 404 and a real heartbeat is accepted, never a 500."""

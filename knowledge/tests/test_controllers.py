@@ -189,7 +189,6 @@ class TestManualControllers(HamsHttpCase):
         self.assertEqual(statuses, [303, 303, 429, 429], "one /24 shares a budget, whatever the host")
         self.assertEqual(vote(self.root_public, other), 303)
 
-    # [@ANCHOR: test_manual_limits_refuse_when_redis_is_down]
     def test_manual_limits_refuse_when_redis_is_down(self):
         # Tests [@ANCHOR: knowledge:network_hits]
         # Tests [@ANCHOR: knowledge:feedback_rate_limit]
