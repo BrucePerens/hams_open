@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from unittest.mock import patch, AsyncMock
 
 # Bridge the local directory to import the daemon module for testing,
@@ -141,6 +142,45 @@ class UnitFileTests(unittest.TestCase):
             self.text,
         )
         self.assertTrue(os.path.isfile(os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache_manager.py")))
+
+
+class LoopStepTests(unittest.IsolatedAsyncioTestCase):
+    # Tests [@ANCHOR: COMM_cache_manager_loop_step]
+
+    async def test_a_failed_connect_is_retried_after_the_short_delay(self):
+        reconnect = AsyncMock(return_value=False)
+        delay = await cache_manager._loop_step([], reconnect)
+        self.assertEqual(delay, cache_manager.RECONNECT_RETRY_SECONDS)
+        self.assertLess(delay, cache_manager.HEALTH_CHECK_SECONDS)
+
+    async def test_a_failed_reconnect_of_a_closed_connection_is_retried_after_the_short_delay(self):
+        conn = unittest.mock.MagicMock()
+        conn.is_closed.return_value = True
+        reconnect = AsyncMock(return_value=False)
+        delay = await cache_manager._loop_step([conn], reconnect)
+        self.assertEqual(delay, cache_manager.RECONNECT_RETRY_SECONDS)
+
+    async def test_a_healthy_connection_waits_the_health_check_period(self):
+        conn = unittest.mock.MagicMock()
+        conn.is_closed.return_value = False
+        conn.execute = AsyncMock()
+        reconnect = AsyncMock(return_value=True)
+        delay = await cache_manager._loop_step([conn], reconnect)
+        self.assertEqual(delay, cache_manager.HEALTH_CHECK_SECONDS)
+        reconnect.assert_not_awaited()
+
+    async def test_a_successful_connect_waits_the_health_check_period(self):
+        conn = unittest.mock.MagicMock()
+        conn.is_closed.return_value = False
+        conn.execute = AsyncMock()
+        conns = []
+
+        async def reconnect():
+            conns.append(conn)
+            return True
+
+        delay = await cache_manager._loop_step(conns, reconnect)
+        self.assertEqual(delay, cache_manager.HEALTH_CHECK_SECONDS)
 
 
 if __name__ == "__main__":
