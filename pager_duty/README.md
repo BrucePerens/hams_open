@@ -206,6 +206,7 @@ Provides HTTP endpoints for daemon-to-Odoo communication.
 *   `get_log_files()`: Retrieves the paths of the active registered log files (Log Analyzer > Target Files) that the calling Pager Duty Admin is allowed to see.
 *   `ping(**kw)`: Returns a simple 200 OK for basic Odoo connectivity checks (`GET /api/v1/pager/ping`, body `{"status": "ok"}`).
 *   `heartbeat(hb_uuid, **kw)`: HTTP endpoint for daemons to transmit their heartbeats without XML-RPC. A GET or POST to `/api/v1/pager/heartbeat/<uuid>` records the current time as the last heartbeat of the Heartbeat (Push Monitor) check with that UUID, or returns 404 when no check has it.
+*   **Unknown-heartbeat limit:** `heartbeat` counts every unknown uuid per network (the /24 of an IPv4 caller, the /48 of an IPv6 one) in Redis through `knowledge.rate_limit.network_hits` [@ANCHOR: pager_duty:heartbeat_miss_limit]. Past 600 misses an hour from one network (`MISSES_PER_HOUR_NETWORK`) the miss answers 429 instead of 404, because each unknown uuid costs a database lookup. A real heartbeat is never counted or refused, so a monitor behind a noisy network keeps reporting. A Redis outage fails open (the plain 404 stays): a dead-man's switch that rejected real heartbeats because the counter was down would raise false alarms, and the worst an outage allows is the unlimited lookups the endpoint allowed before.
 
 ---
 

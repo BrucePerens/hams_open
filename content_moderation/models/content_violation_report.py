@@ -106,6 +106,9 @@ class ContentViolationReport(models.Model):
     def create(self, vals_list):
         """A guest's second report of the same URL from the same network on the same day returns the
         first report instead of adding another."""
+        if self.env.user.share:
+            # A portal or public caller cannot file a report that is already resolved (F6, ODOO_ACCESS_CONTROL_AUDIT_2026-11-12).
+            vals_list = [{k: v for k, v in vals.items() if k != "state"} for vals in vals_list]
         Report = self.env["content.violation.report"]
         keys = [False if vals.get("reported_by_user_id") else self._guest_dedupe_key(vals.get("target_url")) for vals in vals_list]
         known = {r.guest_dedupe_key: r for r in Report.search([("guest_dedupe_key", "in", [k for k in keys if k])], limit=len(keys))}

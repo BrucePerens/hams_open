@@ -176,3 +176,21 @@ class TestOwnerOwnershipRefusals(HamsHttpCase):
         self.env.flush_all()
         self.authenticate("ownrefa", "ownrefa")
         self._refused("ownrefa")
+
+    def test_09_a_suspended_member_cannot_edit_or_republish_a_post_through_the_blog_editor(self):
+        # Tests [@ANCHOR: user_websites:COMM_blog_post_edit_submit]
+        # Suspension unpublishes everything once; the blog editor must not let the member publish again (the stock /blog
+        # index would list it), the way every /my/site route already refuses a suspended owner.
+        self.owner.is_suspended_from_websites = True
+        self.env.flush_all()
+        self.authenticate("ownrefa", "ownrefa")
+        post_id = self.owner_post.id
+        edit = self.url_open(f"/blog_post/edit/{post_id}", allow_redirects=False)
+        self.assertEqual(edit.status_code, 303)
+        self.assertIn("/my/home", edit.headers["Location"])
+        data = {"csrf_token": odoo.http.Request.csrf_token(self), "name": "Spam", "content": "<p>x</p>", "is_published": "on"}
+        saved = self.url_open(f"/blog_post/edit/submit/{post_id}", data=data, method="POST", allow_redirects=False)
+        self.assertEqual(saved.status_code, 303)
+        self.owner_post.invalidate_recordset()
+        self.assertFalse(self.owner_post.is_published)
+        self.assertEqual(self.owner_post.name, "Owner Post")

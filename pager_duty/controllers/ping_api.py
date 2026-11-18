@@ -4,6 +4,14 @@
 import json
 from odoo import http, fields
 from odoo.http import request
+from odoo.addons.knowledge.rate_limit import network_hits
+
+# [@ANCHOR: pager_duty:heartbeat_miss_limit]
+# Verified by [@ANCHOR: test_heartbeat_misses_are_limited_per_network]
+# Every unknown uuid costs a database lookup, so misses are counted per network (/24 or /48) and answered 429 past 600
+# an hour. A real heartbeat is never counted or refused. A Redis outage fails OPEN (the miss is a plain 404): a dead-man's
+# switch that rejected real heartbeats because the counter was down would raise false alarms.
+MISSES_PER_HOUR_NETWORK = 600
 
 
 # [@ANCHOR: pager_duty_ping_api_pager_ping_api]
@@ -39,6 +47,13 @@ class PagerPingAPI(http.Controller):
             check.last_heartbeat = fields.Datetime.now()
             return http.Response(
                 json.dumps({"status": "ok"}), content_type="application/json"
+            )
+        misses = network_hits(request.env, "pager_heartbeat_miss", 3600)
+        if misses is not None and misses > MISSES_PER_HOUR_NETWORK:
+            return http.Response(
+                json.dumps({"err": "too many unknown heartbeats from your network"}),
+                status=429,
+                content_type="application/json",
             )
         return http.Response(
             json.dumps({"err": "not found"}),

@@ -327,12 +327,16 @@ class TestSecurityUtilsUnits(SafePatchMixin, BaseCase):
                 return [3, 1, 3]
 
         class Model:
+            def with_user(self, uid):
+                seen.append(("user", uid))
+                return self
+
             def _search(self, domain, **kwargs):
                 seen.append((domain, kwargs))
                 return Result()
         util = _utils(models={"x.y": Model()})
-        self.assertEqual(util._ground_truth_ids("x.y", [("a", "=", 1)]), {1, 3})
-        self.assertEqual(seen, [([("a", "=", 1)], {"bypass_access": True})])
+        self.assertEqual(util._ground_truth_ids("x.y", [("a", "=", 1)], 9), {1, 3})
+        self.assertEqual(seen, [("user", 9), ([("a", "=", 1)], {"bypass_access": True})])
 
     def _erase(self, scoped_ids, real_ids, login_row=("svc_login",)):
         unlinked = []
@@ -354,7 +358,7 @@ class TestSecurityUtilsUnits(SafePatchMixin, BaseCase):
         cursor = FakeCursor(fetchone=login_row)
         util = _utils(cursor, models={"x.y": Model()})
         self._stub("_get_service_uid", lambda xml_id: searches.append(("uid", xml_id)) or 9)
-        self._stub("_ground_truth_ids", lambda model, domain: searches.append(("truth", model, domain)) or set(real_ids))
+        self._stub("_ground_truth_ids", lambda model, domain, uid: searches.append(("truth", model, domain)) or set(real_ids))
         return util, cursor, unlinked, searches
 
     def test_erase_matching_set_unlinks_and_returns_sorted_ids(self):

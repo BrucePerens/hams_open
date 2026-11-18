@@ -6,6 +6,9 @@ from unittest.mock import MagicMock
 import redis as real_redis
 
 from odoo.tests.common import tagged
+import secrets
+
+from odoo.addons.pager_duty.controllers import ping_api
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
 
@@ -51,6 +54,27 @@ class TestPagerControllers(HamsHttpCase):
         # Tests [@ANCHOR: pager_duty:get_check_id_by_uuid]
         response = self.url_open("/api/v1/pager/heartbeat/no-such-uuid")
         self.assertEqual(response.status_code, 404)
+
+    # [@ANCHOR: test_heartbeat_misses_are_limited_per_network]
+    def test_heartbeat_misses_are_limited_per_network(self):
+        # Tests [@ANCHOR: pager_duty:heartbeat_miss_limit]
+        """Unknown uuids are counted per network and answered 429 past the limit; a real heartbeat still works; a
+        Redis outage leaves the plain 404 (and real heartbeats) alone."""
+        self.safe_patch_object(ping_api, "MISSES_PER_HOUR_NETWORK", 2)
+        check = self.env["pager.check"].create({"name": "Limited Monitor", "check_type": "heartbeat", "interval": 60})
+        mine = "198.18.%d" % (secrets.randbelow(200) + 1)
+        other = "198.19.%d.9" % (secrets.randbelow(200) + 1)
+
+        def beat(uuid, address):
+            return self.url_open(f"/api/v1/pager/heartbeat/{uuid}", headers={"CF-Connecting-IP": address}).status_code
+
+        statuses = [beat("no-such-%d" % host, "%s.%d" % (mine, host)) for host in (10, 11, 12, 13)]
+        self.assertEqual(statuses, [404, 404, 429, 429])
+        self.assertEqual(beat(check.heartbeat_uuid, "%s.14" % mine), 200, "a real heartbeat is never refused")
+        self.assertEqual(beat("no-such-x", other), 404, "another network has its own budget")
+        self.safe_patch_object(ping_api, "network_hits", return_value=None)
+        self.assertEqual(beat("no-such-y", "%s.15" % mine), 404, "Redis down: fail open")
+        self.assertEqual(beat(check.heartbeat_uuid, "%s.15" % mine), 200)
 
     # Tests [@ANCHOR: pager_duty_board_pager_board]
     def test_02_board_security_and_render(self):
