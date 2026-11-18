@@ -14,6 +14,12 @@ model_id = 19
 [kenwood.ky]
 form = "undocumented"
 
+[levels]
+attenuator_db = []
+attenuator_any_up_to_db = 0
+preamp_steps = 0
+antenna_ports = 2
+
 [timing]
 timeout_ms = 200
 retries = 3
@@ -62,6 +68,16 @@ code = "9"
 [[facts]]
 key = "rig.*"
 provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py and this repository's TS-2000 bridge", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.antenna_ports"
+provenance = { kind = "manual", reference = "Kenwood TS-2000/TS-2000X/TS-B2000 Instruction Manual B62-1221-10, file TS-2000_instruction_manual_E.pdf, sha256 f2780ed98541d3e484301f5f87e6a829d2629bb9ba487a8c4c6b50c97af07762: appendix 21, PC control command table, AN (printed p. 116, PDF p. 126): ANp1; p1 1 selects ANT1, 2 selects ANT2" }
+verified = { state = "manual-checked", reference = "AN, instruction manual p. 116" }
+
+[[facts]]
+key = "levels.*"
+provenance = { kind = "repo-code", reference = "daemons/radioctl/crates/radioctl-core/src/description.rs LevelParams::default()", note = "No attenuator or preamp list of the TS-2000 has been read, so those fields hold the defaults (none listed); only antenna_ports, above, comes from a manual." }
 verified = { state = "unverified" }
 
 [[facts]]
