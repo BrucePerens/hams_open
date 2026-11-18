@@ -1,0 +1,50 @@
+.\" SPDX-License-Identifier: GPL-3.0-or-later
+.TH YOGA-WINDOWS-VM 1 "November 2026" "lenovo-yoga-c940-14iil-windows-vm" "User Commands"
+.SH NAME
+yoga-windows-vm \- run the Windows install of a Lenovo Yoga C940 in a KVM virtual machine
+.SH SYNOPSIS
+.B yoga-windows-vm
+.I command
+.RI [ argument ]
+.SH DESCRIPTION
+Manages a libvirt/QEMU virtual machine that boots the Windows installation already on the laptop's NVMe drive.
+The default mode is an overlay: the real Windows partition is never written.
+Commands that change system state re-run themselves with sudo unless run as root.
+.SH COMMANDS
+.TP
+.B init
+Build the virtual GPT/ESP disk, the MSDM copy and the overlay, and define the VM (root).
+.TP
+.B start " [--viewer]"
+Start the VM, headless unless --viewer is given.
+.TP
+.B view
+Open virt-viewer on the running VM.
+.TP
+.B launch
+Start the VM if needed and open the viewer (used by the GNOME launcher).
+.TP
+.B stop
+ACPI shutdown; wait SHUTDOWN_WAIT seconds; destroy the VM only as a last resort.
+.TP
+.B status
+Show the disk mode, the VM state, the host mount state and whether autostart is on.
+.TP
+.BR mode " overlay|raw"
+Switch the disk mode. Raw mode needs --enable-raw-writes and the VM must be off.
+.TP
+.BR autostart " on|off"
+Start the VM at host boot and stop it cleanly at host shutdown (default off).
+.TP
+.B remount
+Remount the Windows partition on the host if the VM is off (root).
+.TP
+.B reset-overlay
+Discard the overlay, that is, the Windows changes made in overlay mode (root).
+.SH FILES
+.TP
+.I /etc/yoga-windows-vm/yoga-windows-vm.conf
+Settings (disk, domain name, data directory, shutdown wait).
+.SH SEE ALSO
+.BR virsh (1),
+.BR virt-viewer (1)
