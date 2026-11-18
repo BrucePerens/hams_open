@@ -51,139 +51,126 @@ class EdgeRoutingDomain(models.Model):
         Pushes the full domain routing table to PagerDuty.
         Designed to be executed asynchronously via ir.cron.
         """
-        try:
-            # Resolve service user securely
-            if self.env.registry.loaded:
-                self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account'))  # Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
-                if self.env.cr.fetchone():
-                    svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
-                        "edge_routing.edge_routing_service_account"
-                    )
-                    env_svc = self.with_user(svc_uid).env
-                else:
-                    env_svc = self.env
+        # Resolve service user securely
+        if self.env.registry.loaded:
+            self.env.cr.execute("SELECT 1 FROM ir_model_data WHERE module=%s AND name=%s", ('edge_routing', 'edge_routing_service_account'))  # Tested by [@ANCHOR: test_edge_routing_service_account_sql_check]
+            if self.env.cr.fetchone():
+                svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
+                    "edge_routing.edge_routing_service_account"
+                )
+                env_svc = self.with_user(svc_uid).env
             else:
                 env_svc = self.env
+        else:
+            env_svc = self.env
 
-            all_domains = []
-            last_id = 0
-            while True:
-                batch = env_svc["edge.routing.domain"].search([("id", ">", last_id)], limit=1000, order="id ASC")
-                if not batch:
-                    break
-                all_domains.extend(batch.mapped("name"))
-                last_id = batch[-1].id
+        all_domains = []
+        last_id = 0
+        while True:
+            batch = env_svc["edge.routing.domain"].search([("id", ">", last_id)], limit=1000, order="id ASC")
+            if not batch:
+                break
+            all_domains.extend(batch.mapped("name"))
+            last_id = batch[-1].id
 
-            if "ham.dns.zone" in env_svc:
-                try:
-                    # The savepoint is load-bearing, not
-                    # decorative. _get_service_env()'s
-                    # own SQL-backed uid lookup can raise a real Postgres
-                    # `RAISE EXCEPTION`, which aborts the transaction; the
-                    # outer `except Exception` here already recovers this
-                    # specific function's own control flow either way (no
-                    # further DB call follows in this function today), but
-                    # without the savepoint the transaction stays poisoned
-                    # for whatever runs next in the SAME transaction --
-                    # e.g. ir.cron's own end-of-job bookkeeping writes, if
-                    # this method is invoked as part of a larger cron
-                    # transaction rather than getting its own.
-                    with self.env.cr.savepoint():
-                        dns_env_svc = env_svc["zero_sudo.security.utils"]._get_service_env("ham_dns.user_dns_api_service")
-                        last_id = 0
-                        while True:
-                            dns_batch = dns_env_svc["ham.dns.zone"].search([("id", ">", last_id)], limit=1000, order="id ASC")
-                            if not dns_batch:
-                                break
-                            all_domains.extend(dns_batch.mapped("name"))
-                            last_id = dns_batch[-1].id
-                except Exception as e:  # audit-ignore-catch-all
-                    # Catch broadly, not just (KeyError, ValueError):
-                    # _get_service_env() -> _get_service_uid() raises
-                    # AccessError on a bad/missing xml_id, and the underlying
-                    # SQL-backed uid resolution can raise a psycopg2 error,
-                    # neither of which is a KeyError/ValueError. A real
-                    # DNS-zone lookup failure of either kind would otherwise
-                    # propagate out of this explicitly-labeled "soft
-                    # dependency" block, crashing the whole cron run instead
-                    # of just skipping the DNS domains.
-                    # The push REPLACES the certbot check's target, so a list without the DNS zones would
-                    # silently drop them from certificate monitoring: push nothing, the next run retries.
-                    _logger.error("Skipping PagerDuty domain sync: the ham.dns.zone lookup failed, and a partial list would replace the full one: %s", e)
-                    return
+        if "ham.dns.zone" in env_svc:
+            try:
+                # The savepoint is load-bearing, not
+                # decorative. _get_service_env()'s
+                # own SQL-backed uid lookup can raise a real Postgres
+                # `RAISE EXCEPTION`, which aborts the transaction; the
+                # outer `except Exception` here already recovers this
+                # specific function's own control flow either way (no
+                # further DB call follows in this function today), but
+                # without the savepoint the transaction stays poisoned
+                # for whatever runs next in the SAME transaction --
+                # e.g. ir.cron's own end-of-job bookkeeping writes, if
+                # this method is invoked as part of a larger cron
+                # transaction rather than getting its own.
+                with self.env.cr.savepoint():
+                    dns_env_svc = env_svc["zero_sudo.security.utils"]._get_service_env("ham_dns.user_dns_api_service")
+                    last_id = 0
+                    while True:
+                        dns_batch = dns_env_svc["ham.dns.zone"].search([("id", ">", last_id)], limit=1000, order="id ASC")
+                        if not dns_batch:
+                            break
+                        all_domains.extend(dns_batch.mapped("name"))
+                        last_id = dns_batch[-1].id
+            except Exception as e:  # audit-ignore-catch-all
+                # Catch broadly, not just (KeyError, ValueError):
+                # _get_service_env() -> _get_service_uid() raises
+                # AccessError on a bad/missing xml_id, and the underlying
+                # SQL-backed uid resolution can raise a psycopg2 error,
+                # neither of which is a KeyError/ValueError. A real
+                # DNS-zone lookup failure of either kind is turned into one
+                # UserError that names the cause.
+                # The push REPLACES the certbot check's target, so a list without the DNS zones would
+                # silently drop them from certificate monitoring: push nothing and fail the cron run; the next run retries.
+                raise exceptions.UserError(
+                    "PagerDuty domain sync failed: the ham.dns.zone lookup failed: %s" % (e,)
+                ) from e
 
-            unique_domains = list(set(all_domains))
+        unique_domains = list(set(all_domains))
 
-            # This POST must carry an `api_identity`: without it EVERY sync is
-            # refused by pager_duty's shared-secret gate. The receiving route
-            # (pager_duty/controllers/domain_api.py,
-            # the pager_duty:update_domains anchor) is `auth="public"` and
-            # gated solely on `hmac.compare_digest(api_identity,
-            # <pager_duty.domain_api_identity>)`; with the field absent it
-            # returns {"status": "error", "message": "Unauthorized"} -- and
-            # because that is a `type="jsonrpc"` route, the refusal arrives
-            # inside an HTTP *200* envelope, so `raise_for_status()` below sees
-            # nothing wrong and the broad `except` never fires. The domain
-            # list would then silently never reach `pager.check.
-            # update_lets_encrypt_domains()`, on every scheduled run and
-            # every domain create/write/unlink trigger.
-            api_identity = env_svc["zero_sudo.security.utils"]._get_system_param(
-                "pager_duty.domain_api_identity"
+        # This POST must carry an `api_identity`: without it EVERY sync is
+        # refused by pager_duty's shared-secret gate. The receiving route
+        # (pager_duty/controllers/domain_api.py,
+        # the pager_duty:update_domains anchor) is `auth="public"` and
+        # gated solely on `hmac.compare_digest(api_identity,
+        # <pager_duty.domain_api_identity>)`; with the field absent it
+        # returns {"status": "error", "message": "Unauthorized"} -- and
+        # because that is a `type="jsonrpc"` route, the refusal arrives
+        # inside an HTTP *200* envelope, so `raise_for_status()` below sees
+        # nothing wrong. The domain
+        # list would then silently never reach `pager.check.
+        # update_lets_encrypt_domains()`, on every scheduled run and
+        # every domain create/write/unlink trigger.
+        api_identity = env_svc["zero_sudo.security.utils"]._get_system_param(
+            "pager_duty.domain_api_identity"
+        )
+        if not api_identity:
+            # Raise (the cron's failure is reported by hams_helpdesk) rather than POSTing a request the endpoint is
+            # guaranteed to refuse: each refusal also increments that
+            # route's own per-source-IP failed-attempt counter, so a
+            # silent retry loop locks this origin out of it entirely.
+            raise exceptions.UserError(
+                "PagerDuty domain sync failed: system parameter "
+                "'pager_duty.domain_api_identity' is not configured, so "
+                "/api/v1/pager_duty/update_domains would refuse the push."
             )
-            if not api_identity:
-                # Fail loudly rather than POSTing a request the endpoint is
-                # guaranteed to refuse: each refusal also increments that
-                # route's own per-source-IP failed-attempt counter, so a
-                # silent retry loop locks this origin out of it entirely.
-                _logger.warning(
-                    "Skipping PagerDuty domain sync: system parameter "
-                    "'pager_duty.domain_api_identity' is not configured, so "
-                    "/api/v1/pager_duty/update_domains would refuse the push."
-                )
-                return
-            # Send to the API
-            host = config.get('odoo_host') or 'odoo'
-            response = requests.post(
-                f"http://{host}:8069/api/v1/pager_duty/update_domains",
-                json={
-                    "jsonrpc": "2.0",
-                    "method": "call",
-                    "params": {
-                        "domains": unique_domains,
-                        "api_identity": api_identity,
-                    },
+        # Send to the API
+        host = config.get('odoo_host') or 'odoo'
+        response = requests.post(
+            f"http://{host}:8069/api/v1/pager_duty/update_domains",
+            json={
+                "jsonrpc": "2.0",
+                "method": "call",
+                "params": {
+                    "domains": unique_domains,
+                    "api_identity": api_identity,
                 },
-                timeout=5,
+            },
+            timeout=5,
+        )
+        response.raise_for_status()
+        # A JSON-RPC route answers an application-level refusal
+        # ("Unauthorized", "Too many attempts", "Empty payload") with HTTP
+        # 200 and the refusal in the body, so raise_for_status() above is
+        # not a success check on its own. Raise so the refusal fails the cron run
+        # instead of being indistinguishable from a successful sync.
+        body = response.json()
+        if body.get("error"):
+            raise ValueError(
+                "PagerDuty domain sync RPC error: %s" % (body["error"],)
             )
-            response.raise_for_status()
-            # A JSON-RPC route answers an application-level refusal
-            # ("Unauthorized", "Too many attempts", "Empty payload") with HTTP
-            # 200 and the refusal in the body, so raise_for_status() above is
-            # not a success check on its own. Raise into this function's own
-            # "don't fail the cron" handler so the refusal is at least logged
-            # instead of being indistinguishable from a successful sync.
-            body = response.json()
-            if body.get("error"):
-                raise ValueError(
-                    "PagerDuty domain sync RPC error: %s" % (body["error"],)
-                )
-            result = body.get("result") or {}
-            if result.get("status") != "success":
-                # Only the endpoint's own status/message are echoed here --
-                # never `api_identity`.
-                raise ValueError(
-                    "PagerDuty domain sync refused (status=%s): %s"
-                    % (result.get("status"), result.get("message"))
-                )
-        except Exception as e:  # audit-ignore-catch-all
-            # requests.post()/raise_for_status() raise
-            # requests.exceptions.* (ConnectionError, Timeout, HTTPError) on
-            # any real network/HTTP failure -- none of those are KeyError or
-            # ValueError, so a genuinely offline PagerDuty endpoint would
-            # crash this cron job with an uncaught exception instead of
-            # logging and returning, defeating the whole point of wrapping
-            # an external HTTP call in a broad "don't fail the cron" guard.
-            _logger.warning("Failed to sync domains to PagerDuty: %s", e)
+        result = body.get("result") or {}
+        if result.get("status") != "success":
+            # Only the endpoint's own status/message are echoed here --
+            # never `api_identity`.
+            raise ValueError(
+                "PagerDuty domain sync refused (status=%s): %s"
+                % (result.get("status"), result.get("message"))
+            )
 
     # [@ANCHOR: edge_routing:COMM_domain_crud_cycle]
     def _trigger_pager_duty_sync(self):

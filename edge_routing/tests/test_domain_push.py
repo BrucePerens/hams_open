@@ -5,6 +5,9 @@
 # License: AGPL-3.0
 
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+import requests
+
+from odoo.exceptions import AccessError, UserError
 from odoo.tests.common import tagged
 
 
@@ -163,7 +166,7 @@ class TestDomainPush(HamsTransactionCase):
             "or /api/v1/pager_duty/update_domains refuses it as Unauthorized",
         )
 
-    def test_push_all_to_pager_duty_is_skipped_when_no_identity_is_configured(self):
+    def test_push_all_to_pager_duty_fails_when_no_identity_is_configured(self):
         # Tests [@ANCHOR: edge_routing:COMM_domain_push_pagerduty]
         # With no shared secret configured the endpoint is guaranteed to
         # refuse, and every refusal increments its own per-source-IP
@@ -175,18 +178,12 @@ class TestDomainPush(HamsTransactionCase):
         self._configure_api_identity(False)
         mock_post = self._mock_post_accepted()
 
-        with self.assertLogs(
-            "odoo.addons.edge_routing.models.domain", level="WARNING"
-        ) as logs:
+        with self.assertRaisesRegex(UserError, "domain_api_identity"):
             domain_model.push_all_to_pager_duty()
 
         mock_post.assert_not_called()
-        self.assertTrue(
-            any("domain_api_identity" in line for line in logs.output),
-            "the skip must say why, not be silent",
-        )
 
-    def test_push_all_to_pager_duty_logs_a_refusal_returned_in_a_200_body(self):
+    def test_push_all_to_pager_duty_raises_on_a_refusal_returned_in_a_200_body(self):
         # Tests [@ANCHOR: edge_routing:COMM_domain_push_pagerduty]
         # The discriminating half of the regression: a `type="jsonrpc"` route
         # signals an application-level refusal with HTTP 200 and the refusal
@@ -203,16 +200,51 @@ class TestDomainPush(HamsTransactionCase):
             "result": {"status": "error", "message": "Unauthorized"},
         }
 
-        with self.assertLogs(
-            "odoo.addons.edge_routing.models.domain", level="WARNING"
-        ) as logs:
+        with self.assertRaisesRegex(ValueError, "Unauthorized"):
             domain_model.push_all_to_pager_duty()
 
-        self.assertTrue(
-            any("Unauthorized" in line for line in logs.output),
-            "a refusal returned inside a 200 body must still be logged, not "
-            "mistaken for a successful sync",
+    def test_push_all_to_pager_duty_raises_on_an_http_error_and_the_next_run_retries(self):
+        # Tests [@ANCHOR: edge_routing:COMM_domain_push_pagerduty]
+        domain_model = self.env["edge.routing.domain"].with_user(
+            self.env.ref("base.user_admin")
         )
+        self._configure_api_identity()
+        mock_post = self._mock_post_accepted()
+        mock_post.side_effect = requests.exceptions.ConnectionError("down")
+        with self.assertRaises(requests.exceptions.ConnectionError):
+            domain_model.push_all_to_pager_duty()
+
+        mock_post.side_effect = None
+        domain_model.push_all_to_pager_duty()
+        self.assertEqual(mock_post.call_count, 2)
+
+    def test_push_all_to_pager_duty_raises_when_the_dns_zone_lookup_fails(self):
+        # Tests [@ANCHOR: edge_routing:COMM_domain_push_pagerduty]
+        domain_model = self.env["edge.routing.domain"].with_user(
+            self.env.ref("base.user_admin")
+        )
+        self._configure_api_identity()
+        mock_post = self._mock_post_accepted()
+        utils_cls = type(self.env["zero_sudo.security.utils"])
+        real = utils_cls._get_service_env
+
+        def failing(this, xml_id, *a, **k):
+            if xml_id == "ham_dns.user_dns_api_service":
+                raise AccessError("no such service user")
+            return real(this, xml_id, *a, **k)
+
+        self.safe_patch_object(utils_cls, "_get_service_env", failing)
+        # ham_dns (hams_com) may not be installed alongside edge_routing: make the soft-dependency branch run
+        # either way. The lookup fails before any ham.dns.zone search, so the model need not exist.
+        env_cls = type(self.env)
+        real_contains = env_cls.__contains__
+        self.safe_patch_object(
+            env_cls, "__contains__",
+            lambda this, model: model == "ham.dns.zone" or real_contains(this, model),
+        )
+        with self.assertRaisesRegex(UserError, "ham.dns.zone lookup failed"):
+            domain_model.push_all_to_pager_duty()
+        mock_post.assert_not_called()
 
     def test_cron_actually_runs_through_the_real_scheduler_path(self):
         # Tests [@ANCHOR: edge_routing_push_pager_duty_cron_runs]

@@ -43,16 +43,14 @@ The `edge_routing` module is the foundational routing layer for high-speed slug 
 list of domains it should check for Let's Encrypt readiness. Steps: (1) if the `edge_routing_service_account` user exists
 (a SQL check on `ir_model_data`, so the method also works while the module is installing), it works as that account;
 (2) it reads every `edge.routing.domain` name in batches of 1000 ordered by id; (3) when `ham.dns.zone` is installed it
-adds those zone names, read as `ham_dns.user_dns_api_service` inside a savepoint, and any failure there is logged as a
-warning and skipped (a soft dependency); (4) it de-duplicates the names; (5) it reads the system parameter
-`pager_duty.domain_api_identity` and, if it is not set, logs a warning and returns without sending (a request the endpoint
+adds those zone names, read as `ham_dns.user_dns_api_service` inside a savepoint, and any failure there raises a `UserError` (a partial list would replace the full one); (4) it de-duplicates the names; (5) it reads the system parameter
+`pager_duty.domain_api_identity` and, if it is not set, raises a `UserError` without sending (a request the endpoint
 would refuse also increments its failed-attempt counter for this source address, so retrying blind would lock the sender
 out); (6) it POSTs a JSON-RPC body `{"jsonrpc": "2.0", "method": "call", "params": {"domains": [...], "api_identity":
 <secret>}}` to `http://<odoo_host>:8069/api/v1/pager_duty/update_domains` (`odoo_host` from the server configuration,
 default `odoo`) with a 5 second timeout; (7) it calls `raise_for_status()` and then checks the JSON body, because that
 route answers refusals ("Unauthorized", "Too many attempts", "Empty payload") with HTTP 200: an `error` member or a
-`result.status` other than `success` becomes a `ValueError`. A final broad `except` (audit-ignore-catch-all) logs any
-failure, including network errors, and does not re-raise, so a dead monitoring endpoint never fails the cron. The secret is
+`result.status` other than `success` becomes a `ValueError`. Every failure, including network errors, propagates, so the cron run fails and `hams_helpdesk` reports it; the next run retries. The secret is
 never logged. Blocking: it makes one synchronous HTTP request inside the cron transaction. Idempotent: the receiver
 replaces its list each time. Only domain names are sent, no slugs or routes. Tests: `tests/test_domain_push.py` (batching,
 missing identity, refusal inside a 200 body, soft dependency).
