@@ -53,3 +53,10 @@ After running the script, restart the Odoo server and update the apps list.
   key so its appearance in a response or log line raises an alarm. An unchanged (masked `********`) or empty key, or one that is not
   a single token (the canary raises `ValueError`, logged as a warning), is skipped: saving the form never fails because of the canary,
   and without the addon nothing happens.
+
+## Secret key from the secret store (group `hams_s3`)
+
+When the host option `hams_module_secrets_from_store` lists `hams_s3`, the Settings form shows only a mask for the S3 secret key, which is served from the secret store under `hams_s3.aws_secret_access_key`. Page: `zero_sudo/docs/stories/secret_store_tier_a.md`, "Module secrets" (including the outstanding OCA read).
+
+- `[@ANCHOR: hams_s3_refuse_typed_secret]` `_refuse_typed_s3_secret(vals)` takes the values dict of a settings create or write and returns nothing. With the group on it raises `UserError`, naming the store name and never the value, when `hams_s3_aws_secret_access_key` is anything but the mask, empty or absent; with the group off it does nothing. It runs before the ORM stores the value, because the transient settings row is a database row. **Tests:** `test_group_on_refuses_a_typed_secret_and_stores_nothing`.
+- `[@ANCHOR: hams_s3_settings_create]` and `[@ANCHOR: hams_s3_settings_write]` are the settings model's `create(vals_list)` and `write(vals)`; they call the check above for every values dict and otherwise return what the ORM returns. A masked, empty or absent secret passes and the store is never read for it; no value is ever logged. **Tests:** the same test.
