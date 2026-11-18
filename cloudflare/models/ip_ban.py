@@ -109,6 +109,19 @@ class CloudflareIPBan(models.Model):
             )
             return False
 
+        refusal = website._cloudflare_shared_zone_refusal()
+        if refusal:
+            # An access rule is zone-wide: it would block the IP on every other domain of the shared zone.
+            _record(
+                {
+                    "notes": f"Failed: {refusal}",
+                    "cf_rule_id": False,
+                    "state": "failed",
+                    "website_id": website.id,
+                }
+            )
+            return False
+
         success, result = ban_ip(ip_address, mode, notes, token, zone_id)
 
         if success:
