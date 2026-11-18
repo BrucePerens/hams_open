@@ -173,15 +173,21 @@ class IrConfigParameterModuleSecrets(models.Model):
     @api.model
     def _hams_module_secrets_clear_from_database(self):
         """Rollout step after the flip: replace the database copies with MOVED_MARKER. Writes nothing
-        unless the store holds every key that still has a database value, so it cannot throw away the only
-        copy. Returns the keys it cleared (names only)."""
+        unless the store holds every key that still has a database value AND holds the same value, so it
+        cannot throw away the only copy of a value. Returns the keys it cleared (names only)."""
         keys = param_keys()
         if not keys:
             raise UserError(self.env._("List a group in %(flag)s before clearing the database copies.", flag=FLAG_OPTION))
         rows = self.search([("key", "in", list(keys))], limit=len(keys))
         pending = rows.filtered(lambda p: p.value and p.value != MOVED_MARKER)
         for row in pending:
-            store_secret(row.key)
+            # The store must hold the SAME value: clearing the database copy of a key whose store value differs
+            # (a stale store entry) would throw away the newer value.
+            held = store_secret(row.key)
+            if not hmac.compare_digest(row.value.encode("utf-8", "replace"), held.encode("utf-8", "replace")):
+                raise UserError(self.env._(
+                    "%(key)s: the database value differs from the secret store; nothing was cleared. Put the "
+                    "current value in the store first.", key=row.key))
         for row in pending:
             row.write({"value": MOVED_MARKER})
         return sorted(pending.mapped("key"))

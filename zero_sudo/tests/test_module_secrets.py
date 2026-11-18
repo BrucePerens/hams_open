@@ -131,9 +131,19 @@ class TestModuleSecrets(TransactionCase, SafePatchMixin):
             self.icp._hams_module_secrets_clear_from_database()
         self.assertEqual(self._row("stripe.secret_key"), DB_KEY)
         self.store_values["stripe.secret_key"] = STORE_KEY
+        self._set_row("stripe.secret_key", STORE_KEY)
         self.assertEqual(self.icp._hams_module_secrets_clear_from_database(), ["stripe.secret_key"])
         self.assertEqual(self._row("stripe.secret_key"), MOVED_MARKER)
         self.assertEqual(self.icp._get_param("stripe.secret_key"), STORE_KEY)
+
+    def test_clear_step_refuses_a_database_value_that_differs_from_the_store(self):
+        # Tests [@ANCHOR: zero_sudo:module_secrets_clear_from_database]
+        self._groups("stripe")
+        self.assertEqual(self._row("stripe.secret_key"), DB_KEY)
+        self.assertNotEqual(DB_KEY, STORE_KEY)
+        with self.assertRaises(UserError):
+            self.icp._hams_module_secrets_clear_from_database()
+        self.assertEqual(self._row("stripe.secret_key"), DB_KEY, "the only copy of that value was not thrown away")
 
     def test_clear_step_needs_a_group(self):
         # Tests [@ANCHOR: zero_sudo:module_secrets_clear_from_database]
