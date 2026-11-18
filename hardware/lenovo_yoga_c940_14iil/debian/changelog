@@ -1,3 +1,11 @@
+lenovo-yoga-c940-14iil (1.1.1) unstable; urgency=medium
+
+  * windows-vm: no longer Depends on util-linux (Essential; lintian
+    depends-on-essential-package-without-using-version), description lines
+    wrapped, manual page yoga-windows-vm(1) added.
+
+ -- Bruce Perens <bruce@perens.com>  Wed, 18 Nov 2026 12:30:00 -0800
+
 lenovo-yoga-c940-14iil (1.1.0) unstable; urgency=medium
 
   * New binary package lenovo-yoga-c940-14iil-windows-vm: the existing Windows

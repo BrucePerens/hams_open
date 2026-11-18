@@ -77,5 +77,20 @@ class TestBuildPackages(unittest.TestCase):
         self.assertIn("has no debian/", r.stderr)
 
 
+@unittest.skipUnless(shutil.which("lintian") and shutil.which("dpkg-buildpackage") and shutil.which("dh"), "needs lintian, dpkg-buildpackage, debhelper")
+class TestDevicePackagesLintianClean(unittest.TestCase):
+    """Every real hardware/<dir>/debian package builds and passes `lintian --pedantic` with no tag of any severity."""
+
+    def test_every_device_package_is_lintian_clean(self):
+        names = sorted(d for d in os.listdir(HERE) if os.path.isdir(os.path.join(HERE, d, "debian")))
+        self.assertTrue(names)
+        out = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, out, True)
+        for name in names:
+            with self.subTest(package=name):
+                r = subprocess.run([SCRIPT, os.path.join(out, name), name], capture_output=True, text=True, env=dict(os.environ, LINTIAN="1"))
+                self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -18,6 +18,7 @@ override_dh_auto_install:
 	install -D -m 0644 $(V)/xml/yoga-windows.xml.in $(W)/usr/share/yoga-windows-vm/yoga-windows.xml.in
 	install -D -m 0644 $(V)/systemd/yoga-windows-vm.service $(W)/usr/lib/systemd/system/yoga-windows-vm.service
 	install -D -m 0644 $(V)/desktop/yoga-windows-vm.desktop $(W)/usr/share/applications/yoga-windows-vm.desktop
+	install -D -m 0644 $(V)/man/yoga-windows-vm.1 $(W)/usr/share/man/man1/yoga-windows-vm.1
 
 override_dh_installsystemd:
 	dh_installsystemd -plenovo-yoga-c940-14iil-windows-vm --no-enable --no-start --name=yoga-windows-vm yoga-windows-vm.service
