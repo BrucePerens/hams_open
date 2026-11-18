@@ -96,6 +96,7 @@ class BlogBlog(models.Model):
             users = self.env["res.users"].with_user(svc_uid).browse(unique_owner_ids)
             limits = {user.id: user._get_blog_limit() for user in users}
 
+            self._lock_quota_rows(unique_owner_ids)
             existing_counts = {u_id: 0 for u_id in unique_owner_ids}
             for owner, count in (
                 self.env["blog.blog"]
@@ -129,6 +130,7 @@ class BlogBlog(models.Model):
                     "user_websites.global_blog_limit", 5
                 )
             )
+            self._lock_quota_rows(unique_group_ids, group=True)
             existing_group_counts = {g_id: 0 for g_id in unique_group_ids}
             for group, count in (
                 self.env["blog.blog"]
