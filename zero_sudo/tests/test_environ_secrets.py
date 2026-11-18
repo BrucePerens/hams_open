@@ -10,10 +10,11 @@ from odoo.tests.common import TransactionCase, tagged
 
 from odoo.addons.zero_sudo.daemon import environ_secrets as es
 from odoo.addons.zero_sudo.models import module_secrets as ms
+from odoo.addons.zero_sudo.tests.common import SafePatchMixin
 
 
 @tagged("post_install", "-at_install")
-class TestEnvironSecrets(TransactionCase):
+class TestEnvironSecrets(TransactionCase, SafePatchMixin):
 
     def _environ_file(self, entries):
         handle = tempfile.NamedTemporaryFile(delete=False)
