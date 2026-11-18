@@ -621,6 +621,30 @@ In `zero_sudo/daemon/environ_secrets.py`. Arguments: `groups`, an iterable of gr
 
 Tests: `zero_sudo/tests/test_environ_secrets.py`, `zero_sudo/tests/test_module_secrets.py`.
 
+### Mail server passwords (`mail_server_secrets.py`)
+
+### `smtp_store_name(server_id)` `[@ANCHOR: zero_sudo:mail_server_store_name]`
+
+Argument `server_id`: the id of an `ir.mail_server` record (an `int`, or text of one). Returns the store name `mail.smtp_pass.<id>` under which that server's SMTP password lives. Raises `ValueError` for a non-integer id. Pure function; it is the only place the name is built, so the login and the rollout step cannot disagree.
+
+### The model `IrMailServerSecrets` `[@ANCHOR: zero_sudo_mail_server_secrets_ir_mail_server]`
+
+Inherits `ir.mail_server`. With the group `mail` off it changes nothing and never reads the store. With it on, the password of a server comes from the store and the `smtp_pass` column is never written. It has no fields, holds no password between calls, and loads with `zero_sudo`.
+
+### `_smtp_login__(connection, smtp_user, smtp_password)` `[@ANCHOR: zero_sudo:mail_server_smtp_login]`
+
+Arguments are Odoo's own. With the group on, a record and a user, the password passed to Odoo's login is the store's `mail.smtp_pass.<id>`; `SecretNotFound` is raised when the store lacks it, so a server with a user and no password fails loudly. Without a record (a command-line configured server) or with the group off it is Odoo's own login. Returns what Odoo's login returns.
+
+### `create(vals_list)` `[@ANCHOR: zero_sudo:mail_server_create]` and `write(vals)` `[@ANCHOR: zero_sudo:mail_server_write]`
+
+Usual ORM arguments and returns. With the group on, a non-empty `smtp_pass` in any values dict raises `UserError` (naming the store name pattern, never the value) before anything is stored; clearing it with `False` is allowed. With the group off they are Odoo's own methods and the store is never read. The check costs one set lookup per values dict, nothing is logged, and a refused write leaves the stored row exactly as it was.
+
+### `_hams_mail_clear_smtp_pass_from_database()` `[@ANCHOR: zero_sudo:mail_server_clear_from_database]`
+
+No arguments. Rollout step after the flip: empties `smtp_pass` on every server that has one (archived servers included). It first requires the store to hold the password of every such server and writes nothing otherwise (`SecretNotFound`); `UserError` when the group is off. Returns the sorted ids it cleared (never a password).
+
+Tests: `zero_sudo/tests/test_module_secrets.py`, `zero_sudo/tests/test_mail_server_secrets.py`.
+
 ## Outstanding migrations
 
 This change adds the store; it migrates nothing yet. Every item below still holds a secret where the web process can read it,
