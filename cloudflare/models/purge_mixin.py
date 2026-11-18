@@ -56,11 +56,29 @@ class CloudflarePurgeMixin(models.AbstractModel):
                     else (all_website_ids if any_missing_website else [])
                 )
                 for w in wids:
-                    purge_map.setdefault(w, []).append(url)
+                    purge_map.setdefault(w, []).extend(self._cloudflare_language_variants(w, url))
 
         if purge_map:
             QueueModel = self.env["cloudflare.purge.queue"].with_user(svc_uid)
             QueueModel.enqueue_urls_batch(purge_map)
+
+    # [@ANCHOR: cloudflare:COMM_language_variants]
+    # Verified by [@ANCHOR: cloudflare:test_purge_covers_language_variants]
+    def _cloudflare_language_variants(self, website_id, url):
+        """The address itself plus its copy under each non-default language prefix of the website.
+
+        A page is cached at the edge once per language address (/fr/<page>); purging only /<page>
+        left an unpublished or erased page served from the edge in the other languages.
+        """
+        if not str(url).startswith("/") or not website_id:
+            return [url]
+        website = self.env["website"].browse(website_id)
+        prefixes = [
+            lang.url_code
+            for lang in website.language_ids
+            if lang != website.default_lang_id and lang.url_code
+        ]
+        return [url] + [f"/{prefix}{url}" for prefix in prefixes]
 
     # [@ANCHOR: cloudflare:COMM_purge_cloudflare_menus]
     def _purge_cloudflare_menus(self):

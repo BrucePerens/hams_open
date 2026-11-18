@@ -9,6 +9,7 @@ from . import test_cache_plan
 from . import test_cloudflare_apis
 from . import test_settings_view_block
 from . import test_purge_everything
+from . import test_purge_language_variants
 from . import test_shared_zone_refusal
 from . import test_purge_queue
 from . import test_enqueue_urls_batch
