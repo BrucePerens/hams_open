@@ -615,7 +615,11 @@ No arguments. Rollout step after the flip: replaces each database copy of a stor
 
 No arguments. Rollback step run before a group leaves the option: writes the store's values back into the rows (restore context) so the host runs on the database again. Keys the store lacks are skipped. Returns the sorted key names it restored.
 
-Tests: `zero_sudo/tests/test_module_secrets.py`.
+### `names_present(groups, environ_path="/proc/self/environ")` `[@ANCHOR: zero_sudo:environ_secrets_names_present]`
+
+In `zero_sudo/daemon/environ_secrets.py`. Arguments: `groups`, an iterable of group names of the option above, and `environ_path`, the NUL separated environment file to read (the running process by default). Returns the sorted names, among the old environment variables of those groups (`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_TUNNEL_TOKEN`, `GEMINI_API_KEY`, `SMTP_PASS`), that the process still sets, even to an empty value; a group with no variable adds none. It returns names only and never a value, and raises `OSError` when the file cannot be read, because a check that cannot look must not say clean. `HAMS_CRYPTO_KEY` is deliberately not judged. The rollout acceptance test `test_this_process_carries_none_of_the_variables_of_a_group_it_serves_from_the_store` runs it on the real process: it passes where no group is listed and fails on a host that lists a group while the unit still loads the variable.
+
+Tests: `zero_sudo/tests/test_environ_secrets.py`, `zero_sudo/tests/test_module_secrets.py`.
 
 ## Outstanding migrations
 
