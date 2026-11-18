@@ -4,3 +4,4 @@
 from . import test_edge_cache_cookies
 from . import test_edge_cache_csrf_hoot
 from . import test_edge_cache_headers
+from . import test_security_txt

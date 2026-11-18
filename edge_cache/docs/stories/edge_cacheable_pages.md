@@ -3,7 +3,7 @@
 As a **site owner on a small Odoo instance behind Cloudflare**, I want my public pages and asset bundles
 cached at Cloudflare's edge without per-visitor cookies on them, so that most visits never reach the server.
 
-The server side is in `edge_cache/models/ir_http.py` (the response headers), `edge_cache/models/website_page.py` (which pages are offered) and `edge_cache/controllers/csrf_token.py`; the browser side is `static/src/js/edge_cache_csrf.js`. Nothing here gates or rejects a request: the module only adds caching directives, so direct access works the same with or without Cloudflare. Tests are in `tests/` and `static/tests/`.
+The server side is in `edge_cache/models/ir_http.py` (the response headers), `edge_cache/models/website_page.py` (which pages are offered) and `edge_cache/controllers/csrf_token.py` and `edge_cache/controllers/security_txt.py`; the browser side is `static/src/js/edge_cache_csrf.js`. Nothing here gates or rejects a request: the module only adds caching directives, so direct access works the same with or without Cloudflare. Tests are in `tests/` and `static/tests/`.
 
 ## Scenario: An anonymous visitor reads a page
 
@@ -51,6 +51,9 @@ A page for a visitor who already has a session or a consent choice, a page with 
 
 ### Token route [@ANCHOR: COMM_cloudflare_csrf_token_route]
 `CloudflareCsrfToken.csrf_token(self)`, route `GET /cloudflare/csrf_token`, `auth="public"`, `readonly=True`, no arguments. Returns JSON `{"csrf_token": <token>}` from `request.csrf_token(None)` (the same lifetime as the page's own token) with `Cache-Control: no-store`; the response is never edge-cacheable and carries the visitor's session cookie, so token and cookie arrive together. It writes nothing but the session cookie. Tests: `test_edge_cached_form_posts_after_token_fetch`, `test_late_session_cookie_of_another_cookieless_request_voids_an_earlier_token`.
+
+### security.txt route [@ANCHOR: COMM_security_txt_route] [@ANCHOR: edge_cache_security_txt_security_txt]
+Purpose: publishes the RFC 9116 security contact on every website, so a researcher who finds a problem knows where to write. `SecurityTxt.security_txt(self)` in `controllers/security_txt.py`, route `GET /.well-known/security.txt`, `auth="public"`, `readonly=True`. Arguments: none. Returns: a `text/plain; charset=utf-8` body with `Contact: mailto:support@hams.com` (the site's existing support address; no separate security mailbox exists), an `Expires` field computed on each request as now plus 180 days in UTC (so it is never stale and always under one year ahead), `Preferred-Languages: en`, and `Canonical` built from the request's own root URL. Errors: none are raised; other HTTP methods get Odoo's normal 404 because only GET is routed. Special concerns: the response opts in to edge caching with the internal `X-Cloudflare-Edge-Cacheable` marker, which `ir.http` consumes and strips, so a cookie-free anonymous 200 carries `Cloudflare-CDN-Cache-Control: max-age=86400`; a visitor with a session or an error answer is never cached. The route writes nothing. Test: `test_security_txt_served` [@ANCHOR: COMM_test_security_txt_served] checks status, content type, the fields, the Expires window and the edge-cache header.
 
 ### Token-form detection [@ANCHOR: COMM_edge_cache_is_token_form]
 `isTokenForm(el)` in `edge_cache_csrf.js` is true for an element matching `.s_website_form` or an HTML form containing an `input[name="csrf_token"]`. It is written without the CSS `:has()` selector, so a browser that lacks it (Chrome before 105) does not throw a `SyntaxError` from `closest()` or `matches()` at every focus and submit on the page, which the capture listeners on `document` would otherwise do. Pure, no side effects. Test: the `:has()` test below.
