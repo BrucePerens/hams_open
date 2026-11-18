@@ -71,16 +71,23 @@ frame is skipped.
   which carry the DATA flag: `Mode::Data` is USB-D, `Mode::DataR` LSB-D, and the filter byte is the filter
   number last reported, 1 before any read), PTT (`1C 00`), S-meter (`15 02`), power meter (`15 11`), the
   raw meters SWR, ALC, COMP, Vd and Id (`15 12` to `15 16`, `Op::GetMeter`, a 0 to 255 deflection;
-  read-only, gate closed or open), CW text (`17`, 1 to 30 characters), split
-  (`0F`), RIT/XIT on and offset (`21`), filter width by index tables (`1A 03`), levels (`14`), model id
-  (`19 00`), and unsolicited transceive frames (`00`, `01`).
-- **Does not cover (deliberately not guessed):** the keyer-speed level, the calibrated SWR ratio
+  read-only, gate closed or open), CW text (`17`, 1 to 30 characters) and its stop (`17 FF`), the unselected
+  VFO's frequency read and set (`25 01`), split (`0F`), RIT/XIT on and offset (`21`), filter width by index
+  tables (`1A 03`), levels (`14`: AF gain, RF gain, RF power, mic gain, monitor level and the keyer speed,
+  6 to 48 wpm), the attenuator (`11`) and preamplifier (`16 02`) of a description with a `[levels]` block,
+  model id (`19 00`), the Main/Sub commands of command `07` (select the band `D0`/`D1` on a description with
+  `main_sub = "select"` or `"full"`; read the selected band `D2` and dual watch `C0` to `C2` on `"full"`, the
+  IC-7610), the core scope operations (command `27`, below), the IC-F8101's own frequency and mode commands
+  (`1A 34` to `1A 36`), and unsolicited transceive frames (`00`, `01`).
+<!--ops rig=icom-ic-7610: ?GetFilterWidth ?SetFilterWidth GetDualWatch GetFrequency GetFrequency.B GetLevel.AfGain GetLevel.Attenuator GetLevel.KeyerSpeed GetLevel.MicGain GetLevel.MonitorLevel GetLevel.Preamp GetLevel.RfGain GetLevel.RfPower GetMeter GetMode GetModelId GetPower GetPtt GetReceiver GetRit GetRitOffset GetScopeAxis GetScopeOutput GetScopeReference GetScopeSpan GetSignal GetSplit GetXit SelectReceiver SendCw SetDualWatch SetFrequency SetFrequency.B SetLevel.AfGain SetLevel.Attenuator SetLevel.KeyerSpeed SetLevel.MicGain SetLevel.MonitorLevel SetLevel.Preamp SetLevel.RfGain SetLevel.RfPower SetMode SetPtt SetRit SetRitOffset SetScopeAxis SetScopeEdges SetScopeOutput SetScopeReference SetScopeSpan SetSplit SetXit StopCw-->
+- **Does not cover (deliberately not guessed):** the calibrated SWR ratio
   (`Op::GetSwr`), power and S-meter (Hamlib's tables are per-model measurements; radioctl reports the raw
   deflection instead), switching transceive on or off (`SetTransceive` is
   refused: on these radios it is a menu item reached through `1A 05` with model-specific numbers, found
   but with no field in the description format yet), filter-number selection, AM-D and FM-D (no mode
-  name for them), the older `1A 06` data-mode form, the IC-9700's XIT, and the
-  Main/Sub family of command `07` on the IC-7610 and IC-9700. Whether `06` clears DATA on a real radio,
+  name for them), the older `1A 06` data-mode form, the IC-9700's XIT, the
+  transmit-band selection of the Main/Sub radios (`SetTxReceiver`, `GetTxReceiver`), and the Main/Sub
+  commands on a description with no `main_sub` key (every model but the IC-7610 and IC-9100). Whether `06` clears DATA on a real radio,
   and whether the filter byte of `26 00` may be left out, are IC-7300 bench questions.
 - **VFO labels:** `Vfo::A` is the *selected* VFO and `Vfo::B` the *unselected* one (the transmit VFO in
   split). The engine does not
@@ -107,7 +114,11 @@ on `;`.
 
 - **Covers:** frequency `FA`/`FB`, mode `MD`, key and unkey `TX;`/`RX;`, S-meter `SM0`, `AI` (the
   transceive switch), `ID`, levels (`AG`, `RG`, `MG`, `ML`, `PC`, `KS`), RIT/XIT (`RT`, `XT`, `RC`,
-  `RU`, `RD`), and the composite `IF;` answer, from which PTT, split, RIT and XIT are read.
+  `RU`, `RD`), the attenuator and preamplifier (`RA`, `PA`) and the antenna port (`AN`) of the models whose
+  description has them, CW text and its stop (`KY`, only on a model whose description has a `[kenwood.ky]`
+  block), and the composite `IF;` answer, from which PTT, split, RIT and XIT are read. The older TS-440S
+  and the TS-990S have their own small command tables inside this engine and refuse what those books lack.
+<!--ops rig=kenwood-ts-590s: GetFrequency GetFrequency.B GetLevel.AfGain GetLevel.Antenna GetLevel.Attenuator GetLevel.KeyerSpeed GetLevel.MicGain GetLevel.MonitorLevel GetLevel.Preamp GetLevel.RfGain GetLevel.RfPower GetMode GetModelId GetPtt GetRit GetRitOffset GetSignal GetSplit GetTxVfo GetXit SendCw SetFrequency SetFrequency.B SetLevel.AfGain SetLevel.Antenna SetLevel.Attenuator SetLevel.KeyerSpeed SetLevel.MicGain SetLevel.MonitorLevel SetLevel.Preamp SetLevel.RfGain SetLevel.RfPower SetMode SetPtt SetRit SetRitOffset SetSplit SetTransceive SetXit StopCw-->
 - **`IF;`:** 38 characters on the TS-2000 and the TS-590; the engine locates the signed RIT/XIT offset as
   the sign nearest the end of the ten characters that differ between the models. The layout is from
   Kenwood's PC command references (document, page and PDF SHA-256 in each fact); the TS-2000 text was
@@ -115,8 +126,8 @@ on `;`.
 - **Split** is `FR0;FT1;` (VFO A receives, VFO B transmits) and is read from `IF;`. `IF;` also yields
   the receive VFO (its P10 field) and, from the split flag, the transmit VFO; `FT;` reads the transmit
   VFO directly (`Op::GetTxVfo`).
-- **Does not cover:** the TS-890S dialect (its own engine, below), CW text, power and
-  SWR meters, the 590's `ML` limit of 20 on the SG (the engine takes 9), data mode (the 590's `IF` cannot be
+- **Does not cover:** the TS-890S dialect (its own engine, below), CW text on a model whose description has
+  no `[kenwood.ky]` block, power and SWR meters, the 590's `ML` limit of 20 on the SG (the engine takes 9), data mode (the 590's `IF` cannot be
   read in data mode), the `RU`/`RD` step (taken as hertz from a cleared offset, which the guides do not
   state outright), and the bandscope.
 - **Known disagreement:** the TS-590 VFO B frequency read differs from Hamlib's (chapter [4](04-api.md)
@@ -137,6 +148,11 @@ fact of `rigs/kenwood-ts-890s.toml`).
   and `PA` take one digit (attenuator 0 off, 6, 12 or 18 dB; preamplifier 0 off, PRE 1, PRE 2). The transmit
   state has no read command, so the description has no `read-ptt` (the actor learns the state from what it
   sent). `ID;` answers `ID024;`.
+- **Covers:** frequency `FA`/`FB`, mode `OM0`, key and unkey (`TX0;`, `RX;`), S-meter `SM`, `AI` (the
+  transceive switch), split `TB`, the transmit VFO `FT`, RIT/XIT, levels (`AG`, `RG`, `MG`, `KS`, `PC`),
+  the attenuator and preamplifier (`RA`, `PA`), the antenna port (`AN`), CW text and its stop (`KY`), `ID`,
+  and the bandscope operations listed below (output, axis, span, reference level, edges, settings, actions).
+<!--ops rig=kenwood-ts-890s: GetFrequency GetFrequency.B GetLevel.AfGain GetLevel.Antenna GetLevel.Attenuator GetLevel.KeyerSpeed GetLevel.MicGain GetLevel.Preamp GetLevel.RfGain GetLevel.RfPower GetMode GetModelId GetRit GetRitOffset GetScopeAxis GetScopeOutput GetScopeReference GetScopeSetting GetScopeSpan GetSignal GetSplit GetTxVfo GetXit ScopeAction SendCw SetFrequency SetFrequency.B SetLevel.AfGain SetLevel.Antenna SetLevel.Attenuator SetLevel.KeyerSpeed SetLevel.MicGain SetLevel.Preamp SetLevel.RfGain SetLevel.RfPower SetMode SetPtt SetRit SetRitOffset SetScopeAxis SetScopeEdges SetScopeOutput SetScopeReference SetScopeSetting SetScopeSpan SetSplit SetTransceive SetXit StopCw-->
 - **LAN:** the guide documents a TCP connection (UTF-8; the radio drops it after 10 s of silence): `##CN;`
   then `##ID` with an account type, the two lengths, the account and the password. The frames are built by
   `lan_connect_request` and `lan_login` and the answers read by `lan_reply`. `Ts890LanFraming` (`kenwood_ts890_lan`) runs them over the network link and `radioctld` serves it as
@@ -161,8 +177,8 @@ fact of `rigs/kenwood-ts-890s.toml`).
   any other expanded case, expanded scroll mode or an unread `BSO` is dropped. The virtual rig answers every `BS`
   command above, `BSM`, `DD0` and `DD1` and sends synthetic `##DD2` and `##DD3` frames; its auto-scroll edges are our model
   (a page of the span's width), since the guide gives none.
-- **Does not cover:** the COM/USB `DD4` form (the guide bars AI on that connector, which the engine needs); the COM/USB `DD2`/`DD3` splits are handled when the description says `kenwood.scope_link = "serial"` (the engine then sets `DD0` 4 and `DD1` 2; the default `lan` sets `DD0` 2 and `DD1` 1; virtual rig only, unverified on a radio); the audio scope and oscilloscope waveforms; CW
-  text, memories, the menu (`EX`) and the `PSQ/PKS` pin note.
+- **Does not cover:** the COM/USB `DD4` form (the guide bars AI on that connector, which the engine needs); the COM/USB `DD2`/`DD3` splits are handled when the description says `kenwood.scope_link = "serial"` (the engine then sets `DD0` 4 and `DD1` 2; the default `lan` sets `DD0` 2 and `DD1` 1; virtual rig only, unverified on a radio); the audio scope and oscilloscope waveforms;
+  the monitor level, memories, the menu (`EX`) and the `PSQ/PKS` pin note.
 - **Oracle:** Hamlib 4.6.2's TS-890S backend reads the frequency and mode with `IF;` and sets the frequency
   with `SF`, neither of which is in the guide, so the virtual rig refuses them and the frequency and mode steps
   diverge (`rigctld_oracle.rs` records which). A bench run would show whether a real TS-890S answers `IF;`;
@@ -176,9 +192,11 @@ response formats are used and the extension modes (`K2n;`, `K3n;`) are never sen
 - **Covers:** `FA`/`FB`, `MD`, PTT read `TQ`, key and unkey (`TX`, `RX`), S-meter `SM`, power `PO`, SWR
   `SW`, bandwidth `BW` (the non-modal command, not `FW`), split `FT`/`FR` (`FT1` transmits on B; an `FT`
   answer also reports the transmit VFO), RIT/XIT `RT`, `XT`, `RO`,
-  levels (`AG`, `RG`, `MG`, `ML`, `KS`, `PC`), CW text `KY`, `ID`, firmware `RV`, the composite `IF`
-  decoder, and `AI` (`AI2;` to turn on specific reports, `AI0;` to turn off; `AI1;` replies are decoded
-  too).
+  levels (`AG`, `RG`, `MG`, `ML`, `KS`, `PC`), the attenuator and preamplifier (`RA`, `PA`) and the antenna
+  port (`AN`) where the description lists them, CW text `KY` and its stop, `ID`, firmware `RVM`, whether a
+  power amplifier is installed (`OM`), the composite `IF` decoder, and `AI` (`AI2;` to turn on specific
+  reports, `AI0;` to turn off; `AI1;` replies are decoded too).
+<!--ops rig=elecraft-kx3: GetFilterWidth GetFirmware GetFrequency GetFrequency.B GetLevel.AfGain GetLevel.Attenuator GetLevel.KeyerSpeed GetLevel.MicGain GetLevel.MonitorLevel GetLevel.Preamp GetLevel.RfGain GetLevel.RfPower GetMode GetModelId GetPower GetPowerAmplifier GetPtt GetRit GetRitOffset GetSignal GetSplit GetSwr GetTxVfo GetXit SendCw SetFilterWidth SetFrequency SetFrequency.B SetLevel.AfGain SetLevel.Attenuator SetLevel.KeyerSpeed SetLevel.MicGain SetLevel.MonitorLevel SetLevel.Preamp SetLevel.RfGain SetLevel.RfPower SetMode SetPtt SetRit SetRitOffset SetSplit SetTransceive SetXit StopCw-->
 - **Safety details:** `KY` text containing `;`, `<`, `>` or control characters is refused, so a text
   cannot smuggle a second command and cannot switch TX TEST on or off. The `FR` reply is not decoded
   (the manual says its value is ignored).
@@ -193,11 +211,17 @@ response formats are used and the extension modes (`K2n;`, `K3n;`) are never sen
 Written from Yaesu's CAT Operation Reference Manuals for each model (file name, PDF SHA-256 and page in
 each fact).
 
-- **Covers:** frequency (9 digits, `FA`/`FB`), mode `MD0<code>;`, PTT read `TX;`, S-meter and power
-  `SM0`, `RM`, split (the FT-991A only), clarifier RIT/XIT (`RT`, `XT`, `RC`, `RU`, `RD`), levels
-  (`AG0`, `RG0`, `MG`, `PC`, `KS`), model id, and `AI`.
-- **Split:** the FT-991A has VFO split with `FT2;`/`FT3;`; its `FT` answer also reports the transmit VFO. The FTDX10 and FTDX101D split by band
-  (MAIN/SUB transmitter), so their descriptions have no `split` capability.
+- **Covers:** frequency (9 digits, `FA`/`FB`), mode `MD0<code>;`, PTT read `TX;` and key and unkey
+  (`TX1;`, `TX0;`), S-meter and power `SM0`, `RM`, split (`FT2;`/`FT3;` or `ST`, below), clarifier RIT/XIT
+  (`RT`, `XT`, `RC`, `RU`, `RD`; the FT-710 family's `CF`), levels (`AG0`, `RG0`, `MG`, `PC`, `KS`), the
+  attenuator and preamplifier (`RA0`, `PA0`) and the antenna port (`AN`) where the description lists them,
+  model id, `AI`, and on the models whose `FT` picks the transmitting band (FT-2000, FTDX5000, FTDX9000) the
+  transmit receiver, Main or Sub.
+<!--ops rig=yaesu-ft-991a: GetFrequency GetFrequency.B GetLevel.AfGain GetLevel.Attenuator GetLevel.KeyerSpeed GetLevel.MicGain GetLevel.Preamp GetLevel.RfGain GetLevel.RfPower GetMode GetModelId GetPower GetPtt GetRit GetRitOffset GetSignal GetSplit GetTxVfo GetXit SetFrequency SetFrequency.B SetLevel.AfGain SetLevel.Attenuator SetLevel.KeyerSpeed SetLevel.MicGain SetLevel.Preamp SetLevel.RfGain SetLevel.RfPower SetMode SetPtt SetRit SetRitOffset SetSplit SetTransceive SetXit-->
+<!--ops rig=yaesu-ftdx-5000: GetFrequency GetFrequency.B GetLevel.AfGain GetLevel.KeyerSpeed GetLevel.MicGain GetLevel.RfGain GetLevel.RfPower GetMode GetModelId GetPower GetPtt GetRit GetRitOffset GetSignal GetSplit GetTxReceiver GetTxVfo GetXit SetFrequency SetFrequency.B SetLevel.AfGain SetLevel.KeyerSpeed SetLevel.MicGain SetLevel.RfGain SetLevel.RfPower SetMode SetPtt SetRit SetRitOffset SetSplit SetTransceive SetTxReceiver SetXit-->
+- **Split:** the FT-991A has VFO split with `FT2;`/`FT3;`; its `FT` answer also reports the transmit VFO. The FTDX10, FTDX101D and
+  FT-710 set split with `ST` (their `[yaesu] split = "st"`), and the FTDX5000 and its relatives pick the
+  transmitting band instead (`tx_band`).
 - **Does not cover:** SWR and calibrated meters (the `RM` scales are model tables), VFO B reads on the
   MAIN/SUB models beyond `FB`, monitor level, the data and narrow modes (A, B, D, E, F), memory channels,
   CW text, and the FTDX101MP (its `ID` is not in the guide that was read).
@@ -216,6 +240,7 @@ under the opcode chart are figures; they were read from rendered pages of the FT
   (`01`) and mode (`07`), PTT on and off (`08`, `88`), the RX status byte (`E7`: S-meter) and TX status byte
   (`F7`: power meter, split, high SWR, PTT), split on and off (`02`, `82`), clarifier on and off (`05`, `85`)
   and offset (`F5`).
+<!--ops rig=yaesu-ft-817: GetFrequency GetMode GetPower GetPtt GetSignal GetSplit SetFrequency SetMode SetPtt SetRit SetRitOffset SetSplit-->
 - **Frequency resolution is 10 Hz.**
 - **The PTT bit level is not in the manuals** (the figure leaves it out). A clear bit 7 of the TX status
   byte means transmitting, from a comment in Hamlib 4.6.2's FT-817 backend; that single fact is labelled
@@ -241,7 +266,8 @@ ranges) are used, no text. The wiki's embedded `messages.h` forbids copying and 
   creates or removes slices, so a radio with no slice answers reads with a timeout.
 - **Covers:** frequency and mode of the slice, PTT read and `xmit 1|0`, CW (`cwx send`, up to 100
   characters), AF gain, mic gain and RF power as percentages, filter width, firmware (`version`),
-  transceive (the subscriptions).
+  transceive (the subscriptions), and the stop of CW text (`cwx clear`).
+<!--ops rig=flex-6300: ?SetFilterWidth GetFilterWidth GetFirmware GetFrequency GetLevel.AfGain GetLevel.MicGain GetLevel.RfPower GetMode GetPtt SendCw SetFrequency SetLevel.AfGain SetLevel.MicGain SetLevel.RfPower SetMode SetPtt SetTransceive StopCw-->
 - **Does not cover:** VITA-49 UDP streams, so **no S-meter, power or SWR** (the descriptions do not claim
   `read-signal`, `read-power` or `read-swr`); slice and panadapter creation; memories; a second VFO,
   split, RIT/XIT; `keepalive`; modes the core `Mode` cannot express (`sam`, `nfm`, `dfm`, `fdv`, kept as
@@ -264,7 +290,8 @@ receive I/Q is a separate data plane. So the engine speaks a small line protocol
 (`hpsdr_io`) that owns an `hpsdr` crate session (Protocol 1 or 2) behind an in-memory duplex stream.
 
 - **Covers:** frequency, PTT, forward power and SWR (the descriptions claim `read-frequency`,
-  `set-frequency`, `read-ptt`, `set-ptt`, `read-power`, `read-swr`).
+  `set-frequency`, `read-ptt`, `set-ptt`, `read-power`, `read-swr`), and the attenuator below.
+<!--ops rig=anan-100: GetFrequency GetLevel.Attenuator GetPower GetPtt GetSwr SetFrequency SetLevel.Attenuator SetPtt-->
 - **Attenuator:** `Level::Attenuator` in whole decibels, 0 to 31 (`GA` and `A <db>` on the bridge's line
   protocol; the same call as `HpsdrControl::set_attenuator`, which remains for code that holds the handle).
 - **Does not cover:** a mode (an SDR's demodulation happens in the host), a preamplifier, receive I/Q (the `hpsdr` crate's `IqStream` is not wired into the actor), and discovery inside
