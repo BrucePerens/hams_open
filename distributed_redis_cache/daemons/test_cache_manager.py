@@ -145,7 +145,7 @@ class UnitFileTests(unittest.TestCase):
 
 
 class LoopStepTests(unittest.IsolatedAsyncioTestCase):
-    """[@ANCHOR: distributed_redis_cache:COMM_cache_manager_loop_step]"""
+    # Tests [@ANCHOR: COMM_cache_manager_loop_step]
 
     async def test_a_failed_connect_is_retried_after_the_short_delay(self):
         reconnect = AsyncMock(return_value=False)
