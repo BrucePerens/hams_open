@@ -507,13 +507,13 @@ class TestSecretBrokerIsolation(BaseCase):
         built = broker_main.build(config, env, self.os_uid, web_other)
         self.assertEqual(built.allowed_uids, frozenset({self.os_uid + 1}))
         refusals = [
-            (config, env, 0, web_other),                                      # root
-            (config, {}, self.os_uid, web_other),                                # no LoadCredential
-            (config, env, self.os_uid, {"odoo": (self.os_uid, set())}.get),         # web account can read it
-            (dict(config, credentials=path), env, self.os_uid, web_other),      # not root-owned
+            (broker_main.broker.BrokerConfigError, config, env, 0, web_other),                                      # root
+            (broker_main.broker.BrokerConfigError, config, {}, self.os_uid, web_other),                                # no LoadCredential
+            (broker_main.broker.BrokerConfigError, config, env, self.os_uid, {"odoo": (self.os_uid, set())}.get),         # web account can read it
+            (broker_main.secret_store.SecretStoreError, dict(config, credentials=path), env, self.os_uid, web_other),      # not root-owned
         ]
-        for args in refusals:
-            with self.assertRaises((broker_main.broker.BrokerConfigError, broker_main.secret_store.SecretStoreError)):
+        for error, *args in refusals:
+            with self.assertRaises(error):
                 broker_main.build(*args)
 
     def test_main_refuses_to_start_without_a_valid_config(self):
