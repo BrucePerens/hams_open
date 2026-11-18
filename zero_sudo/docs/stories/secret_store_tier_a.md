@@ -535,6 +535,41 @@ from `ir_config_parameter`. Flag off: core's tuple unchanged. Flag on: the `data
 store value equal to the old row gives the same token, which keeps every open session valid across the flip. Returns core's
 `False` unchanged when the user row is missing.
 
+## Module secrets (Stripe, AI provider keys, hams_s3, Cloudflare, mail), group by group
+
+The modules' own secrets move to the store one group at a time, behind a host option, the same way as the core secrets. The
+option is `hams_module_secrets_from_store` (odoo.conf, `[options]`), a comma separated list of groups, for example
+`stripe,ai`. **A group that is not listed behaves exactly as before** (database value, store never read). **A listed group
+is store only:** the `ir.config_parameter` rows of its keys hold `moved-to-secret-store`, a write of any other value is
+refused with an error, and a host whose store lacks a key the database still has a row for refuses to load the registry
+(fail fast; there is never a silent fall back to the database). An unknown group name is a start-up error. The code is
+`zero_sudo/models/module_secrets.py`; the secret keeps the same name in the store as its parameter key.
+
+Steps for one group, per host: (1) put each secret in the store under its name; (2) list the group in the option and restart;
+(3) verify the module works; (4) call `_hams_module_secrets_clear_from_database()` (it refuses unless the store holds every key
+that still has a database value); rollback is `_hams_module_secrets_restore_to_database()` and then removing the group. This
+is a host setting and a restart; the code change itself does nothing until the option lists the group.
+
+| Group | Keys or fields | Status |
+|---|---|---|
+| `stripe` | `stripe.secret_key`, `stripe.webhook_secret` (parameters) | migrated (code and tests) |
+
+### Functions of `module_secrets.py`
+
+- `enabled_groups(config=None)` `[@ANCHOR: zero_sudo:module_secrets_enabled_groups]`: the set of groups the option lists; unset or empty is none; an unknown name raises `ValueError`.
+- `group_enabled(group, config=None)` `[@ANCHOR: zero_sudo:module_secrets_group_enabled]`: whether one group is listed.
+- `module_secret_store()` `[@ANCHOR: zero_sudo:module_secrets_store]`: the process's `SecretStore` (`default_store()`); a seam for tests.
+- `store_secret(name)` `[@ANCHOR: zero_sudo:module_secrets_store_secret]`: the store's value, `SecretNotFound` when it has none (the message never holds a value).
+- `optional_store_secret(name)` `[@ANCHOR: zero_sudo:module_secrets_optional_store_secret]`: the store's value, or `None` when it has none.
+- `param_keys(config=None)` `[@ANCHOR: zero_sudo:module_secrets_param_keys]`: the `ir.config_parameter` keys served from the store on this host.
+- The model `IrConfigParameterModuleSecrets` `[@ANCHOR: zero_sudo_module_secrets_ir_config_parameter_module_secrets]` inherits `ir.config_parameter`; `_get_param(key)` `[@ANCHOR: zero_sudo:module_secrets_get_param]`: a listed key is the store's value (`None` when missing, read by the module as "not configured"), never cached.
+- `_module_secret_db_value(key, value)` `[@ANCHOR: zero_sudo:module_secrets_db_value]`: what a write puts in the row: the marker for the value the store holds, empty values unchanged, `UserError` otherwise.
+- `create` `[@ANCHOR: zero_sudo:module_secrets_create]` and `write` `[@ANCHOR: zero_sudo:module_secrets_write]`: route every write of a listed key through the rule above.
+- `_check_module_secrets_in_store()` `[@ANCHOR: zero_sudo:module_secrets_check_store]` and `_register_hook()` `[@ANCHOR: zero_sudo:module_secrets_register_hook]`: the start-up check.
+- `_hams_module_secrets_clear_from_database()` `[@ANCHOR: zero_sudo:module_secrets_clear_from_database]` and `_hams_module_secrets_restore_to_database()` `[@ANCHOR: zero_sudo:module_secrets_restore_to_database]`: the rollout and rollback steps (names only returned).
+
+Tests: `zero_sudo/tests/test_module_secrets.py`.
+
 ## Outstanding migrations
 
 This change adds the store; it migrates nothing yet. Every item below still holds a secret where the web process can read it,
@@ -547,7 +582,7 @@ in the order that gives the largest reduction per step.
 | process environment | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_TUNNEL_TOKEN` | `cloudflare`, deployment | first: the account token |
 | process environment | `HAMS_CRYPTO_KEY` (decrypts every `*_crypt` column) | `zero_sudo` (`_get_crypto_secret`) | it also protects backup credentials, so any change needs Bruce's decision |
 | process environment | `GEMINI_API_KEY`, `SMTP_PASS`, `REDIS_PASSWORD`, `RMQ_PASS`, `DB_PASS`, `PDNS_API_KEY`, `ODOO_ADMIN_PASSWORD`, `ODOO_SERVICE_PASSWORD` | deployment (env files) | stop loading the env files into the web unit; move each to a unit credential or the broker |
-| `ir.config_parameter` | `stripe.secret_key`, `stripe.webhook_secret` | Stripe dues module | webhook check becomes `stripe_webhook_verify` |
+| `ir.config_parameter` | `stripe.secret_key`, `stripe.webhook_secret` | Stripe dues module | migrated: group `stripe` (see Module secrets above), off until the host lists it |
 | `ir.config_parameter` | `database.secret`, `mail.web_push_vapid_private_key` | Odoo core (`base`, `mail`) | served from the store by `core_secrets.py` behind `hams_core_secrets_from_store` (above); off until the hams1 rollout flips it |
 | `ir.config_parameter` | `gemini.api_key`, `form_shield.signing_key`, `parking.form_secret` | AI provider glue, `form_shield`, `parking` | the two signing keys become `hmac_sign` / `hmac_verify` |
 | `ir.config_parameter` | `ham_relay_bridge.api_key`, `ham_relay_bridge.source_publish_key`, `ham_relay_bridge.turn_secret`, `ham_simulated_band.ident_token_secret` | relay bridge, simulated band | |

@@ -5,6 +5,7 @@
 # License: AGPL-3.0
 
 from . import core_secrets
+from . import module_secrets
 from . import daemon_utils
 from . import ir_http
 from . import ir_module_module
