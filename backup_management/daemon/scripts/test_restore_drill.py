@@ -111,6 +111,21 @@ class TestRestoreDrill(unittest.TestCase):
             json.dump(self.cfg, f)
         self.assertEqual(rd.main(["x", path]), 1)
 
+    def test_worker_runs_script_with_no_arguments_using_config_beside_it(self):
+        # The backup worker's cmd is [script_path] with no arguments: a missing arg must not mean usage-and-exit-2.
+        make_snapshot(self.repo)
+        with open(os.path.join(self.tmp.name, "restore_drill.json"), "w") as f:
+            json.dump(self.cfg, f)
+        orig = rd.DEFAULT_CONFIG
+        rd.DEFAULT_CONFIG = os.path.join(self.tmp.name, "restore_drill.json")
+        self.addCleanup(setattr, rd, "DEFAULT_CONFIG", orig)
+        self.assertEqual(rd.main(["x"]), 0)
+        self.assertEqual(os.path.dirname(orig), os.path.dirname(os.path.abspath(rd.__file__)))
+        self.assertEqual(rd.main(["x", "a", "b"]), 2)
+
+    def test_server_tools_dir_is_on_the_import_path(self):
+        self.assertIn("/opt/hams/src/hams_open/hams_shared/tools", rd.SHARED_TOOLS_DIRS)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP. All Rights Reserved.
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Content-checking restore drill: usage `restore_drill.py CONFIG.json`.
+"""Content-checking restore drill: usage `restore_drill.py [CONFIG.json]` (default: restore_drill.json beside the script, as the backup worker runs it).
 
 Exits 0 only when the newest complete snapshot restores into a scratch directory and passes every content check
 (row counts, a canary value, sampled file hashes). An empty or wrong restore cannot exit 0. Every failing check is named
@@ -24,9 +24,16 @@ import sys
 import tempfile
 import types
 
-sys.path.insert(0, os.environ.get("HAMS_SHARED_TOOLS") or os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "hams_shared", "tools"))
+# Where b2_backup.py is found: the override, the repo layout, then the server's checked-out hams_open (the deployed
+# copy of this script lives in /opt/hams/daemons/backup_worker/scripts, where the repo-relative path does not exist).
+SHARED_TOOLS_DIRS = [d for d in (
+    os.environ.get("HAMS_SHARED_TOOLS"),
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "hams_shared", "tools"),
+    "/opt/hams/src/hams_open/hams_shared/tools") if d]
+sys.path.extend(SHARED_TOOLS_DIRS)
 import b2_backup  # noqa: E402
+
+DEFAULT_CONFIG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "restore_drill.json")
 
 NEEDS_BRUCE = "needs Bruce: key step"
 
@@ -138,11 +145,12 @@ def run_drill(cfg, log=print):
 
 
 def main(argv):
-    if len(argv) != 2:
-        print("usage: restore_drill.py CONFIG.json", file=sys.stderr)
+    if len(argv) > 2:
+        print("usage: restore_drill.py [CONFIG.json]", file=sys.stderr)
         return 2
     try:
-        with open(argv[1]) as f:
+        # The backup worker runs the script with no arguments: the config then sits beside it.
+        with open(argv[1] if len(argv) == 2 else DEFAULT_CONFIG) as f:
             cfg = json.load(f)
         run_drill(cfg, log=lambda m: print(m, flush=True))
     except DrillError as exc:
