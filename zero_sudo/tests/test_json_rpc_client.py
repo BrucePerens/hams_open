@@ -222,7 +222,7 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
 
         socket_path = os.path.join(self.test_dir, "rpc.sock")
         server = Server(socket_path, Handler)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)  # burn-ignore-test-daemon-thread: shut down and joined below
         thread.start()
         try:
             client = SecureJSONRPCClient(self.env_path, "unix://" + socket_path, self.db_name)
