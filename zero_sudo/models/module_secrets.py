@@ -31,6 +31,7 @@ FLAG_OPTION = "hams_module_secrets_from_store"
 # group -> the ir.config_parameter keys (also the store names) it moves.
 PARAM_GROUPS = {
     "stripe": ("stripe.secret_key", "stripe.webhook_secret"),
+    "ai": ("gemini.api_key", "greyline.api_key", "greyline.password"),
 }
 # Groups whose secrets are not ir.config_parameter keys; the owning module reads the store itself.
 FIELD_GROUPS = ()

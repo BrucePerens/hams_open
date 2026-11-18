@@ -142,3 +142,23 @@ class TestModuleSecrets(TransactionCase, SafePatchMixin):
         self.assertEqual(self.icp._hams_module_secrets_restore_to_database(), ["stripe.secret_key", "stripe.webhook_secret"])
         self._groups("")
         self.assertEqual(self.icp._get_param("stripe.secret_key"), STORE_KEY)
+
+    def test_ai_group_serves_provider_keys_and_keeps_them_out_of_the_database(self):
+        # Tests [@ANCHOR: zero_sudo:module_secrets_get_param]
+        # Tests [@ANCHOR: zero_sudo:module_secrets_db_value]
+        keys = ("gemini.api_key", "greyline.api_key", "greyline.password")
+        self.store_values.update({k: "test-ai-store-" + k for k in keys})
+        self._set_row("gemini.api_key", "test-ai-database-copy")
+        self._groups("ai")
+        self.assertEqual(ms.param_keys(), keys)
+        for key in keys:
+            self.assertEqual(self.icp._get_param(key), "test-ai-store-" + key)
+            self.icp.set_param(key, "test-ai-store-" + key)
+            self.assertEqual(self._row(key), MOVED_MARKER)
+        with self.assertRaises(UserError):
+            self.icp.set_param("gemini.api_key", "test-ai-typed")
+        self.assertEqual(self.icp._hams_module_secrets_clear_from_database(), [])
+        self.env.cr.execute("SELECT key FROM ir_config_parameter WHERE value LIKE 'test-ai-%'")
+        self.assertEqual(self.env.cr.fetchall(), [])
+        # Stripe keys are not served when only the ai group is listed.
+        self.assertEqual(self.icp._get_param("stripe.secret_key"), DB_KEY)
