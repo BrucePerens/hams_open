@@ -7,6 +7,7 @@ credential header. urllib used to copy every request header to the redirect targ
 
 import importlib
 import threading
+import urllib.error
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from odoo.tests.common import tagged
@@ -106,7 +107,7 @@ class TestPagerDaemonsRefuseRedirects(HamsTransactionCase):
         # Tests [@ANCHOR: pager_duty:fetch_github_pat_expiry]
         with _RedirectProbe() as probe:
             self.safe_patch("odoo.addons.pager_duty.daemon.check_github_pat_expiry.GITHUB_USER_URL", probe.url + "/user")
-            with self.assertRaises(Exception) as raised:
+            with self.assertRaises(urllib.error.HTTPError) as raised:
                 check_mod._fetch_expiry_header("ghp_test_token")
         self.assertIn("302", str(raised.exception))
         self.assertEqual(probe.first_headers[0]["authorization"], "Bearer ghp_test_token")
