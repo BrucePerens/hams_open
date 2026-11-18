@@ -133,15 +133,21 @@ class IrConfigParameterModuleSecrets(models.Model):
     # [@ANCHOR: zero_sudo:module_secrets_write]
     def write(self, vals):
         keys = param_keys()
-        if "value" in vals and keys:
-            secret_rows = self.filtered(lambda p: p.key in keys)
+        if keys and ("value" in vals or "key" in vals):
+            # The key a row will have AFTER this write decides whether it is guarded: renaming an ordinary row to a
+            # store-served key must not carry a real value into the database.
+            def key_after(row):
+                return vals.get("key", row.key)
+
+            secret_rows = self.filtered(lambda p: key_after(p) in keys)
             if secret_rows:
                 others = self - secret_rows
                 result = True
                 if others:
                     result = super(IrConfigParameterModuleSecrets, others).write(vals)
                 for row in secret_rows:
-                    row_vals = dict(vals, value=self._module_secret_db_value(row.key, vals["value"]))
+                    value = vals["value"] if "value" in vals else row.value
+                    row_vals = dict(vals, value=self._module_secret_db_value(key_after(row), value))
                     result = super(IrConfigParameterModuleSecrets, row).write(row_vals) and result
                 return result
         return super().write(vals)
