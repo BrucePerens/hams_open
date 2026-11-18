@@ -111,6 +111,10 @@ Parses the five characters of `IF` P3 (and of `CF001`): a sign, `+` or `-`, then
 
 Builds a newcat engine; takes ownership of the description. It requires `desc.family == Family::YaesuNewcat` and a `[yaesu]` parameter block; otherwise it returns `RigError` of kind `Unsupported` ("not a Yaesu newcat description"). The new engine has a fresh tokenizer and the clarifier switches assumed off (`clar` is `(false, false)`, later learned from replies). No I/O. Call once per rig; the engine is single-owner state, driven by the rig actor, never shared across threads.
 
+### `fn has_antenna_ports(&self) -> bool` [@ANCHOR: radioctl:radioctl_yaesu_engine_has_antenna_ports]
+
+True only for the FTDX101D and FTDX101MP (`yaesu.model_id` 681 or 682) whose description lists `levels.antenna_ports = 3`: the only Yaesu models whose `AN` command has been read (CAT Operation Reference Manual, `AN`, PDF p. 7). Selects `ANp1p2;` (p1 0 main band, p2 1 to 3) and reads `AN0;`, answered `ANp1p2p4;`. Any other Yaesu gets `Unsupported` for the antenna level. Pure.
+
 ### `fn decode_front_end(&self, name: &str, digits: &str) -> Option<Observation>` [@ANCHOR: radioctl:radioctl_yaesu_engine_decode_front_end]
 
 Decodes an `RA` (attenuator) or `PA` (preamp) answer. `digits` must be a single `0` (main receiver; fixed zero on the FT-991A) followed by exactly one digit, the wire step. The step is mapped to the level value (dB for the attenuator, step number for the preamp) with `attenuation::value_of` and the description. Returns `Observation::Level(Attenuator or Preamp, value)`, or `None` when the format is wrong or the description has no such step, so the answer is reported as unrecognised, never guessed. Pure.
