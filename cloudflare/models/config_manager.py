@@ -293,6 +293,10 @@ class CloudflareConfigManager(models.AbstractModel):
             else self.env["website"].get_current_website()
         )
         token, zone_id = website._get_cloudflare_credentials()
+        refusal = website._cloudflare_shared_zone_refusal()
+        if refusal:
+            # The zone's ruleset holds the other domains' rules too: they must not become this website's own.
+            return False, refusal
 
         state, existing_ruleset = get_zone_ruleset_checked(
             "http_request_firewall_custom", token, zone_id

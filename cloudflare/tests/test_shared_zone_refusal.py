@@ -70,3 +70,28 @@ class TestSharedZoneRefusal(HamsTransactionCase):
         self.manager.initialize_cloudflare_state()
         for call in read.call_args_list:
             self.assertNotEqual(call.args[2], "z", "the shared zone was read")
+
+    def test_pull_waf_rules_is_refused_for_a_shared_zone(self):
+        # Tests [@ANCHOR: cloudflare:COMM_website_shared_zone_refusal]
+        self._share()
+        read = self.safe_patch(CM + "get_zone_ruleset_checked")
+        ok, message = self.manager.action_pull_waf_rules(website_id=self.website.id)
+        self.assertFalse(ok)
+        self.assertIn("shares its Cloudflare zone", message)
+        read.assert_not_called()
+
+    def test_ip_ban_is_refused_for_a_shared_zone(self):
+        # Tests [@ANCHOR: cloudflare:COMM_website_shared_zone_refusal]
+        self._share()
+        ban = self.safe_patch("odoo.addons.cloudflare.models.ip_ban.ban_ip", return_value=(True, "rule"))
+        self.assertFalse(self.env["cloudflare.ip.ban"]._execute_ban("192.0.2.9", website_id=self.website.id))
+        ban.assert_not_called()
+        row = self.env["cloudflare.ip.ban"].search([("ip_address", "=", "192.0.2.9")])
+        self.assertEqual(row.state, "failed")
+        self.assertIn("shares its Cloudflare zone", row.notes)
+
+    def test_ip_ban_still_works_for_an_own_zone(self):
+        # Tests [@ANCHOR: cloudflare:COMM_website_shared_zone_refusal]
+        ban = self.safe_patch("odoo.addons.cloudflare.models.ip_ban.ban_ip", return_value=(True, "rule"))
+        self.assertTrue(self.env["cloudflare.ip.ban"]._execute_ban("192.0.2.10", website_id=self.website.id))
+        ban.assert_called_once()
