@@ -74,8 +74,9 @@ def newest_complete_snapshot(repo):
     for name in sorted(os.listdir(repo), reverse=True):
         try:
             with open(os.path.join(repo, name, "state.json")) as f:
-                if json.load(f).get("status") == "complete":
-                    return os.path.join(repo, name)
+                state = json.load(f)
+            if isinstance(state, dict) and state.get("status") == "complete":
+                return os.path.join(repo, name)
         except (OSError, ValueError):
             continue
     raise DrillError("check snapshot: no complete snapshot in the repository")
