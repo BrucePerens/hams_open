@@ -4,9 +4,16 @@
 # This file is part of hams_open, an open source module.
 # License: AGPL-3.0
 
+import json
 import os
+import types
 import requests
 import logging
+
+if __package__:  # imported as odoo.addons.zero_sudo.daemon.json_rpc_client
+    from . import odoo_rpc_client
+else:  # a daemon that put this directory itself on sys.path (zero_sudo/daemon/README.md)
+    import odoo_rpc_client
 
 _logger = logging.getLogger(__name__)
 
@@ -14,6 +21,9 @@ _logger = logging.getLogger(__name__)
 # [@ANCHOR: zero_sudo_json_rpc_client_secure_jsonrpcclient]
 class SecureJSONRPCClient:
     """
+    `base_url` is `http(s)://host[:port]` or `unix:///absolute/socket/path` (the RPC guard's socket, see
+    `hams_rpc_guard/README.md`, "Unix socket").
+
     Standardized JSON-2 IPC client for external daemons.
     Reads credentials strictly from local daemon_key_manager .env files.
     Implements self-healing retry logic upon key rotation.
@@ -52,6 +62,26 @@ Missing LOGIN or KEY.
 """.strip()
             raise ValueError(err_msg)
 
+    # [@ANCHOR: zero_sudo:json_rpc_client_post_unix]
+    def _post_unix(self, url, payload):
+        """POST over the Unix socket of `base_url`; `url` is `<base_url>/json/2/<model>/<method>`."""
+        socket_path = self.base_url[len("unix://"):]
+        path = url[len(self.base_url):]
+        headers = {
+            "X-Odoo-Database": self.db_name,
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+        }
+        connection = odoo_rpc_client.UnixHTTPConnection(socket_path, timeout=30)
+        try:
+            connection.request("POST", path, body=json.dumps(payload).encode(), headers=headers)
+            response = connection.getresponse()
+            body = response.read()
+            # the two things `call()` reads from a `requests.Response`
+            return types.SimpleNamespace(status_code=response.status, json=lambda: json.loads(body))
+        finally:
+            connection.close()
+
     def call(self, model, method, ids=(), **kwargs):
         # Odoo's JSON-2 wire protocol: odoo.http.Json2Dispatcher.dispatch()
         # merges the JSON body's own top-level keys straight into the
@@ -69,6 +99,8 @@ Missing LOGIN or KEY.
         payload = {"ids": list(ids), **kwargs}
 
         def _do_request():
+            if self.base_url.startswith("unix://"):
+                return self._post_unix(url, payload)
             headers = {
                 "X-Odoo-Database": self.db_name,
                 "Content-Type": "application/json",
