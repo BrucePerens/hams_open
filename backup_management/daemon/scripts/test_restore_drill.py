@@ -93,6 +93,14 @@ class TestRestoreDrill(unittest.TestCase):
         make_snapshot(self.repo, name="20261117T000000Z", users=0, status="partial")
         rd.run_drill(self.cfg, log=lambda m: None)
 
+    def test_a_state_file_that_is_not_an_object_is_skipped_like_a_partial_one(self):
+        make_snapshot(self.repo, name="20261116T000000Z")
+        newest = make_snapshot(self.repo, name="20261117T000000Z", users=0)
+        for text in ("[]", "null", '"complete"'):
+            with open(os.path.join(newest, "state.json"), "w") as f:
+                f.write(text)
+            self.assertEqual(os.path.basename(rd.newest_complete_snapshot(self.repo)), "20261116T000000Z")
+
     def test_key_engines_fail_loudly(self):
         for engine in ("kopia", "pgbackrest", "b2"):
             self.cfg["engine"] = engine
