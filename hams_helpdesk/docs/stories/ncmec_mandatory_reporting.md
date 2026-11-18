@@ -69,7 +69,9 @@ Full design context: `docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md` (ha
     for an actual NCMEC filing `[@ANCHOR: hams_helpdesk:COMM_ncmec_email_report_fallback]`.
 12. Once real API credentials exist, the same button instead submits the packet directly to
     NCMEC's own CyberTipline Reporting API
-    `[@ANCHOR: hams_helpdesk:COMM_ncmec_submit_report_via_api]`.
+    `[@ANCHOR: hams_helpdesk:COMM_ncmec_submit_report_via_api]`, the packet text going in the report's
+    free-text `additionalInfo` element beside the incident summary and reporter email (the element name is to be
+    confirmed against NCMEC's real XSD in their test environment once credentials exist).
 13. After an admin pastes the packet into NCMEC's own portal by hand (the no-credentials path),
     marking the report filed manually records that the incident has been reported, with the same
     double-file guard `action_ncmec_report` itself uses

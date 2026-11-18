@@ -126,7 +126,8 @@ _NCMEC_PARAM_FALLBACK_EMAIL = "hams_helpdesk.ncmec_fallback_report_email"
 #   Test/sandbox:     https://exttest.cybertip.org/ispws
 # The /submit request body below uses only the handful of elements NCMEC's own documentation page
 # actually named (<report>/<incidentSummary>/<incidentType>, <reporter>/<reportingPerson>,
-# <incidentDateTime>) -- the real XSD was not itself fetched, so this is a best-effort shape that
+# <incidentDateTime>), plus <additionalInfo> carrying the packet text (a guess at the free-text element's
+# name) -- the real XSD was not itself fetched, so this is a best-effort shape that
 # MUST be validated against NCMEC's actual schema before any production submission is attempted.
 # /upload, /fileinfo, /retract, and /finish are deliberately not implemented: this phase's packet
 # design substitutes a playback URL for an uploaded file (see _ncmec_assemble_report_packet), and
@@ -2114,6 +2115,10 @@ class HelpdeskTicket(models.Model):
         reporter = ET.SubElement(report, "reporter")
         reporting_person = ET.SubElement(reporter, "reportingPerson")
         ET.SubElement(reporting_person, "email").text = self.ncmec_contact_email or ""
+        # The assembled packet (ticket, reported member, playback URL, contact) as plain text in the
+        # free-text description element, last in the report. Which element NCMEC's real XSD names for
+        # it is still to be checked in their test environment once credentials exist.
+        ET.SubElement(report, "additionalInfo").text = self.ncmec_report_packet or ""
         payload = ET.tostring(report, encoding="utf-8")
 
         basic_auth = base64.b64encode(f"{username}:{password}".encode("utf-8")).decode("ascii")
