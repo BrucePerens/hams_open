@@ -48,7 +48,7 @@ Builds the Kenwood-style ASCII engine. `desc` is taken by value and kept. Errors
 
 ### `fn antenna_form(&self) -> Result<AntennaForm, RigError>` [@ANCHOR: radioctl:radioctl_kenwood_engine_antenna_form]
 
-Chooses how this model writes `AN` (antenna connector): the TS-480 (ID 20) takes `ANp;` with p 1 or 2, the TS-590S (ID 21) takes `ANp1p2p3;` with p1 0 or 1. Both need `levels.antenna_ports` of 2. Any other model (the TS-590SG, for which no PC command guide has been read) gets `Unsupported`. Pure; used by `SendLevel` and `GetLevel` for `Level::Antenna` and by the reply decoder.
+Chooses how this model writes `AN` (antenna connector): the TS-480 (ID 20) and the TS-2000 (ID 19) take `ANp;` with p 1 or 2, the TS-590S (ID 21) takes `ANp1p2p3;` with p1 0 or 1. Both need `levels.antenna_ports` of 2. Any other model (the TS-590SG, for which no PC command guide has been read) gets `Unsupported`. Pure; used by `SendLevel` and `GetLevel` for `Level::Antenna` and by the reply decoder.
 
 ### `fn ky(&self) -> Result<radioctl_core::description::KyParams, RigError>` [@ANCHOR: radioctl:radioctl_kenwood_engine_ky]
 
