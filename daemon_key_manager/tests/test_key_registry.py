@@ -12,6 +12,7 @@ from odoo.tools import mute_logger
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 from odoo.exceptions import UserError, AccessError
+from psycopg2 import IntegrityError
 
 
 _logger = logging.getLogger(__name__)
@@ -960,7 +961,7 @@ class TestKeyRegistry(RealTransactionCase):
             original_content = f.read()
 
         with mute_logger("odoo.sql_db"):
-            with self.assertRaises(Exception):
+            with self.assertRaises(IntegrityError):
                 self.env["daemon.key.registry"].with_user(self.manager_user.id).register_daemon(
                     "Attacker Daemon",
                     "daemon_key_manager.user_daemon_key_manager_service",
