@@ -7,6 +7,7 @@ import importlib.util
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -30,7 +31,7 @@ class InstallerTests(unittest.TestCase):
     def test_run_runs_a_command_and_raises_on_failure(self):
         with contextlib.redirect_stdout(io.StringIO()):
             install_glasgow.run(["true"])
-            with self.assertRaises(Exception):
+            with self.assertRaises(subprocess.CalledProcessError):
                 install_glasgow.run(["false"])
 
     # Tests [@ANCHOR: glasgow_install_copy_bounded]
