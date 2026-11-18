@@ -2,6 +2,7 @@
 name = "codec2_fixedpoint_codegen_check"
 version = "0.1.0"
 edition = "2021"
+license = "LGPL-3.0-or-later"
 
 [lib]
 crate-type = ["staticlib"]
