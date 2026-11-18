@@ -20,4 +20,5 @@ Description: Lenovo ThinkPad Yoga 11e demo-laptop support for Debian
  settings: lid ignored and no inactivity suspend on AC, screen off after 5
  minutes, Wi-Fi power saving off.
  .
- The settings are applied only when the DMI product version is "ThinkPad Yoga 11e".
+ The settings are applied only when the DMI product version is
+ "ThinkPad Yoga 11e".

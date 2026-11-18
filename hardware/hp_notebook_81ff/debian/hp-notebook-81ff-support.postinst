@@ -25,7 +25,7 @@ case "$1" in
             fi
             if [ -d /run/systemd/system ]; then
                 # Weekly TRIM for SSDs; harmless on a hard disk.  Debian enables it already.
-                systemctl enable fstrim.timer >/dev/null 2>&1 || true
+                deb-systemd-helper enable fstrim.timer >/dev/null 2>&1 || true
             fi
             if [ -d /run/systemd/system ] && command -v tlp >/dev/null 2>&1; then
                 tlp start >/dev/null 2>&1 || true
