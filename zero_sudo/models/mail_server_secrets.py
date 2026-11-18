@@ -32,8 +32,10 @@ class IrMailServerSecrets(models.Model):
     def _smtp_login__(self, connection, smtp_user, smtp_password):
         """With the group on and a stored server, logs in with the store's password for this server (SecretNotFound
         when the store lacks it: a mail server with a user and no password must fail loudly). A call without a
-        record (a CLI-configured server) and every call with the group off use Odoo's own login."""
-        if self and group_enabled(STORE_GROUP) and smtp_user:
+        record (a CLI-configured server), a server that does not authenticate by user name and password (an
+        OAuth server such as Gmail or Outlook has a user and no password) and every call with the group off use
+        Odoo's own login."""
+        if self and self.smtp_authentication == "login" and group_enabled(STORE_GROUP) and smtp_user:
             smtp_password = store_secret(smtp_store_name(self.id))
         return super()._smtp_login__(connection, smtp_user, smtp_password)
 
