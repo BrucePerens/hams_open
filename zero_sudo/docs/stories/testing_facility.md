@@ -443,6 +443,10 @@ The constructor stores them, creates a `requests.Session`, and calls `_load_cred
 
 `_load_credentials(self)` reads the `.env` file at `self.env_path` line by line and sets `self.login` from the line `ODOO_RPC_LOGIN=...` and `self.api_key` from `ODOO_RPC_KEY=...` (the value is everything after the first `=`, stripped of the line ending; later lines win). **Errors.** `FileNotFoundError` with a message that the daemon must be registered and the key-manager cron must have run when the file does not exist; `ValueError` ("Malformed credential file ... Missing LOGIN or KEY") when either value is absent or empty. It is called from the constructor and again by `call` after a 401 or 403, which is how a real key rotation mid-run is healed without restarting the daemon. It reads a file only; the key is never logged.
 
+### SecureJSONRPCClient._post_unix `[@ANCHOR: zero_sudo:json_rpc_client_post_unix]`
+
+`_post_unix(self, url, payload)` is what `call()` uses when `base_url` starts with `unix://` (`unix:///run/odoo/rpc.sock`, the `hams_rpc_guard` socket): it POSTs the JSON payload with the same headers (`X-Odoo-Database`, `Authorization: Bearer <key>`) through `UnixHTTPConnection` of `odoo_rpc_client.py` (30 s timeout, one connection per call) and returns an object with `status_code` and `json()`, so the 401/403 credential reload and the error handling of `call()` are the same as over TCP. **Errors.** `OSError` when the socket cannot be reached. Tested against a server on a temporary socket, `test_call_over_a_unix_socket_and_self_heals_on_401`.
+
 ## Layout SEO helper
 
 ### `assert_layout_seo(test, xmlids)` [@ANCHOR: zero_sudo:assert_layout_seo]

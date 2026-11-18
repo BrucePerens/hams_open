@@ -4,9 +4,13 @@
 # This file is part of hams_open, an open source module.
 # License: AGPL-3.0
 
+import json
 import os
+import socketserver
 import tempfile
+import threading
 import shutil
+from http.server import BaseHTTPRequestHandler
 from unittest.mock import MagicMock
 from odoo.tests.common import tagged
 from odoo import _
@@ -192,6 +196,48 @@ class TestSecureJSONRPCClient(HamsTransactionCase):
         client = SecureJSONRPCClient(self.env_path, self.base_url, self.db_name)
         with self.assertRaisesRegex(RuntimeError, "404"):
             client.call("res.users", "read", ids=[999999])
+
+    # Tests [@ANCHOR: zero_sudo:json_rpc_client_post_unix]
+    def test_call_over_a_unix_socket_and_self_heals_on_401(self):
+        seen = []
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(handler):
+                body = json.loads(handler.rfile.read(int(handler.headers["Content-Length"])))
+                seen.append((handler.path, handler.headers["Authorization"], handler.headers["X-Odoo-Database"], body))
+                stale = handler.headers["Authorization"] == "Bearer test_key"
+                answer = json.dumps({"message": "denied"} if stale else {"result": "over-socket"}).encode()
+                handler.send_response(401 if stale else 200)
+                handler.send_header("Content-Length", str(len(answer)))
+                handler.end_headers()
+                handler.wfile.write(answer)
+
+            def log_message(handler, *args):
+                return None
+
+        class Server(socketserver.UnixStreamServer):
+            def get_request(self):
+                request, _address = super().get_request()
+                return request, ("unix", 0)  # BaseHTTPRequestHandler wants an address pair
+
+        socket_path = os.path.join(self.test_dir, "rpc.sock")
+        server = Server(socket_path, Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            client = SecureJSONRPCClient(self.env_path, "unix://" + socket_path, self.db_name)
+            with open(self.env_path, "w") as f:
+                f.write("ODOO_RPC_LOGIN=test_user\nODOO_RPC_KEY=rotated_key\n")
+            result = client.call("res.users", "search", domain=[1])
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(5)
+
+        self.assertEqual(result, "over-socket")
+        self.assertEqual([entry[0] for entry in seen], ["/json/2/res.users/search"] * 2)
+        self.assertEqual([entry[1] for entry in seen], ["Bearer test_key", "Bearer rotated_key"])
+        self.assertEqual(seen[1][2:], (self.db_name, {"ids": [], "domain": [1]}))
 
     def test_missing_env_file(self):
         non_existent = os.path.join(self.test_dir, "non_existent.env")
