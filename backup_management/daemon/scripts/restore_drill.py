@@ -149,7 +149,11 @@ def check_postgres(dump_path, cfg, log):
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise DrillError(f"check database: postgres tools failed ({type(exc).__name__})") from None
     finally:
-        run(["dropdb", "--if-exists", name])
+        try:
+            run(["dropdb", "--if-exists", name])
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            # Never let the cleanup's own failure replace the error being raised (a missing tool fails here too).
+            log(f"scratch database {name} was not dropped ({type(exc).__name__})")
 
 
 # [@ANCHOR: backup_management:restore_drill_check_files]
