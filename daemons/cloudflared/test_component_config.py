@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Tests of the config classes of component-tests/config.py (pure data; no tunnel or network needed)."""
 import base64
+import dataclasses
 import json
 import os
 import sys
@@ -19,7 +20,7 @@ class ConfigClassesTest(unittest.TestCase):
         self.assertEqual(merged["x"], 1)
         self.assertTrue(merged["no-autoupdate"])
         self.assertIn("localhost:", merged["metrics"])
-        with self.assertRaises(Exception):
+        with self.assertRaises(dataclasses.FrozenInstanceError):
             base.no_autoupdate = False
 
     # Tests [@ANCHOR: cloudflared:NamedTunnelBaseConfig]

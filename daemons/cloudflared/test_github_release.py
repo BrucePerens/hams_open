@@ -141,7 +141,7 @@ class GetOrCreateReleaseTest(unittest.TestCase):
     # Tests [@ANCHOR: github_release:get_or_create_release]
     def test_no_release_is_created_for_a_tag_that_does_not_exist(self):
         repo = self._repo(tags=("other",))
-        with self.assertRaises(Exception):
+        with self.assertRaisesRegex(Exception, "Tag 2026.1.0 not found"):  # the script raises a bare Exception
             gr.get_or_create_release(repo, "2026.1.0")
         repo.create_git_release.assert_not_called()
 

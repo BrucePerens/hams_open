@@ -59,7 +59,7 @@ class KvReadTest(unittest.TestCase):
     # Tests [@ANCHOR: github_message:kv_get_keys]
     def test_a_failed_listing_raises_instead_of_returning_nothing(self):
         with mock.patch.object(gm.requests, "get", return_value=FakeResponse(500, None, text="down")):
-            with self.assertRaises(Exception):
+            with self.assertRaisesRegex(Exception, "failed to get checksums"):  # the script raises a bare Exception
                 gm.kv_get_keys("p", "acct", "ns", "tok")
 
     # Tests [@ANCHOR: github_message:kv_get_value]
@@ -74,7 +74,7 @@ class KvReadTest(unittest.TestCase):
     # Tests [@ANCHOR: github_message:kv_get_value]
     def test_a_failed_value_fetch_never_returns_the_error_text_as_a_checksum(self):
         with mock.patch.object(gm.requests, "get", return_value=FakeResponse(404, None, text="not found")):
-            with self.assertRaises(Exception):
+            with self.assertRaisesRegex(Exception, "failed to get checksums"):  # the script raises a bare Exception
                 gm.kv_get_value("k", "acct", "ns", "tok")
 
 
