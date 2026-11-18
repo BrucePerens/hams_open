@@ -24,6 +24,7 @@ from odoo.addons.ses_webhook.controllers.webhook_api import (
 
 from odoo.addons.ses_webhook.controllers.webhook_api import SesWebhookController, _processing_failure_description, _verdict
 from odoo.exceptions import AccessError
+from psycopg2 import IntegrityError
 from odoo.tests.common import tagged
 from odoo.tools import mute_logger
 
@@ -1365,7 +1366,7 @@ class TestSesWebhook(HamsHttpCase):
     def test_08_domain_unique_constraints(self):
         """Verify that SQL constraints block duplicate domain names and tokens."""
         # Due to how Odoo tests wrap transactions, checking SQL constraints requires mute_logger and catching IntegrityError
-        with mute_logger('odoo.sql_db'), self.assertRaises(Exception):
+        with mute_logger('odoo.sql_db'), self.assertRaises(IntegrityError):
             with self.env.cr.savepoint():
                 self.env['ses.webhook.domain'].create({
                     'name': 'test-a.com', # Duplicate name
@@ -1373,7 +1374,7 @@ class TestSesWebhook(HamsHttpCase):
                 })
                 self.env.flush_all()
 
-        with mute_logger('odoo.sql_db'), self.assertRaises(Exception):
+        with mute_logger('odoo.sql_db'), self.assertRaises(IntegrityError):
             with self.env.cr.savepoint():
                 self.env['ses.webhook.domain'].create({
                     'name': 'test-c.com',
