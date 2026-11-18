@@ -8,6 +8,8 @@ import redis as real_redis
 from odoo.tests.common import tagged
 import secrets
 
+from odoo.addons.knowledge import rate_limit
+
 from odoo.addons.pager_duty.controllers import ping_api
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
@@ -54,6 +56,15 @@ class TestPagerControllers(HamsHttpCase):
         # Tests [@ANCHOR: pager_duty:get_check_id_by_uuid]
         response = self.url_open("/api/v1/pager/heartbeat/no-such-uuid")
         self.assertEqual(response.status_code, 404)
+
+    def test_heartbeat_fails_open_when_redis_is_down(self):
+        # Tests [@ANCHOR: pager_duty:heartbeat_miss_limit]
+        """A Redis outage fails OPEN: an unknown uuid is a plain 404 and a real heartbeat is accepted, never a 500."""
+        check = self.env["pager.check"].create({"name": "Outage Monitor", "check_type": "heartbeat", "interval": 60})
+        self.safe_patch_object(rate_limit, "expiring_counter", side_effect=real_redis.exceptions.ConnectionError("down"))
+        headers = {"CF-Connecting-IP": "198.18.7.7"}
+        self.assertEqual(self.url_open("/api/v1/pager/heartbeat/no-such-uuid", headers=headers).status_code, 404)
+        self.assertEqual(self.url_open(f"/api/v1/pager/heartbeat/{check.heartbeat_uuid}", headers=headers).status_code, 200)
 
     # [@ANCHOR: test_heartbeat_misses_are_limited_per_network]
     def test_heartbeat_misses_are_limited_per_network(self):

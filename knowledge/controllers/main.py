@@ -27,6 +27,12 @@ _md_cache = lru.LRU(1024)
 # vote: a skipped vote costs nothing, an open counter is what the limit is there to stop.
 FEEDBACK_PER_HOUR_NETWORK = 60
 
+# [@ANCHOR: knowledge:search_rate_limit]
+# Verified by [@ANCHOR: test_manual_search_is_limited_per_network]
+# A search runs ILIKE over every article body, so searches are counted per network (/24 or /48): 300 an hour is far
+# above reading by hand, and a script does not get past it. Redis down refuses the search: reading articles still works.
+SEARCHES_PER_HOUR_NETWORK = 300
+
 # Headings of the Help index, in the order readers meet them. A member
 # manual names its heading with "help_topic" in its knowledge_docs entry;
 # unknown headings follow alphabetically, then "Other guides".
@@ -395,6 +401,13 @@ class ManualLibraryController(http.Controller):
         # manuals are searched, for every reader including administrators.
         domain = self._help_domain()
         if search:
+            hits = network_hits(request.env, "manual_search", 3600)
+            if hits is None or hits > SEARCHES_PER_HOUR_NETWORK:
+                return request.make_response(
+                    "Too many searches from your network. Please try again later.",
+                    status=429,
+                    headers=[("Content-Type", "text/plain; charset=utf-8")],
+                )
             like = f"%{escape_psql(search)}%"
             domain += ["|", ("name", "=ilike", like), ("body", "=ilike", like)]
 
