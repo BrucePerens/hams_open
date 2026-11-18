@@ -1,3 +1,11 @@
+convertible-power (1.0.4) unstable; urgency=medium
+
+  * Maintainer scripts no longer call systemctl directly (lintian
+    maintainer-script-calls-systemctl); they use deb-systemd-invoke and
+    deb-systemd-helper. No change to what is installed.
+
+ -- Bruce Perens <bruce@perens.com>  Wed, 18 Nov 2026 12:00:00 -0800
+
 convertible-power (1.0.3) unstable; urgency=medium
 
   * The GDM login screen no longer suspends from inactivity on AC power

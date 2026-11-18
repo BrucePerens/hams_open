@@ -8,9 +8,8 @@ case "$1" in
             deb-systemd-invoke try-restart upower.service || true
             # power-profiles-daemon is removed by the dependency on tlp, but a running copy is not always
             # stopped; while it runs, TLP refuses to set the CPU boost and energy settings.
-            if systemctl is-active --quiet power-profiles-daemon.service; then
-                systemctl stop power-profiles-daemon.service || true
-            fi
+            # Stopping a unit that is not running (or not installed) is harmless.
+            deb-systemd-invoke stop power-profiles-daemon.service || true
             # The login screen's settings are compiled from /usr/share/gdm/dconf when GDM starts; compile them now too.
             if [ -x /usr/share/gdm/generate-config ]; then
                 /usr/share/gdm/generate-config || true

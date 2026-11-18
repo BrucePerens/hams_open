@@ -9,7 +9,7 @@ case "$1" in
             dconf update >/dev/null 2>&1 || true
         fi
         if [ -d /run/systemd/system ]; then
-            systemctl reload NetworkManager >/dev/null 2>&1 || true
+            deb-systemd-invoke reload NetworkManager.service >/dev/null 2>&1 || true
         fi
         if [ -d /run/systemd/system ] && command -v tlp >/dev/null 2>&1; then
             tlp start >/dev/null 2>&1 || true
