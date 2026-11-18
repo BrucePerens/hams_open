@@ -47,3 +47,4 @@ from . import test_analytics_hoot
 from . import website_credentials
 from . import test_refusal_branches
 from . import test_stored_record_names
+from . import test_secret_store_group
