@@ -43,7 +43,7 @@ if not verdict.ok:
 
 The question page renders `form_shield.question_fields` with `form.shield.issue("q")`.
 
-Odoo's own forms (`/website/form/...`, event registration, newsletter subscribe, follow) are covered
+Odoo's own forms (`/website/form/...`, event registration, follow) are covered
 without touching them: `static/src/js/recaptcha_patch.js` replaces what stands behind the stock
 `ReCaptcha` class and `models/ir_http.py` verifies its token for the listed actions. `login` is not
 enforced (see below).

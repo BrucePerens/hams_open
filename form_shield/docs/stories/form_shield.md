@@ -1,6 +1,6 @@
 # Story: Public Forms Are Protected From Programs Without a Third-Party Captcha
 
-As the **Site Owner**, I want **the forms that anyone can send (report a violation, request an invitation, contact us, newsletter, event
+As the **Site Owner**, I want **the forms that anyone can send (report a violation, request an invitation, contact us, event
 registration) to turn away programs without a Google or Cloudflare captcha**, so that my moderators read people's reports and my visitors are
 not tracked by a third party to prove they are people.
 
@@ -30,7 +30,7 @@ A member skips the challenge and meets the honeypots and a looser limit, counted
 
 ## Scenario: Odoo's own forms
 
-The website form builder (Contact Us), event registration, newsletter and follow ask the stock `ReCaptcha` class for a token. `form_shield` makes
+The website form builder (Contact Us), event registration and follow ask the stock `ReCaptcha` class for a token. `form_shield` makes
 that token its own answer, loads no Google script, and checks it on the server where Odoo calls its captcha hook.
 
 ## Scenario: The administrator sees what is being turned away
@@ -390,7 +390,7 @@ Registered as `form_shield.FormShieldErrorNotice` on `#wrapwrap`. A shielded for
 
 ### Odoo's own forms, browser side (`static/src/js/recaptcha_patch.js`) [@ANCHOR: form_shield:recaptcha_patch]
 
-Patches `ReCaptcha.prototype` of `google_recaptcha` so Odoo's website form, event registration, newsletter and follow forms get the shield's answer as their token and load no Google script. The enforced actions (`website_form`, `website_event_registration`, `website_mass_mailing_subscribe`, `website_mail_follow`) are listed in both this file and `models/ir_http.py` and must be kept equal; any other action gets an answer with no token. Details are in the two entries at the end of this file (`loadLibs` and `getToken`). Test: `test_odoo_forms_require_a_solved_challenge`.
+Patches `ReCaptcha.prototype` of `google_recaptcha` so Odoo's website form, event registration and follow forms get the shield's answer as their token and load no Google script. The enforced actions (`website_form`, `website_event_registration`, `website_mass_mailing_subscribe`, `website_mail_follow`) are listed in both this file and `models/ir_http.py` and must be kept equal; any other action gets an answer with no token. Details are in the two entries at the end of this file (`loadLibs` and `getToken`). Test: `test_odoo_forms_require_a_solved_challenge`.
 
 ### `report_limits` in `user_websites` [@ANCHOR: user_websites:report_limits]
 
