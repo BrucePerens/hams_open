@@ -20,6 +20,7 @@ split = "st"
 attenuator_db = [6, 12, 18]
 attenuator_any_up_to_db = 0
 preamp_steps = 2
+antenna_ports = 3
 
 [timing]
 timeout_ms = 2000
@@ -93,6 +94,11 @@ verified = { state = "unverified" }
 key = "levels.attenuator_db"
 provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball hamlib-4.6.2.tar.gz, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rig_caps `.attenuator` of the Yaesu FTDX-101MP in rigs/yaesu ([6, 12, 18]) and `rigctl -m 1044 --dump-caps`", note = "The guide (RA p. 20) gives the RA steps; the dB figures are Hamlib's, read for facts only." }
 verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.antenna_ports"
+provenance = { kind = "manual", reference = "Yaesu FTDX101D/FTDX101MP 'CAT Operation Reference Manual', file FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, sha256 4f54e60adcb444671547770f90fb06dbf420b695ba1aec9b7d0a973ed81e8bc5: AN, PDF p. 7: ANp1p2; p1 0 main band, p2 1 ANT1, 2 ANT2, 3 ANT3; read ANp1; answers ANp1p2p4; (p4 0 fixed)" }
+verified = { state = "manual-checked", reference = "AN, PDF p. 7" }
 
 [[facts]]
 key = "levels.*"

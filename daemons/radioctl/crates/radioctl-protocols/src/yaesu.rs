@@ -233,6 +233,18 @@ impl YaesuEngine {
         if self.split_st() { "ST;" } else { "FT;" }.to_string()
     }
 
+    // [@ANCHOR: radioctl_yaesu_engine_has_antenna_ports]
+    /// True for the models whose `AN` command has been read: the FTDX101D and FTDX101MP (IDs 681
+    /// and 682), three antenna connectors (CAT Operation Reference Manual, `AN`, PDF p. 7).
+    fn has_antenna_ports(&self) -> bool {
+        self.desc.levels.antenna_ports == 3
+            && self
+                .desc
+                .yaesu
+                .as_ref()
+                .is_some_and(|y| matches!(y.model_id, 681 | 682))
+    }
+
     // [@ANCHOR: radioctl_yaesu_engine_decode_front_end]
     /// An `RA` or `PA` answer: `0` (main receiver; the FT-991A has this digit as a fixed zero)
     /// and the step, mapped by the description.
@@ -335,6 +347,13 @@ impl YaesuEngine {
                 .and_then(|v| u16::try_from(v).ok())
                 .map(Observation::ModelId),
             (Some(name @ ("RA" | "PA")), Some(digits)) => self.decode_front_end(name, digits),
+            // `ANp1p2p4;`: main band (p1 0), connector 1 to 3, p4 a fixed 0.
+            (Some("AN"), Some(rest)) if self.has_antenna_ports() => match rest.as_bytes() {
+                [b'0', port @ b'1'..=b'3', b'0'] => {
+                    Some(Observation::Level(Level::Antenna, u16::from(port - b'0')))
+                }
+                _ => None,
+            },
             (Some(name), Some(digits)) => decode_level(&self.desc, name, digits),
             _ => None,
         };
@@ -504,6 +523,15 @@ impl ProtocolEngine for YaesuEngine {
                 };
                 Self::command(format!("RC;{step}"), none)
             }
+            Op::GetLevel(Level::Antenna) if self.has_antenna_ports() => {
+                Self::command("AN0;".to_string(), observe(Field::Level(Level::Antenna)))
+            }
+            Op::SetLevel(Level::Antenna, port @ 1..=3) if self.has_antenna_ports() => {
+                Self::command(format!("AN0{port};"), none)
+            }
+            Op::GetLevel(Level::Antenna) | Op::SetLevel(Level::Antenna, _) => {
+                return Err(Self::unsupported("no antenna port list on this model"));
+            }
             Op::GetLevel(level @ (Level::Attenuator | Level::Preamp)) => {
                 attenuation::step_of(&self.desc, *level, 0)?;
                 let name = if *level == Level::Attenuator {
@@ -637,6 +665,41 @@ mod tests {
             level_range(&shipped("yaesu-ft-991a"), Level::MicGain),
             Some((0, 100))
         );
+    }
+
+    // Tests [@ANCHOR: radioctl_yaesu_engine_has_antenna_ports]
+    // Tests [@ANCHOR: radioctl_yaesu_engine_decode]
+    #[test]
+    fn the_ftdx101_antenna_command_follows_the_cat_manual() {
+        for id in ["yaesu-ftdx101d", "yaesu-ftdx-101mp"] {
+            let mut e = YaesuEngine::new(shipped(id)).expect("engine");
+            assert_eq!(
+                e.encode(&Op::GetLevel(Level::Antenna)).unwrap().bytes,
+                b"AN0;"
+            );
+            assert_eq!(
+                e.encode(&Op::SetLevel(Level::Antenna, 3)).unwrap().bytes,
+                b"AN03;"
+            );
+            assert!(e.encode(&Op::SetLevel(Level::Antenna, 0)).is_err());
+            assert!(e.encode(&Op::SetLevel(Level::Antenna, 4)).is_err());
+            assert_eq!(
+                e.feed(b"AN020;", Duration::ZERO),
+                vec![Inbound::Observation(Observation::Level(Level::Antenna, 2))]
+            );
+            // The sub band's answer, and a connector outside 1 to 3, are not this reading.
+            assert!(matches!(
+                e.feed(b"AN110;", Duration::ZERO)[0],
+                Inbound::Unrecognised(_)
+            ));
+            assert!(matches!(
+                e.feed(b"AN040;", Duration::ZERO)[0],
+                Inbound::Unrecognised(_)
+            ));
+        }
+        // No other Yaesu has had its AN command read: refused.
+        let mut other = YaesuEngine::new(shipped("yaesu-ft-950")).expect("engine");
+        assert!(other.encode(&Op::GetLevel(Level::Antenna)).is_err());
     }
 
     // Tests [@ANCHOR: radioctl_yaesu_level_range]
