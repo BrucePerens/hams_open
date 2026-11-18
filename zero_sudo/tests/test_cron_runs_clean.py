@@ -38,6 +38,18 @@ class TestCronRunsClean(common.HamsTransactionCase):
 
     # Tests [@ANCHOR: zero_sudo:cron_runs_clean_as_its_user]
     def test_every_installed_cron_runs_as_its_user_without_access_errors(self):
+        # Production configures the shared secret the PagerDuty domain push cron requires (it raises without it); a
+        # fresh test database has none, so give it one like the deployment does. In test mode the per-cron cursor below
+        # wraps this test's own transaction (it sees the parameter and nothing it does is really committed).
+        self.registry_enter_test_mode()
+        self.env["ir.config_parameter"].set_param("pager_duty.domain_api_identity", "cron-smoke-test-identity")
+        self.env.flush_all()
+        self.env.registry.clear_cache("stable")
+        if self.env["ir.module.module"].search_count([("name", "=", "edge_routing"), ("state", "=", "installed")]):
+            # That cron then pushes the domain list to this server's own route; answer as the route does on success.
+            mock_post = self.safe_patch("odoo.addons.edge_routing.models.domain.requests.post")
+            mock_post.return_value.status_code = 200
+            mock_post.return_value.json.return_value = {"jsonrpc": "2.0", "id": None, "result": {"status": "success"}}
         rows = self.env["ir.model.data"].search([("model", "=", "ir.cron")])
         core_addons = os.path.dirname(get_module_path("base"))
         problems = []
