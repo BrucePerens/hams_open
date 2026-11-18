@@ -37,6 +37,7 @@ class IrMailServerSecrets(models.Model):
             smtp_password = store_secret(smtp_store_name(self.id))
         return super()._smtp_login__(connection, smtp_user, smtp_password)
 
+    # [@ANCHOR: zero_sudo:mail_server_refuse_typed]
     @api.model
     def _refuse_typed_smtp_pass(self, vals):
         if group_enabled(STORE_GROUP) and vals.get("smtp_pass"):

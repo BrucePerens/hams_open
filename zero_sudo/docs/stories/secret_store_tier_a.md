@@ -635,6 +635,10 @@ Inherits `ir.mail_server`. With the group `mail` off it changes nothing and neve
 
 Arguments are Odoo's own. With the group on, a record and a user, the password passed to Odoo's login is the store's `mail.smtp_pass.<id>`; `SecretNotFound` is raised when the store lacks it, so a server with a user and no password fails loudly. Without a record (a command-line configured server) or with the group off it is Odoo's own login. Returns what Odoo's login returns.
 
+### `_refuse_typed_smtp_pass(vals)` `[@ANCHOR: zero_sudo:mail_server_refuse_typed]`
+
+Argument `vals`: the values dict of a mail server create or write. Returns nothing. With the group on and a non-empty `smtp_pass` in `vals` it raises `UserError` that names the store name pattern `mail.smtp_pass.<server id>` and never the value; with the group off, or with an empty or absent `smtp_pass`, it does nothing and does not read the store. It runs before anything is stored.
+
 ### `create(vals_list)` `[@ANCHOR: zero_sudo:mail_server_create]` and `write(vals)` `[@ANCHOR: zero_sudo:mail_server_write]`
 
 Usual ORM arguments and returns. With the group on, a non-empty `smtp_pass` in any values dict raises `UserError` (naming the store name pattern, never the value) before anything is stored; clearing it with `False` is allowed. With the group off they are Odoo's own methods and the store is never read. The check costs one set lookup per values dict, nothing is logged, and a refused write leaves the stored row exactly as it was.

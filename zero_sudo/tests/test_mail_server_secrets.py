@@ -71,6 +71,7 @@ class TestMailServerSecrets(TransactionCase, SafePatchMixin):
             self._login()
 
     def test_group_on_refuses_a_typed_password(self):
+        # Tests [@ANCHOR: zero_sudo:mail_server_refuse_typed]
         # Tests [@ANCHOR: zero_sudo:mail_server_create]
         # Tests [@ANCHOR: zero_sudo:mail_server_write]
         self._group(True)
