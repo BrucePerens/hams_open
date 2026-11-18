@@ -71,3 +71,6 @@ daemons/**/target/
 
 # gate snapshot build stamps (hams_shared/tools/gate_snapshot.py writes <artifact>.gate_stamp beside the artifact)
 *.gate_stamp
+
+# Per-worktree agent status file (never committed)
+/STATUS.md
