@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 import logging
 
-from odoo import api, fields, models
+from odoo import _, api, fields, models
+from odoo.exceptions import UserError
 from odoo.addons.zero_sudo import public_rpc
+from odoo.addons.zero_sudo.models.module_secrets import group_enabled, optional_store_secret
 
 
 _logger = logging.getLogger(__name__)
@@ -10,6 +12,10 @@ _logger = logging.getLogger(__name__)
 # What the Settings form shows in place of a stored S3 secret key. Saving the form with this value (or an empty one)
 # leaves the stored key as it is; any other value replaces it.
 SECRET_MASK = "********"
+# Group "hams_s3" of the host option hams_module_secrets_from_store: the S3 secret key is served from the secret
+# store under this name and is never typed into, shown by or written from the Settings form.
+STORE_GROUP = "hams_s3"
+STORE_NAME = "hams_s3.aws_secret_access_key"
 
 
 # [@ANCHOR: hams_s3_res_config_settings_res_config_settings]
@@ -95,6 +101,8 @@ class ResConfigSettings(models.TransientModel):
                     'hams_s3_aws_bucket': backend.aws_bucket,
                     'hams_s3_aws_region': backend.aws_region,
                 })
+        if group_enabled(STORE_GROUP):
+            res['hams_s3_aws_secret_access_key'] = SECRET_MASK if optional_store_secret(STORE_NAME) else False
         return res
 
     @public_rpc
@@ -116,7 +124,9 @@ class ResConfigSettings(models.TransientModel):
                 'aws_bucket': self.hams_s3_aws_bucket,
                 'aws_region': self.hams_s3_aws_region or 'us-east-1',
             }
-            if self.hams_s3_aws_secret_access_key in (SECRET_MASK, False, ''):
+            if group_enabled(STORE_GROUP):
+                del vals['aws_secret_access_key']  # the store owns it: the backend row never receives it
+            elif self.hams_s3_aws_secret_access_key in (SECRET_MASK, False, ''):
                 if backend:
                     del vals['aws_secret_access_key']  # unchanged in the form: keep the stored key
                 else:
@@ -125,6 +135,29 @@ class ResConfigSettings(models.TransientModel):
                 backend.write(vals)
             else:
                 env_svc['storage.backend'].create(vals)
+
+    @api.model
+    def _refuse_typed_s3_secret(self, vals):
+        # [@ANCHOR: hams_s3_refuse_typed_secret]
+        """With the group on, a secret key typed into the form (in `vals`) is refused (UserError, naming the store
+        name, never the value) before anything is stored: it must go into the secret store, not into the database,
+        and the transient settings row is a database row too."""
+        if group_enabled(STORE_GROUP) and vals.get('hams_s3_aws_secret_access_key') not in (SECRET_MASK, False, '', None):
+            raise UserError(_(
+                "The S3 secret key is served from the secret store on this host (hams_module_secrets_from_store). "
+                "Put the new value in the store, name %(name)s.", name=STORE_NAME))
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        # [@ANCHOR: hams_s3_settings_create]
+        for vals in vals_list:
+            self._refuse_typed_s3_secret(vals)
+        return super().create(vals_list)
+
+    def write(self, vals):
+        # [@ANCHOR: hams_s3_settings_write]
+        self._refuse_typed_s3_secret(vals)
+        return super().write(vals)
 
     def _register_s3_secret_with_canary(self):
         # [@ANCHOR: hams_s3_register_secret_with_canary]
