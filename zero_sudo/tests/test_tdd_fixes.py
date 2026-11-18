@@ -6,7 +6,7 @@
 
 
 from . import common
-from odoo.exceptions import AccessError, UserError
+from odoo.exceptions import AccessDenied, AccessError, UserError
 from odoo import _
 
 import http.client
@@ -72,9 +72,11 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         auth_info = self.env["res.users"].authenticate(credential, {"interactive": False})
         self.assertEqual(auth_info["uid"], regular.id)
 
-        with self.assertRaises(Exception):
+        # interactive: True checks the stored password itself; a non-interactive call for a service account is refused earlier
+        # (it cannot read auth_totp.policy), which would pass this assertion without proving the password was not saved.
+        with self.assertRaises(AccessDenied):
             bad_credential = dict(credential, login="service_batch_test@example.com")
-            self.env["res.users"].authenticate(bad_credential, {"interactive": False})
+            self.env["res.users"].authenticate(bad_credential, {"interactive": True})
 
     def test_a_password_write_to_a_service_account_still_saves_the_other_fields(self):
         # Tests [@ANCHOR: zero_sudo:res_users_write]
@@ -84,10 +86,10 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         service.write({"password": "attacker_supplied_password", "name": "Service Renamed"})
         self.env.cr.flush()
         self.assertEqual(service.name, "Service Renamed")
-        with self.assertRaises(Exception):
+        with self.assertRaises(AccessDenied):
             self.env["res.users"].authenticate(
                 {"login": "service_keeps_fields@example.com", "password": "attacker_supplied_password", "type": "password"},
-                {"interactive": False},
+                {"interactive": True},
             )
 
     def test_write_password_as_a_non_system_service_account_splits_by_flag(self):
@@ -148,9 +150,9 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
         self.assertEqual(
             self.env["res.users"].authenticate(credential, {"interactive": False})["uid"], regular.id
         )
-        with self.assertRaises(Exception):
+        with self.assertRaises(AccessDenied):
             self.env["res.users"].authenticate(
-                dict(credential, login="narrow_target_service_test@example.com"), {"interactive": False}
+                dict(credential, login="narrow_target_service_test@example.com"), {"interactive": True}
             )
 
     def test_write_de_designating_a_service_account_still_forces_a_random_password(self):
@@ -180,13 +182,13 @@ class TestZeroSudoFixes(common.HamsTransactionCase):
 
         self.assertFalse(service.is_service_account)
 
-        with self.assertRaises(Exception):
+        with self.assertRaises(AccessDenied):
             bad_credential = {
                 "login": "formerly_service_test@example.com",
                 "password": "attacker_supplied_password",
                 "type": "password",
             }
-            self.env["res.users"].authenticate(bad_credential, {"interactive": False})
+            self.env["res.users"].authenticate(bad_credential, {"interactive": True})
 
     def test_write_invalidates_the_is_service_account_cache(self):
         # Tests [@ANCHOR: zero_sudo:res_users_write]
