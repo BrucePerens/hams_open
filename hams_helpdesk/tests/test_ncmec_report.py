@@ -18,6 +18,7 @@ construction, not just disciplined.
 from unittest.mock import MagicMock
 import io
 import urllib.error
+import xml.etree.ElementTree as ET
 
 from odoo import _
 from odoo.exceptions import AccessError, UserError
@@ -463,6 +464,10 @@ class TestNcmecReport(HamsTransactionCase):
         self.assertTrue(called_request.full_url.startswith(_FAKE_NCMEC_BASE_URL))
         self.assertTrue(called_request.get_header("Authorization", "").startswith("Basic "))
         self.assertTrue(mock_urlopen.call_args.kwargs.get("https_only"))
+        # The assembled packet (ticket, reported member, recording, contact) is in the submitted XML.
+        sent = ET.fromstring(called_request.data)
+        self.assertEqual(sent.findtext("additionalInfo"), ticket.ncmec_report_packet)
+        self.assertIn("-- QSO Recording --", sent.findtext("additionalInfo"))
 
     def test_action_ncmec_report_keeps_pending_when_the_reply_is_not_a_confirmed_success(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_ncmec_submit_report_via_api]
