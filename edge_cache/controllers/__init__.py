@@ -2,3 +2,4 @@
 # Copyright © HAMS project. AGPL-3.0-or-later.
 
 from . import csrf_token
+from . import security_txt
