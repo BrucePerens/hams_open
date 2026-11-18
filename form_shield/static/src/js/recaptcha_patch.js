@@ -10,7 +10,7 @@ import { ShieldSession } from "@form_shield/js/shield_client";
 // [@ANCHOR: form_shield:recaptcha_patch]
 // Verified by [@ANCHOR: form_shield:test_odoo_forms_require_a_solved_challenge]
 //
-// Odoo's own forms (website form builder, event registration, newsletter subscribe, follow) ask
+// Odoo's own forms (website form builder, event registration, follow) ask
 // `new ReCaptcha()` for a token named by the form's action and send it as recaptcha_token_response.
 // This replaces what stands behind that class: no Google script is loaded, and the token is the
 // shield's `<challenge>~<counter>`. The challenge is fetched when the form wakes up (so the
