@@ -6,6 +6,8 @@ from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 import odoo.http
 import secrets
+import redis
+from odoo.addons.knowledge import rate_limit
 
 from odoo.addons.knowledge.controllers import main as manual_controller
 
@@ -186,6 +188,26 @@ class TestManualControllers(HamsHttpCase):
         statuses = [vote(article, "%s.%d" % (mine, 10 + number)) for number, article in enumerate(articles)]
         self.assertEqual(statuses, [303, 303, 429, 429], "one /24 shares a budget, whatever the host")
         self.assertEqual(vote(self.root_public, other), 303)
+
+    # [@ANCHOR: test_manual_limits_refuse_when_redis_is_down]
+    def test_manual_limits_refuse_when_redis_is_down(self):
+        # Tests [@ANCHOR: knowledge:network_hits]
+        # Tests [@ANCHOR: knowledge:feedback_rate_limit]
+        # Tests [@ANCHOR: knowledge:search_rate_limit]
+        """A Redis outage fails closed: search and feedback answer 429, never a 500; reading articles still works."""
+        self.safe_patch_object(rate_limit, "expiring_counter", side_effect=redis.exceptions.ConnectionError("down"))
+        headers = {"CF-Connecting-IP": "198.18.7.7"}
+        self.assertEqual(self.url_open("/manual/search?search=radio", headers=headers).status_code, 429)
+        self.authenticate(None, None)
+        vote = self.url_open(
+            "/manual/feedback",
+            data={"csrf_token": odoo.http.Request.csrf_token(self), "article_id": self.root_public.id, "is_helpful": "1"},
+            headers=headers,
+            method="POST",
+            allow_redirects=False,
+        )
+        self.assertEqual(vote.status_code, 429)
+        self.assertEqual(self.url_open("/manual", headers=headers).status_code, 200)
 
     # [@ANCHOR: test_manual_search_is_limited_per_network]
     def test_manual_search_is_limited_per_network(self):
