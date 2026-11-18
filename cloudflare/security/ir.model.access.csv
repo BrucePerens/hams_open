@@ -2,6 +2,7 @@ id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_cloudflare_purge_queue_purge_svc,cloudflare.purge.queue purge svc,model_cloudflare_purge_queue,cloudflare.group_cloudflare_purge,1,1,1,1
 access_website_purge_svc,website purge svc,website.model_website,cloudflare.group_cloudflare_purge,1,0,0,0
 access_res_company_purge_svc,res.company purge svc,base.model_res_company,cloudflare.group_cloudflare_purge,1,0,0,0
+access_res_lang_purge_svc,res.lang purge svc,base.model_res_lang,cloudflare.group_cloudflare_purge,1,0,0,0
 access_ir_config_parameter_purge_svc,ir.config_parameter purge svc,base.model_ir_config_parameter,cloudflare.group_cloudflare_purge,1,0,0,0
 access_cloudflare_waf_rule_waf_svc,cloudflare.waf.rule waf svc,model_cloudflare_waf_rule,cloudflare.group_cloudflare_waf,1,1,1,1
 access_cloudflare_cache_rule_waf_svc,cloudflare.cache.rule waf svc,model_cloudflare_cache_rule,cloudflare.group_cloudflare_waf,1,0,0,0
