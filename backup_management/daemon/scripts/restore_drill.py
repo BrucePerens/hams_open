@@ -10,7 +10,8 @@ on stderr (never a key, passphrase or secret value). The scratch directory is re
 
 Keyless part only: engine "plaintext" reads a directory repository laid out as
   <repo>/<snapshot>/state.json   {"status": "complete"|"partial"}
-  <repo>/<snapshot>/db.sqlite    database copy
+  <repo>/<snapshot>/db.sqlite    database copy (or db.dump, a pg_dump -Fc file, when the config says "database": "postgres":
+                                 restored into a scratch database on the cluster the PG* environment names, dropped afterwards)
   <repo>/<snapshot>/files/...    file tree (content-addressed = named by SHA-1 of content)
 Engines needing a repository key or passphrase (kopia, pgbackrest, B2) are stubs that fail with NEEDS_BRUCE.
 Reuses b2_backup.restore_sample / sha1_file / sha256_file for the file check.
@@ -18,8 +19,10 @@ Reuses b2_backup.restore_sample / sha1_file / sha256_file for the file check.
 import json
 import os
 import random  # audit-ignore-weak-random: fixed seed picks which files to sample; not a security property
+import secrets
 import shutil
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import types
@@ -78,33 +81,74 @@ def newest_complete_snapshot(repo):
     raise DrillError("check snapshot: no complete snapshot in the repository")
 
 
+# [@ANCHOR: backup_management:restore_drill_compare]
+def compare_content(query, cfg, log):
+    """Row counts of the fixed tables against the expected counts (within min_ratio), then the canary value.
+    `query(sql)` returns the first column of the first row (None for no row); it raises DrillError("...") on a database error."""
+    for table, expected in cfg["tables"].items():
+        if not table.isidentifier():
+            raise DrillError(f"check row_count: bad table name {table!r}")
+        try:
+            n = int(query(f"select count(*) from {table}"))
+        except DrillError:
+            raise DrillError(f"check row_count: table {table} missing or unreadable") from None
+        log(f"rows {table}={n} expected={expected}")
+        if n == 0 or n < expected * cfg.get("min_ratio", 0.9):
+            raise DrillError(f"check row_count: {table} has {n} rows, expected about {expected}")
+    canary = cfg["canary"]
+    if not (canary["table"].isidentifier() and canary["column"].isidentifier()):
+        raise DrillError("check canary: bad table or column name")
+    got = query(f"select {canary['column']} from {canary['table']} limit 1")
+    if got is None or str(got) != canary["value"]:
+        raise DrillError("check canary: the canary row is missing or has the wrong value")
+    log("canary ok")
+
+
 # [@ANCHOR: backup_management:restore_drill_check_database]
 def check_database(db_path, cfg, log):
-    """Row counts of the fixed tables against the expected counts (within min_ratio), then the canary value."""
+    """Checks a sqlite database copy (engine plaintext)."""
     try:
         con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
         try:
-            for table, expected in cfg["tables"].items():
-                if not table.isidentifier():
-                    raise DrillError(f"check row_count: bad table name {table!r}")
+            def query(sql):
                 try:
-                    n = con.execute(f"select count(*) from {table}").fetchone()[0]
+                    row = con.execute(sql).fetchone()
                 except sqlite3.Error:
-                    raise DrillError(f"check row_count: table {table} missing or unreadable") from None
-                log(f"rows {table}={n} expected={expected}")
-                if n == 0 or n < expected * cfg.get("min_ratio", 0.9):
-                    raise DrillError(f"check row_count: {table} has {n} rows, expected about {expected}")
-            canary = cfg["canary"]
-            if not (canary["table"].isidentifier() and canary["column"].isidentifier()):
-                raise DrillError("check canary: bad table or column name")
-            row = con.execute(f"select {canary['column']} from {canary['table']} limit 1").fetchone()
-            if row is None or str(row[0]) != canary["value"]:
-                raise DrillError("check canary: the canary row is missing or has the wrong value")
-            log("canary ok")
+                    raise DrillError("sqlite error") from None
+                return row[0] if row else None
+            compare_content(query, cfg, log)
         finally:
             con.close()
     except sqlite3.Error as exc:
         raise DrillError(f"check database: not a readable database ({type(exc).__name__})") from None
+
+
+# [@ANCHOR: backup_management:restore_drill_check_postgres]
+def check_postgres(dump_path, cfg, log):
+    """Restores a pg_dump custom-format file into a scratch database on the cluster the PG* environment names, checks it,
+    and drops the scratch database on every path. The database name is random and starts with restore_drill_, so the live
+    database is never the target. Connection settings come from the standard PG* environment, never from the config."""
+    name = "restore_drill_" + secrets.token_hex(6)
+
+    def run(argv, **kw):
+        return subprocess.run(argv, capture_output=True, text=True, timeout=cfg.get("timeout", 3600), check=False, **kw)
+
+    try:
+        if run(["createdb", name]).returncode != 0:
+            raise DrillError("check database: cannot create the scratch database")
+        if run(["pg_restore", "--no-owner", "--no-privileges", "-d", name, dump_path]).returncode != 0:
+            raise DrillError("check database: pg_restore of the dump failed")
+
+        def query(sql):
+            r = run(["psql", "-X", "-At", "-v", "ON_ERROR_STOP=1", "-d", name, "-c", sql])
+            if r.returncode != 0:
+                raise DrillError("psql error")
+            return r.stdout.splitlines()[0] if r.stdout.strip() else None
+        compare_content(query, cfg, log)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise DrillError(f"check database: postgres tools failed ({type(exc).__name__})") from None
+    finally:
+        run(["dropdb", "--if-exists", name])
 
 
 # [@ANCHOR: backup_management:restore_drill_check_files]
@@ -133,12 +177,13 @@ def run_drill(cfg, log=print):
     snap = newest_complete_snapshot(cfg["repo"])
     scratch = tempfile.mkdtemp(prefix="restore_drill_")  # mode 0700
     try:
-        db_copy = os.path.join(scratch, "db.sqlite")
+        pg = cfg.get("database") == "postgres"
+        db_copy = os.path.join(scratch, "db.dump" if pg else "db.sqlite")
         try:
-            shutil.copy2(os.path.join(snap, "db.sqlite"), db_copy)
+            shutil.copy2(os.path.join(snap, "db.dump" if pg else "db.sqlite"), db_copy)
         except OSError:
             raise DrillError("check database: the snapshot has no database") from None
-        check_database(db_copy, cfg, log)
+        (check_postgres if pg else check_database)(db_copy, cfg, log)
         check_files(snap, scratch, cfg, log)
     finally:
         shutil.rmtree(scratch, ignore_errors=True)

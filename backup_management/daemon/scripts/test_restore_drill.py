@@ -6,7 +6,9 @@ import glob
 import hashlib
 import json
 import os
+import shutil
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -125,6 +127,81 @@ class TestRestoreDrill(unittest.TestCase):
 
     def test_server_tools_dir_is_on_the_import_path(self):
         self.assertIn("/opt/hams/src/hams_open/hams_shared/tools", rd.SHARED_TOOLS_DIRS)
+
+
+def _have_postgres():
+    try:
+        return subprocess.run(["psql", "-X", "-Atc", "select 1", "-d", "postgres"], capture_output=True,
+                              timeout=20, check=False).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+@unittest.skipUnless(_have_postgres(), "needs a local postgres the test user can create databases in")
+# [@ANCHOR: backup_management:COMM_test_restore_drill_postgres]
+class TestRestoreDrillPostgres(unittest.TestCase):
+    # Tests [@ANCHOR: backup_management:restore_drill_check_postgres]
+    # Tests [@ANCHOR: backup_management:restore_drill_compare]
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.repo = os.path.join(self.tmp.name, "repo")
+        os.makedirs(self.repo)
+        self.cfg = {"engine": "plaintext", "database": "postgres", "repo": self.repo, "tables": {"res_users": 10},
+                    "canary": {"table": "canary", "column": "v", "value": "K6BP-canary"}, "sample_files": 5,
+                    "content_addressed": True}
+
+    def snapshot(self, users=10, canary="K6BP-canary", dump_bytes=None):
+        snap = make_snapshot(self.repo)
+        os.remove(os.path.join(snap, "db.sqlite"))
+        dump = os.path.join(snap, "db.dump")
+        if dump_bytes is not None:
+            with open(dump, "wb") as f:
+                f.write(dump_bytes)
+            return
+        name = "drill_src_" + os.urandom(4).hex()
+        subprocess.run(["createdb", name], check=True)
+        try:
+            sql = ("create table res_users(id int); insert into res_users select generate_series(1, %d);"
+                   "create table canary(v text); insert into canary values ('%s');" % (users, canary))
+            subprocess.run(["psql", "-X", "-q", "-d", name, "-c", sql], check=True)
+            subprocess.run(["pg_dump", "-Fc", "-f", dump, name], check=True)
+        finally:
+            subprocess.run(["dropdb", "--if-exists", name], check=True)
+
+    def scratch_dbs(self):
+        out = subprocess.run(["psql", "-X", "-At", "-d", "postgres", "-c",
+                              "select datname from pg_database where datname like 'restore_drill_%'"],
+                             capture_output=True, text=True, check=True).stdout
+        return set(out.split())
+
+    def test_good_dump_passes_and_scratch_database_is_dropped(self):
+        self.snapshot()
+        before = self.scratch_dbs()
+        rd.run_drill(self.cfg, log=lambda m: None)
+        self.assertEqual(self.scratch_dbs(), before)
+
+    def test_wrong_row_count_fails_and_drops(self):
+        self.snapshot(users=3)
+        before = self.scratch_dbs()
+        with self.assertRaisesRegex(rd.DrillError, "check row_count"):
+            rd.run_drill(self.cfg, log=lambda m: None)
+        self.assertEqual(self.scratch_dbs(), before)
+
+    def test_wrong_canary_fails(self):
+        self.snapshot(canary="other")
+        with self.assertRaisesRegex(rd.DrillError, "check canary"):
+            rd.run_drill(self.cfg, log=lambda m: None)
+
+    def test_empty_or_garbage_dump_fails_and_drops(self):
+        for data in (b"", b"not a dump"):
+            self.snapshot(dump_bytes=data)
+            before = self.scratch_dbs()
+            with self.assertRaisesRegex(rd.DrillError, "check database"):
+                rd.run_drill(self.cfg, log=lambda m: None)
+            self.assertEqual(self.scratch_dbs(), before)
+            shutil.rmtree(self.repo)
+            os.makedirs(self.repo)
 
 
 if __name__ == "__main__":
