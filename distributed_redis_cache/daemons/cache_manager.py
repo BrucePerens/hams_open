@@ -154,6 +154,28 @@ async def _bump_invalidation_counter():
         logger.warning("Could not bump the cache invalidation counter after connecting: %s", e)
 
 
+HEALTH_CHECK_SECONDS = 60
+RECONNECT_RETRY_SECONDS = 5
+
+
+# [@ANCHOR: distributed_redis_cache:COMM_cache_manager_loop_step]
+async def _loop_step(db_conns, reconnect):
+    """One pass of the main loop: connect if there is no connection, else health-check each one. Returns the seconds to
+    sleep before the next pass: a failed connect is retried after RECONNECT_RETRY_SECONDS, not the health-check
+    period. ``reconnect`` is an async callable returning True when it connected."""
+    if not db_conns and not await reconnect():
+        return RECONNECT_RETRY_SECONDS
+    # execute() needs a timeout: connect()'s own timeout only bounds the handshake, and a blackholed session would
+    # otherwise block here forever instead of reaching the reconnect path.
+    for conn in list(db_conns):
+        if conn.is_closed():
+            if not await reconnect():
+                return RECONNECT_RETRY_SECONDS
+            break
+        await conn.execute("SELECT 1", timeout=10)
+    return HEALTH_CHECK_SECONDS
+
+
 _background_tasks = set()
 
 # [@ANCHOR: distributed_redis_cache:COMM_postgres_notify_handler]
@@ -241,40 +263,18 @@ async def main():
             db_conns.append(conn)
             await _bump_invalidation_counter()
             logger.info("Listening to PostgreSQL channel '%s' on database '%s'...", PG_CHANNEL, DB_NAME)
+            return True
         except Exception as e:  # audit-ignore-catch-all: # Tested by [@ANCHOR: COMM_test_cache_manager_exception_handling]
             # A daemon that can never reach Postgres in the first place
             # (a real, realistic startup-ordering condition) must not crash.
             # # Verified by [@ANCHOR: COMM_test_cache_manager_reconnect_failure]
             logger.exception("Could not connect to database %s: %s", DB_NAME, e)
+            return False
 
     while True:
         try:
-            if not db_conns:
-                await _reconnect()
-                
-            # Perform periodic health check on all connections
-            #
-            # execute() needs a timeout. asyncpg.connect()'s own `timeout`
-            # kwarg only bounds the initial TCP/auth handshake -- it says
-            # nothing about later calls. If the TCP session goes into a
-            # real "blackhole" state after connecting (a NAT/firewall/
-            # routing change silently dropping packets, an overloaded
-            # Postgres backend that accepts the socket but never replies --
-            # a realistic infra failure, not an exotic attack), an
-            # execute() call without a timeout would block forever, inside the main loop, before
-            # ever reaching the except/reconnect branch below -- the daemon
-            # looked "up" while silently no longer noticing its own
-            # connection was dead, for as long as the OS TCP retransmit
-            # timeout takes (unbounded on some configurations). A real
-            # timeout here means a stuck connection surfaces as a real,
-            # loud reconnect attempt within seconds, not silently forever.
-            for conn in list(db_conns):
-                if conn.is_closed():
-                    await _reconnect()
-                    break
-                await conn.execute("SELECT 1", timeout=10)
-            
-            await asyncio.sleep(60)  # audit-ignore-sleep: # Tested by [@ANCHOR: COMM_test_cache_manager_sleep]
+            delay = await _loop_step(db_conns, _reconnect)
+            await asyncio.sleep(delay)  # audit-ignore-sleep: # Tested by [@ANCHOR: COMM_test_cache_manager_sleep]
         except asyncio.CancelledError:
             logger.info("Daemon shutting down cleanly.")
             break

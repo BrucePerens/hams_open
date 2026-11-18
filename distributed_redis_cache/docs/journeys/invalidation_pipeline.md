@@ -39,6 +39,14 @@ Full entries for the anchors named in steps 1 and 4.
 
 **See also.** Test `tests/test_cache_manager_real.py`; `distributed_redis_cache:COMM_poll_and_clear_local_cache` for the reader.
 
+### `distributed_redis_cache:COMM_cache_manager_loop_step` [@ANCHOR: distributed_redis_cache:COMM_cache_manager_loop_step]
+
+**Purpose.** Keep the daemon's Postgres LISTEN connection alive and make up what a gap lost.
+
+**Call interface.** `async _loop_step(db_conns, reconnect)` in `daemons/cache_manager.py`: connects when there is no connection, else runs `SELECT 1` on each. Returns the seconds `main()` sleeps next: 5 after a failed connect, 60 (the health-check period) otherwise.
+
+**Effects.** A NOTIFY sent while the connection is down is never delivered and is not replayed. What is recovered: after the next successful connect the daemon bumps the counter (see below), so every worker flushes its whole L1 cache on its next poll and re-reads from the database; stale L1 entries do not outlive the gap. What is not recovered: the per-model Redis L2 keys and the pub/sub message for the missed NOTIFY are not rebuilt, and reads in the gap (up to about 5 s of retry plus the connect time, longer if Postgres stays down) can still be served from L1. A dead connection is noticed by the next health check, up to 60 s later.
+
 ### `distributed_redis_cache:COMM_cache_manager_bump_counter_on_connect` [@ANCHOR: distributed_redis_cache:COMM_cache_manager_bump_counter_on_connect]
 
 **Purpose.** Notifications sent while the daemon was not listening (a restart, a dropped Postgres connection) were never published, so no worker would know its process-local cache may be stale.
