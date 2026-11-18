@@ -68,3 +68,6 @@ pager_duty/daemon/pager_config.json
 # Rust build output (cargo target directories): hundreds of MB per crate, never committed.
 daemons/*/target/
 daemons/**/target/
+
+# gate snapshot build stamps (hams_shared/tools/gate_snapshot.py writes <artifact>.gate_stamp beside the artifact)
+*.gate_stamp
