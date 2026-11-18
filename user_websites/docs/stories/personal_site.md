@@ -351,6 +351,18 @@ snapshot predates the other's commit. Writing a row the other request changed si
 failure and Odoo runs the request again, so the second create is refused. Verified by `[@ANCHOR: user_websites:test_post_quota_race]`
 (`tests/test_post_quota_race.py`, two real connections).
 
+### Blog Quota Lock: `blog_quota_lock_rows` [@ANCHOR: user_websites:blog_quota_lock_rows]
+
+`blog.blog._lock_quota_rows(ids, group=False)` (`models/blog_blog.py`) takes a list of `res.users` ids, or `user_websites_group`
+ids when `group=True`, and returns nothing. `_check_blog_quota` calls it before it counts: it runs
+`UPDATE ... SET id = id` on those rows (no value change), in sorted order, exactly as `blog.post` and `website.page` do. Two
+simultaneous creates would otherwise both count N-1 and both pass, because each REPEATABLE READ snapshot predates the other's
+commit. Writing a row the other request changed since the snapshot fails with a serialization failure and Odoo runs the request
+again, so the second create sees the first and is refused with the usual quota `ValidationError`. It raises nothing itself. The
+write takes a row lock for the rest of the transaction, so it must stay inside the create's own transaction and never run in a
+separate cursor. Verified by `[@ANCHOR: user_websites:test_blog_quota_race]` (`tests/test_blog_quota_race.py`): two real
+connections, the loser's snapshot starts before the winner's check, and the loser must fail with `SerializationFailure`.
+
 ### Blog Quota: `user_websites_blog_quota_check` [@ANCHOR: user_websites_blog_quota_check]
 
 `blog.blog._check_blog_quota(self, vals_list)` (`models/blog_blog.py`) is called from `create`. It adds up, per owner user
