@@ -553,6 +553,7 @@ is a host setting and a restart; the code change itself does nothing until the o
 | Group | Keys or fields | Status |
 |---|---|---|
 | `stripe` | `stripe.secret_key`, `stripe.webhook_secret` (parameters) | migrated (code and tests) |
+| `ai` | `gemini.api_key`, `greyline.api_key`, `greyline.password` (parameters; read by the AI-verification, code-review, club-discovery, repeater-import and event-sync accounts and daemons through `get_param`) | migrated (code and tests) |
 
 ### Functions of `module_secrets.py`
 
@@ -630,7 +631,7 @@ in the order that gives the largest reduction per step.
 | process environment | `GEMINI_API_KEY`, `SMTP_PASS`, `REDIS_PASSWORD`, `RMQ_PASS`, `DB_PASS`, `PDNS_API_KEY`, `ODOO_ADMIN_PASSWORD`, `ODOO_SERVICE_PASSWORD` | deployment (env files) | stop loading the env files into the web unit; move each to a unit credential or the broker |
 | `ir.config_parameter` | `stripe.secret_key`, `stripe.webhook_secret` | Stripe dues module | migrated: group `stripe` (see Module secrets above), off until the host lists it |
 | `ir.config_parameter` | `database.secret`, `mail.web_push_vapid_private_key` | Odoo core (`base`, `mail`) | served from the store by `core_secrets.py` behind `hams_core_secrets_from_store` (above); off until the hams1 rollout flips it |
-| `ir.config_parameter` | `gemini.api_key`, `form_shield.signing_key`, `parking.form_secret` | AI provider glue, `form_shield`, `parking` | the two signing keys become `hmac_sign` / `hmac_verify` |
+| `ir.config_parameter` | `gemini.api_key` (migrated: group `ai`), `form_shield.signing_key`, `parking.form_secret` | AI provider glue, `form_shield`, `parking` | the two signing keys become `hmac_sign` / `hmac_verify` |
 | `ir.config_parameter` | `ham_relay_bridge.api_key`, `ham_relay_bridge.source_publish_key`, `ham_relay_bridge.turn_secret`, `ham_simulated_band.ident_token_secret` | relay bridge, simulated band | |
 | settings fields | `hams_s3_aws_access_key_id`, `hams_s3_aws_secret_access_key` | `hams_s3` | |
 | settings fields | `cloudflare_api_token`, `cloudflare_turnstile_secret`, `website.cloudflare_api_token_crypt` | `cloudflare` | |
