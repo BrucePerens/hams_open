@@ -35,6 +35,18 @@ class BlogBlog(models.Model):
         "This group already has a blog with this exact title!",
     )
 
+    def _lock_quota_rows(self, ids, group=False):
+        # [@ANCHOR: user_websites:blog_quota_lock_rows]
+        # Verified by [@ANCHOR: user_websites:test_blog_quota_race]
+        """Write (no value change) the owner rows before the quota count. Two simultaneous creates would
+        otherwise both count N-1: each REPEATABLE READ snapshot predates the other's commit. Writing a row the
+        other request changed since the snapshot fails with a serialization failure, and Odoo runs the request
+        again (same device as blog.post and website.page)."""
+        if group:
+            self.env.cr.execute("UPDATE user_websites_group SET id = id WHERE id = ANY(%s)", (sorted(ids),))  # audit-ignore-sql: write-lock on the owners' own rows
+        else:
+            self.env.cr.execute("UPDATE res_users SET id = id WHERE id = ANY(%s)", (sorted(ids),))  # audit-ignore-sql: write-lock on the owners' own rows
+
     def _check_blog_quota(self, vals_list):
         # [@ANCHOR: user_websites_blog_quota_check]
 
