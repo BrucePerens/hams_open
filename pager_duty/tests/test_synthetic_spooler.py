@@ -8,6 +8,7 @@ import os
 import tempfile
 import threading
 import time
+from unittest.mock import patch
 
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
