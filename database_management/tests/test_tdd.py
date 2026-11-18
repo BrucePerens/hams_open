@@ -7,6 +7,7 @@ from odoo.tools import mute_logger
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
 from odoo.exceptions import UserError
+from psycopg2.errors import ReadOnlySqlTransaction
 from unittest.mock import MagicMock, PropertyMock
 
 
@@ -51,7 +52,7 @@ class TestDatabaseManagementTDD(HamsTransactionCase):
         cr.execute("CREATE TABLE explain_ro_probe (x int)")
         cr.execute("SELECT dba_explain_query(%s)", ("SELECT 1",))
         self.assertIn("Result", cr.fetchone()[0])
-        with self.assertRaises(Exception), mute_logger("odoo.sql_db"), cr.savepoint():
+        with self.assertRaises(ReadOnlySqlTransaction), mute_logger("odoo.sql_db"), cr.savepoint():
             cr.execute(
                 "SELECT dba_explain_query(%s)",
                 ("WITH i AS (INSERT INTO explain_ro_probe VALUES (1) RETURNING x) SELECT * FROM i",),
