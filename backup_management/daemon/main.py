@@ -9,6 +9,8 @@ import time
 import shutil
 import pika
 import subprocess
+import http.client
+import socket
 import urllib.request
 import urllib.error
 import logging
@@ -35,6 +37,33 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 _OPENER = urllib.request.build_opener(_NoRedirect)
+UNIX_URL_PREFIX = "unix://"
+
+
+# [@ANCHOR: backup_management:unix_opener]
+# Verified by [@ANCHOR: backup_management:test_a_unix_url_reaches_odoo_over_the_socket]
+def _opener_for(url):
+    """`(opener, base)` for `url`. `unix:///run/odoo/rpc.sock` (the RPC guard's Unix socket) gives an opener that sends
+    every request over that socket (no redirects, no proxies) and the base `http://unix-socket`; any other URL gives
+    the plain no-redirect opener and itself."""
+    if not url.startswith(UNIX_URL_PREFIX):
+        return _OPENER, url
+    socket_path = url[len(UNIX_URL_PREFIX):]
+    def connect(host, timeout):
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            sock.settimeout(timeout)
+            sock.connect(socket_path)
+        except OSError as error:
+            sock.close()
+            raise urllib.error.URLError(error) from error  # like a refused TCP connection
+        connection = http.client.HTTPConnection("unix-socket", timeout=timeout)
+        connection.sock = sock  # http.client only connects by itself when it has no socket
+        return connection
+
+    handler = urllib.request.HTTPHandler()
+    handler.http_open = lambda req: handler.do_open(connect, req)
+    return urllib.request.build_opener(_NoRedirect, urllib.request.ProxyHandler({}), handler), "http://unix-socket"
 
 
 logging.basicConfig(
@@ -569,14 +598,15 @@ def _json2_call(model, method_name, svc_uid=None, **kwargs):
         }
         if svc_uid:
             headers["X-Odoo-Service-Uid"] = str(svc_uid)
+        opener, base = _opener_for(ODOO_URL)
         req = urllib.request.Request(
-            f"{ODOO_URL}/json/2/{model}/{method_name}",
+            f"{base}/json/2/{model}/{method_name}",
             data=payload_str.encode("utf-8"),
             headers=headers,
             method="POST",
         )
         try:
-            with _OPENER.open(req, timeout=15) as response:
+            with opener.open(req, timeout=15) as response:
                 res_data = json.loads(response.read().decode("utf-8"))
                 if isinstance(res_data, dict) and res_data.get("error"):
                     raise OdooAPIError(f"Odoo Error: {res_data['error']}")
