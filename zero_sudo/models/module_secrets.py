@@ -34,7 +34,7 @@ PARAM_GROUPS = {
     "ai": ("gemini.api_key", "greyline.api_key", "greyline.password"),
 }
 # Groups whose secrets are not ir.config_parameter keys; the owning module reads the store itself.
-FIELD_GROUPS = ("cloudflare", "hams_s3")
+FIELD_GROUPS = ("cloudflare", "hams_s3", "mail")
 GROUPS = tuple(PARAM_GROUPS) + tuple(FIELD_GROUPS)
 
 

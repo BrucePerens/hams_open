@@ -127,4 +127,5 @@ from . import test_secret_provision_units  # noqa: E402
 from . import test_secret_store_units  # noqa: E402
 from . import test_dashboard_doc_link_rel  # noqa: E402
 from . import test_daemon_stop_and_poll_guards  # noqa: E402
-from . import test_environ_secrets
+from . import test_environ_secrets  # noqa: E402
+from . import test_mail_server_secrets  # noqa: E402
