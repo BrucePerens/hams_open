@@ -52,6 +52,7 @@ redis_client = redis.Redis(connection_pool=redis_pool)
 
 
 BLOG_PAGE_SIZE = 100  # posts on one page of /<slug>/blog
+COMMUNITY_PAGE_SIZE = 60  # members on one page of /community
 
 BLOG_TITLE_MAX_CHARS = 120  # the form's own maxlength, and a page's title limit
 
@@ -1196,21 +1197,23 @@ class UserWebsitesController(http.Controller):
 
         return request.render("user_websites.documentation_page", {})
 
-    @http.route("/community", type="http", auth="public", website=True)
+    @http.route(["/community", "/community/page/<int:page>"], type="http", auth="public", website=True)
     # [@ANCHOR: user_websites:COMM_community_directory]
-    def community_directory(self, **kwargs):
+    def community_directory(self, page=1, **kwargs):
         # # Tested by [@ANCHOR: user_websites:test_tour_community_directory]
-        pager = {
-            "page_count": 0,
-            "page": dict(),
-            "page_previous": dict(),
-            "page_next": dict(),
-        }
-
-        # Load directory entries (Users who opted in)
+        # Tested by [@ANCHOR: user_websites:test_community_directory_pages_reach_every_member]
+        # Load directory entries (Users who opted in): the view holds only opted-in members, so count, order, then page.
         utils = request.env["zero_sudo.security.utils"]
         env_svc = utils._get_service_env("user_websites.user_websites_service_account")
-        entries = env_svc["user_websites.public_directory_view"].search([], limit=1000)
+        directory = env_svc["user_websites.public_directory_view"]
+        try:
+            page_number = int(page)
+        except (TypeError, ValueError):
+            page_number = 1
+        pager = request.website.pager(
+            url="/community", total=directory.search_count([]), page=page_number, step=COMMUNITY_PAGE_SIZE
+        )
+        entries = directory.search([], order="name, id", limit=COMMUNITY_PAGE_SIZE, offset=pager["offset"])
 
         return request.render(
             "user_websites.community_directory", {"pager": pager, "entries": entries}
