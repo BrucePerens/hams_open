@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 {
     "name": "Hams AI Safety Reporting",
-    "version": "1.1",
+    "version": "1.2",
     "category": "Operations/Helpdesk",
     "summary": "Ticket category and narrow service account for AI safety-classification self-reporting.",
     "description": """
