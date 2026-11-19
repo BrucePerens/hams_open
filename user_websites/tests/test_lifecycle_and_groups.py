@@ -236,24 +236,26 @@ class TestLifecycleAndGroups(RealTransactionCase):
             post.is_published, "Post should be unpublished when user is archived"
         )
 
-    def test_05_community_directory_opt_in(self):
+    def test_05_community_directory_opt_out(self):
         # Tests [@ANCHOR: user_websites:COMM_public_directory_view_init]
-        self.assertFalse(self.user_a.privacy_show_in_directory)
-
-        self.env.cr.commit()
-        response = self.url_open("/community")
-        self.assertNotIn(
-            self.user_a.name, response.text, "User should NOT be visible by default"
-        )
-
-        self.user_a.write({"privacy_show_in_directory": True})
+        self.assertTrue(self.user_a.privacy_show_in_directory)
 
         self.env.cr.commit()
         response = self.url_open("/community")
         self.assertIn(
             f"/{self.user_a.website_slug}",
             response.text,
-            "User link should be visible after opt-in",
+            "User should be listed by default",
+        )
+
+        self.user_a.write({"privacy_show_in_directory": False})
+
+        self.env.cr.commit()
+        response = self.url_open("/community")
+        self.assertNotIn(
+            f"/{self.user_a.website_slug}",
+            response.text,
+            "User link should be gone after opt-out",
         )
 
     def test_06_group_report_button_visibility(self):

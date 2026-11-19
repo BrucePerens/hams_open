@@ -143,7 +143,7 @@ website page. Tested by `test_dropzone_layout`.
 
 The element `user_websites_dropzone_users` is the first child of the "User Websites" notebook page that the
 `view_users_form_user_websites` view adds to the back-office user form (`base.view_users_form`, in
-`views/res_users_views.xml`). It sits above the Configuration group (slug, page limit, directory opt-in). Another module
+`views/res_users_views.xml`). It sits above the Configuration group (slug, page limit, directory opt-out). Another module
 can add fields or buttons for per-user website settings here. Visible only to people who can open the user form. Tested by
 `test_dropzone_users` (`test_02_res_users`).
 
@@ -159,7 +159,7 @@ Tested by `test_dropzone_blog_post` (`test_03_blog_post`).
 The element `user_websites_dropzone_directory_card` is inside each member card of the public `/community` directory
 (`community_directory` template in `views/user_websites_templates.xml`), under the "View Blog" link. It is rendered once
 per directory entry, so content placed here repeats for every listed member and has the entry in scope. Only members who
-opted in appear in the directory. There is no dedicated test of its markup yet; the directory page tour renders it
+not opted out appear in the directory. There is no dedicated test of its markup yet; the directory page tour renders it
 (to-do: add a `test_xpath_rendering.py` assertion).
 
 ### Dropzone Global Settings: `dropzone_settings` [@ANCHOR: dropzone_settings]

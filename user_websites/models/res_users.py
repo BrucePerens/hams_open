@@ -257,9 +257,10 @@ class ResUsers(models.Model):
     )
 
     privacy_show_in_directory = fields.Boolean(
-        string="Show in Public Directory",
-        help="If checked, a link to this user's website will appear in the public community directory.",
-        default=False,
+        string="Listed in Public Directory",
+        help="Members are listed in the public community directory by default. Uncheck to opt out; "
+        "a link to this user's website then no longer appears there.",
+        default=True,
     )
 
     # [@ANCHOR: user_websites:gdpr_erasure_pending_field]

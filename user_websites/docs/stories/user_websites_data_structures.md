@@ -215,7 +215,7 @@
 |---|---|---|
 | `website_slug` | `Char` | Website Slug: The URL-friendly identifier for the user's site. Alphanumeric and hyphens only. (index=`"trigram"`) |
 | `website_page_limit` | `Integer` | Website Page Limit: Maximum number of pages this user can create. If 0, the global limit is used. |
-| `privacy_show_in_directory` | `Boolean` | Show in Public Directory: If checked, a link to this user's website will appear in the public community directory. (default=`False`) |
+| `privacy_show_in_directory` | `Boolean` | Listed in Public Directory: Members are listed in the public community directory by default. Uncheck to opt out; a link to this user's website then no longer appears there. (default=`True`) |
 | `appeal_ids` | `One2many` | Moderation Appeals (comodel `content.violation.appeal`) |
 
 **Class attributes.** `_inherit = ["res.users", "edge.routing.mixin"]`; `_website_slug_format = models.Constraint("CHECK(website_slug IS NULL OR website_slug = '' OR website_slug ~ '^[a-z0-9\\-]+$`; `_website_slug_unique = models.Constraint("UNIQUE(website_slug)", "The Website Slug must be unique!")`.
