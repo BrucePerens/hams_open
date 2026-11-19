@@ -12,11 +12,8 @@
             <!-- The container keeps the links inset like the rest of the page: a row placed directly in the
                  full-width footer strip would touch the left edge of the window (x=0). -->
             <div class="container"><div class="row"><div class="col-sm text-center text-sm-start small">
-                <a href="/privacy" class="me-3 o_tour_footer_privacy">Privacy Policy</a>
-                <a href="/cookie-policy" class="me-3 o_tour_footer_cookie_policy">Cookie Policy</a>
-                <a href="/terms" class="me-3 o_tour_footer_terms">Terms of Service</a>
-                <a href="/accessibility" class="me-3 o_tour_footer_accessibility">Accessibility Statement</a>
-                <a href="/my/privacy" class="me-3 o_tour_footer_my_privacy">My Privacy</a>
+                <!-- One footer link (Bruce, 2026-11-19); /compliance lists every policy and notice. -->
+                <a href="/compliance" class="o_tour_footer_legal">Legal and Compliance Information</a>
             </div></div></div>
         </xpath>
     </template>
