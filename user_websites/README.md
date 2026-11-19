@@ -78,7 +78,7 @@ The `user_websites` module enables decentralized content creation. It employs th
 
 ### Extended `res.users`
 * **`website_slug`**: URL-safe identifier. A slug is the first path segment of a user's (or group's) site URLs, e.g. `yourname` in `/yourname` and `/yourname/blog`; it must not be one of `RESERVED_SLUGS` (section 3).
-* **`privacy_show_in_directory`**: Opt-in for the public `/community` directory.
+* **`privacy_show_in_directory`**: Listed in the public `/community` directory by default (default True); a member opts out by turning it off.
 * **`violation_strike_count`**: Number of upheld content violations.
 * **`is_suspended_from_websites`**: If True, all personal content is forcefully unpublished (the unpublishing itself is done in the background by `action_suspend_user_websites()`; a direct write of this field only invalidates the slug/page resolver caches) and the user's slug routes return 404.
 * **`appeal_ids`** (`One2many`): Links to Moderation Appeals.
@@ -268,7 +268,7 @@ This section ensures all module functions and their developer usage are thorough
 *   No `get_values()`/`set_values()` overrides: two plain `config_parameter` fields, `global_website_page_limit` (`user_websites.global_website_page_limit`, default 100) and `company_abuse_email` (`user_websites.company_abuse_email`). Administrator membership is managed on the group itself (the Settings page only links to it).
 
 ### SQL Views (`models/sql_views.py`)
-*   **`init()`**: Executes the `CREATE OR REPLACE VIEW` statements for three plain (non-materialized) SQL views: the community directory (opted-in, active, non-suspended users with a slug), content routing (slug resolution), and the weekly digest. `UserWebsitesDbFunctions.init()` also creates the `increment_strike_count()` database function.
+*   **`init()`**: Executes the `CREATE OR REPLACE VIEW` statements for three plain (non-materialized) SQL views: the community directory (listed-by-default, active, non-suspended users with a slug), content routing (slug resolution), and the weekly digest. `UserWebsitesDbFunctions.init()` also creates the `increment_strike_count()` database function.
 
 ### Controllers (`controllers/main.py`, `controllers/user_websites_api.py`)
 *   **`UserWebsitesController`**:
@@ -542,7 +542,7 @@ Test `test_01_high_speed_full_platform_exercise` in `tests/test_simulation.py`, 
 
 ### `GET /community` (community directory) [@ANCHOR: UX_COMMUNITY_DIRECTORY]
 
-**Purpose:** the public directory of members who opted in with `privacy_show_in_directory`. **Route:** `UserWebsitesController.community_directory(**kwargs)`, `auth="public"`, `website=True`, GET; the user-experience anchor is also written in `data/documentation.html`. **Returns:** the `user_websites.community_directory` page with `entries`, at most 1000 rows read from the SQL view `user_websites.public_directory_view` as the service account: active users with a slug, not service accounts, not suspended, not website-ineligible, each with name, slug, last update and summed page and post views. A reader who has not opted in is never listed. **Errors:** none of its own. **Side effects:** none; read-only, no locks. **Tests:** `test_03_community_directory_rendering`, `test_03b_community_directory_internal_user` and `test_04_community_directory_privacy_respect` in `tests/test_controllers.py`, and the tour `community_directory_tour.js`.
+**Purpose:** the public directory of members listed through `privacy_show_in_directory` (on by default; opt-out). **Route:** `UserWebsitesController.community_directory(**kwargs)`, `auth="public"`, `website=True`, GET; the user-experience anchor is also written in `data/documentation.html`. **Returns:** the `user_websites.community_directory` page with `entries`, at most 1000 rows read from the SQL view `user_websites.public_directory_view` as the service account: active users with a slug, not service accounts, not suspended, not website-ineligible, each with name, slug, last update and summed page and post views. A member who opted out is never listed. **Errors:** none of its own. **Side effects:** none; read-only, no locks. **Tests:** `test_03_community_directory_rendering`, `test_03b_community_directory_internal_user` and `test_04_community_directory_privacy_respect` in `tests/test_controllers.py`, and the tour `community_directory_tour.js`.
 
 ### Home page route `/<slug>` [@ANCHOR: controller_user_websites_home]
 

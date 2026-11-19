@@ -168,7 +168,7 @@ msgstr ""
 
 #. module: user_websites
 #: model:ir.model.fields,field_description:user_websites.field_res_users__privacy_show_in_directory
-msgid "Show in Public Directory"
+msgid "Listed in Public Directory"
 msgstr ""
 
 #. module: user_websites
