@@ -37,94 +37,10 @@ registry.category("web_tour.tours").add("compliance_tour", {
                 }
             }
         },
-        // Check footer links
+        // The footer has one legal link, to the /compliance hub.
         {
-            trigger: ".o_tour_footer_privacy",
-            content: 'Verify Privacy Policy link in footer',
-        },
-        {
-            trigger: ".o_tour_footer_cookie_policy",
-            content: 'Verify Cookie Policy link in footer',
-        },
-        {
-            trigger: ".o_tour_footer_terms",
-            content: 'Verify Terms of Service link in footer',
-        },
-        {
-            trigger: ".o_tour_footer_accessibility",
-            content: 'Verify Accessibility Statement link in footer',
-        },
-        {
-            trigger: ".o_tour_footer_my_privacy",
-            content: 'Verify My Privacy link in footer',
-        },
-        // Navigate to Cookie Policy
-        {
-            trigger: ".o_tour_footer_cookie_policy",
-            content: 'Click on Cookie Policy link in footer',
-            run: 'click',
-            expectUnloadPage: true,
-        },
-        TourUtils.dismissCookiesBar(),
-        {
-            trigger: 'h1',
-            content: 'Verify Cookie Policy page loaded',
-            run: function () {
-                if (!document.body.textContent.includes('Cookie Policy')) {
-                    throw new Error('[!] DIAGNOSTIC FOR AI: Cookie Policy page failed to load.');
-                }
-            }
-        },
-        // Navigate to Terms of Service
-        {
-            trigger: ".o_tour_footer_terms",
-            content: 'Click on Terms of Service link in footer',
-            run: 'click',
-            expectUnloadPage: true,
-        },
-        TourUtils.dismissCookiesBar(),
-        {
-            trigger: 'h1',
-            content: 'Verify Terms of Service page loaded',
-            run: function () {
-                if (!document.body.textContent.includes('Terms of Service')) {
-                    throw new Error('[!] DIAGNOSTIC FOR AI: Terms of Service page failed to load.');
-                }
-            }
-        },
-        // Navigate to Accessibility Statement
-        {
-            trigger: ".o_tour_footer_accessibility",
-            content: 'Click on Accessibility Statement link in footer',
-            run: 'click',
-            expectUnloadPage: true,
-        },
-        TourUtils.dismissCookiesBar(),
-        {
-            trigger: 'h1',
-            content: 'Verify Accessibility Statement page loaded',
-            run: function () {
-                const text = document.body.textContent;
-                if (!text.includes('Accessibility Statement') || !text.includes('WCAG 2.1 level AA')) {
-                    throw new Error('[!] DIAGNOSTIC FOR AI: Accessibility Statement page failed to load or content missing.');
-                }
-            }
-        },
-        // Navigate to Compliance Index
-        {
-            trigger: "body",
-            content: "Inject Compliance Index link",
-            run: function () {
-                const link = document.createElement('a');
-                link.href = '/compliance';
-                link.className = 'temp_compliance_nav_link';
-                link.textContent = 'Compliance';
-                document.body.appendChild(link);
-            }
-        },
-        {
-            trigger: ".temp_compliance_nav_link",
-            content: "Navigate to Compliance Index",
+            trigger: ".o_tour_footer_legal",
+            content: 'Click the single legal link in the footer',
             run: 'click',
             expectUnloadPage: true,
         },
