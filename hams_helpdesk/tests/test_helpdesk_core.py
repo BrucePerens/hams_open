@@ -6,6 +6,7 @@ import os
 
 from odoo.exceptions import AccessError
 from odoo.tests.common import tagged
+from odoo.tools import html2plaintext
 from odoo.tools.translate import code_translations
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
@@ -366,6 +367,39 @@ class TestHelpdeskCore(HamsTransactionCase):
         self.assertEqual(notices(spam), 0, "A ticket created in the spam quarantine must not notify the assignee.")
         real = Ticket.create({"name": "Real at creation", "stage": "new", "user_id": assignee.id})
         self.assertEqual(notices(real), 1, "A new ticket still notifies its assignee.")
+
+    def test_04e_assignment_email_leads_with_the_problem_text(self):
+        # Tests [@ANCHOR: hams_helpdesk:assignment_notice_body]
+        # Staff must not dig for the problem: the assignment email's body starts with the reporter's text, then the notice.
+        assignee = self.env.ref("base.user_admin")
+        ticket = self.env["hams_helpdesk.ticket"].create(
+            {"name": "Rotator stuck", "description": "<p>The rotator stops at 90 degrees.</p>", "stage": "new", "user_id": assignee.id}
+        )
+        message = self.env["mail.message"].search(
+            [("res_id", "=", ticket.id), ("model", "=", "hams_helpdesk.ticket"), ("body", "ilike", "assigned to you")], limit=1
+        )
+        text = html2plaintext(message.body).strip()
+        self.assertTrue(text.startswith("The rotator stops at 90 degrees."), text)
+        self.assertIn("assigned to you", text)
+        self.assertLess(text.index("rotator"), text.index("assigned to you"))
+
+    def test_04f_assignment_email_without_description_is_just_the_notice(self):
+        assignee = self.env.ref("base.user_admin")
+        ticket = self.env["hams_helpdesk.ticket"].create({"name": "No text", "stage": "new", "user_id": assignee.id})
+        message = self.env["mail.message"].search(
+            [("res_id", "=", ticket.id), ("model", "=", "hams_helpdesk.ticket"), ("body", "ilike", "assigned to you")], limit=1
+        )
+        self.assertTrue(html2plaintext(message.body).strip().startswith("Helpdesk Ticket #"))
+
+    def test_04g_form_shows_the_problem_text_right_under_the_title(self):
+        # Tests [@ANCHOR: hams_helpdesk:view_problem_text]
+        arch = self.env.ref("hams_helpdesk.view_hams_helpdesk_ticket_form").arch
+        title = arch.index('<field name="name"')
+        problem = arch.index('<field name="description"')
+        self.assertLess(title, problem)
+        self.assertLess(problem, arch.index("<group>"), "the problem text comes before the secondary fields")
+        self.assertLess(problem, arch.index("<notebook>"))
+        self.assertNotIn('<page string="Description">', arch)
 
     def test_04d_a_ticket_created_as_spam_sends_no_shift_cc_note(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_automated_routing_and_notification]
