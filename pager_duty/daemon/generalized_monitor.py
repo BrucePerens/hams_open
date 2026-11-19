@@ -21,6 +21,7 @@ import ssl
 import subprocess
 import sys
 import time
+import http.client
 import urllib.request
 import urllib.error
 import ftplib
@@ -53,6 +54,34 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 _OPENER = urllib.request.build_opener(_NoRedirect)
+UNIX_URL_PREFIX = "unix://"
+
+
+# [@ANCHOR: pager_duty:unix_opener_monitor]
+# Verified by [@ANCHOR: pager_duty:test_monitor_a_unix_url_reaches_odoo_over_the_socket]
+def _opener_for(url):
+    """`(opener, base)` for `url`. `unix:///run/odoo/rpc.sock` (the RPC guard's Unix socket) gives an opener that sends
+    every request over that socket (no redirects, no proxies) and the base `http://unix-socket`; any other URL gives
+    the plain no-redirect opener and itself."""
+    if not url.startswith(UNIX_URL_PREFIX):
+        return _OPENER, url
+    socket_path = url[len(UNIX_URL_PREFIX):]
+    def connect(host, timeout):
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            sock.settimeout(timeout)
+            sock.connect(socket_path)
+        except OSError as error:
+            sock.close()
+            raise urllib.error.URLError(error) from error  # like a refused TCP connection
+        connection = http.client.HTTPConnection("unix-socket", timeout=timeout)
+        connection.sock = sock  # http.client only connects by itself when it has no socket
+        return connection
+
+    handler = urllib.request.HTTPHandler()
+    handler.http_open = lambda req: handler.do_open(connect, req)
+    return urllib.request.build_opener(_NoRedirect, urllib.request.ProxyHandler({}), handler), "http://unix-socket"
+
 
 # Real fix, found by an adversarial security review: this module's own
 # internal Redis connections (log_anomaly_proxy/log_search_proxy below)
@@ -118,14 +147,15 @@ class OdooClient:
     def execute(self, model, method, **kwargs):
         # A 401 re-reads the key file once and sends the call again (see reload_key).
         for attempt in (1, 2):
+            opener, base = _opener_for(self.url)
             req = urllib.request.Request(
-                f"{self.url}/json/2/{model}/{method}",
+                f"{base}/json/2/{model}/{method}",
                 data=json.dumps(kwargs).encode("utf-8"),
                 headers=self.headers,
                 method="POST",
             )
             try:
-                with _OPENER.open(req, timeout=15) as response:
+                with opener.open(req, timeout=15) as response:
                     return json.loads(response.read().decode("utf-8"))
             except urllib.error.HTTPError as e:
                 if e.code == 401 and attempt == 1 and self.reload_key():
@@ -140,13 +170,14 @@ def get_odoo_client(logger, config):
     db = config.get("odoo_database") or os.environ.get("ODOO_DB")
     if not db:
         try:
+            opener, base = _opener_for(url)
             req = urllib.request.Request(
-                f"{url}/web/database/list",
+                f"{base}/web/database/list",
                 data=json.dumps({}).encode("utf-8"),
                 headers={"Content-Type": "application/json-rpc"},
                 method="POST",
             )
-            with urllib.request.urlopen(req, timeout=5) as res:
+            with opener.open(req, timeout=5) as res:
                 data = json.loads(res.read().decode("utf-8"))
                 dbs = data.get("result", [])
                 if dbs:
