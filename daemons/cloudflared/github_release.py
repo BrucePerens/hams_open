@@ -63,7 +63,7 @@ def send_hash(pkg_hash, name, version, account, namespace, api_token):
         except ValueError:
             errors = []
         detail = errors[0] if errors else response.text
-        raise Exception(f"failed to upload checksum: {detail}")
+        raise RuntimeError(f"failed to upload checksum: {detail}")
 
 
 # [@ANCHOR: github_release:assert_tag_exists]
@@ -82,7 +82,7 @@ def assert_tag_exists(repo, version):
     for tag in repo.get_tags():
         if tag.name == version:
             return
-    raise Exception("Tag {} not found".format(version))
+    raise RuntimeError("Tag {} not found".format(version))
 
 
 # [@ANCHOR: github_release:get_or_create_release]
@@ -286,7 +286,7 @@ def get_binary_version(binary_path):
     # Find start of needle
     needle_index = version_info.find(needle)
     if needle_index == -1:
-        raise Exception(
+        raise RuntimeError(
             f"could not find {needle!r} in `go version -m {binary_path}` output: {version_info!r}"
         )
     # Find backward slash relative to the beggining of the needle

@@ -42,7 +42,7 @@ def _raise_for_kv_error(response, action):
     except ValueError:
         errors = []
     detail = errors[0] if errors else response.text
-    raise Exception(f"failed to {action}: {detail}")
+    raise RuntimeError(f"failed to {action}: {detail}")
 
 
 # [@ANCHOR: github_message:kv_get_keys]
@@ -183,7 +183,7 @@ def main():
             # Previously this fell through and let
             # `release.update_release(...)` below raise an opaque AttributeError on a NoneType
             # instead of a clear, actionable message.
-            raise Exception(f"Release {args.release_version} not found; cannot update message")
+            raise RuntimeError(f"Release {args.release_version} not found; cannot update message")
 
         msg = ""
 
