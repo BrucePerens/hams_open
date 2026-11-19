@@ -19,8 +19,11 @@ import importlib.util
 import os
 import uuid
 
+from psycopg2 import IntegrityError
+
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.tests import Form, new_test_user, tagged
+from odoo.tools import mute_logger
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.cloudflare.utils import cloudflare_api, dns_plan
 from cryptography.fernet import Fernet
@@ -266,8 +269,9 @@ class TestDnsRecordModel(HamsTransactionCase):
         old = self._make(name="dup.hams.com", content="66.135.10.57")
         old.active = False
         self._make(name="dup.hams.com", content="66.135.10.57")
-        with self.assertRaises(ValidationError):
+        with mute_logger("odoo.sql_db"), self.assertRaises(IntegrityError), self.env.cr.savepoint():
             old.active = True
+            old.flush_recordset()
 
     # Tests [@ANCHOR: cloudflare:COMM_dns_record_glue_unproxied]
     def test_02_a_nameserver_name_must_be_dns_only_whichever_row_comes_first(self):
@@ -301,8 +305,9 @@ class TestDnsRecordModel(HamsTransactionCase):
         self.assertTrue(a_row.proxied, "a CNAME keeps the default")
 
     def test_04_a_duplicate_row_is_refused(self):
+        # The unique index answers a create before the readable check can (see test_dns_record_unique).
         self._make()
-        with self.assertRaises(ValidationError):
+        with mute_logger("odoo.sql_db"), self.assertRaises(IntegrityError), self.env.cr.savepoint():
             self._make()
 
     def test_04b_an_archived_row_never_clashes_even_when_the_caller_searches_archived_rows(self):

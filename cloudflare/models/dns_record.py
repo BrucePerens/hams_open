@@ -44,6 +44,15 @@ class CloudflareDNSRecord(models.Model):
         "CHECK(LENGTH(TRIM(name)) > 0)", "Name cannot be empty."
     )
 
+    # Two administrators (or a push adopting a record while someone adds it) both pass `_check_record`'s search, which
+    # cannot see the other's uncommitted row, so the database refuses a second active row for one record. `content` is
+    # hashed because it can be up to 2048 characters, past what an index entry may hold.
+    # Verified by [@ANCHOR: cloudflare:test_two_active_rows_for_one_record_are_impossible_in_the_database]
+    _one_active_row_per_record = models.UniqueIndex(
+        "(type, name, md5(content)) WHERE active",
+        "An active row for this type, name and content already exists.",
+    )
+
     type = fields.Selection(
         [("A", "A"), ("AAAA", "AAAA"), ("CNAME", "CNAME"), ("TXT", "TXT"), ("NS", "NS")],
         string="Type",
