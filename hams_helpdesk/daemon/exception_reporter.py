@@ -34,10 +34,7 @@ import urllib.request
 
 # The flag reader is pager_duty/daemon/pagerduty_maintenance.py, a sibling module directory of this one.
 sys.path.append(os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "pager_duty", "daemon")))
-try:
-    import pagerduty_maintenance
-except ImportError:
-    pagerduty_maintenance = None
+import pagerduty_maintenance  # noqa: E402
 
 
 # [@ANCHOR: hams_helpdesk_daemon_exception_reporter_no_redirect]
@@ -185,11 +182,11 @@ def unit_result(unit):
     return done.stdout.strip() if done.returncode == 0 else ""
 
 
+# [@ANCHOR: hams_helpdesk:daemon_in_maintenance]
 def in_maintenance():
-    """True while the pagerduty maintenance flag (/etc/pagerduty/maintenance, set by the deploy) is active. When the
-    reader is not installed beside this module, or the flag is absent, expired or malformed, this is False and every
-    failure is reported."""
-    return pagerduty_maintenance is not None and pagerduty_maintenance.is_active()
+    """True while the pagerduty maintenance flag (/etc/pagerduty/maintenance, set by the deploy) is active. An
+    absent, expired or malformed flag is not maintenance: the failure is reported."""
+    return pagerduty_maintenance.is_active()
 
 
 # [@ANCHOR: hams_helpdesk:daemon_report_unit]

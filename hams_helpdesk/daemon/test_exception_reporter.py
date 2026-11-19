@@ -93,6 +93,7 @@ class ReportUnitWaitTests(unittest.TestCase):
 
 
 class MaintenanceTests(unittest.TestCase):
+    # Tests [@ANCHOR: hams_helpdesk:daemon_in_maintenance]
     """A unit that fails while the pagerduty maintenance flag is set (a deploy or restart) is not reported (ticket 168)."""
 
     def run_report(self, flag_json):
