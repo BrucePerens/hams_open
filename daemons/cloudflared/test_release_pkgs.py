@@ -216,7 +216,7 @@ class GpgImportTest(unittest.TestCase):
     # Tests [@ANCHOR: release_pkgs:PkgCreator::import_gpg_keys]
     def test_a_private_key_that_imports_no_fingerprint_is_rejected(self):
         with mock.patch.object(rp.gnupg, "GPG", return_value=self._gpg([], [])):
-            with self.assertRaises(Exception) as ctx:
+            with self.assertRaises(RuntimeError) as ctx:
                 rp.PkgCreator().import_gpg_keys(self.PRIVATE, self.PUBLIC)
         self.assertIn("Failed to import private key", str(ctx.exception))
 
@@ -224,7 +224,7 @@ class GpgImportTest(unittest.TestCase):
     def test_an_imported_key_missing_from_the_secret_key_list_is_an_error(self):
         gpg = self._gpg(["FP1"], [{"fingerprint": "OTHER", "uids": ["x"]}])
         with mock.patch.object(rp.gnupg, "GPG", return_value=gpg):
-            with self.assertRaises(Exception) as ctx:
+            with self.assertRaises(RuntimeError) as ctx:
                 rp.PkgCreator().import_gpg_keys(self.PRIVATE, self.PUBLIC)
         self.assertIn("FP1", str(ctx.exception))
 

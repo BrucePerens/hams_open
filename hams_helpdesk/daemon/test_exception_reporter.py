@@ -7,6 +7,7 @@ OnFailure unit waits out an Odoo restart instead of exiting 1 and leaving a fail
 import io
 import os
 import shutil
+import socketserver
 import sys
 import tempfile
 import threading
@@ -229,6 +230,50 @@ class _RedirectProbe:
         for server in (self.first, self.sink):
             server.shutdown()
             server.server_close()
+
+
+class UnixSocketTests(unittest.TestCase):
+    # Tests [@ANCHOR: hams_helpdesk:daemon_post_report]
+    # [@ANCHOR: hams_helpdesk:test_a_unix_url_reaches_odoo_over_the_socket]
+    def test_a_unix_url_reaches_odoo_over_the_socket(self):
+        # Tests [@ANCHOR: hams_helpdesk:daemon_unix_opener]
+        seen = []
+
+        class Guard(BaseHTTPRequestHandler):
+            def do_POST(self):
+                seen.append((self.path, self.headers["Host"], self.headers["Authorization"], self.rfile.read(int(self.headers["Content-Length"]))))
+                body = b'{"recorded": true}'
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        with tempfile.TemporaryDirectory() as directory:
+            key_file = os.path.join(directory, "key")
+            with open(key_file, "w", encoding="utf-8") as handle:
+                handle.write("ODOO_RPC_KEY=secret-key\n")
+            socket_path = os.path.join(directory, "rpc.sock")
+            server = socketserver.UnixStreamServer(socket_path, Guard)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)  # burn-ignore-test-daemon-thread: hermetic fixture, shut down below
+            thread.start()
+            try:
+                answer = er.post_report({"unit": "a.service"}, url="unix://" + socket_path, key_file=key_file)
+            finally:
+                server.shutdown()
+                server.server_close()
+        self.assertEqual(answer, {"recorded": True})
+        self.assertEqual(seen, [("/json/2/hams_helpdesk.exception.fingerprint/report_daemon_failure", "unix-socket", "Bearer secret-key", b'{"unit": "a.service"}')])
+
+    def test_a_unix_url_with_nothing_listening_is_unavailable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            key_file = os.path.join(directory, "key")
+            with open(key_file, "w", encoding="utf-8") as handle:
+                handle.write("ODOO_RPC_KEY=secret-key\n")
+            with self.assertRaises(er.OdooUnavailable):
+                er.post_report({}, url="unix://" + os.path.join(directory, "none.sock"), key_file=key_file)
 
 
 class RefusalTests(unittest.TestCase):

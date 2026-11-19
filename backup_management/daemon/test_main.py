@@ -8,6 +8,7 @@ import io
 import json
 import os
 import shutil
+import socketserver
 import sys
 import tempfile
 import threading
@@ -1122,6 +1123,48 @@ class TestJson2CallReloadsARotatedKey(unittest.TestCase):
                     backup_worker._json2_call("backup.job", "get_jobs")
                 self.assertIn("401", str(caught.exception))
                 self.assertEqual(self.seen, [self.OLD])
+
+
+class Guard(BaseHTTPRequestHandler):
+    """The RPC guard's Unix socket stand-in: records (path, Host, Authorization, body) and answers `[1, 2]`."""
+    seen = []
+
+    def do_POST(self):
+        Guard.seen.append((self.path, self.headers["Host"], self.headers["Authorization"], self.rfile.read(int(self.headers["Content-Length"]))))
+        body = b'[1, 2]'
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args):
+        pass
+
+
+class UnixSocketTests(unittest.TestCase):
+    def setUp(self):
+        Guard.seen = []
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.socket_path = os.path.join(directory.name, "rpc.sock")
+        server = socketserver.UnixStreamServer(self.socket_path, Guard)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)  # burn-ignore-test-daemon-thread: hermetic fixture, shut down in cleanup
+        thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+
+    # [@ANCHOR: backup_management:test_a_unix_url_reaches_odoo_over_the_socket]
+    def test_a_unix_url_reaches_odoo_over_the_socket(self):
+        # Tests [@ANCHOR: backup_management:unix_opener]
+        # Tests [@ANCHOR: backup_management:COMM_json2_call]
+        with patch.object(backup_worker, "ODOO_URL", "unix://" + self.socket_path), patch.object(backup_worker, "ODOO_PASS", "secret-key"):
+            self.assertEqual(backup_worker._json2_call("backup.job", "get_jobs", limit=2), [1, 2])
+        self.assertEqual(Guard.seen, [("/json/2/backup.job/get_jobs", "unix-socket", "Bearer secret-key", b'{"limit": 2}')])
+
+    def test_a_unix_url_with_nothing_listening_is_unavailable(self):
+        with patch.object(backup_worker, "ODOO_URL", "unix://" + self.socket_path + ".none"), patch.object(backup_worker, "ODOO_PASS", "k"):
+            with self.assertRaises(backup_worker.OdooUnavailableError):
+                backup_worker._json2_call("backup.job", "get_jobs")
 
 
 class TestJobThatCannotBeReportedIsRequeued(unittest.TestCase):

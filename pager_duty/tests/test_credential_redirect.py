@@ -82,7 +82,7 @@ class TestPagerDaemonsRefuseRedirects(HamsTransactionCase):
         # Tests [@ANCHOR: pager_duty:odoo_client_execute]
         with _RedirectProbe() as probe:
             client = generalized_monitor.OdooClient(probe.url, "db", "pager_service_internal", "monitor-key")
-            with self.assertRaises(Exception) as raised:
+            with self.assertRaises(RuntimeError) as raised:
                 client.execute("pager.check", "check_heartbeat_rpc", hb_uuid="x")
         self.assertIn("302", str(raised.exception))
         self.assertEqual(probe.first_headers[0]["authorization"], "bearer monitor-key")

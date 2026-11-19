@@ -21,8 +21,10 @@ stderr as a status code and nothing more (no URL, key or response body).
 """
 
 import contextlib
+import http.client
 import json
 import os
+import socket
 import subprocess
 import sys
 import time
@@ -42,6 +44,34 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 _OPENER = urllib.request.build_opener(_NoRedirect)
+UNIX_URL_PREFIX = "unix://"
+
+
+# [@ANCHOR: hams_helpdesk:daemon_unix_opener]
+# Verified by [@ANCHOR: hams_helpdesk:test_a_unix_url_reaches_odoo_over_the_socket]
+def _opener_for(url):
+    """`(opener, base)` for `url`. `unix:///run/odoo/rpc.sock` (the RPC guard's Unix socket) gives an opener that sends
+    every request over that socket (no redirects, no proxies) and the base `http://unix-socket`; any other URL gives
+    the plain no-redirect opener and itself."""
+    if not url.startswith(UNIX_URL_PREFIX):
+        return _OPENER, url
+    socket_path = url[len(UNIX_URL_PREFIX):]
+    def connect(host, timeout):
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            sock.settimeout(timeout)
+            sock.connect(socket_path)
+        except OSError as error:
+            sock.close()
+            raise urllib.error.URLError(error) from error  # like a refused TCP connection
+        connection = http.client.HTTPConnection("unix-socket", timeout=timeout)
+        connection.sock = sock  # http.client only connects by itself when it has no socket
+        return connection
+
+    handler = urllib.request.HTTPHandler()
+    handler.http_open = lambda req: handler.do_open(connect, req)
+    return urllib.request.build_opener(_NoRedirect, urllib.request.ProxyHandler({}), handler), "http://unix-socket"
+
 
 DEFAULT_URL = "http://odoo:8069"
 DEFAULT_KEY_FILE = "/opt/hams/etc/keys/exception_reporter.env"
@@ -93,7 +123,7 @@ def load_key(key_file):
 # [@ANCHOR: hams_helpdesk:daemon_post_report]
 def post_report(payload, url=None, database=None, key_file=None, timeout=15):
     """Sends one report. Returns Odoo's answer (a dict). Raises ReportError on any failure."""
-    base = (url or os.environ.get("ODOO_URL") or DEFAULT_URL).rstrip("/")
+    opener, base = _opener_for((url or os.environ.get("ODOO_URL") or DEFAULT_URL).rstrip("/"))
     key = load_key(key_file or os.environ.get("EXCEPTION_REPORTER_KEY_FILE") or DEFAULT_KEY_FILE)
     headers = {
         "Authorization": f"Bearer {key}",
@@ -110,7 +140,7 @@ def post_report(payload, url=None, database=None, key_file=None, timeout=15):
         method="POST",
     )
     try:
-        with _OPENER.open(request, timeout=timeout) as response:
+        with opener.open(request, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as error:
         if error.code in UNAVAILABLE_HTTP_CODES:

@@ -647,6 +647,12 @@
         * *When* another record with the same Cloudflare tunnel id is created for that website
         * *Then* the database MUST refuse it, and the upgrade MUST delete older duplicates keeping the first.
 
+* **Story:** As the operator, a DNS record is held by one active row, so two administrators saving the same record together never leave two rows. *(Reference: cloudflare/migrations/1.13/pre-dns-record-dedupe.py -> [@ANCHOR: cloudflare:migration_dns_record_dedupe])*
+    * **BDD Criteria:**
+        * *Given* an active row exists for a type, name and content
+        * *When* another active row with the same type, name and content is created
+        * *Then* the database MUST refuse it, and the upgrade MUST archive (never delete) all but the row linked to Cloudflare, else the oldest.
+
 ### `CloudflareConfigManagerRateLimit` [@ANCHOR: cloudflare:cloudflare_rate_limit_push_cloudflare_config_manager_rate_limit]
 
 **Purpose and location.** The rate-limit push of the Cloudflare configuration manager, defined in `cloudflare/models/rate_limit_push.py` as an abstract Odoo model that extends (`_inherit`) `cloudflare.config.manager`; bases: `models.AbstractModel`. It adds `plan_rate_limits` (a plan that only reads Cloudflare) and `action_push_rate_limits` (the explicit apply) for the zone's `http_ratelimit` ruleset.

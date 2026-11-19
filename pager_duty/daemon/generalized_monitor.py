@@ -161,7 +161,7 @@ class OdooClient:
                 if e.code == 401 and attempt == 1 and self.reload_key():
                     continue
                 err_body = e.read().decode("utf-8")
-                raise Exception(f"JSON-2 API Error {e.code}: {err_body}")
+                raise RuntimeError(f"JSON-2 API Error {e.code}: {err_body}")
 
 
 # [@ANCHOR: pager_duty:get_odoo_client]

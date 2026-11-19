@@ -58,6 +58,16 @@ impl Ft8Decoder {
     /// FT8 analysis window.
     // [@ANCHOR: Ft8Decoder::new]
     pub fn new(sample_rate: u32, f_min: f32, f_max: f32) -> Option<Self> {
+        // The C shim does no range validation: a negative or inverted
+        // range hung feed()/decode() or crashed inside ft8_lib.
+        let nyquist = sample_rate as f32 / 2.0;
+        if !(f_min.is_finite() && f_max.is_finite())
+            || f_min < 0.0
+            || f_max <= f_min
+            || f_max > nyquist
+        {
+            return None;
+        }
         let session = unsafe { ffi::ft8_session_new(sample_rate as i32, f_min, f_max) };
         if session.is_null() {
             return None;
@@ -387,6 +397,27 @@ mod tests {
             Ft8Decoder::new(0, 200.0, 3000.0).is_none(),
             "a zero sample rate must fail construction, not hand back a decoder whose feed() can never make progress"
         );
+    }
+
+    #[test]
+    fn a_bad_frequency_range_fails_construction() {
+        // Construction only: on the unfixed code these returned a live
+        // decoder whose feed()/decode() hung or crashed.
+        for (rate, lo, hi) in [
+            (11678u32, -31949882.0f32, -2e-10f32),
+            (12000, -1.0, 3000.0),
+            (12000, 3000.0, 200.0),
+            (12000, 200.0, 200.0),
+            (12000, 200.0, 7000.0),
+            (12000, f32::NAN, 3000.0),
+            (12000, 200.0, f32::INFINITY),
+        ] {
+            assert!(
+                Ft8Decoder::new(rate, lo, hi).is_none(),
+                "range {lo}..{hi} at {rate} Hz must fail construction"
+            );
+        }
+        assert!(Ft8Decoder::new(12000, 200.0, 3000.0).is_some());
     }
 
     #[test]

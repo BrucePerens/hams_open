@@ -70,6 +70,16 @@ class TestMailServerSecrets(TransactionCase, SafePatchMixin):
         with self.assertRaises(ss.SecretNotFound):
             self._login()
 
+    def test_group_on_leaves_a_server_that_does_not_log_in_with_a_password_alone(self):
+        # Tests [@ANCHOR: zero_sudo:mail_server_smtp_login]
+        # A Gmail or Outlook server has a user and no password (its login is an OAuth token, built by the
+        # next _smtp_login__ in the chain): the store must not be asked, or every send from it fails with
+        # SecretNotFound.
+        self._group(True)
+        self.store_values.clear()
+        self.server.write({"smtp_authentication": "cli"})
+        self.assertEqual(self._login(), ("u", DB_PASS))
+
     def test_group_on_refuses_a_typed_password(self):
         # Tests [@ANCHOR: zero_sudo:mail_server_refuse_typed]
         # Tests [@ANCHOR: zero_sudo:mail_server_create]

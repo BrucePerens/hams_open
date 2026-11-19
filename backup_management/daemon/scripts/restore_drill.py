@@ -74,8 +74,9 @@ def newest_complete_snapshot(repo):
     for name in sorted(os.listdir(repo), reverse=True):
         try:
             with open(os.path.join(repo, name, "state.json")) as f:
-                if json.load(f).get("status") == "complete":
-                    return os.path.join(repo, name)
+                state = json.load(f)
+            if isinstance(state, dict) and state.get("status") == "complete":
+                return os.path.join(repo, name)
         except (OSError, ValueError):
             continue
     raise DrillError("check snapshot: no complete snapshot in the repository")
@@ -148,7 +149,11 @@ def check_postgres(dump_path, cfg, log):
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise DrillError(f"check database: postgres tools failed ({type(exc).__name__})") from None
     finally:
-        run(["dropdb", "--if-exists", name])
+        try:
+            run(["dropdb", "--if-exists", name])
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            # Never let the cleanup's own failure replace the error being raised (a missing tool fails here too).
+            log(f"scratch database {name} was not dropped ({type(exc).__name__})")
 
 
 # [@ANCHOR: backup_management:restore_drill_check_files]

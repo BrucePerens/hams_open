@@ -66,7 +66,7 @@ class SendHashTest(unittest.TestCase):
     def test_a_rejected_upload_raises_even_when_the_errors_array_is_empty(self):
         with mock.patch.object(gr.requests, "put",
                                return_value=FakeResponse(500, {"errors": []}, text="kv down")):
-            with self.assertRaises(Exception) as ctx:
+            with self.assertRaises(RuntimeError) as ctx:
                 gr.send_hash("h", "n", "v", "a", "ns", "t")
         self.assertIn("failed to upload checksum", str(ctx.exception))
         self.assertIn("kv down", str(ctx.exception))
@@ -75,7 +75,7 @@ class SendHashTest(unittest.TestCase):
     def test_a_rejected_upload_names_the_first_error_from_the_body(self):
         with mock.patch.object(gr.requests, "put",
                                return_value=FakeResponse(403, {"errors": [{"message": "no access"}]})):
-            with self.assertRaises(Exception) as ctx:
+            with self.assertRaises(RuntimeError) as ctx:
                 gr.send_hash("h", "n", "v", "a", "ns", "t")
         self.assertIn("no access", str(ctx.exception))
 
@@ -98,13 +98,13 @@ class AssertTagExistsTest(unittest.TestCase):
 
     # Tests [@ANCHOR: github_release:assert_tag_exists]
     def test_a_missing_tag_raises_naming_the_tag(self):
-        with self.assertRaises(Exception) as ctx:
+        with self.assertRaises(RuntimeError) as ctx:
             gr.assert_tag_exists(self._repo("2026.2.0"), "2026.1.0")
         self.assertIn("2026.1.0", str(ctx.exception))
 
     # Tests [@ANCHOR: github_release:assert_tag_exists]
     def test_a_repository_with_no_tags_raises_the_not_found_error(self):
-        with self.assertRaises(Exception) as ctx:
+        with self.assertRaises(RuntimeError) as ctx:
             gr.assert_tag_exists(self._repo(), "2026.1.0")
         self.assertIn("not found", str(ctx.exception))
 
@@ -291,7 +291,7 @@ class GetBinaryVersionTest(unittest.TestCase):
     # Tests [@ANCHOR: github_release:get_binary_version]
     def test_output_without_the_marker_raises_instead_of_returning_garbage(self):
         with mock.patch.object(gr.subprocess, "Popen", return_value=_go_version_output("no version here")):
-            with self.assertRaises(Exception) as ctx:
+            with self.assertRaises(RuntimeError) as ctx:
                 gr.get_binary_version("/bin/cf")
         self.assertIn("main.Version=", str(ctx.exception))
 

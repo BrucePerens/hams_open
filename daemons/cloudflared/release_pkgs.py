@@ -209,7 +209,7 @@ class PkgCreator:
         private_key = base64.b64decode(private_key)
         import_result = gpg.import_keys(private_key)
         if not import_result.fingerprints:
-            raise Exception("Failed to import private key")
+            raise RuntimeError("Failed to import private key")
 
         public_key = base64.b64decode(public_key)
         gpg.import_keys(public_key)
@@ -222,7 +222,7 @@ class PkgCreator:
             if key["fingerprint"] == imported_fingerprint:
                 return (key["fingerprint"], key["uids"][0])
 
-        raise Exception(f"Could not find imported key with fingerprint {imported_fingerprint}")
+        raise RuntimeError(f"Could not find imported key with fingerprint {imported_fingerprint}")
 
     # [@ANCHOR: release_pkgs:PkgCreator::import_multiple_gpg_keys]
     def import_multiple_gpg_keys(self, primary_private_key, primary_public_key, secondary_private_key=None, secondary_public_key=None):

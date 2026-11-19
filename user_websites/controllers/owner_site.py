@@ -128,7 +128,7 @@ def clean_member_image(data, mimetype):
     if mimetype == "image/gif":
         try:
             width, height = Image.open(io.BytesIO(data)).size
-        except (UnidentifiedImageError, OSError, ValueError, SyntaxError):
+        except (UnidentifiedImageError, OSError, ValueError, SyntaxError, Image.DecompressionBombError):
             return None
         return data if width * height <= MAX_IMAGE_PIXELS else None
     try:
