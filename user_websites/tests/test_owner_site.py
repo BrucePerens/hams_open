@@ -11,6 +11,7 @@ the hams.com headers and footer.
 import base64
 import io
 import re
+import struct
 
 import redis
 from PIL import Image
@@ -189,6 +190,15 @@ class TestMemberHtmlSanitizer(BaseCase):
         big_gif = _picture("GIF", size=(5000, 5000))
         self.assertLess(len(big_gif), owner_site.MAX_IMAGE_BYTES)
         self.assertIsNone(owner_site.clean_member_image(big_gif, "image/gif"))
+
+    def test_image_reencode_refuses_decompression_bomb_gif(self):
+        # Tests [@ANCHOR: user_websites:owner_image_reencode]
+        # A 20-byte GIF that declares 60000 x 60000 pixels makes Pillow raise DecompressionBombError on open;
+        # that is a refusal (None), not an unhandled error (a 500 on the upload).
+        w = h = 60000
+        bomb = (b"GIF89a" + struct.pack("<HHBBB", w, h, 0, 0, 0) + b"\x2c"
+                + struct.pack("<HHHHB", 0, 0, w, h, 0) + b"\x02\x00;")
+        self.assertIsNone(owner_site.clean_member_image(bomb, "image/gif"))
 
     def test_image_src_cannot_climb_out_of_web_image(self):
         # Tests [@ANCHOR: user_websites:fn_hmtl_clean_url]
