@@ -83,7 +83,7 @@ class TestSnsRefusals(HamsHttpCase):
         self.assertEqual(log.status, 'rejected_signature')
 
     def test_a_json_escape_for_nul_or_a_lone_surrogate_is_a_400_and_logs_nothing(self):
-        # Tests [@ANCHOR: ses_webhook:COMM_receive_sns_webhook]
+        # Tests [@ANCHOR: ses_webhook:storable_payload]
         # The text of the body is valid JSON, but the string it decodes to cannot be stored: PostgreSQL has no NUL
         # and a lone surrogate cannot be encoded. The rejected_signature log row used to be created from it: a 500.
         before = self.env['ses.webhook.log'].search_count([])

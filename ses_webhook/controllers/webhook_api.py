@@ -109,6 +109,24 @@ _MAX_SNS_REDELIVERY_AGE = timedelta(hours=24)
 _KNOWN_PAYLOAD_TYPES = {'Notification', 'SubscriptionConfirmation', 'UnsubscribeConfirmation'}
 
 
+# [@ANCHOR: ses_webhook:storable_payload]
+# Verified by [@ANCHOR: ses_webhook:COMM_receive_sns_webhook]
+def _storable(value):
+    """False when a string anywhere in the parsed JSON (key or value) holds a NUL or a lone surrogate, which PostgreSQL
+    and psycopg2 cannot store."""
+    if isinstance(value, str):
+        try:
+            value.encode('utf-8')
+        except UnicodeEncodeError:
+            return False
+        return '\x00' not in value
+    if isinstance(value, dict):
+        return all(_storable(k) and _storable(v) for k, v in value.items())
+    if isinstance(value, list):
+        return all(_storable(v) for v in value)
+    return True
+
+
 # [@ANCHOR: ses_webhook:build_string_to_sign]
 # Verified by [@ANCHOR: ses_webhook:COMM_verify_sns_signature]
 def _build_string_to_sign(payload):
@@ -370,6 +388,10 @@ class SesWebhookController(http.Controller):
             # message shape -- every .get() below assumes a dict. Found in
             # passing while adding signature verification: previously this
             # would 500 instead of 400 (e.g. raw_data == '[]').
+            return request.make_response("Invalid JSON", status=400)
+
+        # A JSON escape (\u0000, \ud800) can decode to text the database cannot hold; the log row below would be a 500.
+        if not _storable(payload):
             return request.make_response("Invalid JSON", status=400)
 
         payload_type = payload.get('Type', 'Unknown')
