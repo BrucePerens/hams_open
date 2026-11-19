@@ -5,12 +5,14 @@ OnFailure unit waits out an Odoo restart instead of exiting 1 and leaving a fail
     python3 hams_helpdesk/daemon/test_exception_reporter.py
 """
 import io
+import json
 import os
 import shutil
 import socketserver
 import sys
 import tempfile
 import threading
+import time
 import unittest
 import urllib.error
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -88,6 +90,47 @@ class ReportUnitWaitTests(unittest.TestCase):
             text = handle.read()
         line = [part for part in text.splitlines() if part.startswith("TimeoutStartSec=")][0]
         self.assertGreaterEqual(int(line.split("=")[1]), er.REPORT_ODOO_WAIT_SECONDS + 120)
+
+
+class MaintenanceTests(unittest.TestCase):
+    """A unit that fails while the pagerduty maintenance flag is set (a deploy or restart) is not reported (ticket 168)."""
+
+    def run_report(self, flag_json):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "maintenance")
+            if flag_json is not None:
+                with open(path, "w", encoding="utf-8") as handle:
+                    handle.write(flag_json)
+            with mock.patch.dict(os.environ, {"PAGERDUTY_MAINTENANCE_FILE": path}), \
+                    mock.patch.object(er, "unit_result", return_value="exit-code"), \
+                    mock.patch.object(er, "journal_tail", return_value="tail"), \
+                    mock.patch.object(er, "post_report", return_value={"recorded": True}) as post, \
+                    redirect_stderr(io.StringIO()):
+                answer = er.report_unit("adif.processor.service")
+        return answer, post
+
+    @staticmethod
+    def flag(set_ago, until_in):
+        now = time.time()
+        return json.dumps({"set_at": now - set_ago, "until": now + until_in, "reason": "deploy", "set_by": "t"})
+
+    def test_an_active_flag_skips_the_report(self):
+        answer, post = self.run_report(self.flag(60, 600))
+        post.assert_not_called()
+        self.assertEqual(answer, {"skipped": "pagerduty maintenance"})
+
+    def test_no_flag_reports(self):
+        answer, post = self.run_report(None)
+        post.assert_called_once()
+        self.assertEqual(answer, {"recorded": True})
+
+    def test_an_expired_flag_reports(self):
+        _answer, post = self.run_report(self.flag(1200, -600))
+        post.assert_called_once()
+
+    def test_a_malformed_flag_reports(self):
+        _answer, post = self.run_report("not json")
+        post.assert_called_once()
 
 
 class PostReportErrorClassTests(unittest.TestCase):

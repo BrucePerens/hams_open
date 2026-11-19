@@ -32,6 +32,13 @@ import traceback
 import urllib.error
 import urllib.request
 
+# The flag reader is pager_duty/daemon/pagerduty_maintenance.py, a sibling module directory of this one.
+sys.path.append(os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "pager_duty", "daemon")))
+try:
+    import pagerduty_maintenance
+except ImportError:
+    pagerduty_maintenance = None
+
 
 # [@ANCHOR: hams_helpdesk_daemon_exception_reporter_no_redirect]
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -178,11 +185,24 @@ def unit_result(unit):
     return done.stdout.strip() if done.returncode == 0 else ""
 
 
+def in_maintenance():
+    """True while the pagerduty maintenance flag (/etc/pagerduty/maintenance, set by the deploy) is active. When the
+    reader is not installed beside this module, or the flag is absent, expired or malformed, this is False and every
+    failure is reported."""
+    return pagerduty_maintenance is not None and pagerduty_maintenance.is_active()
+
+
 # [@ANCHOR: hams_helpdesk:daemon_report_unit]
 def report_unit(unit, wait_seconds=None, sleep=time.sleep, monotonic=time.monotonic, **options):
     """What the OnFailure unit does: report ``unit`` with its result and journal tail. While Odoo is unavailable (a restart
     or deploy) it retries with a growing delay for up to ``wait_seconds`` (REPORT_ODOO_WAIT_SECONDS), then raises the last
-    error. Any other failure (a rejected key, a 4xx) is raised at once. The payload is read once, before the first try."""
+    error. Any other failure (a rejected key, a 4xx) is raised at once. The payload is read once, before the first try.
+    A failure that starts while the pagerduty maintenance flag is active (a deploy stopping Odoo and its daemons) is a
+    planned restart, not an exception: nothing is posted (ticket 168). The flag is read when this unit starts, i.e. when
+    the failure happened, not after the wait for Odoo."""
+    if in_maintenance():
+        print(f"pagerduty maintenance is active; not reporting {unit}", file=sys.stderr)
+        return {"skipped": "pagerduty maintenance"}
     payload = {
         "unit": unit,
         "kind": "unit_failed",
