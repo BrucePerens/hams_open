@@ -81,3 +81,14 @@ class TestSnsRefusals(HamsHttpCase):
         log = self.env['ses.webhook.log'].search([('name', '=', 'msg-bogus-type')])
         self.assertEqual(log.payload_type, 'Unknown')
         self.assertEqual(log.status, 'rejected_signature')
+
+    def test_a_json_escape_for_nul_or_a_lone_surrogate_is_a_400_and_logs_nothing(self):
+        # Tests [@ANCHOR: ses_webhook:storable_payload]
+        # The text of the body is valid JSON, but the string it decodes to cannot be stored: PostgreSQL has no NUL
+        # and a lone surrogate cannot be encoded. The rejected_signature log row used to be created from it: a 500.
+        before = self.env['ses.webhook.log'].search_count([])
+        for message_id in ('a\\u0000b', 'a\\ud800b'):
+            body = ('{"Type": "Notification", "MessageId": "%s", "Message": "x"}' % message_id).encode('ascii')
+            response = self.url_open('/mail/webhook/sns?token=refusals_secret', data=body)
+            self.assertEqual(response.status_code, 400, message_id)
+        self.assertEqual(self.env['ses.webhook.log'].search_count([]), before)

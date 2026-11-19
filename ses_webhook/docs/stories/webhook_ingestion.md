@@ -42,3 +42,9 @@ server, and a transient processing failure degrades to a logged error rather
 than an AWS retry storm.
 
 * **Story:** As an administrator, I want the webhook audit rows (rejected signature, rejected sender, failures) kept when a webhook domain is deleted, still saying which domain and company they were for -> [@ANCHOR: ses_webhook:log_compute_domain_name]. The stored `domain_name` is a computed copy of the domain's name, refreshed whenever the log still has its domain and left unchanged once the domain is deleted and the link is set to null; it takes no arguments, returns nothing, writes only that one field, and cannot fail on an orphaned row. Checked by [@ANCHOR: ses_webhook:test_log_survives_domain_delete], which deletes the domain and asserts the log row survives with its domain name and company intact.
+
+* **Story:** As an administrator, I want a webhook body whose JSON escapes decode to a NUL or a lone surrogate answered with 400 and no log row, so that such a body is an ordinary refusal and not a server error with an exception ticket. *(Reference: ses_webhook/controllers/webhook_api.py -> [@ANCHOR: ses_webhook:storable_payload])*
+    * **BDD Criteria:**
+        * *Given* a request with a valid domain token whose JSON body holds `"\u0000"` or `"\ud800"` in any key or value
+        * *When* it is posted to the SNS webhook
+        * *Then* the answer MUST be 400 `Invalid JSON` and no `ses.webhook.log` row is created.
