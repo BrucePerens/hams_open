@@ -59,8 +59,7 @@
                 <span><t t-out="resolved_slug.upper()"/> &#183; a <a href="https://hams.com/">Hams.com</a> member site</span>
                 <span class="d-flex flex-wrap gap-3 align-items-center">
                     <t t-if="not is_owner"><t t-call="user_websites.report_violation_snippet"/></t>
-                    <a href="/privacy">Privacy</a>
-                    <a href="/terms">Terms</a>
+                    <a href="/compliance">Legal and Compliance Information</a>
                 </span>
             </div>
         </footer>
