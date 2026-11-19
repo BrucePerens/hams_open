@@ -235,8 +235,9 @@ Server Error". Returns a JSON response via `request.make_json_response`. The `as
 PostgreSQL cannot store or compare a string with a NUL character: a search box that passed `%00` on to an `ilike` failed with "A string
 literal cannot contain NUL (0x00) characters", a 500 and an exception ticket (one route, the glossary search, already stripped it).
 `_dispatch` looks at `request.params` (query string, form fields, path arguments and a JSON body) before the endpoint runs, and
-answers 400 (`BadRequest`) when `_has_nul` finds a NUL in any string, dict key, list or tuple member; uploaded files are not
-inspected. `_has_nul` walks the data with a list, not recursion, so a deeply nested body is safe. Nothing on the site has a use for the
+answers 400 (`BadRequest`) when `_has_nul` finds a NUL or a lone UTF-16 surrogate (a JSON `"\ud800"`, which psycopg2 cannot encode: the
+same 500) in any string, dict key, list or tuple member; uploaded files are not
+inspected. `_has_nul` walks the data with a list, not recursion, so a deeply nested body is safe. Nothing on the site has a use for either
 character. Test: `tests/test_nul_in_request_params.py`.
 
 ### `mask_email(address)` [@ANCHOR: hams_base:log_mask_email]

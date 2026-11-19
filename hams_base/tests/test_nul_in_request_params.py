@@ -23,6 +23,14 @@ class TestNulInRequestParams(HamsHttpCase):
             nested = [nested]
         self.assertFalse(_has_nul(nested))
 
+    def test_01b_the_check_finds_a_lone_surrogate_but_not_a_pair(self):
+        # Tests [@ANCHOR: hams_base:has_nul]
+        # A JSON "\\ud800" decodes to a lone surrogate, which psycopg2 cannot encode.
+        self.assertTrue(_has_nul("a\ud800b"))
+        self.assertTrue(_has_nul({"q": ["x", {"deep": "\udfff"}]}))
+        self.assertTrue(_has_nul({"k\ud800": 1}))
+        self.assertFalse(_has_nul(json.loads('"\\ud83d\\ude00 \\u00e9"')))
+
     def test_02_a_nul_in_a_query_parameter_is_a_400(self):
         # Tests [@ANCHOR: hams_base:refuse_nul_in_request_params]
         self.assertEqual(self.url_open("/web/login?redirect=%2Fmy").status_code, 200)
@@ -51,3 +59,17 @@ class TestNulInRequestParams(HamsHttpCase):
 
         self.assertNotEqual(call({"q": ["x"]}), 400)
         self.assertEqual(call({"q": ["x", {"deep": "a\x00b"}]}), 400)
+
+    def test_05_a_lone_surrogate_in_a_json_body_is_a_400(self):
+        # Tests [@ANCHOR: hams_base:refuse_nul_in_request_params]
+        # json.dumps writes the lone surrogate as the six characters \\ud800, which the server decodes back to U+D800.
+        def call(params):
+            response = self.url_open(
+                "/web/database/list",
+                data=json.dumps({"jsonrpc": "2.0", "method": "call", "params": params}),
+                headers={"Content-Type": "application/json"},
+            )
+            return response.json().get("error", {}).get("code")
+
+        self.assertNotEqual(call({"q": ["x", {"deep": "\U0001F600"}]}), 400)
+        self.assertEqual(call({"q": ["x", {"deep": "a\ud800b"}]}), 400)
