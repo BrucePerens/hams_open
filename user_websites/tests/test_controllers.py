@@ -1,6 +1,9 @@
 # -*- coding: utf-8 -*-
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
+from lxml import html
+
+from odoo.addons.user_websites.controllers import main
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.real_transaction import RealTransactionCase
 
@@ -183,6 +186,25 @@ class TestUserWebsitesControllers(RealTransactionCase):
         response = self.url_open("/community")
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("You are not allowed to access", response.content.decode("utf-8"))
+
+    # [@ANCHOR: user_websites:test_community_directory_pages_reach_every_member]
+    def test_community_directory_pages_reach_every_member(self):
+        """Tests [@ANCHOR: COMM_community_directory]
+        With two members per page there is more than one page, and walking the pages reaches every opted-in member once."""
+        self.attacker.privacy_show_in_directory = True
+        self.env.cr.commit()
+        self.safe_patch_object(main, "COMMUNITY_PAGE_SIZE", 1)
+        self.authenticate(None, None)
+        seen = []
+        for number in range(1, 40):
+            tree = html.fromstring(self.url_open("/community/page/%d" % number).content)
+            cards = tree.xpath("//a[starts-with(@href, '/') and contains(@href, '-http') and not(contains(@href, '/blog'))]/@href")
+            self.assertLessEqual(len(cards), 1, "one member per page")
+            if not cards or cards[0] in seen:  # past the last page the pager shows the last page again
+                break
+            seen += cards
+        self.assertIn("/" + self.user_a.website_slug, seen)
+        self.assertIn("/" + self.attacker.website_slug, seen)
 
     def test_04_community_directory_privacy_respect(self):
         """
