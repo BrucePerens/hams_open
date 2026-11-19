@@ -77,12 +77,19 @@
                             A person overrode this verdict on <field name="triage_overridden_at" class="oe_inline"/>.
                         </span>
                     </div>
+                    <!-- The reporter's problem text, right under the status banners and above everything else:
+                         staff should not have to dig for it. [@ANCHOR: hams_helpdesk:view_problem_text] -->
+                    <h1><field name="name" placeholder="Ticket title"/></h1>
+                    <h2 class="o_helpdesk_problem_heading">Problem</h2>
+                    <div class="o_helpdesk_problem_text fs-4 mb-3">
+                        <field name="description" nolabel="1" invisible="links_defanged" placeholder="No problem text was entered."/>
+                        <field name="description_defanged" nolabel="1" invisible="not links_defanged" readonly="1"/>
+                    </div>
                     <group>
                         <group>
                             <!-- The record id is the ticket number everything else quotes
                                  ("per-unit ticket #104", incident notes, e-mails). -->
                             <field name="id" string="Ticket #" readonly="1" invisible="not id"/>
-                            <field name="name"/>
                             <field name="callsign"/>
                             <field name="user_id"/>
                             <field name="partner_id"/>
@@ -124,10 +131,6 @@
                         </field>
                     </group>
                     <notebook>
-                        <page string="Description">
-                            <field name="description" invisible="links_defanged"/>
-                            <field name="description_defanged" invisible="not links_defanged" readonly="1"/>
-                        </page>
                         <page string="Filter Findings" groups="hams_helpdesk.group_helpdesk_user"
                               invisible="not suspicion_removed and not suspicion_score and not suspicion_log_ids">
                             <field name="suspicion_log_ids" readonly="1">

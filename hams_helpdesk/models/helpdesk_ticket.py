@@ -3,6 +3,7 @@
 
 from odoo import _, api, fields, models
 from odoo.exceptions import AccessError, UserError
+from odoo.tools import html2plaintext
 from odoo.addons.zero_sudo.daemon.ssrf_safe_fetch import (
     SSRFValidationError,
     urlopen_ssrf_safe as _urlopen_ssrf_safe,
@@ -631,6 +632,22 @@ class HelpdeskTicket(models.Model):
             "%s other server exception tickets were opened without paging since the last page.", silent
         )
 
+    # [@ANCHOR: hams_helpdesk:assignment_notice_body]
+    def _assignment_notice_body(self):
+        """Body of the assignment email: the reporter's problem text first (the ticket's description, already filtered
+        by the untrusted-text filter and sanitized HTML), then the one-line assignment notice. A ticket whose links
+        are defanged is defanged again by _notify_by_email_render_layout(), so no live link reaches the email."""
+        self.ensure_one()
+        line = Markup("<p>%s</p>") % (
+            _("Helpdesk Ticket #%s assigned to you.") % self.id + self._silent_exception_note()
+        )
+        if not html2plaintext(self.description or "").strip():
+            return line
+        return Markup('<div class="o_helpdesk_problem_text" style="font-size:16px;margin-bottom:16px">%s</div>%s') % (
+            self.description,
+            line,
+        )
+
     # [@ANCHOR: hams_helpdesk:COMM_automated_routing_and_notification]
     def _automated_routing_and_notification(self):
         """
@@ -687,8 +704,7 @@ class HelpdeskTicket(models.Model):
                 # a few lines below does the same
                 # (subtype_xmlid="mail.mt_note").
                 ticket_service.message_post(
-                    body=_("Helpdesk Ticket #%s assigned to you.") % ticket_service.id
-                    + self._silent_exception_note(),
+                    body=ticket_service._assignment_notice_body(),
                     partner_ids=[ticket_service.user_id.partner_id.id],
                     subject=_("Ticket Assigned: %s") % ticket_service.name,
                     subtype_xmlid="mail.mt_note",
