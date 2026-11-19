@@ -140,6 +140,15 @@ class TestResUsersEmailChangeAlert(HamsTransactionCase):
             return real_get_service_env(this, xml_id, *args, **kwargs)
 
         self.safe_patch_object(utils, "_get_service_env", new=_get_service_env)
+        # hams_base alone has no pager_duty, so "pager.incident" is not a model; the code under test checks for it
+        # before asking for the service env. Report it as present so the test passes with or without pager_duty.
+        env_class = type(self.env)
+        real_contains = env_class.__contains__
+
+        def _contains(this, model_name):
+            return model_name == "pager.incident" or real_contains(this, model_name)
+
+        self.safe_patch_object(env_class, "__contains__", new=_contains)
         with self.assertLogs("odoo.addons.hams_base.models.res_users", level="ERROR"):
             user.write({"email": "alert_fail_new@example.com"})
         self.assertEqual(user.email, "alert_fail_new@example.com")
