@@ -19,6 +19,7 @@ from . import test_tunnel_daemon
 from . import test_tunnel_provisioning_security
 from . import test_tunnel_multi_website
 from . import test_tunnel_credential_refusals
+from . import test_dns_record_unique
 from . import test_tunnel_unique
 from . import test_dns_record_cname_and_length
 from . import test_tunnel_route_format
