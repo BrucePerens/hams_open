@@ -23,7 +23,7 @@ class RaiseForKvErrorTest(unittest.TestCase):
     # Tests [@ANCHOR: github_message:_raise_for_kv_error]
     def test_a_non_200_with_an_errors_list_names_the_first_error(self):
         response = FakeResponse(403, {"errors": [{"code": 10000, "message": "bad token"}]})
-        with self.assertRaises(Exception) as ctx:
+        with self.assertRaises(RuntimeError) as ctx:
             gm._raise_for_kv_error(response, "get checksums")
         self.assertIn("failed to get checksums", str(ctx.exception))
         self.assertIn("bad token", str(ctx.exception))
@@ -32,13 +32,13 @@ class RaiseForKvErrorTest(unittest.TestCase):
     def test_a_non_200_with_an_empty_errors_array_still_raises_with_the_body_text(self):
         # The original bug: this shape fell through and the caller took the error text as data.
         response = FakeResponse(500, {"errors": []}, text="upstream exploded")
-        with self.assertRaises(Exception) as ctx:
+        with self.assertRaises(RuntimeError) as ctx:
             gm._raise_for_kv_error(response, "get checksums")
         self.assertIn("upstream exploded", str(ctx.exception))
 
     # Tests [@ANCHOR: github_message:_raise_for_kv_error]
     def test_a_non_json_error_page_still_raises_with_its_text(self):
-        with self.assertRaises(Exception) as ctx:
+        with self.assertRaises(RuntimeError) as ctx:
             gm._raise_for_kv_error(FakeResponse(502, None, text="<html>Bad Gateway</html>"), "get checksums")
         self.assertIn("Bad Gateway", str(ctx.exception))
 
