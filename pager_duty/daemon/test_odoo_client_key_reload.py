@@ -70,7 +70,7 @@ class TestOdooClientReloadsARotatedKey(unittest.TestCase):
                         os.remove(self.env_file)
                 else:
                     self._write(content)
-                with self.assertRaises(Exception) as caught:
+                with self.assertRaises(RuntimeError) as caught:
                     self.client.execute("pager.check", "search_read")
                 self.assertIn("401", str(caught.exception))
                 self.assertEqual(self.seen, [self.OLD])
