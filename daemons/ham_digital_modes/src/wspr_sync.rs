@@ -550,7 +550,11 @@ pub fn find_sync(
                 }
             }
         }
-        if start_sample >= max_start_sample {
+        // No later start can fit a whole 162-symbol window either, so stop here instead of
+        // stepping through every remaining start up to a huge `max_start_sample`.
+        if start_sample >= max_start_sample
+            || start_sample + WSPR_NUM_SYMBOLS * spsym > samples.len()
+        {
             break;
         }
         start_sample = (start_sample + time_step).min(max_start_sample);
@@ -1358,6 +1362,14 @@ mod tests {
     /// alone (with the score gate lowered so a best candidate is still returned), a final start
     /// offset clamped off the `time_step` grid, and a `max_start_sample` past the end of the
     /// audio, where both versions must skip the offsets that don't fit.
+    // Tests [@ANCHOR: find_sync]
+    #[test]
+    fn find_sync_with_an_unbounded_max_start_returns_none_at_once_when_no_window_fits() {
+        // Used to step through every start up to `max_start_sample` (about 2^64 / 1024 of them).
+        let samples = vec![0i16; 1000];
+        assert!(find_sync(&samples, 12000, 1400.0, 1600.0, usize::MAX, 0.0).is_none());
+    }
+
     #[test]
     // Tests [@ANCHOR: find_sync]
     // Tests [@ANCHOR: block_spectrum]
