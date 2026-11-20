@@ -790,7 +790,11 @@ pub(crate) fn find_next_root_from_q23(poly_q: &[i32; 6], x_start: f32) -> Option
             // root estimate is the midpoint computed in the *last*
             // iteration, not a fresh average of the post-update bounds
             // (that would be a 7th, uncounted bisection).
-            return Some(mid);
+            //
+            // A bracket that straddles -1 (the sweep runs to xl >= -1, so xr can be just below
+            // it) can leave `mid` slightly under -1, outside acos's domain: the float path then got
+            // NaN and `acos_lut_fixed`'s debug_assert fired. The root is an LSP cosine, so clamp it.
+            return Some(mid.max(-1.0));
         }
         xl = xr;
         p_l = p_r;
@@ -1308,6 +1312,21 @@ pub(crate) mod tests {
     /// of one real quantizer step, the same "check what actually gets
     /// transmitted" reasoning `lpc_energy_fixed`/`apply_bw_gamma_fixed`
     /// already established.
+    #[test]
+    // Tests [@ANCHOR: find_next_root_from_q23]
+    fn find_next_root_from_q23_never_returns_a_root_below_minus_one() {
+        // p(x) = x + 1.003 has its only root at -1.003, inside the last sweep bracket (-1.0, -1.01):
+        // the bisection midpoint used to come back below -1, where acos is NaN.
+        let one = 1i32 << COEF_FRAC_BITS;
+        let poly_q = [0, 0, 0, 0, one, (1.003f64 * one as f64).round() as i32];
+        let root = find_next_root_from_q23(&poly_q, 1.0).expect("a sign change exists");
+        assert!(
+            (-1.0..=1.0).contains(&root),
+            "root {root} is outside [-1, 1]"
+        );
+        assert!(root.acos().is_finite());
+    }
+
     #[test]
     // Tests [@ANCHOR: lpc_to_lsp_from_integer_ak]
     // Tests [@ANCHOR: find_next_root_from_q23]
