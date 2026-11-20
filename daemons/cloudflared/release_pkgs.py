@@ -372,6 +372,17 @@ def create_rpm_packaging(
         upload_from_directories(pkg_uploader, "rpm", release_version, binary_name)
 
 
+def rpm_signing_choice(key_results, primary_public_key, secondary_public_key):
+    """
+    The RPMs are signed with the secondary key when a rollover keypair was imported, otherwise with
+    the primary one. Returns (key name, public key to import into rpm). The name used to be taken
+    from the secondary key unconditionally, which is None when only one keypair is given.
+    """
+    if len(key_results) > 1:
+        return key_results[1][1], secondary_public_key
+    return key_results[0][1], primary_public_key
+
+
 # [@ANCHOR: release_pkgs:parse_args]
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -490,18 +501,14 @@ if __name__ == "__main__":
     )
     if not key_results or len(key_results) == 0:
         raise SystemExit("No GPG keys were provided for signing")
-    primary_gpg_key_id, primary_gpg_key_name = key_results[0]
+    primary_gpg_key_id = key_results[0][0]
     secondary_gpg_key_id = None
-    secondary_gpg_key_name = None
     if len(key_results) > 1:
-        secondary_gpg_key_id, secondary_gpg_key_name = key_results[1]
+        secondary_gpg_key_id = key_results[1][0]
 
-    if args.gpg_private_key_2:
-        print(f"signing RPM with secondary gpg_key: {secondary_gpg_key_id}")
-        pkg_creator.import_rpm_key(args.gpg_public_key_2)
-    else:
-        print(f"signing RPM with primary gpg_key: {primary_gpg_key_name}")
-        pkg_creator.import_rpm_key(args.gpg_public_key)
+    rpm_key_name, rpm_public_key = rpm_signing_choice(key_results, args.gpg_public_key, args.gpg_public_key_2)
+    print(f"signing RPM with gpg_key: {rpm_key_name}")
+    pkg_creator.import_rpm_key(rpm_public_key)
 
 
     pkg_uploader = PkgUploader(args.account, args.bucket, args.id, args.secret)
@@ -524,7 +531,7 @@ if __name__ == "__main__":
         "./artifacts",
         args.release_tag,
         args.binary,
-        secondary_gpg_key_name,
+        rpm_key_name,
         args.pkg_upload_url,
         args.gpg_public_key_url,
         args.upload_repo_file,
