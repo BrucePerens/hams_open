@@ -9,7 +9,8 @@
   cannot tell these apart, so the endpoint tells a prober nothing;
 * 400 the body is not a valid report, 403 it came from another site, 413 it is too large, 415 it is not
   JSON, 422 it is not a report of this site's own scripts (a browser extension, another site, a stale
-  page), 429 the visitor is over the rate limit, 503 the limiter could not count.
+  page), 429 the visitor is over the rate limit or the limiter could not count (Redis down: the report is dropped),
+  503 the report could not be recorded.
 
 CSRF: ``csrf=False`` because the endpoint does nothing on behalf of a session. The page sends the session
 cookie with the report (the reporter uses ``credentials: "same-origin"``) and the server reads only the user id

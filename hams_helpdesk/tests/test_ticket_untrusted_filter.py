@@ -132,6 +132,15 @@ class TestTicketUntrustedFilter(HamsTransactionCase):
         self.assertIn("UNTRUSTED-", row["untrusted_block"])
         self.assertNotIn("description", row)
 
+    def test_11b_mcp_safe_read_ignores_a_negative_max_chars(self):
+        # Tests [@ANCHOR: hams_helpdesk:mcp_safe_read]
+        # A negative limit used to slice the text from the end (text[:-3]), dropping its last characters.
+        uid = self.env["zero_sudo.security.utils"]._get_service_uid("hams_helpdesk.user_ai_triage_service")
+        good = self._ticket(description="<p>abcdefghij</p>")
+        row = good.with_user(uid).mcp_safe_read(max_chars=-3)[0]
+        self.assertIn("abcdefghij", row["untrusted_block"])
+        self.assertNotIn("truncated", row["untrusted_block"])
+
     def test_12_ai_note_loses_images_and_links(self):
         uid = self.env["zero_sudo.security.utils"]._get_service_uid("hams_helpdesk.user_ai_triage_service")
         ticket = self._ticket()
