@@ -128,6 +128,8 @@ pub enum Request {
     HubTakeoverStart(TakeoverSettings),
     /// Stop serving DHCP on the user's subnet (the router is back).
     HubTakeoverStop,
+    /// Ask for a clean power-off of the machine (the hub's low-battery shutdown); only with `hub = true`. The broker only leaves a request file.
+    Poweroff,
     /// Bind the DHCP client port (UDP 68) on one named interface and pass the descriptor, so the relay can listen for a router's DHCP offer without a privilege (only with `hub = true`).
     BindDhcpClient {
         /// The interface the socket is bound to (SO_BINDTODEVICE); no other interface hears it.
@@ -209,6 +211,8 @@ pub enum Response {
     },
     /// Answer to `UpdatePackage`: the package manager ran and exited successfully.
     Updated,
+    /// Answer to `Poweroff`: the request was recorded; the machine stops a moment later under the root-owned unit that watches the file.
+    PoweroffRequested,
     /// Answer to `TimeStatus`.
     TimeStatus {
         /// The system clock now, Unix seconds.
@@ -432,6 +436,7 @@ impl Request {
                 }
             }
             Request::HubTakeoverStop => out.push(13),
+            Request::Poweroff => out.push(15),
             Request::BindDhcpClient { interface } => {
                 out.push(14);
                 put_string(&mut out, interface);
@@ -524,6 +529,7 @@ impl Request {
                 uplink_dns: if r.bool()? { Some(r.ipv4()?) } else { None },
             }),
             13 => Request::HubTakeoverStop,
+            15 => Request::Poweroff,
             14 => Request::BindDhcpClient {
                 interface: r.string()?,
             },
@@ -607,6 +613,10 @@ impl Response {
             Response::Updated => {
                 out.push(Status::Ok as u8);
                 out.push(5);
+            }
+            Response::PoweroffRequested => {
+                out.push(Status::Ok as u8);
+                out.push(8);
             }
             Response::TimeStatus {
                 now_unix_secs,
@@ -709,6 +719,7 @@ impl Response {
                     }
                 }
                 5 => Response::Updated,
+                8 => Response::PoweroffRequested,
                 6 => Response::TimeStatus {
                     now_unix_secs: r.u64()?,
                     steps_last_hour: r.u8()?,
@@ -802,6 +813,7 @@ mod tests {
                 uplink_dns: Some(Ipv4Addr::new(192, 168, 1, 1)),
             }),
             Request::HubTakeoverStop,
+            Request::Poweroff,
             Request::BindDhcpClient {
                 interface: "br0".into(),
             },
@@ -853,6 +865,7 @@ mod tests {
             }]),
             Response::Opened,
             Response::Updated,
+            Response::PoweroffRequested,
             Response::TimeStatus {
                 now_unix_secs: 1_793_500_000,
                 steps_last_hour: 1,

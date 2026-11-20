@@ -108,6 +108,8 @@ pub trait Os {
     fn hub_status(&self) -> (bool, bool);
     /// Upgrades the installed relay package through the system package manager.
     fn update_package(&self) -> io::Result<()>;
+    /// Asks for a clean power-off of the machine.
+    fn poweroff(&self) -> io::Result<()>;
     /// The system clock, Unix seconds.
     fn system_time_unix_secs(&self) -> u64;
     /// Steps the system clock (needs `CAP_SYS_TIME`).
@@ -127,6 +129,9 @@ pub struct LinuxOs {
     /// Normally `/var/lib/hams-relay-broker/update-requested`: the file `update_package` creates; the relay package's root-owned
     /// `hams-relay-update.path` unit watches it and runs the package upgrade, because this unprivileged service cannot.
     pub update_request: PathBuf,
+    /// Normally `/var/lib/hams-relay-broker/poweroff-requested`: the file `poweroff` creates; the relay package's root-owned
+    /// `hams-relay-poweroff.path` unit watches it and runs `systemctl poweroff`, because this service holds no right to.
+    pub poweroff_request: PathBuf,
 }
 
 impl Default for LinuxOs {
@@ -136,6 +141,7 @@ impl Default for LinuxOs {
             group_file: PathBuf::from("/etc/group"),
             hub: crate::hub_runner::HubRunner::default(),
             update_request: PathBuf::from("/var/lib/hams-relay-broker/update-requested"),
+            poweroff_request: PathBuf::from("/var/lib/hams-relay-broker/poweroff-requested"),
         }
     }
 }
@@ -461,6 +467,12 @@ impl Os for LinuxOs {
         fs::write(&self.update_request, b"")
     }
 
+    // [@ANCHOR: relay_broker_linux_poweroff]
+    fn poweroff(&self) -> io::Result<()> {
+        // Like the package update: a request file, a root-owned path unit runs the one fixed `systemctl poweroff`. Nothing from the caller.
+        fs::write(&self.poweroff_request, b"")
+    }
+
     fn system_time_unix_secs(&self) -> u64 {
         LinuxOs::wall_clock_secs()
     }
@@ -655,6 +667,19 @@ mod tests {
         os.update_package().unwrap();
         assert!(os.update_request.exists());
         os.update_package().unwrap(); // a second request while one is pending is fine
+    }
+
+    // Tests [@ANCHOR: relay_broker_linux_poweroff]
+    #[test]
+    fn poweroff_leaves_a_request_file_and_runs_no_program() {
+        let root = temp_dir("poweroff");
+        let os = LinuxOs {
+            poweroff_request: root.join("poweroff-requested"),
+            ..LinuxOs::default()
+        };
+        assert!(!os.poweroff_request.exists());
+        os.poweroff().unwrap();
+        assert!(os.poweroff_request.exists());
     }
 
     // Tests [@ANCHOR: relay_broker_linux_add_to_group]
