@@ -219,7 +219,8 @@ class TestHelpAudience(HamsHttpCase):
         for number in range(1, 200):
             response = self.url_open("/manual/internal/page/%d" % number)
             self.assertEqual(response.status_code, 200)
-            cards = response.content.count(b"list-group-item list-group-item-action")
+            # The closing quote matters: the site's navigation menu links carry more classes after these two.
+            cards = response.content.count(b'class="list-group-item list-group-item-action">')
             self.assertLessEqual(cards, 1, "one document per page")
             if response.content in names:  # past the last page the pager shows the last page again
                 break
