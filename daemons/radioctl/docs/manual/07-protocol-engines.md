@@ -124,7 +124,11 @@ on `;`.
   description has them, CW text and its stop (`KY`, only on a model whose description has a `[kenwood.ky]`
   block), and the composite `IF;` answer, from which PTT, split, RIT and XIT are read. The older TS-440S
   and the TS-990S have their own small command tables inside this engine and refuse what those books lack.
-<!--ops rig=kenwood-ts-590s: GetFrequency GetFrequency.B GetLevel.AfGain GetLevel.Antenna GetLevel.Attenuator GetLevel.KeyerSpeed GetLevel.MicGain GetLevel.MonitorLevel GetLevel.Preamp GetLevel.RfGain GetLevel.RfPower GetMode GetModelId GetPtt GetRit GetRitOffset GetSignal GetSplit GetTxVfo GetXit SendCw SetFrequency SetFrequency.B SetLevel.AfGain SetLevel.Antenna SetLevel.Attenuator SetLevel.KeyerSpeed SetLevel.MicGain SetLevel.MonitorLevel SetLevel.Preamp SetLevel.RfGain SetLevel.RfPower SetMode SetPtt SetRit SetRitOffset SetSplit SetTransceive SetXit StopCw-->
+  The tone ops of the `repeater` capability on the TS-590S only: the tone mode as the flags `TO` (tone) and
+  `CT` (CTCSS tone squelch) sent together and read together (`Off`, `Tone`, `Tsql`), and the tone `TN` (with
+  `CN` for the squelch, up to number 41) by the guide's chart. The TS-590S has no DCS and no repeater shift or
+  offset command, so those ops are refused. Unverified on a radio.
+<!--ops rig=kenwood-ts-590s: GetCtcssTone GetFrequency GetFrequency.B GetLevel.AfGain GetLevel.Antenna GetLevel.Attenuator GetLevel.KeyerSpeed GetLevel.MicGain GetLevel.MonitorLevel GetLevel.Preamp GetLevel.RfGain GetLevel.RfPower GetMode GetModelId GetPtt GetRit GetRitOffset GetSignal GetSplit GetToneMode GetTxVfo GetXit SendCw SetCtcssTone SetFrequency SetFrequency.B SetLevel.AfGain SetLevel.Antenna SetLevel.Attenuator SetLevel.KeyerSpeed SetLevel.MicGain SetLevel.MonitorLevel SetLevel.Preamp SetLevel.RfGain SetLevel.RfPower SetMode SetPtt SetRit SetRitOffset SetSplit SetToneMode SetTransceive SetXit StopCw-->
 - **`IF;`:** 38 characters on the TS-2000 and the TS-590; the engine locates the signed RIT/XIT offset as
   the sign nearest the end of the ten characters that differ between the models. The layout is from
   Kenwood's PC command references (document, page and PDF SHA-256 in each fact); the TS-2000 text was
