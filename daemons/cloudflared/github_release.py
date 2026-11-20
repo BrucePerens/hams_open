@@ -291,6 +291,10 @@ def get_binary_version(binary_path):
         )
     # Find backward slash relative to the beggining of the needle
     relative_end_index = version_info[needle_index:].find("\\")
+    if relative_end_index == -1:
+        raise RuntimeError(
+            f"no closing backslash after {needle!r} in `go version -m {binary_path}` output: {version_info!r}"
+        )
     # Calculate needle position plus needle length to find version beggining
     start_index = needle_index + len(needle)
     # Calculate needle position plus relative position of the backward slash

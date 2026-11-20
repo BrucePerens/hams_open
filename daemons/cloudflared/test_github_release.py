@@ -295,6 +295,14 @@ class GetBinaryVersionTest(unittest.TestCase):
                 gr.get_binary_version("/bin/cf")
         self.assertIn("main.Version=", str(ctx.exception))
 
+    # Tests [@ANCHOR: github_release:get_binary_version]
+    def test_a_marker_with_no_closing_backslash_raises_instead_of_returning_an_empty_version(self):
+        output = "build\t-ldflags=-X main.Version=2024.8.3\n"
+        with mock.patch.object(gr.subprocess, "Popen", return_value=_go_version_output(output)):
+            with self.assertRaises(RuntimeError) as ctx:
+                gr.get_binary_version("/bin/cf")
+        self.assertIn("backslash", str(ctx.exception))
+
 
 class AssertAssetVersionTest(InTempDir):
     # Tests [@ANCHOR: github_release:assert_asset_version]
