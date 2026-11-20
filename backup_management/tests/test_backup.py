@@ -219,6 +219,29 @@ class TestBackupManagement(RealTransactionCase):
             "repeated jobs.",
         )
 
+    def test_05c_cron_trigger_does_not_queue_a_backup_behind_one_still_pending_or_running(self):
+        # Tests [@ANCHOR: backup_management:COMM_cron_trigger_scheduled_backups]
+        # Two runs over the same configs (a worker that was down, a long backup, or "Run Backup Now" first) must leave one
+        # backup job per config, not one per run.
+        channel = _AcceptingChannel()
+        self.safe_patch_object(
+            type(self.env["hams_rabbitmq.pool"]), "_get_channel", return_value=channel
+        )
+        configs = [self.config_kopia.id, self.config_pg.id]
+        self.env["backup.config"].cron_trigger_scheduled_backups()
+        first = self.env["backup.job"].search_count([("config_id", "in", configs)])
+        self.env["backup.config"].cron_trigger_scheduled_backups()
+        self.assertEqual(
+            self.env["backup.job"].search_count([("config_id", "in", configs)]), first,
+            "[!] DIAGNOSTIC FOR AI: a second scheduled run queued another backup behind one still pending.",
+        )
+        self.env["backup.job"].search([("config_id", "in", configs)]).write({"state": "processing"})
+        self.env["backup.config"].cron_trigger_scheduled_backups()
+        self.assertEqual(self.env["backup.job"].search_count([("config_id", "in", configs)]), first)
+        self.env["backup.job"].search([("config_id", "in", configs)]).write({"state": "done"})
+        self.env["backup.config"].cron_trigger_scheduled_backups()
+        self.assertGreater(self.env["backup.job"].search_count([("config_id", "in", configs)]), first)
+
     def test_07_orchestration_trigger(self):
         # Tests [@ANCHOR: backup_management:COMM_test_backup_orchestration]
 

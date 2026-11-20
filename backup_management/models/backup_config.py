@@ -792,7 +792,18 @@ class BackupConfig(models.Model):
             "backup_management.user_backup_service_internal"
         )
         configs = self.env["backup.config"].with_user(svc_uid).search([], limit=1000)
+        # A backup still queued or running is not queued again behind itself (a worker that was down for days, or a long
+        # run, would otherwise leave one extra backup per day to run back to back, or alongside "Run Backup Now").
+        active = {
+            (job.config_id.id, job.action)
+            for job in self.env["backup.job"].search(
+                [("config_id", "in", configs.ids), ("action", "in", ["kopia", "pgbackrest"]), ("state", "in", ["pending", "processing"])],
+                limit=100000,
+            )
+        }
         for conf in configs:
+            if (conf.id, conf.engine) in active:
+                continue
             # A stored path the validator no longer accepts must not stop the backups of every configuration after it
             # (and roll back the jobs already queued in this run).
             try:
