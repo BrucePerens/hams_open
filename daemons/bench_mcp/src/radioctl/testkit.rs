@@ -210,6 +210,8 @@ pub struct Sim {
     pub ptt_commands: Vec<u8>,
     /// The next `set_ptt 0` is not executed: its connection is closed (the connection in use was lost at the moment of release).
     pub hangup_on_unkey: bool,
+    /// Every read (`dump_state`, `get_*`) closes its connection, while `set_*` commands are served.
+    pub hangup_on_reads: bool,
 }
 
 #[cfg(test)]
@@ -240,6 +242,7 @@ impl Sim {
             ptt_sticks: false,
             ptt_commands: vec![],
             hangup_on_unkey: false,
+            hangup_on_reads: false,
         }
     }
 
@@ -254,6 +257,9 @@ impl Sim {
         self.log.push(cmd.to_string());
         let mut w = cmd.split_whitespace();
         let (name, a, b) = (w.next().unwrap_or(""), w.next(), w.next());
+        if self.hangup_on_reads && (name == "dump_state" || name.starts_with("get_")) {
+            return Reply::Hangup;
+        }
         if self.ptt && self.hangup_when_keyed && name != "set_ptt" {
             // The client vanishes: this connection is closed. Later connections are served again.
             self.hangup_when_keyed = false;

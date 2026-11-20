@@ -2339,6 +2339,28 @@ fn the_safe_state_unkeys_reads_it_back_lowers_the_power_and_works_while_another_
     );
 }
 
+// Tests [@ANCHOR: radioctl_tx_safe_state]
+#[test]
+fn the_safe_state_still_releases_and_names_the_manual_step_when_every_read_fails() {
+    let b = TxBench::new("tx_safe_link", false);
+    {
+        let mut s = b.sim.lock().unwrap();
+        s.ptt = true;
+        s.hangup_on_reads = true;
+    }
+    let mut c = open(&b.insts[0]).unwrap();
+    let e = txtools::safe_state(&mut c, &b.insts[0], &json!({})).unwrap_err();
+    // The release was tried (set_ptt 0 reached the rig) and the failure to confirm it carries the manual step.
+    assert!(
+        b.sim.lock().unwrap().ptt_commands.contains(&0),
+        "set_ptt 0 was never sent"
+    );
+    assert!(
+        e.contains("SAFE STATE NOT CONFIRMED") && e.contains("front panel"),
+        "{e}"
+    );
+}
+
 // Tests [@ANCHOR: radioctl_tx_startup_check]
 // Tests [@ANCHOR: radioctl_tx_take_note]
 // Tests [@ANCHOR: radioctl_startup_note]
