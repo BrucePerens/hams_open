@@ -732,6 +732,7 @@ name = "radioctl-capi"
 version = "0.1.0"
 dependencies = [
  "cbindgen",
+ "libc",
  "radioctl-core",
  "radioctl-protocols",
  "radioctl-station",
