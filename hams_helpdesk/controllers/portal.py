@@ -2,10 +2,11 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 import logging
+from datetime import timedelta
 
 import redis
 
-from odoo import _, http
+from odoo import _, fields, http
 from odoo.http import request
 from odoo.addons.distributed_redis_cache.redis_pool import expiring_counter, get_redis_connection
 from odoo.addons.portal.controllers.portal import CustomerPortal, pager as portal_pager
@@ -296,7 +297,15 @@ class HelpdeskPortal(CustomerPortal):
         previous_default_env = transaction.default_env
         transaction.default_env = svc_env
         try:
-            ticket = svc_env["hams_helpdesk.ticket"].create(vals)
+            # [@ANCHOR: hams_helpdesk:portal_submit_idempotent]
+            # Verified by [@ANCHOR: hams_helpdesk:test_a_double_submit_opens_one_ticket]
+            # A double-click or a browser retry posts the form twice: this member's ticket with the same subject from the last
+            # few minutes (the description is stored as sanitised HTML, so it is not compared) is the same request, so the member is sent to it and the helpdesk sees one ticket.
+            ticket = svc_env["hams_helpdesk.ticket"].search(
+                [("partner_id", "=", vals["partner_id"]), ("name", "=", vals["name"]),
+                 ("create_date", ">=", fields.Datetime.now() - timedelta(minutes=10))],
+                limit=1,
+            ) or svc_env["hams_helpdesk.ticket"].create(vals)
         finally:
             transaction.default_env = previous_default_env
         return request.redirect("/my/ticket/%s" % ticket.id)
