@@ -103,6 +103,7 @@ impl Broker {
             Request::HubStatus => "hub_status",
             Request::HubTakeoverStart(_) => "hub_takeover_start",
             Request::HubTakeoverStop => "hub_takeover_stop",
+            Request::BridgedApStart(_) => "bridged_ap_start",
             Request::UpdatePackage => "update_package",
             Request::SetSystemTime { .. } => "set_system_time",
             Request::TimeStatus => "time_status",
@@ -139,6 +140,7 @@ impl Broker {
             Request::HubStatus => self.hub_status(peer),
             Request::HubTakeoverStart(t) => self.hub_takeover_start(peer, t),
             Request::HubTakeoverStop => self.hub_takeover_stop(peer),
+            Request::BridgedApStart(b) => self.bridged_ap_start(peer, b),
             Request::UpdatePackage => self.update_package(peer),
             Request::SetSystemTime {
                 target_unix_secs,
@@ -327,6 +329,41 @@ impl Broker {
             }
             Err(e) => {
                 self.log(peer, "hub_stop", "failed", e.to_string());
+                (Response::error(Status::Failed, format!("hub: {e}")), None)
+            }
+        }
+    }
+
+    // [@ANCHOR: relay_broker_broker_bridged_ap_start]
+    /// The bridged access point start action: allowed only when the hub is enabled; the settings are validated and `hostapd.conf` written from the fixed template.
+    fn bridged_ap_start(
+        &mut self,
+        peer: Peer,
+        settings: &hub::BridgedApSettings,
+    ) -> (Response, Option<OwnedFd>) {
+        if !self.hub_enabled {
+            self.log(peer, "bridged_ap_start", "denied", "hub not enabled".into());
+            return (Response::error(Status::Denied, "hub not enabled"), None);
+        }
+        let conf = match hub::bridged_hostapd_conf(settings) {
+            Ok(c) => c,
+            Err(why) => {
+                self.log(peer, "bridged_ap_start", "denied", why.clone());
+                return (Response::error(Status::Denied, why), None);
+            }
+        };
+        match self.os.hub_bridged_ap_start(&conf, &settings.interface) {
+            Ok(()) => {
+                self.log(
+                    peer,
+                    "bridged_ap_start",
+                    "allowed",
+                    settings.interface.clone(),
+                );
+                (self.hub_answer(), None)
+            }
+            Err(e) => {
+                self.log(peer, "bridged_ap_start", "failed", e.to_string());
                 (Response::error(Status::Failed, format!("hub: {e}")), None)
             }
         }

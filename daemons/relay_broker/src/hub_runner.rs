@@ -207,6 +207,39 @@ impl HubRunner {
         Ok(())
     }
 
+    // [@ANCHOR: relay_broker_hub_runner_bridged_ap_start]
+    /// Writes `hostapd.conf` and starts only `hostapd -B` (its `bridge=` line adds the wifi interface to the owner's bridge). No address is set and no `dnsmasq` runs.
+    pub fn bridged_ap_start(&self, hostapd_conf: &str, interface: &str) -> io::Result<()> {
+        let nic = self.sys_net.join(interface);
+        if !nic.join("wireless").exists() && !nic.join("phy80211").exists() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("{interface} is not a wireless interface"),
+            ));
+        }
+        self.stop()?;
+        fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(&self.dir)?;
+        let hostapd_path = self.dir.join("hostapd.conf");
+        write_private(&hostapd_path, hostapd_conf)?;
+        let hostapd_pid = self.pid_file("hostapd");
+        let started = self.run(
+            &self.hostapd,
+            &[
+                std::ffi::OsStr::new("-B"),
+                std::ffi::OsStr::new("-P"),
+                hostapd_pid.as_os_str(),
+                hostapd_path.as_os_str(),
+            ],
+        );
+        if started.is_err() {
+            let _ = self.stop();
+        }
+        started
+    }
+
     // [@ANCHOR: relay_broker_hub_runner_stop]
     /// Stops both programs and removes the files and the interface address. Stopping a hub that is not running succeeds.
     pub fn stop(&self) -> io::Result<()> {
@@ -353,6 +386,29 @@ mod tests {
         assert_eq!(hub.status(), (false, false));
         assert!(!root.join("ip.log").exists(), "no ip command ran");
         assert!(!hub.dir.join("hostapd.conf").exists());
+    }
+
+    // Tests [@ANCHOR: relay_broker_hub_runner_bridged_ap_start]
+    #[test]
+    fn a_bridged_access_point_runs_only_hostapd_and_sets_no_address() {
+        let (hub, root) = fake("bridged");
+        for name in ["eth0", "nonexistent"] {
+            let e = hub.bridged_ap_start("a\n", name).unwrap_err();
+            assert_eq!(e.kind(), io::ErrorKind::InvalidInput);
+        }
+        hub.bridged_ap_start("interface=wlan0\nbridge=br0\n", "wlan0")
+            .unwrap();
+        assert_eq!(hub.status(), (true, false), "hostapd only");
+        assert!(!root.join("ip.log").exists(), "no ip command ran");
+        assert!(hub.dir.join("hostapd.conf").exists());
+        assert!(!hub.dir.join("dnsmasq.conf").exists());
+        hub.stop().unwrap();
+        assert_eq!(hub.status(), (false, false));
+        assert!(!hub.dir.join("hostapd.conf").exists());
+        assert!(
+            !root.join("ip.log").exists(),
+            "stop does not touch an address it never set"
+        );
     }
 
     // Tests [@ANCHOR: relay_broker_hub_runner_takeover_start]

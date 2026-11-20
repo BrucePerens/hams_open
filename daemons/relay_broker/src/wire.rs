@@ -10,7 +10,7 @@
 //! most `MAX_STRING` bytes. A passed file descriptor is not in the body: it rides in SCM_RIGHTS
 //! ancillary data alongside an `Opened` response.
 
-use crate::hub::{HubSettings, TakeoverSettings};
+use crate::hub::{BridgedApSettings, HubSettings, TakeoverSettings};
 use std::net::Ipv4Addr;
 
 /// Protocol version carried in every body. A peer speaking another version gets
@@ -128,6 +128,8 @@ pub enum Request {
     HubTakeoverStart(TakeoverSettings),
     /// Stop serving DHCP on the user's subnet (the router is back).
     HubTakeoverStop,
+    /// Phase 0: start only the access point, bridged into the owner's own bridge, with the router doing DHCP (only with `hub = true`; stop with `HubStop`).
+    BridgedApStart(BridgedApSettings),
 }
 
 /// The kind of source a clock step rests on.
@@ -427,6 +429,15 @@ impl Request {
                 }
             }
             Request::HubTakeoverStop => out.push(13),
+            Request::BridgedApStart(b) => {
+                out.push(16);
+                put_string(&mut out, &b.interface);
+                put_string(&mut out, &b.bridge);
+                put_string(&mut out, &b.ssid);
+                put_string(&mut out, &b.passphrase);
+                out.push(b.channel);
+                out.push(u8::from(b.five_ghz));
+            }
         }
         out
     }
@@ -515,6 +526,14 @@ impl Request {
                 uplink_dns: if r.bool()? { Some(r.ipv4()?) } else { None },
             }),
             13 => Request::HubTakeoverStop,
+            16 => Request::BridgedApStart(BridgedApSettings {
+                interface: r.string()?,
+                bridge: r.string()?,
+                ssid: r.string()?,
+                passphrase: r.string()?,
+                channel: r.u8()?,
+                five_ghz: r.bool()?,
+            }),
             other => return Err(WireError::BadTag(other)),
         };
         r.finish()?;
@@ -790,6 +809,14 @@ mod tests {
                 uplink_dns: Some(Ipv4Addr::new(192, 168, 1, 1)),
             }),
             Request::HubTakeoverStop,
+            Request::BridgedApStart(crate::hub::BridgedApSettings {
+                interface: "wlan0".into(),
+                bridge: "br0".into(),
+                ssid: "HAMS-EMERGENCY".into(),
+                passphrase: "correct horse".into(),
+                channel: 6,
+                five_ghz: false,
+            }),
             Request::UpdatePackage,
             Request::SetSystemTime {
                 target_unix_secs: 1_793_500_000,
