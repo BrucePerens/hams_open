@@ -279,6 +279,11 @@ pub fn envelope_feature(samples: &[i16], frame_len: usize) -> Vec<f64> {
 /// window through anyway.
 // [@ANCHOR: ham_digital_modes:two_tone_window_len]
 pub fn two_tone_window_len(sample_rate: u32, shift_hz: f64, max_baud: f64) -> Option<usize> {
+    // A non-positive or NaN shift or baud has no valid band (and `sample_rate / 0` saturates to usize::MAX,
+    // which made the midpoint sum below overflow).
+    if !shift_hz.is_finite() || shift_hz <= 0.0 || !max_baud.is_finite() || max_baud <= 0.0 {
+        return None;
+    }
     let min_window = (sample_rate as f64 / shift_hz).ceil() as usize;
     let max_window_exclusive = (sample_rate as f64 / max_baud).floor() as usize;
     if max_window_exclusive <= min_window {
@@ -973,6 +978,16 @@ mod tests {
         assert_eq!(two_tone_window_len(8_000, 170.0, 300.0), None);
         // An empty band (min == max) is also None.
         assert_eq!(two_tone_window_len(1_000, 100.0, 100.0), None);
+    }
+
+    #[test]
+    // Tests [@ANCHOR: ham_digital_modes:two_tone_window_len]
+    fn two_tone_window_len_refuses_a_non_positive_shift_or_baud_instead_of_overflowing() {
+        // max_baud 0 made the upper bound usize::MAX and the midpoint sum overflow (a panic in debug).
+        assert_eq!(two_tone_window_len(48_000, 170.0, 0.0), None);
+        assert_eq!(two_tone_window_len(48_000, 170.0, -5.0), None);
+        assert_eq!(two_tone_window_len(48_000, 0.0, 100.0), None);
+        assert_eq!(two_tone_window_len(48_000, f64::NAN, 100.0), None);
     }
 
     /// A feature that flips sign every 20 samples (a 50 baud clock at 1000 Hz) has a first difference whose
