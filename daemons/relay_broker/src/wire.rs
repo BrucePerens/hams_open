@@ -130,6 +130,11 @@ pub enum Request {
     HubTakeoverStop,
     /// Phase 0: start only the access point, bridged into the owner's own bridge, with the router doing DHCP (only with `hub = true`; stop with `HubStop`).
     BridgedApStart(BridgedApSettings),
+    /// Bind the DHCP client port (UDP 68) on one named interface and pass the descriptor, so the relay can listen for a router's DHCP offer without a privilege (only with `hub = true`).
+    BindDhcpClient {
+        /// The interface the socket is bound to (SO_BINDTODEVICE); no other interface hears it.
+        interface: String,
+    },
 }
 
 /// The kind of source a clock step rests on.
@@ -438,6 +443,10 @@ impl Request {
                 out.push(b.channel);
                 out.push(u8::from(b.five_ghz));
             }
+            Request::BindDhcpClient { interface } => {
+                out.push(14);
+                put_string(&mut out, interface);
+            }
         }
         out
     }
@@ -534,6 +543,9 @@ impl Request {
                 channel: r.u8()?,
                 five_ghz: r.bool()?,
             }),
+            14 => Request::BindDhcpClient {
+                interface: r.string()?,
+            },
             other => return Err(WireError::BadTag(other)),
         };
         r.finish()?;
@@ -817,6 +829,9 @@ mod tests {
                 channel: 6,
                 five_ghz: false,
             }),
+            Request::BindDhcpClient {
+                interface: "br0".into(),
+            },
             Request::UpdatePackage,
             Request::SetSystemTime {
                 target_unix_secs: 1_793_500_000,

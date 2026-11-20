@@ -17,6 +17,7 @@ answers a fixed set of typed requests from authenticated local peers over a Unix
 | `update_package` | asks for the relay package upgrade: creates `/var/lib/hams-relay-broker/update-requested`, which the package's root-owned `hams-relay-update.path` unit turns into the one fixed `apt-get install --only-upgrade hams-local-relay` (or `dnf upgrade`), because the broker itself holds no right to run a package manager; nothing from the caller; only with `update_package = true` in the config (the relay package's config turns it on) |
 | `set_system_time` / `time_status` | `set_system_time` steps the system clock to a UTC the relay chose (`CLOCK_REALTIME`; needs `CAP_SYS_TIME`), only with `set_time = true` (the relay package's config turns it on). The broker applies its own ceilings and does not trust the relay: the target must not be before the build date (2026-11-01) or more than a year past the broker's own clock (a clock earlier than the build date has no ceiling); a step beyond `max_unproven_step_secs` (default 30) needs a GPS source or two agreeing sources; at most `max_time_steps_per_hour` (default 4) steps an hour, then one more attempt trips a circuit breaker that refuses everything for an hour. Every attempt is audited with the clock before, the target, the source and the evidence. `time_status` is read-only: the clock, steps in the last hour, breaker state, the earliest accepted target | root or `CAP_SYS_TIME` |
 | `bridged_ap_start` | phase 0 bridged access point: only with `hub = true`; validates the typed settings, writes `hostapd.conf` from the same fixed WPA2 template as the hub plus `bridge=<owner's bridge>` and starts `hostapd -B` only (no address, no `dnsmasq`; the router keeps doing DHCP); `hub_stop` ends it | root |
+| `bind_dhcp_client` | binds UDP 68 (the DHCP client port) on ONE named interface (`SO_BINDTODEVICE`, broadcast allowed) and passes the descriptor, so the relay can hear a router's DHCP offer while it is the takeover server; only with `hub = true`; a bad interface name is `Denied`. | root (privileged port) |
 | `hub_takeover_start` / `hub_takeover_stop` | phase 0 of the hub: one `dnsmasq` serving the user's own /24 from the high pool .200 to .250 with 5 minute leases while the router is gone; no access point and no address change; only with `hub = true`. |
 | `hub_start` / `hub_stop` / `hub_status` | the stand-alone emergency hub: only with `hub = true` in the config. Validates the typed settings, writes `hostapd.conf` and `dnsmasq.conf` from fixed templates into `/run/hams-relay-broker/hub` (mode 0600), gives the wifi interface the hub address with `ip` and starts `hostapd -B` and `dnsmasq` with fixed argument lists; stop signals only a pid whose `/proc/PID/comm` still names the program, then removes the files | root |
 
@@ -1304,6 +1305,14 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 
 **Purpose.** Stops the takeover `dnsmasq` (only a pid whose `/proc/<pid>/comm` is `dnsmasq`) and removes its files; never touches the address. **Signature.** `pub fn takeover_stop(&self) -> io::Result<()>`. **Returns.** `Ok`, also when nothing runs. **Tests.** same as `takeover_start`.
 
+### `Broker::bind_dhcp_client` (broker.rs) [@ANCHOR: relay_broker:relay_broker_broker_bind_dhcp_client]
+
+**Purpose.** Lets the unprivileged relay listen on the DHCP client port (68) of the hub interface only, to detect a router's DHCP offer. **Signature.** `fn bind_dhcp_client(&mut self, peer: Peer, interface: &str) -> (Response, Option<OwnedFd>)` (private). `interface`: plain name (1 to 15 bytes, no leading `-`). **Returns.** `(Response::Opened, Some(fd))`. **Errors.** `Denied` "hub not enabled" or "bad interface name"; `Failed` when the bind fails. **Side effects.** Takes UDP 68 on that interface until the descriptor is closed; audited. **Tests.** `the_dhcp_client_port_is_bound_only_when_the_hub_is_enabled_and_for_a_plain_interface` (tests/broker.rs).
+
+### `LinuxOs::bind_dhcp_client` (os.rs) [@ANCHOR: relay_broker:relay_broker_linux_bind_dhcp_client]
+
+**Purpose.** The socket for the above: IPv4 UDP, `SO_BINDTODEVICE` to the interface, `SO_BROADCAST`, bound to 0.0.0.0:68, so no other interface's traffic reaches it (never a wildcard listener). **Signature.** `fn bind_dhcp_client(&self, interface: &str) -> io::Result<OwnedFd>`. **Returns.** The bound close-on-exec descriptor. **Errors.** `io::Error` (no such interface, port in use, no privilege). **Tests.** `the_dhcp_client_socket_fails_cleanly_for_a_missing_interface` (os.rs).
+
 ### `LinuxOs::bind_udp` (os.rs) [@ANCHOR: relay_broker:relay_broker_linux_bind_udp]
 
 **Purpose.** Binds a UDP socket on the wildcard address and returns the descriptor, so the relay can serve a privileged port (123, its time service) without any privilege of its own. Dual stack: an IPv6 socket with `IPV6_V6ONLY` off when the kernel has IPv6, plain IPv4 otherwise.
@@ -1742,6 +1751,7 @@ Every data structure of the broker, explained in full (ADR 0113): purpose, field
 | `HubTakeoverStart` | `(TakeoverSettings)` | Serve DHCP for the user's own subnet (router gone) from a fixed template; `hub = true` only. |
 | `HubTakeoverStop` | - | Stop that DHCP server (router back). |
 | `BridgedApStart` | interface, bridge, ssid, passphrase (strings), channel (u8), 5 GHz flag | Start only the access point, bridged (tag 16). |
+| `BindDhcpClient` | `interface` (string) | Bind UDP 68 on that interface only and pass the descriptor (tag 14). |
 | `UpdatePackage` | - | Upgrade the installed relay package through the system package manager (a fixed command, no arguments from the caller; only with `update_package = true`). |
 | `SetSystemTime` | - | Step the system clock to a UTC the relay decided on; the broker applies its own ceilings (`time_guard.rs`). |
 | `TimeStatus` | - | Read-only: the broker's clock and its time-step limits. |

@@ -88,6 +88,8 @@ pub trait Os {
     fn add_to_group(&self, user: &str, group: &str) -> io::Result<()>;
     /// A UDP socket bound to the wildcard address on `port` (dual stack where the kernel allows it).
     fn bind_udp(&self, port: u16) -> io::Result<OwnedFd>;
+    /// A broadcast-capable IPv4 UDP socket on port 68 bound to one interface only (`SO_BINDTODEVICE`).
+    fn bind_dhcp_client(&self, interface: &str) -> io::Result<OwnedFd>;
     /// Writes the hub's two configuration files and starts its programs.
     fn hub_start(
         &self,
@@ -399,6 +401,34 @@ impl Os for LinuxOs {
         }
     }
 
+    // [@ANCHOR: relay_broker_linux_bind_dhcp_client]
+    /// Binds IPv4 UDP 68 with broadcast allowed and the socket tied to `interface`, so only that interface's DHCP traffic reaches the relay.
+    fn bind_dhcp_client(&self, interface: &str) -> io::Result<OwnedFd> {
+        use nix::sys::socket::{
+            bind, setsockopt, socket, AddressFamily, SockFlag, SockType, SockaddrIn,
+        };
+        let fd = socket(
+            AddressFamily::Inet,
+            SockType::Datagram,
+            SockFlag::SOCK_CLOEXEC,
+            None,
+        )
+        .map_err(io::Error::from)?;
+        setsockopt(
+            &fd,
+            sockopt::BindToDevice,
+            &std::ffi::OsString::from(interface),
+        )
+        .map_err(io::Error::from)?;
+        setsockopt(&fd, sockopt::Broadcast, &true).map_err(io::Error::from)?;
+        let addr = SockaddrIn::from(std::net::SocketAddrV4::new(
+            std::net::Ipv4Addr::UNSPECIFIED,
+            68,
+        ));
+        bind(std::os::fd::AsRawFd::as_raw_fd(&fd), &addr).map_err(io::Error::from)?;
+        Ok(fd)
+    }
+
     fn hub_start(
         &self,
         hostapd_conf: &str,
@@ -469,6 +499,13 @@ mod tests {
     // Tests [@ANCHOR: os_linux_os_struct]
     use super::*;
     use std::os::fd::AsFd;
+
+    // Tests [@ANCHOR: relay_broker_linux_bind_dhcp_client]
+    #[test]
+    fn the_dhcp_client_socket_fails_cleanly_for_a_missing_interface() {
+        // Port 68 is privileged and the interface is absent: either way the call returns an error, never a wildcard socket.
+        assert!(LinuxOs::default().bind_dhcp_client("nonexistent0").is_err());
+    }
 
     // Tests [@ANCHOR: relay_broker_linux_bind_udp]
     #[test]

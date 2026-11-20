@@ -32,6 +32,8 @@ pub struct FakeOs {
     pub added: Arc<Mutex<Vec<(String, String)>>>,
     /// Ports `bind_udp` was asked for.
     pub binds: Arc<Mutex<Vec<u16>>>,
+    /// Interfaces `bind_dhcp_client` was asked for.
+    pub dhcp_binds: Arc<Mutex<Vec<String>>>,
     /// The configuration texts and interface of a started hub.
     pub hub: Arc<Mutex<Option<(String, String, String)>>>,
     /// The takeover `dnsmasq` configuration while a takeover runs.
@@ -107,6 +109,7 @@ impl FakeOs {
             ]),
             added: Arc::new(Mutex::new(Vec::new())),
             binds: Arc::new(Mutex::new(Vec::new())),
+            dhcp_binds: Arc::new(Mutex::new(Vec::new())),
             hub: Arc::new(Mutex::new(None)),
             takeover: Arc::new(Mutex::new(None)),
             updates: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
@@ -166,6 +169,10 @@ impl Os for FakeOs {
     }
     fn bind_udp(&self, port: u16) -> io::Result<OwnedFd> {
         self.binds.lock().unwrap().push(port);
+        LinuxOs::default().open_device(Path::new("/dev/null"), true)
+    }
+    fn bind_dhcp_client(&self, interface: &str) -> io::Result<OwnedFd> {
+        self.dhcp_binds.lock().unwrap().push(interface.to_string());
         LinuxOs::default().open_device(Path::new("/dev/null"), true)
     }
     fn hub_start(

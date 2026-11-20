@@ -618,6 +618,47 @@ fn a_takeover_is_refused_unless_enabled_and_valid_then_written_from_its_template
     assert!(seen.lock().unwrap().is_none());
 }
 
+// Tests [@ANCHOR: relay_broker_broker_bind_dhcp_client]
+#[test]
+fn the_dhcp_client_port_is_bound_only_when_the_hub_is_enabled_and_for_a_plain_interface() {
+    let now = Instant::now();
+    let denied = |r: &Response| {
+        matches!(
+            r,
+            Response::Error {
+                status: Status::Denied,
+                ..
+            }
+        )
+    };
+    let req = |i: &str| Request::BindDhcpClient {
+        interface: i.into(),
+    };
+    let os = FakeOs::typical();
+    let peer = os.peer;
+    let mut off = broker_with(&test_config(), os, None);
+    let (resp, fd) = off.handle(peer, &req("br0"), now);
+    assert!(denied(&resp) && fd.is_none(), "hub off: {resp:?}");
+
+    let os = FakeOs::typical();
+    let seen = os.dhcp_binds.clone();
+    let mut cfg = test_config();
+    cfg.hub_enabled = true;
+    let mut on = broker_with(&cfg, os, None);
+    for bad in ["", "-x", "br 0", "averyveryverylongname"] {
+        let (resp, fd) = on.handle(peer, &req(bad), now);
+        assert!(denied(&resp) && fd.is_none(), "{bad:?}: {resp:?}");
+    }
+    assert!(
+        seen.lock().unwrap().is_empty(),
+        "a refusal never reaches the OS"
+    );
+    let (resp, fd) = on.handle(peer, &req("br0"), now);
+    assert_eq!(resp, Response::Opened);
+    assert!(fd.is_some());
+    assert_eq!(*seen.lock().unwrap(), vec!["br0".to_string()]);
+}
+
 // Tests [@ANCHOR: relay_broker_broker_bridged_ap_start]
 #[test]
 fn a_bridged_access_point_is_refused_unless_enabled_and_valid_then_written_from_its_template() {

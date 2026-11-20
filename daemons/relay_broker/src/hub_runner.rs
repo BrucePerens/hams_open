@@ -398,6 +398,13 @@ mod tests {
         }
         hub.bridged_ap_start("interface=wlan0\nbridge=br0\n", "wlan0")
             .unwrap();
+        // The fake program renames itself by exec after the script returns; wait for that, not for a fixed time.
+        for _ in 0..100 {
+            if hub.status() == (true, false) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
         assert_eq!(hub.status(), (true, false), "hostapd only");
         assert!(!root.join("ip.log").exists(), "no ip command ran");
         assert!(hub.dir.join("hostapd.conf").exists());
