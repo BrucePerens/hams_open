@@ -103,6 +103,7 @@ impl Broker {
             Request::HubStatus => "hub_status",
             Request::HubTakeoverStart(_) => "hub_takeover_start",
             Request::HubTakeoverStop => "hub_takeover_stop",
+            Request::Poweroff => "poweroff",
             Request::UpdatePackage => "update_package",
             Request::SetSystemTime { .. } => "set_system_time",
             Request::TimeStatus => "time_status",
@@ -139,6 +140,7 @@ impl Broker {
             Request::HubStatus => self.hub_status(peer),
             Request::HubTakeoverStart(t) => self.hub_takeover_start(peer, t),
             Request::HubTakeoverStop => self.hub_takeover_stop(peer),
+            Request::Poweroff => self.poweroff(peer),
             Request::UpdatePackage => self.update_package(peer),
             Request::SetSystemTime {
                 target_unix_secs,
@@ -250,6 +252,28 @@ impl Broker {
                 self.log(peer, "update_package", "failed", e.to_string());
                 (
                     Response::error(Status::Failed, format!("update: {e}")),
+                    None,
+                )
+            }
+        }
+    }
+
+    // [@ANCHOR: relay_broker_broker_poweroff]
+    /// The power-off action: allowed only when the hub is enabled (the owner set up a stand-alone box); the OS layer only records the request.
+    fn poweroff(&mut self, peer: Peer) -> (Response, Option<OwnedFd>) {
+        if !self.hub_enabled {
+            self.log(peer, "poweroff", "denied", "hub not enabled".into());
+            return (Response::error(Status::Denied, "hub not enabled"), None);
+        }
+        match self.os.poweroff() {
+            Ok(()) => {
+                self.log(peer, "poweroff", "allowed", String::new());
+                (Response::PoweroffRequested, None)
+            }
+            Err(e) => {
+                self.log(peer, "poweroff", "failed", e.to_string());
+                (
+                    Response::error(Status::Failed, format!("poweroff: {e}")),
                     None,
                 )
             }

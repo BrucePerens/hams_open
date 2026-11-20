@@ -85,6 +85,7 @@ fn main() {
             println!("hub: access point {access_point}, dhcp {dhcp}")
         }
         Response::Updated => println!("the relay package was upgraded"),
+        Response::PoweroffRequested => println!("a power-off was requested"),
         other @ (Response::TimeStatus { .. } | Response::TimeSet { .. }) => println!("{other:?}"),
         Response::Error { status, reason } => {
             eprintln!("{status:?}: {reason}");
