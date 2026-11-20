@@ -128,6 +128,11 @@ pub enum Request {
     HubTakeoverStart(TakeoverSettings),
     /// Stop serving DHCP on the user's subnet (the router is back).
     HubTakeoverStop,
+    /// Bind the DHCP client port (UDP 68) on one named interface and pass the descriptor, so the relay can listen for a router's DHCP offer without a privilege (only with `hub = true`).
+    BindDhcpClient {
+        /// The interface the socket is bound to (SO_BINDTODEVICE); no other interface hears it.
+        interface: String,
+    },
 }
 
 /// The kind of source a clock step rests on.
@@ -427,6 +432,10 @@ impl Request {
                 }
             }
             Request::HubTakeoverStop => out.push(13),
+            Request::BindDhcpClient { interface } => {
+                out.push(14);
+                put_string(&mut out, interface);
+            }
         }
         out
     }
@@ -515,6 +524,9 @@ impl Request {
                 uplink_dns: if r.bool()? { Some(r.ipv4()?) } else { None },
             }),
             13 => Request::HubTakeoverStop,
+            14 => Request::BindDhcpClient {
+                interface: r.string()?,
+            },
             other => return Err(WireError::BadTag(other)),
         };
         r.finish()?;
@@ -790,6 +802,9 @@ mod tests {
                 uplink_dns: Some(Ipv4Addr::new(192, 168, 1, 1)),
             }),
             Request::HubTakeoverStop,
+            Request::BindDhcpClient {
+                interface: "br0".into(),
+            },
             Request::UpdatePackage,
             Request::SetSystemTime {
                 target_unix_secs: 1_793_500_000,
