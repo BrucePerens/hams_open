@@ -102,7 +102,8 @@ pub(crate) fn pack_call(callsign: &str) -> Option<u32> {
     let mut call6 = [b' '; 6];
     if bytes.len() > 2 && bytes[2].is_ascii_digit() {
         call6[..bytes.len()].copy_from_slice(bytes);
-    } else if bytes.len() > 1 && bytes[1].is_ascii_digit() {
+    } else if (2..=5).contains(&bytes.len()) && bytes[1].is_ascii_digit() {
+        // One-letter prefix: shifted right by one, so at most five characters fit the buffer.
         call6[1..1 + bytes.len()].copy_from_slice(bytes);
     } else {
         return None; // not a standard-format callsign this function handles
@@ -743,6 +744,15 @@ mod tests {
         assert!(pack_call("KA9GRZ").is_some()); // digit at index 2
         assert!(pack_call("").is_none());
         assert!(pack_call("TOOLONGCALL").is_none());
+    }
+
+    #[test]
+    // Tests [@ANCHOR: pack_call]
+    fn pack_call_refuses_a_six_character_callsign_with_a_one_letter_prefix_instead_of_panicking() {
+        // The one-letter-prefix form is shifted right by one into a six-character buffer, so it
+        // fits only up to five characters; six used to slice past the end of the buffer.
+        assert!(pack_call("K1ABCD").is_none());
+        assert!(pack_call("K1ABC").is_some());
     }
 
     #[test]
