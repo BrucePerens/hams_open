@@ -398,7 +398,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 1038 | Yaesu | FT-847UNI | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-847uni` | - | unverified | - | described |
 | 1022 | Yaesu | FT-857 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-857d` | - | manual-checked | - | described |
 | 1015 | Yaesu | FT-890 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-890` | - | unverified | - | described |
-| 1036 | Yaesu | FT-891 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-891` | - | manual-checked | - | described |
+| 1036 | Yaesu | FT-891 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-891` | shift, offset, tones | manual-checked | - | described |
 | 1023 | Yaesu | FT-897 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-897` | - | unverified | - | described |
 | 1043 | Yaesu | FT-897D | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-897d` | - | manual-checked | - | described |
 | 1013 | Yaesu | FT-900 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-900` | - | unverified | - | described |
@@ -407,7 +407,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 1031 | Yaesu | FT-980 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-980` | - | unverified | - | described |
 | 1016 | Yaesu | FT-990 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-990` | - | unverified | - | described |
 | 1048 | Yaesu | FT-990 Old Rom | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-990-oldrom` | - | unverified | - | described |
-| 1035 | Yaesu | FT-991 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-991a` | - | manual-checked | - | described |
+| 1035 | Yaesu | FT-991 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-991a` | shift, offset, tones | manual-checked | - | described |
 | 1042 | Yaesu | FTDX-10 | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx10` | - | manual-checked | - | described |
 | 1040 | Yaesu | FTDX-101D | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx101d` | - | manual-checked | - | described |
 | 1044 | Yaesu | FTDX-101MP | A | yaesu_newcat_ascii | yaesu | `yaesu-ftdx-101mp` | - | manual-checked | - | described |

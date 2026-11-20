@@ -223,8 +223,13 @@ each fact).
   attenuator and preamplifier (`RA0`, `PA0`) and the antenna port (`AN`) where the description lists them,
   model id, `AI`, and on the models whose `FT` picks the transmitting band (FT-2000, FTDX5000, FTDX9000) the
   transmit receiver, Main or Sub.
-<!--ops rig=yaesu-ft-991a: GetFrequency GetFrequency.B GetLevel.AfGain GetLevel.Attenuator GetLevel.KeyerSpeed GetLevel.MicGain GetLevel.Preamp GetLevel.RfGain GetLevel.RfPower GetMode GetModelId GetPower GetPtt GetRit GetRitOffset GetSignal GetSplit GetTxVfo GetXit SetFrequency SetFrequency.B SetLevel.AfGain SetLevel.Attenuator SetLevel.KeyerSpeed SetLevel.MicGain SetLevel.Preamp SetLevel.RfGain SetLevel.RfPower SetMode SetPtt SetRit SetRitOffset SetSplit SetTransceive SetXit-->
-<!--ops rig=yaesu-ftdx-5000: GetFrequency GetFrequency.B GetLevel.AfGain GetLevel.KeyerSpeed GetLevel.MicGain GetLevel.RfGain GetLevel.RfPower GetMode GetModelId GetPower GetPtt GetRit GetRitOffset GetSignal GetSplit GetTxReceiver GetTxVfo GetXit SetFrequency SetFrequency.B SetLevel.AfGain SetLevel.KeyerSpeed SetLevel.MicGain SetLevel.RfGain SetLevel.RfPower SetMode SetPtt SetRit SetRitOffset SetSplit SetTransceive SetTxReceiver SetXit-->
+  The repeater and tone ops of the `repeater` capability (listed for the FT-991A and the FT-891): shift
+  `OS0` (0 simplex, 1 plus, 2 minus), tone mode `CT0` (0 off, 1 CTCSS encode and decode, 2 CTCSS encode,
+  3 DCS), the CTCSS tone `CN00` and the DCS code `CN01` by their number in the book's charts (tenths of a
+  hertz and decimal-octal codes in the API). The books have no offset command: it is a menu item, so the
+  offset ops are refused. Unverified on a radio.
+<!--ops rig=yaesu-ft-991a: GetCtcssTone GetDcsCode GetFrequency GetFrequency.B GetLevel.AfGain GetLevel.Attenuator GetLevel.KeyerSpeed GetLevel.MicGain GetLevel.Preamp GetLevel.RfGain GetLevel.RfPower GetMode GetModelId GetPower GetPtt GetRepeaterShift GetRit GetRitOffset GetSignal GetSplit GetToneMode GetTxVfo GetXit SetCtcssTone SetDcsCode SetFrequency SetFrequency.B SetLevel.AfGain SetLevel.Attenuator SetLevel.KeyerSpeed SetLevel.MicGain SetLevel.Preamp SetLevel.RfGain SetLevel.RfPower SetMode SetPtt SetRepeaterShift SetRit SetRitOffset SetSplit SetToneMode SetTransceive SetXit-->
+<!--ops rig=yaesu-ftdx-5000: GetCtcssTone GetDcsCode GetFrequency GetFrequency.B GetLevel.AfGain GetLevel.KeyerSpeed GetLevel.MicGain GetLevel.RfGain GetLevel.RfPower GetMode GetModelId GetPower GetPtt GetRepeaterShift GetRit GetRitOffset GetSignal GetSplit GetToneMode GetTxReceiver GetTxVfo GetXit SetCtcssTone SetDcsCode SetFrequency SetFrequency.B SetLevel.AfGain SetLevel.KeyerSpeed SetLevel.MicGain SetLevel.RfGain SetLevel.RfPower SetMode SetPtt SetRepeaterShift SetRit SetRitOffset SetSplit SetToneMode SetTransceive SetTxReceiver SetXit-->
 - **Split:** the FT-991A has VFO split with `FT2;`/`FT3;`; its `FT` answer also reports the transmit VFO. The FTDX10, FTDX101D and
   FT-710 set split with `ST` (their `[yaesu] split = "st"`), and the FTDX5000 and its relatives pick the
   transmitting band instead (`tx_band`).

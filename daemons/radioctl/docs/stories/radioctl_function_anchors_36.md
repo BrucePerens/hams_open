@@ -186,3 +186,11 @@ Builds a legacy five-byte engine and takes ownership of the description. It requ
 ### `fn decode_frequency_mode(&self, bytes: &[u8]) -> Vec<Inbound>` [@ANCHOR: radioctl:radioctl_ylegacy_decode_frequency_mode]
 
 Decodes the five-byte answer to opcode `03`: four BCD frequency bytes (10 Hz units) and one mode byte. It returns two observations, `Frequency(A, hz)` and `Mode`, the mode taken from the description's mode code table. If the slice is not five bytes, a nibble is not a digit, or the mode code is unknown, it returns one `Inbound::Unrecognised` carrying the bytes. Only VFO A is reported: these rigs have no second VFO readout, so the transmit VFO is deliberately not reported (see the module note on split and the active transmit frequency). Pure.
+
+### `fn tone_number(dcs: bool, value: u16) -> Option<usize>` [@ANCHOR: radioctl:radioctl_yaesu_tone_number]
+
+Finds the number the Yaesu `CN` command carries for a CTCSS tone or a DCS code. `dcs` chooses the chart: false is the 50-entry CTCSS chart of the FT-991A CAT book (Table 1), with `value` in tenths of a hertz (885 is 88.5 Hz); true is the 104-entry DCS chart (Table 2), with `value` as the decimal number of the three octal digits (23 is 023). Returns the index into the chart, which is the number written after `CN00` or `CN01`, or `None` when the chart has no such entry, which the engine reports as an `Unsupported` error rather than sending a value the rig would refuse. Pure, no I/O, no other errors; the inverse is `tone_value`.
+
+### `fn tone_value(dcs: bool, number: usize) -> Option<u16>` [@ANCHOR: radioctl:radioctl_yaesu_tone_value]
+
+The CTCSS tone or DCS code behind a `CN` number: `dcs` chooses the chart (false CTCSS in tenths of a hertz, true DCS as the decimal number of its octal digits) and `number` is the index the rig sent or the virtual rig received. Returns the chart entry, or `None` past the end of the chart (above 49 for CTCSS, above 103 for DCS), so a corrupt answer is reported as unrecognised and the virtual rig answers `?;`. Pure, no I/O, no other errors; the inverse is `tone_number`.

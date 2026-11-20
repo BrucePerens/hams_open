@@ -1377,6 +1377,63 @@ impl VirtualRig {
                 self.state.rit_offset = 0;
                 None
             }
+            // FT-991A and FT-891 (guide: P1 a fixed 0): the repeater shift, the tone mode and the
+            // tone or DCS code numbers.
+            ("OS", "0") => Some(format!(
+                "OS0{};",
+                match self.state.shift {
+                    RepeaterShift::Simplex => 0,
+                    RepeaterShift::Plus => 1,
+                    RepeaterShift::Minus => 2,
+                }
+            )),
+            ("OS", flag @ ("00" | "01" | "02")) => {
+                self.state.shift = match flag {
+                    "00" => RepeaterShift::Simplex,
+                    "01" => RepeaterShift::Plus,
+                    _ => RepeaterShift::Minus,
+                };
+                None
+            }
+            ("CT", "0") => Some(format!(
+                "CT0{};",
+                match self.state.tone_mode {
+                    ToneMode::Off => 0,
+                    ToneMode::Tsql => 1,
+                    ToneMode::Tone => 2,
+                    ToneMode::Dcs => 3,
+                }
+            )),
+            ("CT", flag @ ("00" | "01" | "02" | "03" | "04")) => {
+                self.state.tone_mode = match flag {
+                    "00" => ToneMode::Off,
+                    "01" => ToneMode::Tsql,
+                    "02" => ToneMode::Tone,
+                    _ => ToneMode::Dcs,
+                };
+                None
+            }
+            ("CN", "00") => {
+                yaesu::tone_number(false, self.state.ctcss_tenths).map(|n| format!("CN00{n:03};"))
+            }
+            ("CN", "01") => {
+                yaesu::tone_number(true, self.state.dcs_code).map(|n| format!("CN01{n:03};"))
+            }
+            ("CN", body) if body.len() == 5 && body.is_ascii() => {
+                let number = body.get(2..).and_then(|d| d.parse::<usize>().ok());
+                let value = number.and_then(|n| yaesu::tone_value(body.starts_with("01"), n));
+                match (body.get(..2), value) {
+                    (Some("00"), Some(tenths)) => {
+                        self.state.ctcss_tenths = tenths;
+                        None
+                    }
+                    (Some("01"), Some(code)) => {
+                        self.state.dcs_code = code;
+                        None
+                    }
+                    _ => Some("?;".to_string()),
+                }
+            }
             ("RU" | "RD", digits) => self.yaesu_move_offset(name == "RU", digits),
             ("SM", "0") => Some(format!("SM0{:03};", self.state.signal.min(255))),
             ("RM", "5") => {

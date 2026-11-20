@@ -5,7 +5,7 @@
 # Frequency fields are 9 digits (`yaesu.frequency_digits`); the IF answer is 28 characters with the semicolon.
 # Gaps and open questions: The guide gives ID 0650; Hamlib's table has 135. Split is the ST command (the guide has ST, not FT 2/3), the clarifier is CF (receive only; the guide has no XT), levels (RG is 000-030 here, the other four match the engine's ranges). Details: crates/radioctl-protocols/src/yaesu.rs.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "transceive", "split", "rit-xit", "levels", "identify"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "transceive", "split", "rit-xit", "levels", "identify", "repeater"]
 
 [rig]
 id = "yaesu-ft-891"
@@ -125,3 +125,8 @@ verified = { state = "unverified" }
 key = "frequency.*"
 provenance = { kind = "manual", reference = "Yaesu FT-891 CAT Operation Reference Manual 1909-C: FA, P1 range 000030000 - 056000000 Hz", note = "The range is the manual's, not measured on a radio." }
 verified = { state = "manual-checked", reference = "FA, P1 range 000030000 - 056000000 Hz" }
+
+[[facts]]
+key = "capability.repeater"
+provenance = { kind = "manual", reference = "Yaesu FT-891 CAT Operation Reference Book, file FT-891_CAT_OM_ENG_1909-C.pdf, sha256 59e2295177633b970408bec10aae62f697c3bde5fe48a3be25282d992bc3bbb0: CN PDF p. 6, CT and Tables 1 and 2 PDF p. 7, OS PDF p. 15: OS0 P2 (0 simplex, 1 plus, 2 minus; FM only), CT0 P2 (0 off, 1 CTCSS encode and decode, 2 CTCSS encode, 3 DCS), CN00 and a tone number 000-049 (Table 1), CN01 and a DCS code number 000-103 (Table 2)", note = "The tone and DCS charts in yaesu.rs are the book's Tables 1 and 2. The book has no repeater offset command (the offset is a menu item), so the offset ops are refused. Unverified: no radio has been connected." }
+verified = { state = "unverified" }
