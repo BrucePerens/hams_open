@@ -6,7 +6,7 @@
 # frequency ranges, filter tables or function lists, so they are not repeated here; the CI-V address, baud rate and
 # "CI-V Transceive" are set in the radio's own menu and must match what radioctl is told.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "split", "filter", "levels", "identify"]
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "split", "filter", "levels", "identify", "repeater"]
 
 [rig]
 id = "icom-ic-7000"
@@ -122,4 +122,9 @@ verified = { state = "unverified" }
 [[facts]]
 key = "mode.*"
 provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/icom_defs.h S_LSB..S_RTTYR (00 LSB, 01 USB, 02 AM, 03 CW, 04 RTTY, 05 FM, 06 WFM, 07 CW-R, 08 RTTY-R); `rigctl -m 3060 --dump-caps` Mode list", note = "No readable copy of Icom's CI-V reference for this model could be obtained (Icom's download endpoints are excluded by robots.txt and the archive.org copies found were image scans or other documents); this fact is Hamlib's. Facts only were read from Hamlib; no code or table was copied. Modes with no entry in radioctl's vocabulary are not listed (none). Data modes (PKTUSB, PKTLSB) are not listed unless command 26 is certain for the model; Hamlib uses other forms (1A 06) on some models and the engine does not send those." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.repeater"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/ic7000.c rig_caps (the model's .set_rptr_shift, .set_rptr_offs, .set_ctcss_tone and .set_dcs_code entries); rigs/icom/icom.c icom_set_rptr_shift (command 0F, 10 simplex, 11 minus, 12 plus), icom_set_rptr_offs (0D, three BCD bytes of 100 Hz units), icom_set_ctcss_tone (1B 00, tenths of a hertz), icom_set_dcs_code (1B 02), icom_set_func (16 42 tone, 16 43 tone squelch, 16 4B DCS); rigs/icom/icom_defs.h", note = "Facts only, no code or table copied. Icom's CI-V guide was not used (see the file header). The capability covers all five repeater ops; a model Hamlib lists without one of them (some have no offset or no tone) answers it with NG. No radio has been connected." }
 verified = { state = "unverified" }

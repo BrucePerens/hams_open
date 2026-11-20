@@ -469,6 +469,7 @@ def load_descriptions(rigs_dir: Path = RIGS_DIR) -> dict[str, dict]:
             "family": data["rig"]["family"],
             "highest": top,
             "hardware": hardware,
+            "repeater": "repeater" in data.get("capabilities", []),
         }
     return found
 
@@ -580,7 +581,8 @@ def render(rows: list[dict], descriptions: dict[str, dict]) -> str:
         "",
         "Columns: **Tier** and **Family** are this tool's planning hints (not a statement of a radio's wire protocol); "
         "**Engine** is the radioctl protocol engine for the family, `-` when none exists; **Verification** is the highest "
-        "`verified` state among the description's facts; **Verified by** comes from `rigs/reports/verified.toml`. "
+        "`verified` state among the description's facts; **Repeater** says whether a description lists the `repeater` "
+        "capability (repeater shift, offset, CTCSS/DCS tone ops; chapter 4 of the manual); **Verified by** comes from `rigs/reports/verified.toml`. "
         "Status: `described` = a `rigs/*.toml` exists; `engine only` = the engine exists, data missing; "
         "`needs variant` = an existing engine needs model variants; `needs engine` = a new engine; "
         "`odd device` = SDR board, network driver, parallel or dummy; `not applicable` = no wire protocol radioctl can "
@@ -630,12 +632,13 @@ def render(rows: list[dict], descriptions: dict[str, dict]) -> str:
     out += ["", "## Models that are not applicable", ""]
     out += [f"- {r['mfg']} {r['model']} ({r['id']}): {NOT_APPLICABLE[r['id']]}" for r in rows if r["id"] in NOT_APPLICABLE] or ["- none"]
     out += ["", "## Every model", "",
-            "| Hamlib id | Manufacturer | Model | Tier | Family | Engine | Description | Verification | Verified by | Status |",
-            "|---:|---|---|---|---|---|---|---|---|---|"]
+            "| Hamlib id | Manufacturer | Model | Tier | Family | Engine | Description | Repeater | Verification | Verified by | Status |",
+            "|---:|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         desc = ", ".join(f"`{d}`" for d in r["descriptions"])
         out.append("| " + " | ".join(cell(x) for x in [
             r["id"], r["mfg"], r["model"], r["tier"], r["family"], r["engine"] or "-", desc or "-",
+            "shift, offset, tones" if any(descriptions[d]["repeater"] for d in r["descriptions"]) else "-",
             r["level"], r["who"], r["status"]]) + " |")
     return "\n".join(out) + "\n"
 
