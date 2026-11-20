@@ -1344,6 +1344,8 @@ class TestExceptionHooks(RealTransactionCase):
         self.assertEqual(rows.exc_type, "builtins.KeyError")
 
     # Tests [@ANCHOR: hams_helpdesk:exc_cron_logged_failures]
+    # Tests [@ANCHOR: hams_helpdesk:exc_cron_logged_failures_init]
+    # Tests [@ANCHOR: hams_helpdesk:exc_cron_logged_failures_emit]
     def test_cron_job_that_logs_a_handled_failure_and_finishes_still_makes_a_ticket(self):
         def handled_and_logged(_model):
             try:
