@@ -1,7 +1,8 @@
 # radioctl
 
-A thread-safe, async-only Rust rig-control library intended to replace Hamlib in the relay, plus a
-`rigctld`-protocol server (`radioctld`).
+A thread-safe, async-only Rust rig-control library, the only rig-control path of the hams.com relay
+(Bruce's decision of 2026-11-03: Hamlib leaves the relay completely), plus a `rigctld`-protocol server
+(`radioctld`). Hamlib remains here only as an offline test oracle on the bench, never shipped.
 
 - Licence: AGPL-3.0-or-later (Bruce's decision of 2026-10-30). Every Rust file carries an SPDX header
   and the manifests inherit the licence from the workspace.
