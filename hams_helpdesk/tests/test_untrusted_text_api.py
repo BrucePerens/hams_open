@@ -192,9 +192,9 @@ class TestUntrustedTextBuildingBlocks(BaseCase):
         self.assertEqual(ut._style_dict(None), {})
         # A hostile style attribute full of ';' must cost time linear in its size (the split used to look ahead for a ')' from every
         # ';', so 40,000 declarations took 17 seconds and a few MB would hold the mail worker for the better part of an hour).
-        started = time.monotonic()
+        started = time.process_time()
         huge = ut._style_dict("color:#fff;" * 40000 + "background:url(a;b);display:none")
-        self.assertLess(time.monotonic() - started, 2.0)
+        self.assertLess(time.process_time() - started, 2.0)
         self.assertEqual((huge["color"], huge["background"], huge["display"]), ("#fff", "url(a;b)", "none"))
         # The same split as the old lookahead, in the cases it distinguished: a ';' before a ')' with no '(' between is inside, otherwise it splits.
         self.assertEqual(ut._style_dict("a:(b;c;d;e:f"), {"a": "(b", "e": "f"})
