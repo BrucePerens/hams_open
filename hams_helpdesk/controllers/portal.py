@@ -1,7 +1,7 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
-from odoo import http
+from odoo import _, http
 from odoo.http import request
 from odoo.addons.portal.controllers.portal import CustomerPortal, pager as portal_pager
 
@@ -163,7 +163,7 @@ class HelpdeskPortal(CustomerPortal):
 
     @http.route(["/my/tickets/new"], type="http", auth="user", website=True)
     # [@ANCHOR: hams_helpdesk:COMM_portal_ticket_new]
-    def portal_ticket_new(self, **kw):
+    def portal_ticket_new(self, form=None, error=None, **kw):
         # A Prospective Ham/SWL user (a real, site-offered signup option
         # specifically for users studying for their license, i.e. by
         # definition without a callsign yet) must not get a raw 400 Bad
@@ -187,14 +187,17 @@ class HelpdeskPortal(CustomerPortal):
             if value not in _PORTAL_EXCLUDED_TICKET_TYPES
         ]
         valid_types = dict(portal_selection)
-        requested_type = kw.get("ticket_type")
+        form = form or {}
+        requested_type = form.get("ticket_type") or kw.get("ticket_type")
         default_ticket_type = requested_type if requested_type in valid_types else "general"
         return request.render(
             "hams_helpdesk.portal_ticket_new",
             {
                 "page_name": "ticket_new",
-                "default_callsign": callsign,
+                "default_callsign": form["callsign"] if "callsign" in form else callsign,
                 "default_ticket_type": default_ticket_type,
+                "form": form,
+                "error": error,
                 "ticket_type_selection": portal_selection,
             },
         )
@@ -209,8 +212,14 @@ class HelpdeskPortal(CustomerPortal):
     )
     def portal_ticket_submit(self, name=None, description=None, callsign=None, ticket_type=None, **kw):
         # Verified by [@ANCHOR: helpdesk_portal_tour]
+        name = (name or "").strip()
         if not name:
-            return request.redirect("/my/tickets/new")
+            # [@ANCHOR: hams_helpdesk:portal_submit_blank_subject]
+            # Verified by [@ANCHOR: hams_helpdesk:test_a_blank_subject_keeps_what_was_typed]
+            return self.portal_ticket_new(
+                form={"description": description or "", "callsign": callsign or "", "ticket_type": ticket_type or ""},
+                error=_("Give the ticket a subject."),
+            )
 
         utils = request.env["zero_sudo.security.utils"]
         svc_uid = utils._get_service_uid("hams_helpdesk.user_helpdesk_service")
