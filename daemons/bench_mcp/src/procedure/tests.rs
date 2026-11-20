@@ -2144,3 +2144,25 @@ bench.expect(False, "bad", gain=float("inf"), low=float("nan"), word="NaN is a w
     assert_eq!(c["word"], json!("NaN is a word"));
     assert_eq!(c["seq"], json!([null, 1.5]));
 }
+
+// Tests [@ANCHOR: proc_store_event_append]
+// Tests [@ANCHOR: proc_store_event_dropped]
+#[test]
+fn a_full_event_list_gets_one_truncated_line_and_then_only_counts() {
+    let dir = crate::testdir::scratch("bench_proc_test__event_cap");
+    let mut log = store::EventLog::open(&dir, 0.0).unwrap();
+    let big = "x".repeat(1 << 20);
+    // Seven 1 MiB events leave room for less than the next 2 MiB one, which becomes the truncated marker.
+    for _ in 0..7 {
+        assert_ne!(log.append("big", json!({"pad": big})), 0);
+    }
+    let huge = "x".repeat(2 << 20);
+    log.append("huge", json!({"pad": huge}));
+    // The list counts as full from here: a small event must be dropped, not stored after the marker.
+    assert_eq!(log.append("small", json!({})), 0);
+    assert_eq!(log.dropped(), 1);
+    let text = std::fs::read_to_string(dir.join("events.jsonl")).unwrap();
+    assert_eq!(text.matches("\"truncated\"").count(), 1);
+    assert!(!text.contains("\"small\""));
+    let _ = std::fs::remove_dir_all(&dir);
+}
