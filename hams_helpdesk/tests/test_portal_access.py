@@ -63,12 +63,16 @@ class TestPortalTicketAccess(HamsHttpCase):
         self.mine.invalidate_recordset()
         self.assertEqual(self.mine.stage, "closed")
 
+    # [@ANCHOR: hams_helpdesk:test_a_blank_subject_keeps_what_was_typed]
     # Tests [@ANCHOR: hams_helpdesk:COMM_portal_ticket_new]
-    def test_a_submission_without_a_subject_creates_nothing(self):
+    # Tests [@ANCHOR: hams_helpdesk:portal_submit_blank_subject]
+    def test_a_submission_without_a_subject_creates_nothing_and_keeps_what_was_typed(self):
         before = self.env["hams_helpdesk.ticket"].search_count([])
-        response = self._post("/my/tickets/submit", name="", description="no subject")
-        self.assertEqual(response.status_code, 303)
-        self.assertTrue(response.headers["Location"].endswith("/my/tickets/new"))
+        for blank in ("", "   "):
+            response = self._post("/my/tickets/submit", name=blank, description="no subject but long text")
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("Give the ticket a subject.", response.text)
+            self.assertIn("no subject but long text", response.text)
         self.assertEqual(self.env["hams_helpdesk.ticket"].search_count([]), before)
 
     # Tests [@ANCHOR: hams_helpdesk:COMM_portal_ticket_new]

@@ -41,7 +41,7 @@ QWeb template `hams_helpdesk.portal_ticket_detail`, rendered by `GET /my/ticket/
 
 ### The portal new-ticket form [@ANCHOR: hams_helpdesk:COMM_helpdesk_portal_new]
 
-QWeb template `hams_helpdesk.portal_ticket_new`, rendered by `GET /my/tickets/new` and posted to `POST /my/tickets/submit` (CSRF protected). Fields: subject (required), callsign (pre-filled from the member's profile, optional), category (the model's ticket types minus the child-safety and automatic-exception types; an unknown `?ticket_type=` falls back to `general`) and description. A prospective ham without a callsign is not refused. Tested by `test_helpdesk_portal_rendering`, `test_portal_ticket_new_renders_without_callsign` and `test_portal_ticket_new_deep_link_preselects_a_real_category`.
+QWeb template `hams_helpdesk.portal_ticket_new`, rendered by `GET /my/tickets/new` and posted to `POST /my/tickets/submit` (CSRF protected). Fields: subject (required), callsign (pre-filled from the member's profile, optional), category (the model's ticket types minus the child-safety and automatic-exception types; an unknown `?ticket_type=` falls back to `general`) and description. A prospective ham without a callsign is not refused. A subject that is empty or only spaces creates nothing: the form is shown again with "Give the ticket a subject." and the description, callsign and category as typed ([@ANCHOR: hams_helpdesk:portal_submit_blank_subject]; test `hams_helpdesk:test_a_blank_subject_keeps_what_was_typed`). Tested by `test_helpdesk_portal_rendering`, `test_portal_ticket_new_renders_without_callsign` and `test_portal_ticket_new_deep_link_preselects_a_real_category`.
 
 ## Amazon SES scan verdicts count as spam signals [@ANCHOR: hams_helpdesk:ses_verdicts]
 
