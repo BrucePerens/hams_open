@@ -69,6 +69,10 @@ UI testing is verified by the four browser tours in `tests/test_ui_tours.py` (cl
 
 `purge_tags(tags, token, zone_id)` is the same call for Cache-Tag values: it POSTs `{"tags": [...]}` in chunks of 30, with the same credentials check, the same 10 second timeout and the same result rules (`False` for missing credentials or any failed chunk, `True` for an empty list). Callers are `process_queue` for queued tag rows and the purge wizard's "Purge Specific Cache-Tags" type. Test: `test_07_purge_tags` in `tests/test_cloudflare_apis.py`.
 
+### Timed bans expire [@ANCHOR: COMM_cf_lift_expired_bans]
+
+`waf.ban_ip(..., duration=N)` stores `expires_at` (now plus N seconds) on the `cloudflare.ip.ban` row; `duration=None` leaves it empty, which means permanent until an admin lifts it. The cron "Cloudflare: Lift Expired IP Bans" (every 5 minutes, as the WAF service account) calls `_cron_lift_expired_bans`, which lifts each active ban whose `expires_at` has passed through the same unban path as the admin button. A ban Cloudflare refuses to lift stays active and is retried on the next run. Test: `test_01b_ban_ip_duration_sets_expiry_and_cron_lifts_it` and `test_01c_cron_keeps_ban_active_when_cloudflare_refuses` in `tests/test_waf_management.py`.
+
 ## Backend views
 
 ### Backend views rendering [@ANCHOR: COMM_cf_backend_views_rendering]

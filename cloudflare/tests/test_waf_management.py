@@ -78,6 +78,7 @@ class TestWafManagement(HamsTransactionCase):
     def test_01b_ban_ip_duration_sets_expiry_and_cron_lifts_it(self):
         # [@ANCHOR: COMM_test_cf_lift_expired_bans]
         # Tests [@ANCHOR: COMM_cf_ban_ip_api]
+        # Tests [@ANCHOR: COMM_cf_lift_expired_bans]
         mock_ban_ip = self.safe_patch("odoo.addons.cloudflare.models.ip_ban.ban_ip")
         mock_ban_ip.return_value = (True, "rule_timed")
         mock_unban_ip = self.safe_patch("odoo.addons.cloudflare.models.ip_ban.unban_ip")
