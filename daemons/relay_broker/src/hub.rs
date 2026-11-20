@@ -66,6 +66,7 @@ pub fn validate(s: &HubSettings) -> Result<(), String> {
     Ok(())
 }
 
+// [@ANCHOR: relay_broker_hub_validate_access_point]
 /// The checks both access-point forms share: plain interface name, printable network name, a WPA2 passphrase (never open), a channel valid for the band.
 fn validate_access_point(
     interface: &str,
@@ -123,6 +124,7 @@ pub fn hostapd_conf(s: &HubSettings) -> Result<String, String> {
     ))
 }
 
+// [@ANCHOR: relay_broker_hub_hostapd_text]
 /// The one `hostapd.conf` template; `bridge` adds `bridge=<name>` so hostapd puts the wifi interface into the user's bridge. The caller has validated every field.
 fn hostapd_text(
     interface: &str,
@@ -317,6 +319,8 @@ mod tests {
     // Tests [@ANCHOR: hub_hub_settings_struct]
     // Tests [@ANCHOR: hub_bridged_ap_settings_struct]
     // Tests [@ANCHOR: relay_broker_hub_bridged_hostapd_conf]
+    // Tests [@ANCHOR: relay_broker_hub_validate_access_point]
+    // Tests [@ANCHOR: relay_broker_hub_hostapd_text]
     #[test]
     fn the_bridged_access_point_joins_the_owners_bridge_and_is_never_open() {
         let g = || BridgedApSettings {

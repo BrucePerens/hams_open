@@ -1280,6 +1280,14 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 
 **Purpose.** Writes the takeover configuration (mode 0600) and starts one `dnsmasq` with fixed arguments; runs no `ip` command, because the interface already holds the hub's fixed address. **Signature.** `pub fn takeover_start(&self, dnsmasq_conf: &str) -> io::Result<()>`. `dnsmasq_conf`: the generated text. **Returns.** `Ok` when started; on failure it removes its files. **Side effects.** Replaces a running takeover. **Tests.** `a_takeover_runs_only_dnsmasq_and_leaves_the_interface_address_alone`.
 
+### `hub::validate_access_point` (hub.rs) [@ANCHOR: relay_broker:relay_broker_hub_validate_access_point]
+
+**Purpose.** The checks the hub and the bridged access point share. **Signature.** `fn validate_access_point(interface: &str, ssid: &str, passphrase: &str, channel: u8, five_ghz: bool) -> Result<(), String>` (private). **Errors.** A message for a non-plain interface name, a name outside 1 to 32 printable ASCII characters, a passphrase outside 8 to 63 printable characters (never open) or a channel invalid for the band. **Tests.** `the_bridged_access_point_joins_the_owners_bridge_and_is_never_open`, `settings_that_could_add_a_line_or_leave_the_hub_open_are_refused` (hub.rs).
+
+### `hub::hostapd_text` (hub.rs) [@ANCHOR: relay_broker:relay_broker_hub_hostapd_text]
+
+**Purpose.** The one fixed `hostapd.conf` template for both forms; an optional `bridge=` line. **Signature.** `fn hostapd_text(interface: &str, ssid: &str, passphrase: &str, channel: u8, five_ghz: bool, bridge: Option<&str>) -> String` (private; the caller has validated every field). **Returns.** The configuration text. **Tests.** `the_bridged_access_point_joins_the_owners_bridge_and_is_never_open`, `the_access_point_config_is_wpa2_and_lets_members_reach_each_other` (hub.rs).
+
 ### `hub::bridged_hostapd_conf` (hub.rs) [@ANCHOR: relay_broker:relay_broker_hub_bridged_hostapd_conf]
 
 **Purpose.** The `hostapd.conf` for the bridged access point: the hub's WPA2 template plus `bridge=<bridge>`. **Signature.** `pub fn bridged_hostapd_conf(s: &BridgedApSettings) -> Result<String, String>`. **Errors.** A message for a bad interface, bridge (not plain, or equal to the wifi interface), name, passphrase (never open) or channel. **Tests.** `the_bridged_access_point_joins_the_owners_bridge_and_is_never_open` (hub.rs).
