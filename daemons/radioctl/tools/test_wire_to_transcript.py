@@ -154,6 +154,25 @@ class WireToTranscriptTests(unittest.TestCase):
             self.assertEqual(len(tomllib.loads(out.read_text())["step"]), 3)
             self.assertEqual(w.main(["--rig", "x", "--wire", str(Path(tmp, "no")), "--log", str(log)]), 1)
 
+    # Tests [@ANCHOR: radioctl_wire_main]
+    def test_main_reports_an_output_file_it_cannot_write(self):
+        import contextlib
+        import io
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            wire, log = Path(tmp, "w.txt"), Path(tmp, "c.log")
+            wire.write_text(WIRE)
+            log.write_text(LOG)
+            out = Path(tmp, "no-such-directory", "t.toml")
+            argv = ["--rig", "icom-ic-7300", "--wire", str(wire), "--log", str(log), "--out", str(out)]
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                code = w.main(argv)
+            self.assertEqual(code, 1)
+            self.assertTrue(err.getvalue().startswith("wire_to_transcript: "))
+
 
 if __name__ == "__main__":
     unittest.main()
