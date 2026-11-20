@@ -83,6 +83,12 @@ class IntelHexTests(unittest.TestCase):
         with self.assertRaises(h.Fx2Error):
             h.parse_ihx(":020000040000FA\n:00000001FF\n")   # extended address record
 
+    def test_a_line_that_is_not_hex_is_an_fx2_error_not_a_value_error(self):
+        # main() reports only Fx2Error as "error: ..."; a ValueError from bytes.fromhex ended in a traceback.
+        for bad in (":zz\n:00000001FF\n", ":0\n:00000001FF\n", ":0300000002004\n:00000001FF\n"):
+            with self.assertRaises(h.Fx2Error, msg=bad):
+                h.parse_ihx(bad)
+
 
 class ChunkTests(unittest.TestCase):
     # Tests [@ANCHOR: HAMS_FX2_image_chunks]
