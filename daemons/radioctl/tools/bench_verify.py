@@ -117,6 +117,8 @@ def port_refusal(port: str) -> str | None:
     """Why a port may not be used, or None. A bare ttyUSBn/ttyACMn is refused: on the dev box ttyUSB0 is the
     SainSmart relay board and the ATM6301 supply shares the radio cables' CH340 ids, so only a by-id path,
     `usb:VID:PID[:SERIAL]`, a pty or `virtual` names a radio."""
+    if ".." in port.split("/"):  # /dev/serial/by-id/../../ttyUSB0 and /dev/pts/../ttyUSB0 name the bare tty the next test refuses
+        return f"{port!r} has a '..' component; name the device itself"
     if BARE_TTY.match(port):
         return f"{port} is a bare tty name; use /dev/serial/by-id/... or usb:VID:PID (a CH340 board may sit on it)"
     if port == "virtual" or port.startswith(("/dev/serial/by-id/", "/dev/pts/")):
