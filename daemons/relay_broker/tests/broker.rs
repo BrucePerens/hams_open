@@ -659,6 +659,54 @@ fn the_dhcp_client_port_is_bound_only_when_the_hub_is_enabled_and_for_a_plain_in
     assert_eq!(*seen.lock().unwrap(), vec!["br0".to_string()]);
 }
 
+// Tests [@ANCHOR: relay_broker_broker_bridged_ap_start]
+#[test]
+fn a_bridged_access_point_is_refused_unless_enabled_and_valid_then_written_from_its_template() {
+    let now = Instant::now();
+    let good = relay_broker::hub::BridgedApSettings {
+        interface: "wlan0".into(),
+        bridge: "br0".into(),
+        ssid: "HAMS-EMERGENCY".into(),
+        passphrase: "correct horse".into(),
+        channel: 6,
+        five_ghz: false,
+    };
+    let denied = |r: &Response| {
+        matches!(
+            r,
+            Response::Error {
+                status: Status::Denied,
+                ..
+            }
+        )
+    };
+    let os = FakeOs::typical();
+    let peer = os.peer;
+    let mut off = broker_with(&test_config(), os, None);
+    let (resp, _) = off.handle(peer, &Request::BridgedApStart(good.clone()), now);
+    assert!(denied(&resp), "{resp:?}");
+
+    let os = FakeOs::typical();
+    let seen = os.hub.clone();
+    let mut cfg = test_config();
+    cfg.hub_enabled = true;
+    let mut on = broker_with(&cfg, os, None);
+    let mut open = good.clone();
+    open.passphrase = String::new();
+    let (resp, _) = on.handle(peer, &Request::BridgedApStart(open), now);
+    assert!(denied(&resp), "{resp:?}");
+    assert!(
+        seen.lock().unwrap().is_none(),
+        "a refusal never reaches the OS"
+    );
+    let (resp, _) = on.handle(peer, &Request::BridgedApStart(good), now);
+    assert!(matches!(resp, Response::Hub { .. }), "{resp:?}");
+    let (conf, dnsmasq, interface) = seen.lock().unwrap().clone().expect("started");
+    assert!(conf.contains("bridge=br0\n"), "{conf}");
+    assert!(dnsmasq.is_empty(), "no DHCP server");
+    assert_eq!(interface, "wlan0");
+}
+
 // Tests [@ANCHOR: relay_broker_broker_hub_start]
 // Tests [@ANCHOR: relay_broker_broker_hub_stop]
 #[test]

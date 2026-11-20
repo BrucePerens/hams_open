@@ -100,6 +100,8 @@ pub trait Os {
     ) -> io::Result<()>;
     /// Stops the hub's programs and removes its files.
     fn hub_stop(&self) -> io::Result<()>;
+    /// Writes `hostapd.conf` (with `bridge=`) and starts only the access point; no address, no DHCP.
+    fn hub_bridged_ap_start(&self, hostapd_conf: &str, interface: &str) -> io::Result<()>;
     /// Writes the takeover configuration and starts `dnsmasq` on the user's own subnet (no access point, no address change).
     fn hub_takeover_start(&self, dnsmasq_conf: &str) -> io::Result<()>;
     /// Stops the takeover `dnsmasq`.
@@ -446,6 +448,10 @@ impl Os for LinuxOs {
 
     fn hub_stop(&self) -> io::Result<()> {
         self.hub.stop()
+    }
+
+    fn hub_bridged_ap_start(&self, hostapd_conf: &str, interface: &str) -> io::Result<()> {
+        self.hub.bridged_ap_start(hostapd_conf, interface)
     }
 
     fn hub_takeover_start(&self, dnsmasq_conf: &str) -> io::Result<()> {

@@ -196,6 +196,14 @@ impl Os for FakeOs {
         *self.hub.lock().unwrap() = None;
         Ok(())
     }
+    fn hub_bridged_ap_start(&self, hostapd_conf: &str, interface: &str) -> io::Result<()> {
+        *self.hub.lock().unwrap() = Some((
+            hostapd_conf.to_string(),
+            String::new(),
+            interface.to_string(),
+        ));
+        Ok(())
+    }
     fn hub_takeover_start(&self, dnsmasq_conf: &str) -> io::Result<()> {
         *self.takeover.lock().unwrap() = Some(dnsmasq_conf.to_string());
         Ok(())

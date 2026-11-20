@@ -47,26 +47,7 @@ pub fn plain_interface_name(name: &str) -> bool {
 // [@ANCHOR: relay_broker_hub_validate]
 /// Checks the settings; the error says which one is wrong. Free text is limited to printable ASCII, so a value cannot add a line to a configuration file.
 pub fn validate(s: &HubSettings) -> Result<(), String> {
-    if !plain_interface_name(&s.interface) {
-        return Err("the wifi interface name is not a plain interface name".into());
-    }
-    if s.ssid.is_empty() || s.ssid.len() > 32 || !printable(&s.ssid) {
-        return Err("the network name must be 1 to 32 printable ASCII characters".into());
-    }
-    if s.passphrase.len() < 8 || s.passphrase.len() > 63 || !printable(&s.passphrase) {
-        return Err(
-            "the passphrase must be 8 to 63 printable ASCII characters (the hub is never open)"
-                .into(),
-        );
-    }
-    let channel_ok = if s.five_ghz {
-        (36..=165).contains(&s.channel)
-    } else {
-        (1..=13).contains(&s.channel)
-    };
-    if !channel_ok {
-        return Err("the channel is not valid for the chosen band".into());
-    }
+    validate_access_point(&s.interface, &s.ssid, &s.passphrase, s.channel, s.five_ghz)?;
     let a = s.hub_address;
     if !(a.is_private() || a.is_link_local()) || a.octets()[3] == 0 || a.octets()[3] == 255 {
         return Err("the hub address must be a private host address".into());
@@ -81,6 +62,38 @@ pub fn validate(s: &HubSettings) -> Result<(), String> {
     }
     if !(1..=24 * 60).contains(&s.lease_minutes) {
         return Err("the lease time must be 1 minute to 24 hours".into());
+    }
+    Ok(())
+}
+
+// [@ANCHOR: relay_broker_hub_validate_access_point]
+/// The checks both access-point forms share: plain interface name, printable network name, a WPA2 passphrase (never open), a channel valid for the band.
+fn validate_access_point(
+    interface: &str,
+    ssid: &str,
+    passphrase: &str,
+    channel: u8,
+    five_ghz: bool,
+) -> Result<(), String> {
+    if !plain_interface_name(interface) {
+        return Err("the wifi interface name is not a plain interface name".into());
+    }
+    if ssid.is_empty() || ssid.len() > 32 || !printable(ssid) {
+        return Err("the network name must be 1 to 32 printable ASCII characters".into());
+    }
+    if passphrase.len() < 8 || passphrase.len() > 63 || !printable(passphrase) {
+        return Err(
+            "the passphrase must be 8 to 63 printable ASCII characters (the hub is never open)"
+                .into(),
+        );
+    }
+    let channel_ok = if five_ghz {
+        (36..=165).contains(&channel)
+    } else {
+        (1..=13).contains(&channel)
+    };
+    if !channel_ok {
+        return Err("the channel is not valid for the chosen band".into());
     }
     Ok(())
 }
@@ -101,13 +114,35 @@ pub fn choose_hub_address(uplink: Option<Ipv4Addr>) -> Ipv4Addr {
 /// The `hostapd.conf` text: WPA2-PSK access point, AP-level carrying only (client isolation off so members and browsers reach each other).
 pub fn hostapd_conf(s: &HubSettings) -> Result<String, String> {
     validate(s)?;
-    Ok(format!(
+    Ok(hostapd_text(
+        &s.interface,
+        &s.ssid,
+        &s.passphrase,
+        s.channel,
+        s.five_ghz,
+        None,
+    ))
+}
+
+// [@ANCHOR: relay_broker_hub_hostapd_text]
+/// The one `hostapd.conf` template; `bridge` adds `bridge=<name>` so hostapd puts the wifi interface into the user's bridge. The caller has validated every field.
+fn hostapd_text(
+    interface: &str,
+    ssid: &str,
+    passphrase: &str,
+    channel: u8,
+    five_ghz: bool,
+    bridge: Option<&str>,
+) -> String {
+    let bridge_line = bridge.map_or(String::new(), |b| format!("bridge={b}\n"));
+    format!(
         "# Written by the hams relay broker from fixed settings. Do not edit.\n\
-         interface={}\n\
+         interface={interface}\n\
+         {bridge_line}\
          driver=nl80211\n\
-         ssid={}\n\
+         ssid={ssid}\n\
          hw_mode={}\n\
-         channel={}\n\
+         channel={channel}\n\
          ieee80211n=1\n\
          wmm_enabled=1\n\
          ap_isolate=0\n\
@@ -115,12 +150,45 @@ pub fn hostapd_conf(s: &HubSettings) -> Result<String, String> {
          wpa=2\n\
          wpa_key_mgmt=WPA-PSK\n\
          rsn_pairwise=CCMP\n\
-         wpa_passphrase={}\n",
-        s.interface,
-        s.ssid,
-        if s.five_ghz { "a" } else { "g" },
+         wpa_passphrase={passphrase}\n",
+        if five_ghz { "a" } else { "g" },
+    )
+}
+
+/// Phase 0 bridged access point: the wifi interface joins the owner's own bridge (`br0`) and the router, not the hub, does DHCP. No address, no dnsmasq.
+// [@ANCHOR: hub_bridged_ap_settings_struct]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BridgedApSettings {
+    /// The wifi interface the access point uses.
+    pub interface: String,
+    /// The owner's existing bridge that hostapd adds the wifi interface to, such as `br0`.
+    pub bridge: String,
+    /// The network name, 1 to 32 printable ASCII characters.
+    pub ssid: String,
+    /// The WPA2 passphrase, 8 to 63 printable ASCII characters. Never open.
+    pub passphrase: String,
+    /// 2.4 GHz channel 1 to 13, or a 5 GHz channel (36 to 165) when `five_ghz`.
+    pub channel: u8,
+    /// True for the 5 GHz band.
+    pub five_ghz: bool,
+}
+
+// [@ANCHOR: relay_broker_hub_bridged_hostapd_conf]
+/// The `hostapd.conf` text for the bridged access point: the same WPA2 template as the hub with `bridge=<bridge>`; refused for a bad interface, bridge, name, passphrase or channel.
+pub fn bridged_hostapd_conf(s: &BridgedApSettings) -> Result<String, String> {
+    validate_access_point(&s.interface, &s.ssid, &s.passphrase, s.channel, s.five_ghz)?;
+    if !plain_interface_name(&s.bridge) || s.bridge == s.interface {
+        return Err(
+            "the bridge name must be a plain interface name other than the wifi interface".into(),
+        );
+    }
+    Ok(hostapd_text(
+        &s.interface,
+        &s.ssid,
+        &s.passphrase,
         s.channel,
-        s.passphrase
+        s.five_ghz,
+        Some(&s.bridge),
     ))
 }
 
@@ -249,6 +317,37 @@ pub fn takeover_dnsmasq_conf(t: &TakeoverSettings) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     // Tests [@ANCHOR: hub_hub_settings_struct]
+    // Tests [@ANCHOR: hub_bridged_ap_settings_struct]
+    // Tests [@ANCHOR: relay_broker_hub_bridged_hostapd_conf]
+    // Tests [@ANCHOR: relay_broker_hub_validate_access_point]
+    // Tests [@ANCHOR: relay_broker_hub_hostapd_text]
+    #[test]
+    fn the_bridged_access_point_joins_the_owners_bridge_and_is_never_open() {
+        let g = || BridgedApSettings {
+            interface: "wlan0".into(),
+            bridge: "br0".into(),
+            ssid: "HAMS-EMERGENCY".into(),
+            passphrase: "correct horse".into(),
+            channel: 6,
+            five_ghz: false,
+        };
+        let text = bridged_hostapd_conf(&g()).unwrap();
+        assert!(text.contains("interface=wlan0\nbridge=br0\n"), "{text}");
+        assert!(text.contains("wpa=2\n") && text.contains("wpa_passphrase=correct horse\n"));
+        assert!(!text.contains("dhcp"), "{text}");
+        let refused = |f: fn(&mut BridgedApSettings)| {
+            let mut s = g();
+            f(&mut s);
+            bridged_hostapd_conf(&s).is_err()
+        };
+        assert!(refused(|s| s.passphrase = "short".into()));
+        assert!(refused(|s| s.bridge = "br0\nwpa=0".into()));
+        assert!(refused(|s| s.bridge = "-br0".into()));
+        assert!(refused(|s| s.bridge = "wlan0".into()));
+        assert!(refused(|s| s.interface = "wlan0;x".into()));
+        assert!(refused(|s| s.channel = 14));
+    }
+
     // Tests [@ANCHOR: hub_takeover_settings_struct]
     use super::*;
 
