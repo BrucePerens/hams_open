@@ -216,6 +216,16 @@ class TestHelpdeskTours(HamsHttpCase):
         # Should redirect to ticket detail
         self.assertEqual(res.status_code, 200)
 
+    # [@ANCHOR: hams_helpdesk:test_a_double_submit_opens_one_ticket]
+    def test_a_double_submit_opens_one_ticket(self):
+        # Tests [@ANCHOR: hams_helpdesk:portal_submit_idempotent]
+        self.authenticate("portal_cust_tour", "password")
+        csrf_token = re.search(r'name="csrf_token"\s+value="([^"]+)"', self.url_open("/my/tickets/new").text).group(1)
+        data = {"name": "Twice Sent Subject", "description": "Sent twice", "callsign": "K1AAA", "csrf_token": csrf_token}
+        for _attempt in range(2):
+            self.url_open("/my/tickets/submit", data=data)
+        self.assertEqual(self.env["hams_helpdesk.ticket"].search_count([("name", "=", "Twice Sent Subject")]), 1)
+
     def test_portal_member_can_submit_ticket_assigned_to_an_agent(self):
         # Tests [@ANCHOR: hams_helpdesk:portal_submit_service_default_env]
         """Regression: a plain member submitting a ticket got
