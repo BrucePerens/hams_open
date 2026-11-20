@@ -1343,6 +1343,33 @@ class TestExceptionHooks(RealTransactionCase):
         # safe_eval wraps every server-action error in a ValueError; the ticket names the real one.
         self.assertEqual(rows.exc_type, "builtins.KeyError")
 
+    # Tests [@ANCHOR: hams_helpdesk:exc_cron_logged_failures]
+    def test_cron_job_that_logs_a_handled_failure_and_finishes_still_makes_a_ticket(self):
+        def handled_and_logged(_model):
+            try:
+                int("not a number")
+            except ValueError:
+                _logger.exception("record 7 could not be processed; tried again next run")
+
+        cron = self.env["ir.cron"].create(
+            {
+                "name": "Exception ticket logged job",
+                "model_id": self.env.ref("base.model_res_partner").id,
+                "state": "code",
+                "code": "model.hunt_logged_failure()",
+                "interval_number": 1,
+                "interval_type": "days",
+                "active": False,
+            }
+        )
+        self.env.cr.commit()
+        self.safe_patch_object(type(self.env["res.partner"]), "hunt_logged_failure", new=handled_and_logged, create=True)
+        cron._callback(cron.cron_name, cron.ir_actions_server_id.id)
+        rows = self.rows([("source", "=", "cron")])
+        self.assertEqual(len(rows), 1, "a failure the job caught and only logged must reach a ticket")
+        self.assertEqual(rows.route, "cron: Exception ticket logged job")
+        self.assertEqual(rows.exc_type, "builtins.ValueError")
+
     def test_report_survives_the_rollback_of_the_failed_transaction(self):
         exc = TypeError("bad")
         with self.assertRaises(psycopg2.errors.DivisionByZero):
