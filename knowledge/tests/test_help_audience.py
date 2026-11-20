@@ -10,6 +10,7 @@ Manual Administrator, and even an administrator meets it only in the labelled
 administrators-only view, never in Help itself.
 """
 from odoo.tests.common import tagged
+from odoo.addons.knowledge.controllers import main as main_module
 from odoo.addons.knowledge.controllers.main import ManualLibraryController
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 
@@ -209,6 +210,23 @@ class TestHelpAudience(HamsHttpCase):
         response = self.url_open("/manual/internal?search=Lifecycle")
         self.assertIn(self.story.name.encode(), response.content)
         self.assertNotIn(self.published_internal.name.encode(), response.content)
+
+    def test_08b_internal_index_pages_reach_every_document(self):
+        # Tests [@ANCHOR: knowledge:internal_index]
+        self.safe_patch_object(main_module, "INTERNAL_PAGE_SIZE", 1)
+        self._as("zorkmid_manager")
+        seen, names = b"", []
+        for number in range(1, 200):
+            response = self.url_open("/manual/internal/page/%d" % number)
+            self.assertEqual(response.status_code, 200)
+            cards = response.content.count(b"list-group-item list-group-item-action")
+            self.assertLessEqual(cards, 1, "one document per page")
+            if response.content in names:  # past the last page the pager shows the last page again
+                break
+            names.append(response.content)
+            seen += response.content
+        for name in self._internal_names():
+            self.assertIn(name, seen)
 
     def test_09_help_links_to_the_internal_view_only_for_administrators(self):
         self._as("zorkmid_member")

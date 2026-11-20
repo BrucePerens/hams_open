@@ -315,6 +315,7 @@
                         </t>
                     </div>
                     <div t-if="not articles" class="alert alert-info mt-3">No internal documentation matches.</div>
+                    <div class="d-flex justify-content-center mt-4"><t t-call="website.pager"/></div>
                 </div>
             </div>
         </t>
