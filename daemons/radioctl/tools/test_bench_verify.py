@@ -174,6 +174,12 @@ class BenchVerifyTests(unittest.TestCase):
         self.assertIsNotNone(b.port_refusal("/dev/ttyUSB0"))
         self.assertIsNotNone(b.port_refusal("/dev/ttyACM1"))
         self.assertIsNotNone(b.port_refusal("COM3"))
+        # A '..' would reach the bare tty through an accepted-looking prefix.
+        self.assertIsNotNone(b.port_refusal("/dev/serial/by-id/../../ttyUSB0"))
+        self.assertIsNotNone(b.port_refusal("/dev/pts/../ttyUSB0"))
+        self.assertIsNotNone(b.port_refusal('/dev/serial/by-id/x"\ntransmit = true'))  # would be written into the TOML config
+        self.assertIsNotNone(b.port_refusal("/dev/serial/by-id/"))
+        self.assertIsNotNone(b.port_refusal('usb:10c4:ea60:A1"\nx'))
         self.assertIsNone(b.port_refusal("/dev/serial/by-id/usb-X-if00"))
         self.assertIsNone(b.port_refusal("usb:10c4:ea60"))
         self.assertIsNone(b.port_refusal("usb:10c4:ea60:A123"))
