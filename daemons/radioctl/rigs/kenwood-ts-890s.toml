@@ -4,7 +4,7 @@
 # selects the engine in crates/radioctl-protocols/src/kenwood_ts890.rs, where the gaps are listed. No radio
 # has been connected, so every `verified` is unverified.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "set-ptt", "read-signal", "transceive", "split", "rit-xit", "levels", "identify", "scope", "send-cw"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "set-ptt", "read-signal", "transceive", "split", "rit-xit", "levels", "identify", "scope", "send-cw", "repeater"]
 
 [rig]
 id = "kenwood-ts-890s"
@@ -152,3 +152,8 @@ verified = { state = "manual-checked", reference = "Kenwood TS-890S 'PC Control 
 key = "kenwood.ky"
 provenance = { kind = "manual", reference = "Kenwood TS-890S 'PC Control Command Reference Guide', file ts890/ts890_pc_command_e.pdf, https://kasc-cdn.novena.hr/files/prod/3340/5/ts890_pc_command_e.pdf, sha256 47aaa1031686d02f229456321fd018e8b53666819016aeb1e19531877cb64ae7, PDF p. 38 (printed 37): KY Set 1 (P1 a space or '2'; '2' makes P2 a variable length of up to 24 bytes, spaces kept), Set 2 `KY0;` stops Set 1, read and answer (P1 0 buffer space, 1 none); table with lower case and @", note = "Used in the P1 = 2 form (`KY2<text>;`, 1 to 24 characters, no padding), which the guide documents for the TS-890S and Hamlib 4.6.2 kenwood_send_morse also sends for it; stop `KY0;`. A text longer than 24 characters is refused, not split. Unverified on a radio." }
 verified = { state = "manual-checked", reference = "Kenwood TS-890S 'PC Control Command Reference Guide', KY (PDF p. 38 (printed 37))" }
+
+[[facts]]
+key = "capability.repeater"
+provenance = { kind = "manual", reference = "Kenwood 'TS-890S PC Control command reference guide' (file ts890_pc_command_e.pdf, sha256 47aaa1031686d02f229456321fd018e8b53666819016aeb1e19531877cb64ae7): CN PDF p. 17 (CTCSS frequency number 00-49 with the chart), TN and TO PDF p. 67 (FM tone frequency number 00-50, 99 sets the default; tone function 0 off, 1 tone, 2 CTCSS, 3 cross tone)", note = "Tone only: the guide has no DCS, repeater shift or offset command, so those ops are refused; cross tone (TO3) is not mapped. A tone set sends TN and CN together, a read asks TN. The chart in kenwood_ts890.rs is the guide's. Unverified: no radio has been connected." }
+verified = { state = "unverified" }

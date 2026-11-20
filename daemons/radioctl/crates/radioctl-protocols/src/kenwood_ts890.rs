@@ -59,7 +59,7 @@ use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind, Request};
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::{Field, Observation, Op};
 use radioctl_core::scope::{FilterScopeFrame, ScopeAction, ScopeAxis, ScopeFrame, ScopeSetting};
-use radioctl_core::units::{Hz, Level, Vfo};
+use radioctl_core::units::{Hz, Level, ToneMode, Vfo};
 
 use crate::attenuation;
 use crate::kenwood::{parse_digits, Token, Tokenizer};
@@ -68,6 +68,31 @@ use crate::kenwood::{parse_digits, Token, Tokenizer};
 const MAX_HZ: u64 = 99_999_999_999;
 /// Largest RIT/XIT offset, in hertz (`RF` carries four digits).
 const MAX_OFFSET_HZ: u16 = 9_999;
+
+// [@ANCHOR: radioctl_ts890_tone_number]
+/// The tone number `TN` takes for a tone in tenths of a hertz (the TS-890S chart: 00 is 67.0 Hz,
+/// 49 is 254.1 Hz, 50 is 1750 Hz), or `None` when the chart has no such tone. `CN` takes 00 to 49.
+pub(crate) fn tone_number(tenths: u16) -> Option<usize> {
+    TS890_TONES.iter().position(|t| *t == tenths)
+}
+
+// [@ANCHOR: radioctl_ts890_tone_value]
+/// The tone in tenths of a hertz behind a TS-890S tone number, or `None` past number 50.
+pub(crate) fn tone_value(number: usize) -> Option<u16> {
+    TS890_TONES.get(number).copied()
+}
+
+/// The TS-890S tone chart (its PC command reference, `TN` and `CN`) in tenths of a hertz by tone
+/// number.
+const TS890_TONES: [u16; 51] = [
+    670, 693, 719, 744, 770, 797, 825, 854, 885, 915, 948, 974, 1000, 1035, 1072, 1109, 1148, 1188,
+    1230, 1273, 1318, 1365, 1413, 1462, 1514, 1567, 1598, 1622, 1655, 1679, 1713, 1738, 1773, 1799,
+    1835, 1862, 1899, 1928, 1966, 1995, 2035, 2065, 2107, 2181, 2257, 2291, 2336, 2418, 2503, 2541,
+    17500,
+];
+
+/// The highest tone number `CN` (the CTCSS squelch tone) takes.
+const CN_MAX: usize = 49;
 
 /// The bandscope span choices of `BS4` in hertz, indexed by the guide's code 0 to 6.
 const SCOPE_SPANS_HZ: [u64; 7] = [5_000, 10_000, 25_000, 50_000, 100_000, 200_000, 500_000];
@@ -357,6 +382,12 @@ impl Ts890Engine {
             (Some("XT"), Some(v @ ("0" | "1"))) => Some(Observation::Xit(v == "1")),
             (Some("RF"), Some(d)) if d.len() == 5 => decode_offset(d),
             (Some("AN"), Some(d)) => decode_antenna(d),
+            (Some("TO"), Some("0")) => Some(Observation::ToneMode(ToneMode::Off)),
+            (Some("TO"), Some("1")) => Some(Observation::ToneMode(ToneMode::Tone)),
+            (Some("TO"), Some("2")) => Some(Observation::ToneMode(ToneMode::Tsql)),
+            (Some("TN"), Some(d)) if d.len() == 2 => parse_digits(d)
+                .and_then(|n| tone_value(usize::try_from(n).ok()?))
+                .map(Observation::CtcssTone),
             (Some("RA"), Some(d)) => self.decode_step(Level::Attenuator, d),
             (Some("PA"), Some(d)) => self.decode_step(Level::Preamp, d),
             (Some(name), Some(d)) => decode_level(name, d),
@@ -885,6 +916,30 @@ impl ProtocolEngine for Ts890Engine {
                 Self::command(format!("{}{value:03};", wire.name), none)
             }
             Op::GetModelId => Self::command("ID;".into(), observe(Field::ModelId)),
+            // The tone ops of the `repeater` capability: `TO` is 0 off, 1 tone, 2 CTCSS (tone
+            // squelch), 3 cross tone; `TN` is the tone, `CN` the squelch tone, set together. The
+            // guide has no DCS, repeater shift or offset command, so those are refused.
+            Op::GetToneMode => Self::command("TO;".into(), observe(Field::ToneMode)),
+            Op::SetToneMode(ToneMode::Off) => Self::command("TO0;".into(), none),
+            Op::SetToneMode(ToneMode::Tone) => Self::command("TO1;".into(), none),
+            Op::SetToneMode(ToneMode::Tsql) => Self::command("TO2;".into(), none),
+            Op::GetCtcssTone => Self::command("TN;".into(), observe(Field::CtcssTone)),
+            Op::SetCtcssTone(tenths) => match tone_number(*tenths) {
+                Some(n) if n <= CN_MAX => Self::command(format!("TN{n:02};CN{n:02};"), none),
+                Some(n) => Self::command(format!("TN{n:02};"), none),
+                None => return Err(Self::unsupported("the rig's tone chart has no such tone")),
+            },
+            Op::SetToneMode(ToneMode::Dcs)
+            | Op::GetDcsCode
+            | Op::SetDcsCode(_)
+            | Op::GetRepeaterShift
+            | Op::SetRepeaterShift(_)
+            | Op::GetRepeaterOffset
+            | Op::SetRepeaterOffset(_) => {
+                return Err(Self::unsupported(
+                    "the TS-890S guide has no DCS, repeater shift or offset command",
+                ))
+            }
             // `KY` as the TS-890S guide documents it (PDF p. 38): the form, width, character table
             // and stop come from the description's `[kenwood.ky]` block.
             Op::SendCw(text) => {

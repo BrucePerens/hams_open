@@ -162,7 +162,11 @@ fact of `rigs/kenwood-ts-890s.toml`).
   transceive switch), split `TB`, the transmit VFO `FT`, RIT/XIT, levels (`AG`, `RG`, `MG`, `KS`, `PC`),
   the attenuator and preamplifier (`RA`, `PA`), the antenna port (`AN`), CW text and its stop (`KY`), `ID`,
   and the bandscope operations listed below (output, axis, span, reference level, edges, settings, actions).
-<!--ops rig=kenwood-ts-890s: GetFrequency GetFrequency.B GetLevel.AfGain GetLevel.Antenna GetLevel.Attenuator GetLevel.KeyerSpeed GetLevel.MicGain GetLevel.Preamp GetLevel.RfGain GetLevel.RfPower GetMode GetModelId GetRit GetRitOffset GetScopeAxis GetScopeOutput GetScopeReference GetScopeSetting GetScopeSpan GetSignal GetSplit GetTxVfo GetXit ScopeAction SendCw SetFrequency SetFrequency.B SetLevel.AfGain SetLevel.Antenna SetLevel.Attenuator SetLevel.KeyerSpeed SetLevel.MicGain SetLevel.Preamp SetLevel.RfGain SetLevel.RfPower SetMode SetPtt SetRit SetRitOffset SetScopeAxis SetScopeEdges SetScopeOutput SetScopeReference SetScopeSetting SetScopeSpan SetSplit SetTransceive SetXit StopCw-->
+  The tone ops of the `repeater` capability: the tone function `TO` (0 off, 1 tone, 2 CTCSS, which is `Off`, `Tone`
+  and `Tsql`; cross tone, 3, is not mapped) and the tone `TN` with `CN` for the squelch (number 49 at most) by the
+  guide's 51-entry chart. The guide has no DCS, repeater shift or offset command, so those ops are refused.
+  Unverified on a radio.
+<!--ops rig=kenwood-ts-890s: GetCtcssTone GetFrequency GetFrequency.B GetLevel.AfGain GetLevel.Antenna GetLevel.Attenuator GetLevel.KeyerSpeed GetLevel.MicGain GetLevel.Preamp GetLevel.RfGain GetLevel.RfPower GetMode GetModelId GetRit GetRitOffset GetScopeAxis GetScopeOutput GetScopeReference GetScopeSetting GetScopeSpan GetSignal GetSplit GetToneMode GetTxVfo GetXit ScopeAction SendCw SetCtcssTone SetFrequency SetFrequency.B SetLevel.AfGain SetLevel.Antenna SetLevel.Attenuator SetLevel.KeyerSpeed SetLevel.MicGain SetLevel.Preamp SetLevel.RfGain SetLevel.RfPower SetMode SetPtt SetRit SetRitOffset SetScopeAxis SetScopeEdges SetScopeOutput SetScopeReference SetScopeSetting SetScopeSpan SetSplit SetToneMode SetTransceive SetXit StopCw-->
 - **LAN:** the guide documents a TCP connection (UTF-8; the radio drops it after 10 s of silence): `##CN;`
   then `##ID` with an account type, the two lengths, the account and the password. The frames are built by
   `lan_connect_request` and `lan_login` and the answers read by `lan_reply`. `Ts890LanFraming` (`kenwood_ts890_lan`) runs them over the network link and `radioctld` serves it as

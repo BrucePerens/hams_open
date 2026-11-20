@@ -5,11 +5,12 @@
 //! rig's private state; like the rest of the virtual rigs it answers only what the engine asks.
 
 use radioctl_core::description::KenwoodDialect;
-use radioctl_core::units::Level;
+use radioctl_core::units::{Level, ToneMode};
 
 use super::VirtualRig;
 use crate::attenuation;
 use crate::kenwood;
+use crate::kenwood_ts890;
 
 /// A refusal.
 const REFUSED: &str = "?;";
@@ -140,6 +141,36 @@ impl VirtualRig {
                 None
             }
             ("KY", _) => self.kenwood_ky(arg),
+            // Tone function (0 off, 1 tone, 2 CTCSS; cross tone, 3, is not modelled) and the tone and squelch tone
+            // numbers (`TN` 00 to 50, `CN` 00 to 49).
+            ("TO", "") => Some(format!(
+                "TO{};",
+                match self.state.tone_mode {
+                    ToneMode::Tone => 1,
+                    ToneMode::Tsql => 2,
+                    ToneMode::Off | ToneMode::Dcs => 0,
+                }
+            )),
+            ("TO", m @ ("0" | "1" | "2")) => {
+                self.state.tone_mode = match m {
+                    "1" => ToneMode::Tone,
+                    "2" => ToneMode::Tsql,
+                    _ => ToneMode::Off,
+                };
+                None
+            }
+            ("TN" | "CN", "") => kenwood_ts890::tone_number(self.state.ctcss_tenths)
+                .map(|n| format!("{name}{n:02};")),
+            ("TN" | "CN", digits) if digits.len() == 2 => {
+                let number = digits.parse::<usize>().ok();
+                match number.and_then(kenwood_ts890::tone_value) {
+                    Some(tenths) if name == "TN" || number <= Some(49) => {
+                        self.state.ctcss_tenths = tenths;
+                        None
+                    }
+                    _ => Some("?;".to_string()),
+                }
+            }
             ("ID", "") => Some(format!("ID{:03};", self.kenwood_id())),
             ("AI", "") => Some(format!("AI{};", u8::from(self.state.transceive))),
             ("AI", a) => {
