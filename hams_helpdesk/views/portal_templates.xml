@@ -165,7 +165,7 @@
                                     </div>
                                     <div class="mb-3">
                                         <label for="ticket_description" class="form-label">Description</label>
-                                        <textarea name="description" id="ticket_description" class="form-control" rows="5" placeholder="Detailed steps to reproduce, error messages, or context..." t-out="(form or {}).get('description')"></textarea>
+                                        <textarea name="description" id="ticket_description" class="form-control" rows="5" placeholder="Detailed steps to reproduce, error messages, or context..."><t t-out="(form or {}).get('description')"/></textarea>
                                     </div>
                                     <div class="text-end">
                                         <button type="submit" class="btn btn-primary o_tour_submit_ticket">Submit Ticket</button>
