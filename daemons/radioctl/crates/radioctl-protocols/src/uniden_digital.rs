@@ -176,10 +176,10 @@ fn frequency(field: &str) -> Option<Hz> {
         let mhz: u64 = whole.trim().parse().ok()?;
         let digits = format!("{fraction:0<6}");
         let hz: u64 = digits.get(..6)?.parse().ok()?;
-        return Some(Hz(mhz * 1_000_000 + hz));
+        return mhz.checked_mul(1_000_000)?.checked_add(hz).map(Hz);
     }
     let units: u64 = field.trim().parse().ok()?;
-    Some(Hz(units * 100))
+    units.checked_mul(100).map(Hz)
 }
 
 // [@ANCHOR: radioctl_unidig_modulation]
@@ -366,6 +366,25 @@ mod tests {
         assert_eq!(frequency("x"), None);
         assert_eq!(modulation("FMB"), Some(Mode::Wfm));
         assert_eq!(modulation("AUTO"), None);
+    }
+
+    // Tests [@ANCHOR: radioctl_unidig_frequency]
+    #[test]
+    fn a_frequency_field_too_large_for_u64_is_unrecognised_not_an_overflow() {
+        let mut e = engine(shipped("uniden-bcd996t")).expect("engine");
+        for field in ["20000000000000.5", "18446744073709551615"] {
+            e.encode(&Op::GetFrequency(Vfo::A)).expect("get");
+            let line = format!("GLG,{field},FM,0,0,,,,1,0\r");
+            assert!(
+                matches!(
+                    e.feed(line.as_bytes(), T0).as_slice(),
+                    [Inbound::Unrecognised(_)]
+                ),
+                "{field}"
+            );
+        }
+        assert_eq!(frequency("18446744073709551615"), None);
+        assert_eq!(frequency("18446744073709551616"), None);
     }
 
     // Tests [@ANCHOR: radioctl_unidig_twin_new]
