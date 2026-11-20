@@ -291,7 +291,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2008 | Kenwood | TS-811 | A | kenwood_ascii | kenwood | `kenwood-ts-811` | - | unverified | - | described |
 | 2009 | Kenwood | TS-850 | A | kenwood_ascii | kenwood | `kenwood-ts-850` | - | unverified | - | described |
 | 2010 | Kenwood | TS-870S | A | kenwood_ascii | kenwood | `kenwood-ts-870s` | - | manual-checked | - | described |
-| 2041 | Kenwood | TS-890S | A | kenwood_ascii | kenwood | `kenwood-ts-890s` | - | manual-checked | - | described |
+| 2041 | Kenwood | TS-890S | A | kenwood_ascii | kenwood | `kenwood-ts-890s` | shift, offset, tones | manual-checked | - | described |
 | 2022 | Kenwood | TS-930 | A | kenwood_ascii | kenwood | `kenwood-ts-930` | - | unverified | - | described |
 | 2011 | Kenwood | TS-940S | A | kenwood_ascii | kenwood | `kenwood-ts-940s` | - | unverified | - | described |
 | 2012 | Kenwood | TS-950S | A | kenwood_ascii | kenwood | `kenwood-ts-950s` | - | unverified | - | described |

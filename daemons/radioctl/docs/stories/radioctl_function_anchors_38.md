@@ -154,3 +154,11 @@ The inverse of `scope_setting_wire` for the letter: given the text after `BS` (o
 ### `fn scope_action_letter(action: ScopeAction) -> char` [@ANCHOR: radioctl:radioctl_ts890_scope_action_wire]
 
 The command letter, without `BS`, of a one-shot scope action: `ClearWaterfall` is `D` (`BSD`, clears the waterfall) and `MarkerShift` is `E` (`BSE`, shifts the marker in auto scroll mode or centres it in fixed mode; the rig ignores it in center mode). Total over the two actions. Pure; `encode` sends `BS` plus this letter with no value, and checks the center-mode rule for `MarkerShift` itself (see `encode`).
+
+### `fn tone_number(tenths: u16) -> Option<usize>` [@ANCHOR: radioctl:radioctl_ts890_tone_number]
+
+The tone number the TS-890S `TN` command takes for a CTCSS tone in tenths of a hertz (885 is 88.5 Hz, number 8). `tenths` is by value; the chart is the 51-entry one of the PC command reference (00 is 67.0 Hz, 49 is 254.1 Hz, 50 is 1750 Hz). Returns the index, or `None` when the chart has no such tone, which the engine reports as an `Unsupported` `RigError` instead of sending a value the rig refuses. The squelch tone `CN` takes 00 to 49 only. Crate-private, pure, no I/O, no other errors; the inverse is `tone_value`.
+
+### `fn tone_value(number: usize) -> Option<u16>` [@ANCHOR: radioctl:radioctl_ts890_tone_value]
+
+The CTCSS tone in tenths of a hertz behind a TS-890S `TN` or `CN` number, from a rig answer or from the virtual rig's received command. `number` is the two-digit number as a `usize`; returns the chart entry, or `None` past number 50, so a corrupt answer is reported as unrecognised and the virtual rig answers `?;`. Crate-private, pure, no I/O, no other errors; the inverse is `tone_number`.
