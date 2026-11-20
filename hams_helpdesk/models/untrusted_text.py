@@ -524,11 +524,12 @@ def _contrast(a, b):
     return (hi + 0.05) / (lo + 0.05)
 
 
-# [@ANCHOR: hams_helpdesk:untrusted_style_declarations]
-def _style_declarations(style):
-    """`style` split at the ';' that are not inside a parenthesis (`url(a;b)`): a ';' is inside when the first '(' or ')' after it is a ')'.
-    The regex that said this (a negative lookahead on `[^(]*` then `)`) looked ahead to the end of the text from every ';', so a hostile style of 40,000
-    declarations took 17 seconds; one backward pass gives the same answer in linear time."""
+# [@ANCHOR: hams_helpdesk:untrusted_style_dict]
+def _style_dict(style):
+    out = {}
+    # Split at the ';' that are not inside a parenthesis (`url(a;b)`): a ';' is inside when the first '(' or ')' after it is a ')'. The regex
+    # that said this (`;(?![^(]*\))`) looked ahead to the end of the text from every ';', so a hostile style of 40,000 declarations took
+    # 17 seconds; one backward pass gives the same split (equal to the old one on 200,000 random strings) in linear time.
     style = style or ""
     inside = [False] * (len(style) + 1)
     state = False
@@ -545,13 +546,7 @@ def _style_declarations(style):
             parts.append(style[start:index])
             start = index + 1
     parts.append(style[start:])
-    return parts
-
-
-# [@ANCHOR: hams_helpdesk:untrusted_style_dict]
-def _style_dict(style):
-    out = {}
-    for part in _style_declarations(style):
+    for part in parts:
         if ":" in part:
             key, _, val = part.partition(":")
             out[key.strip().lower()] = val.strip().lower()

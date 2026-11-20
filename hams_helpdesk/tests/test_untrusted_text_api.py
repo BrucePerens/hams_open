@@ -168,7 +168,6 @@ class TestUntrustedTextBuildingBlocks(BaseCase):
         # Tests [@ANCHOR: hams_helpdesk:untrusted_luminance]
         # Tests [@ANCHOR: hams_helpdesk:untrusted_contrast]
         # Tests [@ANCHOR: hams_helpdesk:untrusted_style_dict]
-        # Tests [@ANCHOR: hams_helpdesk:untrusted_style_declarations]
         # Tests [@ANCHOR: hams_helpdesk:untrusted_tiny_size]
         self.assertEqual(ut._parse_color("WHITE !important"), WHITE)
         self.assertEqual(ut._parse_color("#fff"), WHITE)
