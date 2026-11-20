@@ -81,7 +81,7 @@ class HelpdeskPortal(CustomerPortal):
         ticket_count = Ticket.search_count(domain)
         pager = portal_pager(url="/my/tickets", total=ticket_count, page=page, step=20)
         tickets = Ticket.search(
-            domain, limit=20, offset=pager["offset"], order="create_date desc"
+            domain, limit=20, offset=pager["offset"], order="create_date desc, id desc"
         )
 
         values.update(
