@@ -103,6 +103,33 @@ pub enum Receiver {
     Sub,
 }
 
+// [@ANCHOR: radioctl_core_units_repeater_shift]
+/// The direction of a repeater shift: the transmit frequency is the receive frequency, lower by
+/// the offset, or higher by it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RepeaterShift {
+    /// No shift: transmit on the receive frequency.
+    Simplex,
+    /// Transmit below the receive frequency (a minus shift).
+    Minus,
+    /// Transmit above the receive frequency (a plus shift).
+    Plus,
+}
+
+// [@ANCHOR: radioctl_core_units_tone_mode]
+/// What the rig does with a sub-audible tone.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ToneMode {
+    /// No tone.
+    Off,
+    /// Send the CTCSS tone (to open a repeater); the receiver is not tone-squelched.
+    Tone,
+    /// Send the CTCSS tone and open the squelch only on the same tone (tone squelch).
+    Tsql,
+    /// Send and require a DCS code.
+    Dcs,
+}
+
 // [@ANCHOR: radioctl_core_units_vfo]
 /// A VFO. Only the VFOs a description lists are usable on a given rig.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

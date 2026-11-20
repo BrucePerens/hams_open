@@ -790,6 +790,7 @@
 | `Identify` | `Identify` | Ask the rig for its identifier and firmware revision. |
 | `Scope` | `Scope` | Spectrum scope: settings and waveform frames. |
 | `Receivers` | `Receivers` | Select and read the Main or Sub receiver (band) of a dual-receiver rig, the band the transmitter follows, and dual watch. |
+| `Repeater` | `Repeater` | Read and set the repeater shift and offset and the CTCSS/DCS tone. |
 
 **Invariants, ownership and concurrency.** Plain data: no locks, atomics or handles inside, so it is copied or moved by value as its derives allow. No invariant beyond the field types is stated in the source (unknown whether callers must keep any relation between fields).
 
@@ -1125,6 +1126,43 @@
 **Serialized form.** No serde derive; it is an in-memory type, and any byte layout is written by hand in the functions that use it.
 
 **Functions that touch it.** `watch` (src/net.rs:299), `watch` (src/net.rs:338), `link_changed` (src/rig.rs:2069), `watch` (src/serial.rs:363), `watch` (src/serial.rs:407), `watch` (src/usb_link.rs:111), `watch` (src/usb_link.rs:151).
+
+**See also:** test `observation_maps_to_its_field (src/op.rs)`.
+
+### `RepeaterShift` [@ANCHOR: radioctl:radioctl_core_units_repeater_shift]
+
+**Purpose and location.** The direction of a repeater shift: the transmit frequency is the receive frequency, lower by the offset, or higher by it. Defined in `daemons/radioctl/crates/radioctl-core/src/units.rs` as a pub `enum`. It derives Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash.
+
+| Variant | Definition | Meaning |
+|---|---|---|
+| `Simplex` | `Simplex` | No shift: transmit on the receive frequency. |
+| `Minus` | `Minus` | Transmit below the receive frequency (a minus shift). |
+| `Plus` | `Plus` | Transmit above the receive frequency (a plus shift). |
+
+**Invariants, ownership and concurrency.** Plain data: no locks, atomics or handles inside, so it is copied or moved by value as its derives allow. No invariant beyond the field types is stated in the source.
+
+**Serialized form.** No serde derive; it is an in-memory type, and any byte layout is written by hand in the functions that use it.
+
+**Functions that touch it.** None yet beyond the `Op` and `Observation` variants that carry it (see `Op`).
+
+**See also:** test `observation_maps_to_its_field (src/op.rs)`.
+
+### `ToneMode` [@ANCHOR: radioctl:radioctl_core_units_tone_mode]
+
+**Purpose and location.** What the rig does with a sub-audible tone. Defined in `daemons/radioctl/crates/radioctl-core/src/units.rs` as a pub `enum`. It derives Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash.
+
+| Variant | Definition | Meaning |
+|---|---|---|
+| `Off` | `Off` | No tone. |
+| `Tone` | `Tone` | Send the CTCSS tone (to open a repeater); the receiver is not tone-squelched. |
+| `Tsql` | `Tsql` | Send the CTCSS tone and open the squelch only on the same tone (tone squelch). |
+| `Dcs` | `Dcs` | Send and require a DCS code. |
+
+**Invariants, ownership and concurrency.** Plain data: no locks, atomics or handles inside, so it is copied or moved by value as its derives allow. No invariant beyond the field types is stated in the source.
+
+**Serialized form.** No serde derive; it is an in-memory type, and any byte layout is written by hand in the functions that use it.
+
+**Functions that touch it.** None yet beyond the `Op` and `Observation` variants that carry it (see `Op`).
 
 **See also:** test `observation_maps_to_its_field (src/op.rs)`.
 

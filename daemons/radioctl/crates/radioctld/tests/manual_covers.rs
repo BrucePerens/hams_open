@@ -22,7 +22,7 @@ use radioctl_core::capability::{Capability, CapabilitySet};
 use radioctl_core::op::Op;
 use radioctl_core::rigfile;
 use radioctl_core::scope::{ScopeAction, ScopeAxis, ScopeSetting};
-use radioctl_core::units::{Hz, Level, Meter, Mode, Receiver, Vfo};
+use radioctl_core::units::{Hz, Level, Meter, Mode, Receiver, RepeaterShift, ToneMode, Vfo};
 use radioctl_protocols::conformance::engine_for;
 
 fn workspace() -> PathBuf {
@@ -129,6 +129,22 @@ fn samples() -> Vec<(String, Vec<Op>)> {
     add("GetTxReceiver", vec![Op::GetTxReceiver]);
     add("SetDualWatch", vec![Op::SetDualWatch(true)]);
     add("GetDualWatch", vec![Op::GetDualWatch]);
+    add("GetRepeaterShift", vec![Op::GetRepeaterShift]);
+    add(
+        "SetRepeaterShift",
+        vec![Op::SetRepeaterShift(RepeaterShift::Minus)],
+    );
+    add("GetRepeaterOffset", vec![Op::GetRepeaterOffset]);
+    add(
+        "SetRepeaterOffset",
+        vec![Op::SetRepeaterOffset(Hz(600_000))],
+    );
+    add("GetToneMode", vec![Op::GetToneMode]);
+    add("SetToneMode", vec![Op::SetToneMode(ToneMode::Tone)]);
+    add("GetCtcssTone", vec![Op::GetCtcssTone]);
+    add("SetCtcssTone", vec![Op::SetCtcssTone(885)]);
+    add("GetDcsCode", vec![Op::GetDcsCode]);
+    add("SetDcsCode", vec![Op::SetDcsCode(23)]);
     all
 }
 

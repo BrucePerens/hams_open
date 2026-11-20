@@ -188,6 +188,16 @@
 | `GetTxReceiver` | `GetTxReceiver` | Read the band the transmitter follows. |
 | `SetDualWatch` | `SetDualWatch(bool)` | Turn dual watch (both receivers listening) on or off (Icom `07 C0`/`C1`). |
 | `GetDualWatch` | `GetDualWatch` | Read whether dual watch is on. |
+| `GetRepeaterShift` | ``GetRepeaterShift`` | Read the repeater shift direction. |
+| `SetRepeaterShift` | ``SetRepeaterShift(RepeaterShift)`` | Set the repeater shift direction (simplex, minus or plus). |
+| `GetRepeaterOffset` | ``GetRepeaterOffset`` | Read the repeater offset (the size of the shift) in hertz. |
+| `SetRepeaterOffset` | ``SetRepeaterOffset(Hz)`` | Set the repeater offset in hertz. |
+| `GetToneMode` | ``GetToneMode`` | Read the tone mode (off, tone encode, tone squelch or DCS). |
+| `SetToneMode` | ``SetToneMode(ToneMode)`` | Set the tone mode. |
+| `GetCtcssTone` | ``GetCtcssTone`` | Read the CTCSS tone frequency in tenths of a hertz (`885` is 88.5 Hz). |
+| `SetCtcssTone` | ``SetCtcssTone(u16)`` | Set the CTCSS tone frequency in tenths of a hertz; the rig accepts only its own list. |
+| `GetDcsCode` | ``GetDcsCode`` | Read the DCS code (the three octal digits written as a decimal number: `023` is 23). |
+| `SetDcsCode` | ``SetDcsCode(u16)`` | Set the DCS code; the rig accepts only its own list. |
 
 **Invariants, ownership and concurrency.** Plain data: no locks, atomics or handles inside, so it is copied or moved by value as its derives allow. No invariant beyond the field types is stated in the source (unknown whether callers must keep any relation between fields).
 
@@ -230,6 +240,11 @@
 | `Receiver` | `Receiver` | The receiver (band) commands act on. |
 | `TxReceiver` | `TxReceiver` | The band the transmitter follows. |
 | `DualWatch` | `DualWatch` | Dual watch on or off. |
+| `RepeaterShift` | ``RepeaterShift`` | The repeater shift direction. |
+| `RepeaterOffset` | ``RepeaterOffset`` | The repeater offset. |
+| `ToneMode` | ``ToneMode`` | The tone mode. |
+| `CtcssTone` | ``CtcssTone`` | The CTCSS tone frequency. |
+| `DcsCode` | ``DcsCode`` | The DCS code. |
 | `Alarm` | `Alarm` | A safety condition the actor reports on its own (see [`Alarm`]). |
 
 **Invariants, ownership and concurrency.** Plain data: no locks, atomics or handles inside, so it is copied or moved by value as its derives allow. No invariant beyond the field types is stated in the source (unknown whether callers must keep any relation between fields).
@@ -293,6 +308,11 @@
 | `Receiver` | `Receiver(Receiver)` | The receiver (band) commands act on. |
 | `TxReceiver` | `TxReceiver(Receiver)` | The band the transmitter follows. |
 | `DualWatch` | `DualWatch(bool)` | Dual watch on or off. |
+| `RepeaterShift` | `RepeaterShift(RepeaterShift)` | The repeater shift direction. |
+| `RepeaterOffset` | `RepeaterOffset(Hz)` | The repeater offset in hertz. |
+| `ToneMode` | `ToneMode(ToneMode)` | The tone mode. |
+| `CtcssTone` | `CtcssTone(u16)` | The CTCSS tone frequency in tenths of a hertz. |
+| `DcsCode` | `DcsCode(u16)` | The DCS code, as the decimal number of its three octal digits. |
 | `Alarm` | `Alarm(Alarm)` | A safety condition reported by the actor, never by the rig. |
 
 **Invariants, ownership and concurrency.** Plain data: no locks, atomics or handles inside, so it is copied or moved by value as its derives allow. No invariant beyond the field types is stated in the source (unknown whether callers must keep any relation between fields).

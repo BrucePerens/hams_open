@@ -49,10 +49,12 @@ pub enum Capability {
     /// Select and read the Main or Sub receiver (band) of a dual-receiver rig, the band the
     /// transmitter follows, and dual watch.
     Receivers,
+    /// Read and set the repeater shift and offset and the CTCSS/DCS tone.
+    Repeater,
 }
 
 /// Every capability with its file-format name.
-const NAMES: [(Capability, &str); 20] = [
+const NAMES: [(Capability, &str); 21] = [
     (Capability::ReadFrequency, "read-frequency"),
     (Capability::SetFrequency, "set-frequency"),
     (Capability::ReadMode, "read-mode"),
@@ -73,6 +75,7 @@ const NAMES: [(Capability, &str); 20] = [
     (Capability::Identify, "identify"),
     (Capability::Scope, "scope"),
     (Capability::Receivers, "receivers"),
+    (Capability::Repeater, "repeater"),
 ];
 
 impl Capability {
