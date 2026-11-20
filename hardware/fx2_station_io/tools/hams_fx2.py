@@ -144,7 +144,10 @@ def parse_ihx(text: str) -> Dict[int, int]:
             continue
         if not line.startswith(":"):
             raise Fx2Error(f"hex line {lineno}: no colon")
-        raw = bytes.fromhex(line[1:])
+        try:
+            raw = bytes.fromhex(line[1:])
+        except ValueError:  # not hex digits (or an odd count): Fx2Error like every other bad line, so main() reports it
+            raise Fx2Error(f"hex line {lineno}: not hexadecimal") from None
         if len(raw) < 5 or raw[0] != len(raw) - 5 or sum(raw) & 0xFF:
             raise Fx2Error(f"hex line {lineno}: bad length or checksum")
         count, addr, rtype = raw[0], (raw[1] << 8) | raw[2], raw[3]
