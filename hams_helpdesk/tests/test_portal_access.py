@@ -6,6 +6,7 @@
 forged POST body cannot make a ticket of a type the portal withholds."""
 import re
 
+from odoo.addons.hams_helpdesk.controllers import portal as portal_controller
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from odoo.tests.common import tagged
 
@@ -73,6 +74,17 @@ class TestPortalTicketAccess(HamsHttpCase):
             self.assertEqual(response.status_code, 200)
             self.assertIn("Give the ticket a subject.", response.text)
             self.assertIn("no subject but long text", response.text)
+        self.assertEqual(self.env["hams_helpdesk.ticket"].search_count([]), before)
+
+    # Tests [@ANCHOR: hams_helpdesk:portal_submit_rate_limited]
+    # [@ANCHOR: hams_helpdesk:test_a_member_over_the_hourly_ticket_limit_creates_nothing_and_is_told_to_wait]
+    def test_a_member_over_the_hourly_ticket_limit_creates_nothing_and_is_told_to_wait(self):
+        # Limit 0 makes the very first submission count as over the limit whatever the counter held before.
+        self.safe_patch_object(portal_controller, "TICKETS_PER_HOUR", 0)
+        before = self.env["hams_helpdesk.ticket"].search_count([])
+        response = self._post("/my/tickets/submit", name="Flood ticket", description="d")
+        self.assertEqual(response.status_code, 429)
+        self.assertIn("too quickly", response.text)
         self.assertEqual(self.env["hams_helpdesk.ticket"].search_count([]), before)
 
     # Tests [@ANCHOR: hams_helpdesk:COMM_portal_ticket_new]
