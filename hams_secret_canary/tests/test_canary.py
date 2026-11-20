@@ -334,10 +334,10 @@ class TestWsgiHook(CanaryCase, HamsHttpCase):
             response = self.url_open("/xmlrpc/2/common", data=request_xml, headers={"Content-Type": "text/xml"})
             # The scan runs on the server thread once the last chunk is out and opens its own cursor, which in test
             # mode needs the registry test lock the test thread holds again as soon as the response is in. Give the
-            # lock up while waiting; leaving the block takes it back, which also waits until the scan has finished.
+            # lock up while waiting (for the response alarm: the log scan alarm on the traceback may land first); leaving the block takes it back, which also waits until the scan has finished.
             with release_test_lock():
                 deadline = time.monotonic() + 10
-                while not logs.records and time.monotonic() < deadline:
+                while not any("seen in response" in line for line in logs.output) and time.monotonic() < deadline:
                     time.sleep(0.05)
         self.assertIn(SECRET, response.text)  # the fault does echo it: the leak this scan exists for
         # The server also logs the exception with its traceback, which the log scan now alarms on its own ("log").
