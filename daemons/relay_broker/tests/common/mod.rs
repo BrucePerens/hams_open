@@ -40,6 +40,8 @@ pub struct FakeOs {
     pub takeover: Arc<Mutex<Option<String>>>,
     /// How many times the package manager was asked to upgrade the relay.
     pub updates: Arc<std::sync::atomic::AtomicUsize>,
+    /// How many times a power-off was requested.
+    pub poweroffs: Arc<std::sync::atomic::AtomicUsize>,
     /// The fake clock (Unix seconds) and a switch that makes setting it fail.
     pub clock: Arc<std::sync::atomic::AtomicU64>,
     pub clock_fails: Arc<std::sync::atomic::AtomicBool>,
@@ -113,6 +115,7 @@ impl FakeOs {
             hub: Arc::new(Mutex::new(None)),
             takeover: Arc::new(Mutex::new(None)),
             updates: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            poweroffs: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             clock: Arc::new(std::sync::atomic::AtomicU64::new(1_793_500_000)),
             clock_fails: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             last_opened: Cell::new(None),
@@ -207,6 +210,11 @@ impl Os for FakeOs {
     }
     fn hub_takeover_stop(&self) -> io::Result<()> {
         *self.takeover.lock().unwrap() = None;
+        Ok(())
+    }
+    fn poweroff(&self) -> io::Result<()> {
+        self.poweroffs
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(())
     }
     fn update_package(&self) -> io::Result<()> {

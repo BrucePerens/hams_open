@@ -779,6 +779,36 @@ fn the_hub_is_refused_unless_enabled_and_then_written_from_the_templates() {
     assert!(hub.lock().unwrap().is_none());
 }
 
+// Tests [@ANCHOR: relay_broker_broker_poweroff]
+#[test]
+fn poweroff_is_refused_unless_the_hub_is_enabled() {
+    let now = Instant::now();
+    let os = FakeOs::typical();
+    let peer = os.peer;
+    let mut off = broker_with(&test_config(), os, None);
+    let (resp, _) = off.handle(peer, &Request::Poweroff, now);
+    assert!(
+        matches!(
+            resp,
+            Response::Error {
+                status: Status::Denied,
+                ..
+            }
+        ),
+        "{resp:?}"
+    );
+
+    let os = FakeOs::typical();
+    let seen = os.poweroffs.clone();
+    let mut cfg = test_config();
+    cfg.hub_enabled = true;
+    let mut on = broker_with(&cfg, os, None);
+    assert_eq!(seen.load(std::sync::atomic::Ordering::SeqCst), 0);
+    let (resp, _) = on.handle(peer, &Request::Poweroff, now);
+    assert_eq!(resp, Response::PoweroffRequested);
+    assert_eq!(seen.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
 // Tests [@ANCHOR: relay_broker_broker_update_package]
 #[test]
 fn update_package_runs_only_when_the_config_enables_it() {

@@ -99,3 +99,18 @@ class TestPortalTicketAccess(HamsHttpCase):
         report.invalidate_recordset()
         self.assertNotEqual(report.stage, "closed")
         self.assertFalse(report.with_user(self.member).search_count([("id", "=", report.id)]), "the portal rule hides it")
+
+    # Tests [@ANCHOR: hams_helpdesk:portal_my_tickets]
+    def test_tickets_created_together_page_without_repeats_or_gaps(self):
+        # Tickets made in one transaction share a create_date: the page order must still be total (newest id first).
+        Ticket = self.env["hams_helpdesk.ticket"]
+        made = Ticket.create(
+            [{"name": "Tie Order %02d" % n, "description": "<p>x</p>", "partner_id": self.member.partner_id.id}
+             for n in range(45)]
+        )
+        self.env.cr.execute("UPDATE hams_helpdesk_ticket SET create_date = %s WHERE id IN %s", ("2026-01-01 00:00:00", tuple(made.ids)))
+        seen = []
+        for path in ("/my/tickets", "/my/tickets/page/2", "/my/tickets/page/3"):
+            seen += re.findall(r"Tie Order (\d\d)", self.url_open(path).text)
+        expected = ["%02d" % n for n in sorted(range(45), reverse=True)]
+        self.assertEqual(seen, expected, "every ticket exactly once, in id order within the shared create_date")
