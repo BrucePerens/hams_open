@@ -26,6 +26,7 @@ _md_cache = lru.LRU(1024)
 # An hour of 60 leaves room for a classroom behind one address; a script does not get past it. Redis down refuses the
 # vote: a skipped vote costs nothing, an open counter is what the limit is there to stop.
 FEEDBACK_PER_HOUR_NETWORK = 60
+INTERNAL_PAGE_SIZE = 100  # documents on one page of /manual/internal
 
 # [@ANCHOR: knowledge:search_rate_limit]
 # Verified by [@ANCHOR: test_manual_search_is_limited_per_network]
@@ -369,8 +370,8 @@ class ManualLibraryController(http.Controller):
 
     # [@ANCHOR: knowledge:internal_index]
     # sitemap=False: an administrators-only page that answers 404 to everyone else; the public sitemap must not list it.
-    @http.route(["/manual/internal"], type="http", auth="public", website=True, sitemap=False)
-    def manual_internal_index(self, search="", **kwargs):
+    @http.route(["/manual/internal", "/manual/internal/page/<int:page>"], type="http", auth="public", website=True, sitemap=False)
+    def manual_internal_index(self, search="", page=1, **kwargs):
         """Administrators-only list of the documentation Help hides."""
         if not self._is_manual_manager():
             raise werkzeug.exceptions.NotFound()
@@ -378,11 +379,18 @@ class ManualLibraryController(http.Controller):
         if search:
             like = f"%{escape_psql(search)}%"
             domain += ["|", ("name", "=ilike", like), ("body", "=ilike", like)]
-        articles = request.env["knowledge.article"].search(domain, limit=1000)
+        # Count, order in SQL, then page: a cap before the sort would hide documents past it.
+        articles = request.env["knowledge.article"]
+        pager = request.website.pager(
+            url="/manual/internal", url_args={"search": search} if search else {}, total=articles.search_count(domain),
+            page=page, step=INTERNAL_PAGE_SIZE,
+        )
+        articles = articles.search(domain, order="name, id", limit=INTERNAL_PAGE_SIZE, offset=pager["offset"])
         return request.render(
             "knowledge.internal_index_template",
             {
-                "articles": articles.sorted(lambda a: a.name.lower()),
+                "articles": articles,
+                "pager": pager,
                 "search_term": search,
                 **self._sidebar_context(),
             },
