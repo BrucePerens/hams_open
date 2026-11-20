@@ -1495,6 +1495,15 @@ fn saved_procedures_have_versions_a_declared_tier_and_run_by_name() {
     )
     .unwrap_err()
     .contains("no version 9"));
+    // a version of the wrong type is refused, never read as "latest" or (for delete) "every version"
+    for v in [json!("1"), json!(1.5), json!(-1)] {
+        let args = json!({"name": "model-of-gen", "version": v, "confirm": true});
+        for t in ["bench_proc_load", "bench_proc_delete"] {
+            let e = tool(&b, t, args.clone()).unwrap_err();
+            assert!(e.contains("version must be a whole number"), "{t}: {e}");
+        }
+    }
+    assert!(tool(&b, "bench_proc_load", json!({"name": "model-of-gen"})).is_ok());
     assert!(tool(&b, "bench_proc_load", json!({"name": "nobody"}))
         .unwrap_err()
         .contains("no saved procedure"));
