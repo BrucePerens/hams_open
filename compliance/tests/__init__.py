@@ -11,3 +11,4 @@ from . import test_security
 from . import test_ui_tours
 from . import test_layout_seo
 from . import test_footer_legal_link
+from . import test_post_migration_privacy_description
