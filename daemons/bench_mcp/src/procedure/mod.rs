@@ -282,6 +282,18 @@ fn number(args: &Value, key: &str, default: f64, lo: f64, hi: f64) -> Result<f64
     }
 }
 
+/// The `version` argument: absent or null is "the latest" (or, for delete, every version); a present value must be a whole
+/// number, so a mistyped `"2"` can never turn into "all versions".
+fn version_arg(args: &Value) -> Result<Option<u64>, String> {
+    match args.get("version") {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v
+            .as_u64()
+            .map(Some)
+            .ok_or_else(|| "version must be a whole number".to_string()),
+    }
+}
+
 /// A true/false argument that may be absent (false).
 fn flag(args: &Value, key: &str) -> Result<bool, String> {
     // [@ANCHOR: proc_flag_arg]
@@ -297,11 +309,7 @@ fn run_params(inst: &Instrument, args: &Value) -> Result<run::Params, String> {
     // [@ANCHOR: proc_run_params]
     let cfg = &inst.procedure;
     let named = match args.get("name").and_then(|n| n.as_str()) {
-        Some(n) => Some(saved::load(
-            cfg,
-            n,
-            args.get("version").and_then(|v| v.as_u64()),
-        )?),
+        Some(n) => Some(saved::load(cfg, n, version_arg(args)?)?),
         None => None,
     };
     let source = match (&named, args.get("source")) {
@@ -514,7 +522,7 @@ pub fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, Str
                 .get("name")
                 .and_then(|n| n.as_str())
                 .ok_or("name is required")?;
-            saved::load(cfg, name, args.get("version").and_then(|v| v.as_u64()))
+            saved::load(cfg, name, version_arg(args)?)
         }
         "bench_proc_delete" => {
             if !flag(args, "confirm")? {
@@ -524,7 +532,7 @@ pub fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, Str
                 .get("name")
                 .and_then(|n| n.as_str())
                 .ok_or("name is required")?;
-            saved::delete(cfg, name, args.get("version").and_then(|v| v.as_u64()))
+            saved::delete(cfg, name, version_arg(args)?)
         }
         _ => Err(format!("{name} is not implemented")),
     }
