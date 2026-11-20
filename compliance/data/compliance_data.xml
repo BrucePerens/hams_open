@@ -4,7 +4,7 @@
     <data noupdate="1">
         <record id="doc_privacy_policy" model="compliance.document">
             <field name="name">Privacy Policy</field>
-            <field name="description">How we collect, use, and protect your personal data.</field>
+            <field name="description">What personal data we collect and how it is used.</field>
             <field name="url">/privacy</field>
             <field name="sequence">10</field>
         </record>
