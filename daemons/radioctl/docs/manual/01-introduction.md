@@ -21,7 +21,7 @@ depends on all three and uses the splitter's PTT arbiter.
 
 The reasons are in the design proposal (`hams_com/docs/proposals/RADIOCTL_RUST_RIG_CONTROL_LIBRARY.md`,
 section 1; that repository is not public, so this paragraph summarises it and the claims about the
-relay are the proposal's, not checked here). The hams.com relay links `libhamlib` in its own process
+relay are the proposal's, not checked here). The hams.com relay linked `libhamlib` in its own process (until its removal lands)
 and serialises every call with one global lock, so a slow answer from one radio delays every other
 radio, including a PTT release. Hamlib is a C library parsing serial replies inside the relay's
 address space, which the relay's zero-privilege design wants out of that process. radioctl is built
@@ -33,10 +33,11 @@ so that:
 - a driver and its test double come from the same data file and cannot drift apart;
 - every fact about a radio says where it came from and what has been checked.
 
-It is **not** a replacement for Hamlib today. Hamlib 4.6.2 lists <!--count:models-->313<!--/count--> radio models ([appendix A](A-capability-matrix.md));
+It is **not** a drop-in replacement for Hamlib for third-party programs. Hamlib 4.6.2 lists <!--count:models-->313<!--/count--> radio models ([appendix A](A-capability-matrix.md));
 radioctl has descriptions for <!--count:described-->283<!--/count--> of the <!--count:real_radios-->283<!--/count--> that are real radios (<!--count:not_applicable-->30<!--/count--> more are not radios or have no transport radioctl speaks; [RIG_SUPPORT.md](../RIG_SUPPORT.md) has the list), none verified on hardware yet. It is not a drop-in `libhamlib`; a C ABI exists as a sketch (`radioctl-capi`, [chapter 14](14-station.md#the-c-abi))
-([chapter 13](13-roadmap.md)). The plan is hybrid: radios move to radioctl one at a time, once a
-description has been verified on real hardware, and Hamlib stays the fallback and the test oracle.
+([chapter 13](13-roadmap.md)). The decision (Bruce, 2026-11-03) is radioctl only for the relay: Hamlib is being removed from the relay
+build, radios radioctl has no verified description for are labelled by verification level, and transmit stays behind
+the safety gate. Hamlib is kept only as an offline differential-test oracle on the bench ([chapter 11](11-testing.md)), never shipped.
 
 ## Concepts
 

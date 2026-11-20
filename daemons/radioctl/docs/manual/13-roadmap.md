@@ -25,7 +25,7 @@ Do not build on a planned item as if it existed.
 | **Rotators, amplifiers, tuners, keyers** (WinKeyer) on the same machinery | RC section 7; whether they are in release one is still open | rotators (`rotctld` and GS-232) and amplifier and tuner channels exist in `radioctl-station` (chapter [14](14-station.md)), and `radioctld` serves rotators in the `rotctld` protocol (chapter [9](09-radioctld.md#rotators): virtual, TCP and serial transports, nothing verified on a real rotator); tuners as rig operations, and keyers (WinKeyer), do not |
 | **Splitter integration in `radioctld`**, one actor shared by both | not in a proposal | the splitter is a library with examples |
 | **Coverage-guided fuzzing** of every parser | RC section 8 | seven cargo-fuzz targets in `fuzz/` (60-second runs only, clean), beside the proptests; no long runs or kept corpus |
-| **Relay integration** behind a per-radio switch with Hamlib fallback in a per-rig process; removing `HAMLIB_CALL_LOCK` | RC section 9 | not in this repository |
+| **Relay integration, radioctl only** (decision 2026-11-03: no Hamlib in the relay build; a safety thread and a real-time transmit thread; Hamlib kept only as the bench oracle) | RC section 9 | in progress in the relay repository (a radioctl radio is a `RadioctlRig` on its rig handle); not in this repository |
 
 The first physical radio for radioctl was the **KX3** (roadmap decision, 2026-10-30). Its bench run on
 2026-11-05 upgraded the first facts to `hardware-verified` (`rigs/reports/verified.toml` records it;
