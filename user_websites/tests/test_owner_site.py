@@ -306,8 +306,11 @@ class TestOwnerSite(HamsHttpCase):
         self.authenticate(None, None)
         html = self.url_open("/ownerone/about").text
         self.assertIn('href="https://hams.com/"', html)
-        self.assertIn('href="/privacy"', html)
-        self.assertIn('href="/terms"', html)
+        # One legal link, to the /compliance hub (Bruce, 2026-11-19).
+        self.assertEqual(html.count('href="/compliance"'), 1)
+        self.assertIn(">Legal and Compliance Information</a>", html)
+        self.assertNotIn('href="/privacy"', html)
+        self.assertNotIn('href="/terms"', html)
         self.assertIn("reportViolationModal", html)
         # QA-009: the dialog's title is an <h2> styled as h5; a bare <h5> made every page jump h2 -> h5.
         self.assertIn('<h2 class="modal-title h5 fw-bold" id="reportViolationModalLabel">', html)
