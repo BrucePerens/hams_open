@@ -530,7 +530,9 @@ def _style_dict(style):
     for part in re.split(r";(?![^(]*\))", style or ""):
         if ":" in part:
             key, _, val = part.partition(":")
-            out[key.strip().lower()] = val.strip().lower()
+            # `!important` changes nothing about what is shown, so it must not hide the value from every check below
+            # (`visibility:hidden !important` is exactly as hidden as `visibility:hidden`).
+            out[key.strip().lower()] = re.sub(r"\s*!\s*important\s*$", "", val.strip().lower())
     return out
 
 

@@ -187,6 +187,7 @@ class TestUntrustedTextBuildingBlocks(BaseCase):
         self.assertAlmostEqual(ut._contrast(WHITE, BLACK), 21.0)
         self.assertAlmostEqual(ut._contrast(WHITE, WHITE), 1.0)
         self.assertEqual(ut._style_dict("Color: White; DISPLAY:none;"), {"color": "white", "display": "none"})
+        self.assertEqual(ut._style_dict("opacity:0 !important;visibility : hidden!IMPORTANT"), {"opacity": "0", "visibility": "hidden"})
         self.assertEqual(ut._style_dict("background:url(a;b);color:red"), {"background": "url(a;b)", "color": "red"})
         self.assertEqual(ut._style_dict(None), {})
         self.assertTrue(ut._tiny_size("1px"))
@@ -214,6 +215,16 @@ class TestUntrustedTextBuildingBlocks(BaseCase):
             ("span", [("style", "color:#ffffff")], "low_contrast"),
             ("span", [("style", "color:rgba(0,0,0,0.05)")], "transparent_text"),
             ("span", [("style", "color:#010101;background-color:#000000")], "low_contrast"),
+            # An !important flag does not change what a browser or mail client shows, so it must not hide the value from the check.
+            ("span", [("style", "visibility:hidden !important")], "visibility_hidden"),
+            ("span", [("style", "visibility: hidden!important")], "visibility_hidden"),
+            ("span", [("style", "opacity:0 !important")], "opacity_zero"),
+            ("span", [("style", "opacity:0!important")], "opacity_zero"),
+            ("span", [("style", "position:absolute !important;left:-9999px")], "off_screen"),
+            ("span", [("style", "content-visibility:hidden !important")], "content_visibility_hidden"),
+            ("span", [("style", "height:0 !important;overflow:hidden !important")], "zero_box_overflow_hidden"),
+            ("span", [("style", "line-height:0;overflow:hidden !important")], "zero_line_height"),
+            ("span", [("style", "max-height:0 !important")], "zero_box_overflow_hidden"),
         ]
         for tag, attrs, reason in cases:
             with self.subTest(reason=reason, attrs=attrs):
