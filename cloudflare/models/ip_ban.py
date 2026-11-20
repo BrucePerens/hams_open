@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0-or-later.
+from datetime import timedelta
+
 from odoo import models, fields, api, _
 from odoo.exceptions import ConcurrencyError, UserError
 from psycopg2 import IntegrityError
@@ -36,6 +38,10 @@ class CloudflareIPBan(models.Model):
         string="Status",
         default="active",
     )
+    expires_at = fields.Datetime(
+        string="Expires At",
+        help="When set, the expiry cron lifts the ban at this time. Empty means permanent until an admin lifts it.",
+    )
     website_id = fields.Many2one(
         "website",
         string="Website",
@@ -52,7 +58,12 @@ class CloudflareIPBan(models.Model):
 
     @api.model
     def _execute_ban(
-        self, ip_address, mode="block", notes="Honeypot Triggered", website_id=None
+        self,
+        ip_address,
+        mode="block",
+        notes="Honeypot Triggered",
+        website_id=None,
+        duration=None,
     ):
         # [@ANCHOR: COMM_cf_execute_ban]
 
@@ -130,6 +141,11 @@ class CloudflareIPBan(models.Model):
                     "notes": notes,
                     "cf_rule_id": result,
                     "state": "active",
+                    "expires_at": (
+                        fields.Datetime.now() + timedelta(seconds=duration)
+                        if duration
+                        else False
+                    ),
                     "website_id": website.id,
                 }
             )
@@ -167,3 +183,25 @@ class CloudflareIPBan(models.Model):
             self.state = "lifted"
         else:
             raise UserError(_("Failed to lift ban via Cloudflare API: %s") % msg)
+
+    @api.model
+    def _cron_lift_expired_bans(self):
+        """Lift active bans whose expires_at has passed, through the normal unban path."""
+        # Verified by [@ANCHOR: COMM_test_cf_lift_expired_bans]
+        expired = self.search(
+            [
+                ("state", "=", "active"),
+                ("expires_at", "!=", False),
+                ("expires_at", "<=", fields.Datetime.now()),
+            ]
+        )
+        for rec in expired:
+            try:
+                with self.env.cr.savepoint():
+                    if rec.cf_rule_id:
+                        rec._action_lift_ban_sync()
+                    else:
+                        rec.state = "lifted"
+            except UserError:
+                # Cloudflare refused or was unreachable: stays active and is retried on the next run.
+                continue

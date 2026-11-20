@@ -54,5 +54,9 @@ class CloudflareWAF(models.AbstractModel):
         )
         ban_env = self.env["cloudflare.ip.ban"].with_user(svc_uid).with_context(mail_notrack=True)
         return ban_env._execute_ban(
-            ip_address, mode=mode, notes=notes, website_id=website_id
+            ip_address,
+            mode=mode,
+            notes=notes,
+            website_id=website_id,
+            duration=duration,
         )

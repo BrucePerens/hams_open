@@ -3,7 +3,9 @@
 
 # -*- coding: utf-8 -*-
 import re
+from datetime import timedelta
 
+from odoo import fields
 from odoo.tests.common import tagged
 from odoo.addons.web.controllers.database import Database
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
@@ -72,6 +74,47 @@ class TestWafManagement(HamsTransactionCase):
         self.assertEqual(ban_record.state, "active")
         self.assertEqual(ban_record.cf_rule_id, "fake_rule_123")
         self.assertEqual(ban_record.website_id.id, self.website.id)
+
+    def test_01b_ban_ip_duration_sets_expiry_and_cron_lifts_it(self):
+        # [@ANCHOR: COMM_test_cf_lift_expired_bans]
+        # Tests [@ANCHOR: COMM_cf_ban_ip_api]
+        mock_ban_ip = self.safe_patch("odoo.addons.cloudflare.models.ip_ban.ban_ip")
+        mock_ban_ip.return_value = (True, "rule_timed")
+        mock_unban_ip = self.safe_patch("odoo.addons.cloudflare.models.ip_ban.unban_ip")
+        mock_unban_ip.return_value = (True, "ok")
+        Ban = self.env["cloudflare.ip.ban"]
+        waf = self.env["cloudflare.waf"].with_user(self.env.ref("base.user_admin"))
+        waf.ban_ip("10.9.0.1", duration=3600, website_id=self.website.id)
+        waf.ban_ip("10.9.0.2", duration=None, website_id=self.website.id)
+        timed = Ban.search([("ip_address", "=", "10.9.0.1")])
+        forever = Ban.search([("ip_address", "=", "10.9.0.2")])
+        self.assertTrue(timed.expires_at, "a 1-hour ban must record an expiry")
+        self.assertFalse(forever.expires_at, "duration None stays permanent")
+        Ban._cron_lift_expired_bans()
+        self.assertEqual(timed.state, "active", "not yet expired")
+        mock_unban_ip.assert_not_called()
+        timed.expires_at = fields.Datetime.now() - timedelta(seconds=1)
+        forever_before = forever.state
+        Ban._cron_lift_expired_bans()
+        self.assertEqual(timed.state, "lifted")
+        self.assertEqual(forever.state, forever_before)
+        mock_unban_ip.assert_called_once()
+
+    def test_01c_cron_keeps_ban_active_when_cloudflare_refuses(self):
+        # Tests [@ANCHOR: COMM_test_cf_lift_expired_bans]
+        mock_unban_ip = self.safe_patch("odoo.addons.cloudflare.models.ip_ban.unban_ip")
+        mock_unban_ip.return_value = (False, "Edge Offline")
+        ban = self.env["cloudflare.ip.ban"].create(
+            {
+                "ip_address": "10.9.0.3",
+                "state": "active",
+                "cf_rule_id": "r3",
+                "website_id": self.website.id,
+                "expires_at": fields.Datetime.now() - timedelta(seconds=5),
+            }
+        )
+        self.env["cloudflare.ip.ban"]._cron_lift_expired_bans()
+        self.assertEqual(ban.state, "active")
 
     def test_02_cf_action_lift_ban(self):
         # Tests [@ANCHOR: cloudflare:COMM_action_lift_ban_sync]

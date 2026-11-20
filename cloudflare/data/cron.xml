@@ -40,6 +40,18 @@
             <field name="user_id" ref="cloudflare.user_cloudflare_tunnel"/>
         </record>
 
+        <record id="ir_cron_lift_expired_cf_ip_bans" model="ir.cron">
+            <!-- audit-ignore-cron: Tested by [@ANCHOR: COMM_test_cf_lift_expired_bans] -->
+            <field name="name">Cloudflare: Lift Expired IP Bans</field>
+            <field name="model_id" ref="model_cloudflare_ip_ban"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_lift_expired_bans()</field>
+            <field name="interval_number">5</field>
+            <field name="interval_type">minutes</field>
+            <field name="active" eval="True"/>
+            <field name="user_id" ref="cloudflare.user_cloudflare_waf"/>
+        </record>
+
         <record id="ir_cron_refresh_cloudflare_trusted_ip_ranges" model="ir.cron">
             <!-- audit-ignore-cron: Tested by [@ANCHOR: test_cron_refresh_cloudflare_ip_ranges] -->
             <field name="name">Cloudflare: Refresh Trusted IP Ranges</field>
