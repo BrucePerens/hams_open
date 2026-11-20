@@ -10,6 +10,7 @@ import email
 import email.policy
 import random  # audit-ignore-weak-random: seeded, reproducible test input, not security
 import re
+import time
 from email.message import EmailMessage
 
 from odoo.tests.common import BaseCase, tagged
@@ -195,6 +196,16 @@ class TestUntrustedTextBuildingBlocks(BaseCase):
         self.assertEqual(ut._style_dict("opacity:0 !important;visibility : hidden!IMPORTANT"), {"opacity": "0", "visibility": "hidden"})
         self.assertEqual(ut._style_dict("background:url(a;b);color:red"), {"background": "url(a;b)", "color": "red"})
         self.assertEqual(ut._style_dict(None), {})
+        # A hostile style attribute full of ';' must cost time linear in its size (the split used to look ahead for a ')' from every
+        # ';', so 40,000 declarations took 17 seconds and a few MB would hold the mail worker for the better part of an hour).
+        started = time.process_time()
+        huge = ut._style_dict("color:#fff;" * 40000 + "background:url(a;b);display:none")
+        self.assertLess(time.process_time() - started, 2.0)
+        self.assertEqual((huge["color"], huge["background"], huge["display"]), ("#fff", "url(a;b)", "none"))
+        # The same split as the old lookahead, in the cases it distinguished: a ';' before a ')' with no '(' between is inside, otherwise it splits.
+        self.assertEqual(ut._style_dict("a:(b;c;d;e:f"), {"a": "(b", "e": "f"})
+        self.assertEqual(ut._style_dict("a:f(b;c);d:e"), {"a": "f(b;c)", "d": "e"})
+        self.assertEqual(ut._style_dict("a:f(b;g(c;d);e);h:i"), {"a": "f(b", "h": "i"})  # nested parentheses: the same split as before
         self.assertTrue(ut._tiny_size("1px"))
         self.assertTrue(ut._tiny_size("2pt"))
         self.assertTrue(ut._tiny_size("xx-small"))

@@ -536,7 +536,26 @@ def _contrast(a, b):
 # [@ANCHOR: hams_helpdesk:untrusted_style_dict]
 def _style_dict(style):
     out = {}
-    for part in re.split(r";(?![^(]*\))", style or ""):
+    # Split at the ';' that are not inside a parenthesis (`url(a;b)`): a ';' is inside when the first '(' or ')' after it is a ')'. The regex
+    # that said this (`;(?![^(]*\))`) looked ahead to the end of the text from every ';', so a hostile style of 40,000 declarations took
+    # 17 seconds; one backward pass gives the same split (equal to the old one on 200,000 random strings) in linear time.
+    style = style or ""
+    inside = [False] * (len(style) + 1)
+    state = False
+    for index in range(len(style) - 1, -1, -1):
+        char = style[index]
+        if char == ")":
+            state = True
+        elif char == "(":
+            state = False
+        inside[index] = state
+    parts, start = [], 0
+    for index, char in enumerate(style):
+        if char == ";" and not inside[index + 1]:
+            parts.append(style[start:index])
+            start = index + 1
+    parts.append(style[start:])
+    for part in parts:
         if ":" in part:
             key, _, val = part.partition(":")
             # `!important` changes nothing about what is shown, so it must not hide the value from every check below
