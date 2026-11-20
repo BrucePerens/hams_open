@@ -4,7 +4,7 @@
 
 use crate::capability::Capability;
 use crate::scope::{ScopeAction, ScopeAxis, ScopeSetting};
-use crate::units::{Hz, Level, Meter, Mode, Receiver, Vfo};
+use crate::units::{Hz, Level, Meter, Mode, Receiver, RepeaterShift, ToneMode, Vfo};
 
 // [@ANCHOR: radioctl_core_op_op]
 /// A command to a rig.
@@ -110,6 +110,26 @@ pub enum Op {
     SetDualWatch(bool),
     /// Read whether dual watch is on.
     GetDualWatch,
+    /// Read the repeater shift direction.
+    GetRepeaterShift,
+    /// Set the repeater shift direction (simplex, minus or plus).
+    SetRepeaterShift(RepeaterShift),
+    /// Read the repeater offset (the size of the shift) in hertz.
+    GetRepeaterOffset,
+    /// Set the repeater offset in hertz.
+    SetRepeaterOffset(Hz),
+    /// Read the tone mode (off, tone encode, tone squelch or DCS).
+    GetToneMode,
+    /// Set the tone mode.
+    SetToneMode(ToneMode),
+    /// Read the CTCSS tone frequency in tenths of a hertz (`885` is 88.5 Hz).
+    GetCtcssTone,
+    /// Set the CTCSS tone frequency in tenths of a hertz; the rig accepts only its own list.
+    SetCtcssTone(u16),
+    /// Read the DCS code (the three octal digits written as a decimal number: `023` is 23).
+    GetDcsCode,
+    /// Set the DCS code; the rig accepts only its own list.
+    SetDcsCode(u16),
 }
 
 // [@ANCHOR: radioctl_core_op_field]
@@ -171,6 +191,16 @@ pub enum Field {
     TxReceiver,
     /// Dual watch on or off.
     DualWatch,
+    /// The repeater shift direction.
+    RepeaterShift,
+    /// The repeater offset.
+    RepeaterOffset,
+    /// The tone mode.
+    ToneMode,
+    /// The CTCSS tone frequency.
+    CtcssTone,
+    /// The DCS code.
+    DcsCode,
     /// A safety condition the actor reports on its own (see [`Alarm`]).
     Alarm,
 }
@@ -253,6 +283,16 @@ pub enum Observation {
     TxReceiver(Receiver),
     /// Dual watch on or off.
     DualWatch(bool),
+    /// The repeater shift direction.
+    RepeaterShift(RepeaterShift),
+    /// The repeater offset in hertz.
+    RepeaterOffset(Hz),
+    /// The tone mode.
+    ToneMode(ToneMode),
+    /// The CTCSS tone frequency in tenths of a hertz.
+    CtcssTone(u16),
+    /// The DCS code, as the decimal number of its three octal digits.
+    DcsCode(u16),
     /// A safety condition reported by the actor, never by the rig.
     Alarm(Alarm),
 }
@@ -289,6 +329,11 @@ impl Observation {
             Observation::Receiver(_) => Field::Receiver,
             Observation::TxReceiver(_) => Field::TxReceiver,
             Observation::DualWatch(_) => Field::DualWatch,
+            Observation::RepeaterShift(_) => Field::RepeaterShift,
+            Observation::RepeaterOffset(_) => Field::RepeaterOffset,
+            Observation::ToneMode(_) => Field::ToneMode,
+            Observation::CtcssTone(_) => Field::CtcssTone,
+            Observation::DcsCode(_) => Field::DcsCode,
             Observation::Alarm(_) => Field::Alarm,
         }
     }
@@ -341,6 +386,16 @@ impl Op {
             | Op::GetTxReceiver
             | Op::SetDualWatch(_)
             | Op::GetDualWatch => Capability::Receivers,
+            Op::GetRepeaterShift
+            | Op::SetRepeaterShift(_)
+            | Op::GetRepeaterOffset
+            | Op::SetRepeaterOffset(_)
+            | Op::GetToneMode
+            | Op::SetToneMode(_)
+            | Op::GetCtcssTone
+            | Op::SetCtcssTone(_)
+            | Op::GetDcsCode
+            | Op::SetDcsCode(_) => Capability::Repeater,
         }
     }
 
@@ -376,6 +431,8 @@ mod tests {
 
     // Tests [@ANCHOR: radioctl_core_observation_field]
     // Tests [@ANCHOR: radioctl_core_units_receiver]
+    // Tests [@ANCHOR: radioctl_core_units_repeater_shift]
+    // Tests [@ANCHOR: radioctl_core_units_tone_mode]
     // Tests [@ANCHOR: radioctl_core_scope_scope_action]
     // Tests [@ANCHOR: radioctl_core_scope_scope_setting]
     // Tests [@ANCHOR: radioctl_core_op_observation]
@@ -456,6 +513,20 @@ mod tests {
             Field::TxReceiver
         );
         assert_eq!(Observation::DualWatch(true).field(), Field::DualWatch);
+        assert_eq!(
+            Observation::RepeaterShift(RepeaterShift::Plus).field(),
+            Field::RepeaterShift
+        );
+        assert_eq!(
+            Observation::RepeaterOffset(Hz(600_000)).field(),
+            Field::RepeaterOffset
+        );
+        assert_eq!(
+            Observation::ToneMode(ToneMode::Tsql).field(),
+            Field::ToneMode
+        );
+        assert_eq!(Observation::CtcssTone(885).field(), Field::CtcssTone);
+        assert_eq!(Observation::DcsCode(23).field(), Field::DcsCode);
     }
 
     // Tests [@ANCHOR: radioctl_core_op_capability]
@@ -482,6 +553,22 @@ mod tests {
         ] {
             assert_eq!(op.required_capability(), Capability::Receivers, "{op:?}");
             assert!(!op.transmits(), "{op:?} never keys the rig");
+        }
+        for op in [
+            Op::GetRepeaterShift,
+            Op::SetRepeaterShift(RepeaterShift::Minus),
+            Op::GetRepeaterOffset,
+            Op::SetRepeaterOffset(Hz(600_000)),
+            Op::GetToneMode,
+            Op::SetToneMode(ToneMode::Tone),
+            Op::GetCtcssTone,
+            Op::SetCtcssTone(885),
+            Op::GetDcsCode,
+            Op::SetDcsCode(23),
+        ] {
+            assert_eq!(op.required_capability(), Capability::Repeater, "{op:?}");
+            assert!(!op.transmits(), "{op:?} never keys the rig");
+            assert!(!op.is_emergency(), "{op:?} waits its turn");
         }
         assert_eq!(
             Op::SetScopeSpan(0, Hz(50_000)).required_capability(),

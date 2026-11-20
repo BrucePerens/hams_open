@@ -218,6 +218,7 @@ Everything else is an `Op`:
 | Receive | `GetSignal`, `GetFilterWidth`, `SetFilterWidth(Hz)` |
 | Split, RIT, XIT | `GetSplit`, `SetSplit(bool)`, `GetTxVfo`, `GetRit`, `SetRit(bool)`, `GetXit`, `SetXit(bool)`, `GetRitOffset`, `SetRitOffset(i16)` |
 | Levels | `GetLevel(Level)`, `SetLevel(Level, u16)` for AF gain, RF gain, mic gain, monitor level, keyer speed, RF power setting, and the receive attenuator (`Level::Attenuator`, decibels, 0 is off) and preamplifier (`Level::Preamp`, a step number, 0 is off). Which attenuator values and preamplifier steps a model has is its description's `[levels]` block (chapter [6](06-rig-descriptions.md)); an engine refuses any other value with `Unsupported`. |
+| Repeater, tones | `GetRepeaterShift`, `SetRepeaterShift(RepeaterShift)`, `GetRepeaterOffset`, `SetRepeaterOffset(Hz)`, `GetToneMode`, `SetToneMode(ToneMode)`, `GetCtcssTone`, `SetCtcssTone(u16)`, `GetDcsCode`, `SetDcsCode(u16)` (capability `repeater`; see "Repeater shift and tones" below) |
 | Reporting | `SetTransceive(bool)` |
 | Identity | `GetModelId`, `GetFirmware`, `GetPowerAmplifier` (Elecraft `OM`: whether the KPA3 or KXPA100 power amplifier is installed) |
 | Scope | `SetScopeOutput`, `GetScopeOutput`, `SetScopeAxis`, `GetScopeAxis`, `SetScopeSpan`, `GetScopeSpan`, `SetScopeEdges`, `SetScopeReference`, `GetScopeReference` (see the end of this chapter) |
@@ -516,6 +517,10 @@ pub async fn active_tx_frequency(&self, freshness: Freshness) -> Result<Hz, RigE
 
 A dual-receiver rig has the capability `receivers` and these ops (decision 2026-11-12; **implemented per model only where the model's manual is on hand, all unverified**): `SelectReceiver(Main|Sub)` and `GetReceiver` (which band later commands act on), `SetTxReceiver(Main|Sub)` and `GetTxReceiver` (which band the transmitter follows; it never keys the rig), and `SetDualWatch(bool)` and `GetDualWatch`. Each set updates the cache (`Observation::Receiver`, `TxReceiver`, `DualWatch`); an engine that has no command for an op refuses it as unsupported.
 
+## Repeater shift and tones
+
+A rig that can work repeaters has the capability `repeater` and the ops `GetRepeaterShift` and `SetRepeaterShift(Simplex|Minus|Plus)`, `GetRepeaterOffset` and `SetRepeaterOffset(Hz)` (the size of the shift, in hertz), `GetToneMode` and `SetToneMode(Off|Tone|Tsql|Dcs)`, `GetCtcssTone` and `SetCtcssTone(u16)` (tenths of a hertz: `885` is 88.5 Hz) and `GetDcsCode` and `SetDcsCode(u16)` (the three octal digits written as a decimal number: `023` is 23). `Tone` sends the CTCSS tone, `Tsql` sends it and opens the squelch only on the same tone, `Dcs` sends and requires the DCS code. None of them keys the rig; each is an ordinary queued command. Each set updates the cache (`Observation::RepeaterShift`, `RepeaterOffset`, `ToneMode`, `CtcssTone`, `DcsCode`); an engine that has no command for an op, or a rig that does not offer the value, refuses it as unsupported. These ops are not polled. Chapter [7](07-protocol-engines.md) says which families implement them (**all unverified**: no rig has been connected).
+
 ## Scope and spectrum
 
 A rig with a spectrum scope (band scope) has the capability `scope`. At the time of writing the IC-7300
@@ -607,6 +612,16 @@ caches), with the meaning taken from the doc comments in `radioctl-core/src/op.r
 | `GetTxReceiver` | Read the band the transmitter follows. |
 | `SetDualWatch(bool)` | Turn dual watch (both receivers listening) on or off (Icom `07 C0`/`C1`). |
 | `GetDualWatch` | Read whether dual watch is on. |
+| `GetRepeaterShift` | Read the repeater shift direction. |
+| `SetRepeaterShift(RepeaterShift)` | Set the repeater shift direction (simplex, minus or plus). |
+| `GetRepeaterOffset` | Read the repeater offset (the size of the shift) in hertz. |
+| `SetRepeaterOffset(Hz)` | Set the repeater offset in hertz. |
+| `GetToneMode` | Read the tone mode (off, tone encode, tone squelch or DCS). |
+| `SetToneMode(ToneMode)` | Set the tone mode. |
+| `GetCtcssTone` | Read the CTCSS tone frequency in tenths of a hertz (`885` is 88.5 Hz). |
+| `SetCtcssTone(u16)` | Set the CTCSS tone frequency in tenths of a hertz; the rig accepts only its own list. |
+| `GetDcsCode` | Read the DCS code (the three octal digits written as a decimal number: `023` is 23). |
+| `SetDcsCode(u16)` | Set the DCS code; the rig accepts only its own list. |
 
 ### `Field`
 
@@ -639,6 +654,11 @@ caches), with the meaning taken from the doc comments in `radioctl-core/src/op.r
 | `Receiver` | The receiver (band) commands act on. |
 | `TxReceiver` | The band the transmitter follows. |
 | `DualWatch` | Dual watch on or off. |
+| `RepeaterShift` | The repeater shift direction. |
+| `RepeaterOffset` | The repeater offset. |
+| `ToneMode` | The tone mode. |
+| `CtcssTone` | The CTCSS tone frequency. |
+| `DcsCode` | The DCS code. |
 | `Alarm` | A safety condition the actor reports on its own (see `Alarm`). |
 
 ## Where the rest of the API is documented
