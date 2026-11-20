@@ -48,7 +48,7 @@ use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind, Request, PARTIAL
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::{Field, Observation, Op};
 use radioctl_core::scope::ScopeFrame;
-use radioctl_core::units::{Hz, Level, Meter, Mode, Receiver, Vfo};
+use radioctl_core::units::{Hz, Level, Meter, Mode, Receiver, RepeaterShift, ToneMode, Vfo};
 
 use crate::attenuation;
 
@@ -285,6 +285,13 @@ pub struct CivEngine {
     /// True between a PTT set and the next reply: some Xiegu radios answer it with `1C 00 <state>`
     /// instead of `FB` (Hamlib's `x108g_set_ptt` comment), which counts as the acknowledgement.
     awaiting_ptt_ack: bool,
+    /// The tone flags (`16 42` tone, `16 43` tone squelch, `16 4B` DCS) as the last read of the
+    /// tone mode has collected them; the mode is reported when the third arrives.
+    tone_flags: [Option<bool>; 3],
+    /// True while the first acknowledgement of a three-frame tone-mode set is still to come.
+    tone_ack_first: bool,
+    /// The acknowledgements of a multi-frame set still to be absorbed after the first.
+    tone_ack_extra: u8,
 }
 
 impl CivEngine {
@@ -309,6 +316,9 @@ impl CivEngine {
             filter_number: DEFAULT_FILTER_NUMBER,
             scope,
             awaiting_ptt_ack: false,
+            tone_flags: [None; 3],
+            tone_ack_first: false,
+            tone_ack_extra: 0,
         })
     }
 
@@ -564,6 +574,46 @@ pub fn filter_hz_to_index(am: bool, hz: u32) -> Option<u8> {
     (0..=49u8).find(|index| filter_index_to_hz(am, *index) == Some(hz))
 }
 
+/// The `16` sub-commands of the three tone flags: tone, tone squelch, DCS.
+const TONE_FLAGS: [u8; 3] = [0x42, 0x43, 0x4B];
+
+// [@ANCHOR: radioctl_civ_encode_repeater_offset]
+/// The 3 data bytes of the repeater offset after `0D`: units of 100 Hz as six BCD digits,
+/// least-significant pair first. `None` unless `hz` is a multiple of 100 Hz below 100 MHz.
+pub fn encode_repeater_offset(hz: Hz) -> Option<[u8; 3]> {
+    if !hz.0.is_multiple_of(100) {
+        return None;
+    }
+    let bytes = encode_bcd_freq_len(Hz(hz.0 / 100), 3)?;
+    bytes.try_into().ok()
+}
+
+// [@ANCHOR: radioctl_civ_decode_repeater_offset]
+/// The offset in hertz from the 3 data bytes after `0C`.
+pub fn decode_repeater_offset(bytes: &[u8]) -> Option<Hz> {
+    if bytes.len() != 3 {
+        return None;
+    }
+    decode_bcd_freq(bytes).map(|units| Hz(units.0 * 100))
+}
+
+// [@ANCHOR: radioctl_civ_encode_tone_digits]
+/// A tone (tenths of a hertz) or a DCS code as six BCD digits in three bytes, most-significant
+/// pair first. `None` above 999,999.
+pub fn encode_tone_digits(value: u16) -> Option<[u8; 3]> {
+    let mut bytes = encode_bcd_freq_len(Hz(u64::from(value)), 3)?;
+    bytes.reverse();
+    bytes.try_into().ok()
+}
+
+// [@ANCHOR: radioctl_civ_decode_tone_digits]
+/// The value of 2 or 3 BCD bytes, most-significant pair first (`00 08 85` is 885).
+pub fn decode_tone_digits(bytes: &[u8]) -> Option<u16> {
+    let mut little = bytes.to_vec();
+    little.reverse();
+    decode_bcd_freq(&little).and_then(|v| u16::try_from(v.0).ok())
+}
+
 fn bcd_pair(value: u16) -> u8 {
     (((value / 10) as u8) << 4) | ((value % 10) as u8)
 }
@@ -709,6 +759,80 @@ impl CivEngine {
         })
     }
 
+    // [@ANCHOR: radioctl_civ_engine_encode_repeater]
+    /// The repeater and tone ops. Shift is command `0F` with `10` simplex, `11` minus, `12` plus
+    /// (the same command as split); the offset is `0C` (read) and `0D` (set), three BCD bytes in
+    /// units of 100 Hz, least-significant pair first; the CTCSS tone is `1B 00` and the DCS code
+    /// `1B 02` (a polarity byte, then the code as four BCD digits), the tone as three BCD bytes
+    /// of tenths of a hertz, most-significant first. The tone mode is three flags, `16 42` tone,
+    /// `16 43` tone squelch and `16 4B` DCS: a set sends the three frames back to back and
+    /// the engine passes on the first acknowledgement and absorbs the other two; a read sends the
+    /// three reads and reports the mode when the third answer arrives. Facts from Hamlib 4.6.2
+    /// `rigs/icom/icom.c` (`icom_set_rptr_shift`, `icom_set_rptr_offs`, `icom_set_ctcss_tone`,
+    /// `icom_set_dcs_code`, `icom_set_func`) and `icom_defs.h`; Icom's own guide was not read.
+    /// Unverified on a radio; Hamlib notes that the shift read does not work on an IC-706MkIIG.
+    fn encode_repeater(&mut self, op: &Op) -> Option<Result<Request, RigError>> {
+        Some(match op {
+            Op::GetRepeaterShift => Ok(self.get(0x0F, &[], Field::RepeaterShift)),
+            Op::SetRepeaterShift(shift) => Ok(self.set(
+                0x0F,
+                &[match shift {
+                    RepeaterShift::Simplex => 0x10,
+                    RepeaterShift::Minus => 0x11,
+                    RepeaterShift::Plus => 0x12,
+                }],
+            )),
+            Op::GetRepeaterOffset => Ok(self.get(0x0C, &[], Field::RepeaterOffset)),
+            Op::SetRepeaterOffset(hz) => encode_repeater_offset(*hz)
+                .map(|bytes| self.set(0x0D, &bytes))
+                .ok_or_else(|| {
+                    Self::unsupported("offset must be a multiple of 100 Hz below 100 MHz")
+                }),
+            Op::GetCtcssTone => Ok(self.get(0x1B, &[0x00], Field::CtcssTone)),
+            Op::SetCtcssTone(tenths) => encode_tone_digits(*tenths)
+                .map(|bytes| self.set(0x1B, &[&[0x00][..], &bytes[..]].concat()))
+                .ok_or_else(|| Self::unsupported("tone does not fit six digits")),
+            Op::GetDcsCode => Ok(self.get(0x1B, &[0x02], Field::DcsCode)),
+            Op::SetDcsCode(code) => match encode_tone_digits(*code) {
+                Some([0, high, low]) => Ok(self.set(0x1B, &[0x02, 0x00, high, low])),
+                _ => Err(Self::unsupported("DCS code does not fit four digits")),
+            },
+            Op::GetToneMode => {
+                self.tone_flags = [None; 3];
+                let mut bytes = Vec::new();
+                for sub in TONE_FLAGS {
+                    bytes.extend(self.command(0x16, &[sub], ReplyKind::None).bytes);
+                }
+                Ok(Request {
+                    bytes,
+                    reply: ReplyKind::Observation(Field::ToneMode),
+                })
+            }
+            Op::SetToneMode(mode) => {
+                let on = match mode {
+                    ToneMode::Off => [false, false, false],
+                    ToneMode::Tone => [true, false, false],
+                    ToneMode::Tsql => [false, true, false],
+                    ToneMode::Dcs => [false, false, true],
+                };
+                let mut bytes = Vec::new();
+                for (sub, on) in TONE_FLAGS.into_iter().zip(on) {
+                    bytes.extend(
+                        self.command(0x16, &[sub, u8::from(on)], ReplyKind::Ack)
+                            .bytes,
+                    );
+                }
+                self.tone_ack_first = true;
+                self.tone_ack_extra = 2;
+                Ok(Request {
+                    bytes,
+                    reply: ReplyKind::Ack,
+                })
+            }
+            _ => return None,
+        })
+    }
+
     // [@ANCHOR: radioctl_civ_engine_encode_rit_xit]
     fn encode_rit_xit(&self, op: &Op) -> Option<Result<Request, RigError>> {
         Some(match op {
@@ -807,6 +931,9 @@ impl ProtocolEngine for CivEngine {
         }
         self.awaiting_ptt_ack = matches!(op, Op::SetPtt(_));
         let ack = ReplyKind::Ack;
+        if let Some(done) = self.encode_repeater(op) {
+            return done;
+        }
         if let Some(done) = self
             .encode_vfo_b_or_split(op)
             .or_else(|| self.encode_main_sub(op))
@@ -911,6 +1038,31 @@ impl ProtocolEngine for CivEngine {
 }
 
 impl CivEngine {
+    // [@ANCHOR: radioctl_civ_engine_decode_tone_flag]
+    /// Keeps one of the three tone flags; the third read answer (`16 4B`) completes the mode,
+    /// the precedence being DCS, then tone squelch, then tone. Answers that arrive without a
+    /// full read (a stale flag after an unsolicited report) report nothing.
+    fn decode_tone_flag(&mut self, sub: u8, state: u8) -> Option<Inbound> {
+        let index = TONE_FLAGS.iter().position(|s| *s == sub)?;
+        self.tone_flags[index] = Some(state != 0);
+        if sub != 0x4B {
+            return None;
+        }
+        let [Some(tone), Some(tsql), Some(dcs)] = self.tone_flags else {
+            return None;
+        };
+        let mode = if dcs {
+            ToneMode::Dcs
+        } else if tsql {
+            ToneMode::Tsql
+        } else if tone {
+            ToneMode::Tone
+        } else {
+            ToneMode::Off
+        };
+        Some(Inbound::Observation(Observation::ToneMode(mode)))
+    }
+
     // [@ANCHOR: radioctl_civ_engine_decode]
     /// Decodes one frame; `None` for our own echoed frames, frames for other stations and scope
     /// frames (those go to the scope assembler).
@@ -931,6 +1083,14 @@ impl CivEngine {
             return Some(Inbound::Ack);
         }
         let observation = match (frame.cmd, data) {
+            (OK, []) if self.tone_ack_first => {
+                self.tone_ack_first = false;
+                return Some(Inbound::Ack);
+            }
+            (OK, []) if self.tone_ack_extra > 0 => {
+                self.tone_ack_extra -= 1;
+                return None;
+            }
             (OK, []) => return Some(Inbound::Ack),
             (NG, []) => return Some(Inbound::Nak),
             (0x00 | 0x03, bcd) => decode_bcd_freq(bcd).map(|hz| Observation::Frequency(Vfo::A, hz)),
@@ -947,7 +1107,18 @@ impl CivEngine {
                 rest.first().is_some_and(|d| *d != 0),
                 rest.get(1).copied(),
             ),
+            (0x0F, [0x10 | 0x13]) => Some(Observation::RepeaterShift(RepeaterShift::Simplex)),
+            (0x0F, [0x11]) => Some(Observation::RepeaterShift(RepeaterShift::Minus)),
+            (0x0F, [0x12]) => Some(Observation::RepeaterShift(RepeaterShift::Plus)),
             (0x0F, [state]) => Some(Observation::Split(*state != 0)),
+            (0x0C, offset) => decode_repeater_offset(offset).map(Observation::RepeaterOffset),
+            (0x1B, [0x00, tone @ ..]) => decode_tone_digits(tone).map(Observation::CtcssTone),
+            (0x1B, [0x02, _polarity, code @ ..]) => {
+                decode_tone_digits(code).map(Observation::DcsCode)
+            }
+            (0x16, [sub @ (0x42 | 0x43 | 0x4B), state]) => {
+                return self.decode_tone_flag(*sub, *state)
+            }
             (0x07, [0xD2, band]) => Some(Observation::Receiver(if *band == 0 {
                 Receiver::Main
             } else {

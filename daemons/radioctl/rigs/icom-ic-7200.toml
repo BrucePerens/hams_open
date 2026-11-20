@@ -7,7 +7,7 @@
 # "CI-V Transceive" are set in the radio's own menu and must match what radioctl is told.
 # Hamlib modes with no entry in radioctl's mode vocabulary, not listed: PKTLSB PKTUSB.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "split", "levels", "identify"]
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "split", "levels", "identify", "repeater"]
 
 [rig]
 id = "icom-ic-7200"
@@ -116,3 +116,8 @@ verified = { state = "manual-checked", reference = "Icom IC-7200 Advanced Instru
 key = "capability.split"
 provenance = { kind = "manual", reference = "Icom IC-7200 Advanced Instructions (CI-V chapter), CI-V command table, PDF page 117 (command 0F split off/on; printed page numbers differ), https://archive.org/download/icom_IC-7200_AdvancedInstructionManual/IC-7200_AdvancedInstructionManual.pdf, sha256 66ceedd4288ade412ba27e6fab4f015a1e01bcc0944d7236d59ee505f48a6f47", note = "Command 0F with sub-command 00 (split off) and 01 (split on) is in the manual's CI-V table, the form the engine sends. Cross-check: Hamlib 4.6.2. Icom's download endpoint is excluded by robots.txt and the direct path is 403; the copy read is the archive.org mirror; read for facts under Bruce Perens' decision of 2026-10-31, nothing copied." }
 verified = { state = "manual-checked", reference = "Icom IC-7200 Advanced Instructions (CI-V chapter), PDF page 117, command 0F split off/on" }
+
+[[facts]]
+key = "capability.repeater"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/ic7200.c rig_caps (the model's .set_rptr_shift, .set_rptr_offs, .set_ctcss_tone and .set_dcs_code entries); rigs/icom/icom.c icom_set_rptr_shift (command 0F, 10 simplex, 11 minus, 12 plus), icom_set_rptr_offs (0D, three BCD bytes of 100 Hz units), icom_set_ctcss_tone (1B 00, tenths of a hertz), icom_set_dcs_code (1B 02), icom_set_func (16 42 tone, 16 43 tone squelch, 16 4B DCS); rigs/icom/icom_defs.h", note = "Facts only, no code or table copied. Icom's CI-V guide was not used (see the file header). The capability covers all five repeater ops; a model Hamlib lists without one of them (some have no offset or no tone) answers it with NG. No radio has been connected." }
+verified = { state = "unverified" }

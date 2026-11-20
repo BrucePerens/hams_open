@@ -70,6 +70,7 @@ The descriptions are the files `rigs/*.toml` (<!--count:description_files-->292<
 | `identify` | the model identifier can be read back | <!--count:cap_identify-->134<!--/count--> |
 | `scope` | bandscope or panadapter output (the `[scope]` block of the description) | <!--count:cap_scope-->5<!--/count--> |
 | `receivers` | a dual-receiver rig whose Main and Sub bands can be selected, given the transmitter and watched together (chapter [4](04-api.md#main-and-sub-receivers)) | <!--count:cap_receivers-->5<!--/count--> |
+| `repeater` | repeater shift and offset, tone mode, CTCSS tone and DCS code can be read and set (chapter [4](04-api.md#repeater-shift-and-tones)) | <!--count:cap_repeater-->31<!--/count--> |
 
 The ANAN files claim no mode, since an SDR's demodulation happens in the host. `read-meters` and `read-swr` differ: the first is the raw 0 to 255 deflection, the second is a ratio in tenths and needs a per-model calibration table (chapter [15](15-power.md)).
 

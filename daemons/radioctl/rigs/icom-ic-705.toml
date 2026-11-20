@@ -3,7 +3,7 @@
 # download terms forbid reuse of its data); the facts come from Hamlib 4.6.2 source, read for facts only,
 # with the file and function named in each fact below. Gaps are listed in crates/radioctl-protocols/src/civ.rs.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "transceive", "split", "rit-xit", "filter", "levels", "identify", "read-meters"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "transceive", "split", "rit-xit", "filter", "levels", "identify", "read-meters", "repeater"]
 
 [rig]
 id = "icom-ic-705"
@@ -142,3 +142,8 @@ verified = { state = "unverified" }
 key = "frequency.*"
 provenance = { kind = "manual", reference = "Icom IC-705 CI-V Reference Guide (IC-705_ENG_CI-V_6.pdf): PDF page 30, command 27 19 scope selectable frequency ranges, 0.03 ~ 1.60 MHz up to 400.00 ~ 470.00 MHz", note = "The guide gives no coverage line; the scope range table spans the receiver. The range is the manual's, not measured on a radio." }
 verified = { state = "manual-checked", reference = "PDF page 30, Command 27 19 scope selectable frequency ranges, 0.03 ~ 1.60 MHz up to 400.00 ~ 470.00 MHz" }
+
+[[facts]]
+key = "capability.repeater"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/ic7300.c rig_caps (the model's .set_rptr_shift, .set_rptr_offs, .set_ctcss_tone and .set_dcs_code entries); rigs/icom/icom.c icom_set_rptr_shift (command 0F, 10 simplex, 11 minus, 12 plus), icom_set_rptr_offs (0D, three BCD bytes of 100 Hz units), icom_set_ctcss_tone (1B 00, tenths of a hertz), icom_set_dcs_code (1B 02), icom_set_func (16 42 tone, 16 43 tone squelch, 16 4B DCS); rigs/icom/icom_defs.h", note = "Facts only, no code or table copied. Icom's CI-V guide was not used (see the file header). The capability covers all five repeater ops; a model Hamlib lists without one of them (some have no offset or no tone) answers it with NG. No radio has been connected." }
+verified = { state = "unverified" }

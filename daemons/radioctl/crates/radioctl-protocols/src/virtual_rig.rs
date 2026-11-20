@@ -25,7 +25,7 @@ use radioctl_core::description::{
 };
 use radioctl_core::engine::PARTIAL_FRAME_TIMEOUT;
 use radioctl_core::error::{ErrorKind, RigError};
-use radioctl_core::units::{Hz, Level, Meter, Mode};
+use radioctl_core::units::{Hz, Level, Meter, Mode, RepeaterShift, ToneMode};
 
 use crate::attenuation;
 
@@ -86,6 +86,16 @@ pub struct RigState {
     pub xit: bool,
     /// RIT/XIT offset in hertz (Elecraft).
     pub rit_offset: i16,
+    /// Repeater shift direction.
+    pub shift: RepeaterShift,
+    /// Repeater offset in hertz.
+    pub repeater_offset: Hz,
+    /// Tone mode.
+    pub tone_mode: ToneMode,
+    /// CTCSS tone in tenths of a hertz.
+    pub ctcss_tenths: u16,
+    /// DCS code as the decimal number of its three octal digits.
+    pub dcs_code: u16,
     /// Receive filter bandwidth (Elecraft).
     pub filter_width: Hz,
     /// Numeric levels (Elecraft).
@@ -178,6 +188,11 @@ pub struct VirtualRig {
     /// Whether the Sub band is the selected one (`07 D1`) and whether dual watch is on (`07 C1`), on a model with `civ.main_sub`.
     civ_sub_selected: bool,
     civ_dual_watch: bool,
+    /// The three CI-V tone flags (`16 42` tone, `16 43` tone squelch, `16 4B` DCS).
+    civ_tone_flags: [bool; 3],
+    /// True when the last `0F` set was a duplex code: a `0F` read then answers with the duplex
+    /// state instead of the split state (Hamlib: the one command reports both).
+    civ_dup_last: bool,
     /// Kenwood: the VFO `FR` selected for receive (0 A, 1 B) and `FT` for transmit; split is
     /// when they differ.
     kenwood_rx_vfo: u8,
@@ -251,6 +266,11 @@ impl VirtualRig {
             rit: false,
             xit: false,
             rit_offset: 0,
+            shift: RepeaterShift::Simplex,
+            repeater_offset: Hz(600_000),
+            tone_mode: ToneMode::Off,
+            ctcss_tenths: 885,
+            dcs_code: 23,
             filter_width: Hz(500),
             levels: BTreeMap::from([
                 (Level::AfGain, 30),
@@ -280,6 +300,8 @@ impl VirtualRig {
             civ_b_selected: false,
             civ_sub_selected: false,
             civ_dual_watch: false,
+            civ_tone_flags: [false; 3],
+            civ_dup_last: false,
             kenwood_rx_vfo: 0,
             yaesu_tx_band: 0,
             kenwood_tx_vfo: 0,
@@ -545,9 +567,78 @@ impl VirtualRig {
                 std::mem::swap(&mut self.state.freq_a, &mut self.state.freq_b);
                 CivReply::Ok
             }
+            (0x0F, []) if self.civ_dup_last => CivReply::Data(
+                0x0F,
+                vec![match self.state.shift {
+                    RepeaterShift::Simplex => 0x10,
+                    RepeaterShift::Minus => 0x11,
+                    RepeaterShift::Plus => 0x12,
+                }],
+            ),
             (0x0F, []) => CivReply::Data(0x0F, vec![u8::from(self.state.split)]),
             (0x0F, [state @ (0x00 | 0x01)]) => {
                 self.state.split = *state == 1;
+                self.civ_dup_last = false;
+                CivReply::Ok
+            }
+            (0x0F, [code @ (0x10..=0x12)]) => {
+                self.state.shift = match code {
+                    0x10 => RepeaterShift::Simplex,
+                    0x11 => RepeaterShift::Minus,
+                    _ => RepeaterShift::Plus,
+                };
+                self.civ_dup_last = true;
+                CivReply::Ok
+            }
+            (0x0C, []) => match civ::encode_repeater_offset(self.state.repeater_offset) {
+                Some(bytes) => CivReply::Data(0x0C, bytes.to_vec()),
+                None => CivReply::Ng,
+            },
+            (0x0D, bytes) => match civ::decode_repeater_offset(bytes) {
+                Some(hz) => {
+                    self.state.repeater_offset = hz;
+                    CivReply::Ok
+                }
+                None => CivReply::Ng,
+            },
+            (0x1B, [0x00]) => match civ::encode_tone_digits(self.state.ctcss_tenths) {
+                Some(bytes) => CivReply::Data(0x1B, [&[0x00][..], &bytes[..]].concat()),
+                None => CivReply::Ng,
+            },
+            (0x1B, [0x00, bytes @ ..]) => match civ::decode_tone_digits(bytes) {
+                Some(tenths) if bytes.len() == 3 => {
+                    self.state.ctcss_tenths = tenths;
+                    CivReply::Ok
+                }
+                _ => CivReply::Ng,
+            },
+            (0x1B, [0x02]) => match civ::encode_tone_digits(self.state.dcs_code) {
+                Some([_, high, low]) => CivReply::Data(0x1B, vec![0x02, 0x00, high, low]),
+                None => CivReply::Ng,
+            },
+            (0x1B, [0x02, _polarity, high, low]) => match civ::decode_tone_digits(&[*high, *low]) {
+                Some(code) => {
+                    self.state.dcs_code = code;
+                    CivReply::Ok
+                }
+                None => CivReply::Ng,
+            },
+            (0x16, [sub @ (0x42 | 0x43 | 0x4B)]) => {
+                let flag = self.civ_tone_flags[tone_flag_index(*sub)];
+                CivReply::Data(0x16, vec![*sub, u8::from(flag)])
+            }
+            (0x16, [sub @ (0x42 | 0x43 | 0x4B), state @ (0x00 | 0x01)]) => {
+                self.civ_tone_flags[tone_flag_index(*sub)] = *state == 1;
+                let [tone, tsql, dcs] = self.civ_tone_flags;
+                self.state.tone_mode = if dcs {
+                    ToneMode::Dcs
+                } else if tsql {
+                    ToneMode::Tsql
+                } else if tone {
+                    ToneMode::Tone
+                } else {
+                    ToneMode::Off
+                };
                 CivReply::Ok
             }
             (0x21, [0x00]) => match civ::encode_rit_offset(self.state.rit_offset) {
@@ -1925,6 +2016,16 @@ fn civ_level_of(sub: u8) -> Option<Level> {
         0x15 => Some(Level::MonitorLevel),
         0x0C => Some(Level::KeyerSpeed),
         _ => None,
+    }
+}
+
+// [@ANCHOR: radioctl_virtual_tone_flag_index]
+/// Which of the three CI-V tone flags a `16` sub-command (`42`, `43`, `4B`) names.
+fn tone_flag_index(sub: u8) -> usize {
+    match sub {
+        0x42 => 0,
+        0x43 => 1,
+        _ => 2,
     }
 }
 

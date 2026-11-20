@@ -78,8 +78,14 @@ frame is skipped.
   model id (`19 00`), the Main/Sub commands of command `07` (select the band `D0`/`D1` on a description with
   `main_sub = "select"` or `"full"`; read the selected band `D2` and dual watch `C0` to `C2` on `"full"`, the
   IC-7610), the core scope operations (command `27`, below), the IC-F8101's own frequency and mode commands
-  (`1A 34` to `1A 36`), and unsolicited transceive frames (`00`, `01`).
-<!--ops rig=icom-ic-7610: ?GetFilterWidth ?SetFilterWidth GetDualWatch GetFrequency GetFrequency.B GetLevel.AfGain GetLevel.Attenuator GetLevel.KeyerSpeed GetLevel.MicGain GetLevel.MonitorLevel GetLevel.Preamp GetLevel.RfGain GetLevel.RfPower GetMeter GetMode GetModelId GetPower GetPtt GetReceiver GetRit GetRitOffset GetScopeAxis GetScopeOutput GetScopeReference GetScopeSpan GetSignal GetSplit GetXit SelectReceiver SendCw SetDualWatch SetFrequency SetFrequency.B SetLevel.AfGain SetLevel.Attenuator SetLevel.KeyerSpeed SetLevel.MicGain SetLevel.MonitorLevel SetLevel.Preamp SetLevel.RfGain SetLevel.RfPower SetMode SetPtt SetRit SetRitOffset SetScopeAxis SetScopeEdges SetScopeOutput SetScopeReference SetScopeSpan SetSplit SetXit StopCw-->
+  (`1A 34` to `1A 36`), the repeater and tone ops of the `repeater` capability (shift `0F 10`/`11`/`12`,
+  offset `0C` read and `0D` set as three BCD bytes of 100 Hz units, CTCSS tone `1B 00` in tenths of a hertz,
+  DCS code `1B 02`, and the tone mode as the three flags `16 42` tone, `16 43` tone squelch and `16 4B`
+  DCS: a mode set sends the three frames at once and the engine passes on the first acknowledgement and
+  absorbs the other two, a mode read asks the three flags and reports the mode when the third answers;
+  facts from Hamlib 4.6.2, unverified on a radio, and Hamlib notes the shift read does not work on an
+  IC-706MkIIG), and unsolicited transceive frames (`00`, `01`).
+<!--ops rig=icom-ic-7610: ?GetFilterWidth ?SetFilterWidth GetCtcssTone GetDcsCode GetDualWatch GetFrequency GetFrequency.B GetLevel.AfGain GetLevel.Attenuator GetLevel.KeyerSpeed GetLevel.MicGain GetLevel.MonitorLevel GetLevel.Preamp GetLevel.RfGain GetLevel.RfPower GetMeter GetMode GetModelId GetPower GetPtt GetReceiver GetRepeaterOffset GetRepeaterShift GetRit GetRitOffset GetScopeAxis GetScopeOutput GetScopeReference GetScopeSpan GetSignal GetSplit GetToneMode GetXit SelectReceiver SendCw SetCtcssTone SetDcsCode SetDualWatch SetFrequency SetFrequency.B SetLevel.AfGain SetLevel.Attenuator SetLevel.KeyerSpeed SetLevel.MicGain SetLevel.MonitorLevel SetLevel.Preamp SetLevel.RfGain SetLevel.RfPower SetMode SetPtt SetRepeaterOffset SetRepeaterShift SetRit SetRitOffset SetScopeAxis SetScopeEdges SetScopeOutput SetScopeReference SetScopeSpan SetSplit SetToneMode SetXit StopCw-->
 - **Does not cover (deliberately not guessed):** the calibrated SWR ratio
   (`Op::GetSwr`), power and S-meter (Hamlib's tables are per-model measurements; radioctl reports the raw
   deflection instead), switching transceive on or off (`SetTransceive` is

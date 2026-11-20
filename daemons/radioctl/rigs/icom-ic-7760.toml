@@ -7,7 +7,7 @@
 # "CI-V Transceive" are set in the radio's own menu and must match what radioctl is told.
 # Hamlib modes with no entry in radioctl's mode vocabulary, not listed: PKTLSB PKTUSB FM-D AM-D PSK PSKR.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "split", "rit-xit", "filter", "levels", "identify", "read-meters"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "split", "rit-xit", "filter", "levels", "identify", "read-meters", "repeater"]
 
 [rig]
 id = "icom-ic-7760"
@@ -143,4 +143,9 @@ verified = { state = "unverified" }
 [[facts]]
 key = "mode.data"
 provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/icom_defs.h C_SEND_SEL_MODE 0x26; rigs/icom/icom.c icom_set_mode_x26 and icom_get_mode_x26; rigs/icom/ic7760.c priv caps `x25x26_always = 1` and `targetable_vfo` RIG_TARGETABLE_MODE", note = "Facts only, no code copied. `data` is USB (01) with DATA set, `data-r` LSB (00) with DATA set; the engine reads the mode with 26 00 and sets it with 26 00 <code> <data> <filter> on this model, as Hamlib does. AM-D and FM-D are not in radioctl's mode vocabulary." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.repeater"
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/ic7760.c rig_caps (the model's .set_rptr_shift, .set_rptr_offs, .set_ctcss_tone and .set_dcs_code entries); rigs/icom/icom.c icom_set_rptr_shift (command 0F, 10 simplex, 11 minus, 12 plus), icom_set_rptr_offs (0D, three BCD bytes of 100 Hz units), icom_set_ctcss_tone (1B 00, tenths of a hertz), icom_set_dcs_code (1B 02), icom_set_func (16 42 tone, 16 43 tone squelch, 16 4B DCS); rigs/icom/icom_defs.h", note = "Facts only, no code or table copied. Icom's CI-V guide was not used (see the file header). The capability covers all five repeater ops; a model Hamlib lists without one of them (some have no offset or no tone) answers it with NG. No radio has been connected." }
 verified = { state = "unverified" }

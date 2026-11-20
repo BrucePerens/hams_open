@@ -206,3 +206,32 @@ Afterwards the simulated split flag is set when the receive and transmit VFOs di
 
 Handles the Kenwood commands that move the RIT/XIT offset up or down (`RU` and `RD`) on the virtual radio. `&mut self`; `up` gives the direction; `digits` must be exactly 5 digits, the amount in hertz.
 The new offset is the current one plus or minus the amount and must stay within plus or minus 9999 Hz. A bad digit string or a result out of range returns `Some("?;")`, the Kenwood error answer, and leaves the offset unchanged. On success the offset is stored and `None` is returned (no answer line).
+
+### `fn encode_repeater(&mut self, op: &Op) -> Option<Result<Request, RigError>>` [@ANCHOR: radioctl:radioctl_civ_engine_encode_repeater]
+
+Encodes the repeater and tone ops of the `repeater` capability for an Icom. The shift is `0F` with `10` simplex, `11` minus, `12` plus (the same command as split); the offset is `0C` (read) and `0D` (set), three BCD bytes in units of 100 Hz; the CTCSS tone is `1B 00` (tenths of a hertz, three BCD bytes, most-significant first) and the DCS code `1B 02` (a polarity byte, then four BCD digits). The tone mode is three flags, `16 42` tone, `16 43` tone squelch, `16 4B` DCS: a set sends the three frames back to back (exactly one flag on, none for `Off`) and arms the engine to pass on the first acknowledgement and absorb the other two; a read sends the three reads and clears the collected flags.
+An offset that is not a multiple of 100 Hz or has more than six digits, a tone above 999,999 and a DCS code above 9999 are refused with an `Unsupported` `RigError`. Any other operation returns `None`. `&mut self` because the tone state is kept in the engine. Builds a request only; facts from Hamlib 4.6.2, unverified on a radio.
+
+### `fn decode_tone_flag(&mut self, sub: u8, state: u8) -> Option<Inbound>` [@ANCHOR: radioctl:radioctl_civ_engine_decode_tone_flag]
+
+Keeps one tone flag from a `16 42`, `16 43` or `16 4B` answer. Only the `16 4B` answer, the last of the three a read asks for, completes the mode, and only when all three flags have been collected since the read: DCS wins over tone squelch, which wins over tone, none is `Off`. Returns `Some(Inbound::Observation(Observation::ToneMode(..)))` then and `None` otherwise (a partial or stale answer reports nothing). `&mut self`.
+
+### `fn encode_repeater_offset(hz: Hz) -> Option<[u8; 3]>` [@ANCHOR: radioctl:radioctl_civ_encode_repeater_offset]
+
+The 3 data bytes of the repeater offset after `0D`: the offset in units of 100 Hz as six BCD digits, least-significant pair first (600 kHz is `00 60 00`). `None` unless `hz` is a multiple of 100 Hz below 100 MHz. Pure, no I/O; the inverse is `decode_repeater_offset`.
+
+### `fn decode_repeater_offset(bytes: &[u8]) -> Option<Hz>` [@ANCHOR: radioctl:radioctl_civ_decode_repeater_offset]
+
+The offset in hertz from the 3 data bytes after `0C` in a CI-V reply (or after `0D` in a set, which the virtual rig uses): the six BCD digits, least-significant pair first, times 100 Hz. `bytes` is the data slice by reference. Returns `None` unless there are exactly three bytes and every nibble is a decimal digit, so a truncated or corrupt reply is never turned into an offset; the caller reports it as an unrecognised frame. Pure, no I/O, no errors beyond `None`; the inverse is `encode_repeater_offset`.
+
+### `fn encode_tone_digits(value: u16) -> Option<[u8; 3]>` [@ANCHOR: radioctl:radioctl_civ_encode_tone_digits]
+
+A CTCSS tone in tenths of a hertz or a DCS code as six BCD digits in three bytes, most-significant pair first (885 is `00 08 85`). A `u16` always fits, so it returns `Some`; the `Option` is the same shape as the other encoders. Pure, no I/O; the inverse is `decode_tone_digits`.
+
+### `fn decode_tone_digits(bytes: &[u8]) -> Option<u16>` [@ANCHOR: radioctl:radioctl_civ_decode_tone_digits]
+
+The value of two or three packed-BCD bytes, most-significant pair first, taken from a CI-V reply: a CTCSS tone in tenths of a hertz (`00 08 85` is 885) after `1B 00`, or a DCS code (`01 23` is 123) after the polarity byte of `1B 02`. `bytes` is the data slice by reference. Returns `None` on a non-BCD nibble or a value above 65,535, so a corrupt reply is never turned into a tone; the caller reports it as an unrecognised frame. Pure, no I/O, no errors beyond `None`; the inverse is `encode_tone_digits`.
+
+### `fn tone_flag_index(sub: u8) -> usize` [@ANCHOR: radioctl:radioctl_virtual_tone_flag_index]
+
+Maps the `16` sub-command byte of a CI-V tone flag to its slot in the virtual Icom's three-flag array: `42` (tone) is 0, `43` (tone squelch) is 1 and `4B` (DCS) is 2. `sub` is the byte by value; any other value falls into slot 2, but the virtual rig only calls it for the three sub-commands it matched first. Returns the index, never fails, no I/O. It keeps the simulated flags in the same order as the engine's `TONE_FLAGS`, so the engine and its virtual twin cannot disagree about which flag is which.
