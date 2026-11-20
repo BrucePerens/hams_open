@@ -1,8 +1,13 @@
 # Copyright © Bruce Perens K6BP.
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+import logging
+
+import redis
+
 from odoo import _, http
 from odoo.http import request
+from odoo.addons.distributed_redis_cache.redis_pool import expiring_counter, get_redis_connection
 from odoo.addons.portal.controllers.portal import CustomerPortal, pager as portal_pager
 
 # docs/proposals/CHILD_SAFETY_COMMUNICATIONS_CONSENT.md, section G / Phase 8. models/
@@ -25,6 +30,21 @@ _CSAM_TICKET_TYPE = "csam_enticement_trafficking"
 _TICKET_NAME_MAX = 200
 _TICKET_DESCRIPTION_MAX = 20000
 _TICKET_CALLSIGN_MAX = 20
+# Most tickets one member may open from the portal in an hour: every ticket notifies the helpdesk staff.
+TICKETS_PER_HOUR = 20
+_logger = logging.getLogger(__name__)
+
+
+# [@ANCHOR: hams_helpdesk:portal_submit_rate_limited]
+# Verified by [@ANCHOR: hams_helpdesk:test_a_member_over_the_hourly_ticket_limit_creates_nothing_and_is_told_to_wait]
+def _ticket_rate_limited(user_id):
+    """True when this member has already opened TICKETS_PER_HOUR tickets this hour. Fails open on a Redis error."""
+    try:
+        client = get_redis_connection(request.env)
+        return expiring_counter(client, f"hams_helpdesk:portal_submit:{request.env.cr.dbname}:{user_id}", 3600) > TICKETS_PER_HOUR
+    except redis.RedisError as error:
+        _logger.info("Portal ticket rate limiter unavailable, the ticket is accepted: %r", error)
+        return False
 
 
 # [@ANCHOR: hams_helpdesk_portal_helpdesk_portal]
@@ -220,6 +240,9 @@ class HelpdeskPortal(CustomerPortal):
                 form={"description": description or "", "callsign": callsign or "", "ticket_type": ticket_type or ""},
                 error=_("Give the ticket a subject."),
             )
+
+        if _ticket_rate_limited(request.env.user.id):
+            return request.make_response(_("You are opening tickets too quickly. Please try again later."), status=429)
 
         utils = request.env["zero_sudo.security.utils"]
         svc_uid = utils._get_service_uid("hams_helpdesk.user_helpdesk_service")
