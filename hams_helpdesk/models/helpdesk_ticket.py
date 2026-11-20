@@ -1394,7 +1394,7 @@ class HelpdeskTicket(models.Model):
         # [@ANCHOR: hams_helpdesk:mcp_safe_read]
         rows = []
         tickets_by_id = {ticket.id: ticket for ticket in self}
-        for view in self.safe_view(max_chars=min(int(max_chars or 0), 20000)):
+        for view in self.safe_view(max_chars=max(0, min(int(max_chars or 0), 20000))):
             ticket = tickets_by_id[view["id"]]
             row = {
                 "id": view["id"],
