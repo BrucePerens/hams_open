@@ -27,13 +27,13 @@ class _LoggedFailures(logging.Handler):
     A cron method that catches a failure per record and only calls ``_logger.exception`` finishes normally, so
     ``_callback`` would never see it; a record that fails the same way every run was then invisible."""
 
-    # Verified by [@ANCHOR: hams_helpdesk:exc_cron_logged_failures]
+    # [@ANCHOR: hams_helpdesk:exc_cron_logged_failures_init]
     def __init__(self):
         super().__init__(level=logging.ERROR)
         self.thread = threading.get_ident()
         self.caught = []
 
-    # Verified by [@ANCHOR: hams_helpdesk:exc_cron_logged_failures]
+    # [@ANCHOR: hams_helpdesk:exc_cron_logged_failures_emit]
     def emit(self, record):
         if record.thread == self.thread and record.exc_info and record.exc_info[1] is not None:
             self.caught.append(record.exc_info[1])
