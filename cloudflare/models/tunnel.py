@@ -594,10 +594,13 @@ class CloudflareTunnel(models.Model):
             # retries on the next call. The flag stays False precisely so
             # that the next call does retry.
             except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: cloudflare_tunnel_push_config_catch_all]  # fmt: skip
+                # exc_info: the traceback is what lets hams_helpdesk's cron hook open a ticket for a push that
+                # fails on every run; without it the failure was only a line in the log.
                 _logger.error(
                     "Failed to provision routes on initial start of tunnel %s: %s",
                     tunnel.cf_tunnel_id,
                     e,
+                    exc_info=True,
                 )
 
         # start_tunnel_daemon is itself idempotent per key, but asking first

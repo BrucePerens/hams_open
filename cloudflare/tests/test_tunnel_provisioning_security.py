@@ -127,9 +127,13 @@ class TestTunnelProvisioningSecurity(HamsTransactionCase):
             "odoo.addons.cloudflare.models.tunnel.start_tunnel_daemon"
         )
 
-        outcome = self.env["cloudflare.tunnel"]._ensure_one_tunnel_running(tunnel)
+        with self.assertLogs("odoo.addons.cloudflare.models.tunnel", level="ERROR") as logs:
+            outcome = self.env["cloudflare.tunnel"]._ensure_one_tunnel_running(tunnel)
 
         self.assertEqual(outcome, "started")
+        # The failure carries its traceback, so the cron hook can turn a push that never works into a ticket.
+        self.assertIsNotNone(logs.records[0].exc_info)
+        self.assertIsNotNone(logs.records[0].exc_info[1])
         mock_start_daemon.assert_called_once_with(
             "faketoken", tunnel_key="cftun_provisioning_test"
         )
