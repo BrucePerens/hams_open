@@ -84,10 +84,17 @@ pub fn attach_pty(
         std::os::unix::fs::symlink(&slave_path, link)
             .map_err(|e| pty_error(format!("link {}: {e}", link.display())))?;
     }
+    let stop = Arc::new(AtomicBool::new(false));
+    // From here the endpoint owns the link: any failure below drops it, which removes the link
+    // and stops a thread already started.
+    let endpoint = PtyEndpoint {
+        slave: slave_path,
+        link,
+        stop: Arc::clone(&stop),
+    };
     let writer_port = master
         .try_clone_native()
         .map_err(|e| pty_error(format!("pty clone: {e}")))?;
-    let stop = Arc::new(AtomicBool::new(false));
     let (input_tx, input_rx) = mpsc::channel::<ClientInput>(CHANNEL);
     let (output_tx, output_rx) = mpsc::channel::<Vec<u8>>(CHANNEL);
     let reader_stop = Arc::clone(&stop);
@@ -100,14 +107,7 @@ pub fn attach_pty(
         .spawn(move || write_master(writer_port, output_rx))
         .map_err(|e| pty_error(format!("pty thread: {e}")))?;
     let client = splitter.attach_channels(runtime, input_rx, output_tx, true);
-    Ok((
-        PtyEndpoint {
-            slave: slave_path,
-            link,
-            stop,
-        },
-        client,
-    ))
+    Ok((endpoint, client))
 }
 
 // [@ANCHOR: radioctl_splitter_pty_read_master]
