@@ -2166,3 +2166,21 @@ fn a_full_event_list_gets_one_truncated_line_and_then_only_counts() {
     assert!(!text.contains("\"small\""));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// Tests [@ANCHOR: proc_py_finite]
+// Tests [@ANCHOR: proc_py_execute]
+// Tests [@ANCHOR: proc_py_wire_send]
+#[test]
+fn a_nan_in_an_emitted_value_or_the_result_becomes_null_and_the_run_still_succeeds() {
+    let b = bench();
+    let source = r#"
+bench.emit("reading", float("nan"))
+bench.emit("pair", (1.5, float("inf")))
+bench.result({"v": float("nan"), "seq": (1, float("-inf")), "ok": 2.5})
+"#;
+    let r = run(&b, source, json!({}));
+    assert_eq!(r["state"], "succeeded", "{r}");
+    assert_eq!(r["value"], json!({"v": null, "seq": [1, null], "ok": 2.5}));
+    assert_eq!(r["emitted"]["reading"], json!(null));
+    assert_eq!(r["emitted"]["pair"], json!([1.5, null]));
+}
