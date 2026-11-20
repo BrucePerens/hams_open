@@ -280,8 +280,9 @@ fn unvoiced_spectrum_q16(
         if voiced[(l - 1) as usize] {
             continue; // Eq. 119: stays zero.
         }
-        let a = band_edge_a_ceil(l, omega0_tilde_q32);
-        let b = band_edge_b_ceil(l, omega0_tilde_q32);
+        // Clamped at bin 128 (Nyquist) like the float twin: a band edge past it indexed `uw` out of range.
+        let b = band_edge_b_ceil(l, omega0_tilde_q32).min(128);
+        let a = band_edge_a_ceil(l, omega0_tilde_q32).min(b);
         if b <= a {
             continue; // Degenerate (unreachable for any real pitch period) zero-width band.
         }
@@ -417,6 +418,21 @@ mod tests {
     // Tests [@ANCHOR: unvoiced_synthesis_noise_state_struct]
     // Tests [@ANCHOR: unvoiced_synthesis_unvoiced_state_struct]
     use super::*;
+
+    #[test]
+    fn a_band_edge_past_nyquist_is_clamped_not_an_out_of_range_index() {
+        // 56 unvoiced harmonics at omega0 = 0.3 rad put the top band edges well past bin 128
+        // (the float twin clamps them; this one used to index `uw` at 256 and panic).
+        let noise = NoiseState::new();
+        let omega0_q32 = (0.3f64 * (1u64 << 32) as f64).round() as i64;
+        let voiced = vec![false; 56];
+        let amplitudes = vec![65536i32; 56];
+        let mut state = UnvoicedState::new();
+        let frame = state
+            .synthesize(&noise, omega0_q32, &voiced, &amplitudes)
+            .expect("lengths match");
+        assert_eq!(frame.len(), N);
+    }
 
     /// The noise generator is the integer recurrence `u(n+1) = (171 u(n) + 11213) mod 53125` from
     /// `u(-105) = 3147`: `new` has advanced it 209 times, `at` reads the window `-104..=104` (and
