@@ -381,5 +381,15 @@ class ParseArgsTest(unittest.TestCase):
             self.assertEqual(ctx.exception.code, 1)
 
 
+class RpmSigningChoiceTest(unittest.TestCase):
+    def test_a_single_keypair_signs_the_rpms_with_its_own_name_not_none(self):
+        name, public = rp.rpm_signing_choice([("FP1", "Primary <p@x>")], "pub1", None)
+        self.assertEqual((name, public), ("Primary <p@x>", "pub1"))
+
+    def test_a_rollover_keypair_signs_the_rpms_when_present(self):
+        name, public = rp.rpm_signing_choice([("FP1", "Primary"), ("FP2", "Secondary")], "pub1", "pub2")
+        self.assertEqual((name, public), ("Secondary", "pub2"))
+
+
 if __name__ == "__main__":
     unittest.main()
