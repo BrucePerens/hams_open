@@ -127,6 +127,12 @@ pub fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, Str
     }
     match name {
         "bench_gla_limits" => {
+            if args
+                .get("link_mbps")
+                .is_some_and(|v| !v.is_null() && !v.is_number())
+            {
+                return Err("link_mbps must be a number".into());
+            }
             let speed = args.get("link_mbps").and_then(|s| s.as_f64()).or_else(|| {
                 crate::glasgow::parse::usb_device(std::path::Path::new("/sys/bus/usb/devices"))
                     .and_then(|u| u.get("link_speed_mbps").and_then(|s| s.as_f64()))
@@ -135,13 +141,14 @@ pub fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, Str
                 args.get("pins").and_then(|p| p.as_u64()).unwrap_or(4) as u32,
                 speed.unwrap_or(480.0),
             );
-            v["link_mbps_source"] = json!(if args.get("link_mbps").is_some() {
-                "argument"
-            } else if speed.is_some() {
-                "sysfs"
-            } else {
-                "assumed"
-            });
+            v["link_mbps_source"] =
+                json!(if args.get("link_mbps").is_some_and(|v| v.is_number()) {
+                    "argument"
+                } else if speed.is_some() {
+                    "sysfs"
+                } else {
+                    "assumed"
+                });
             Ok(v)
         }
         "bench_gla_safe_state" => tools::Backend::call(

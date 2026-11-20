@@ -1605,6 +1605,12 @@ fn tools_are_listed_by_tier_the_instrument_is_found_and_the_tier_is_enforced() {
         (r["capture_works"].as_bool(), r["link_mbps_source"].as_str()),
         (Some(false), Some("argument"))
     );
+    // a link speed that is not a number is refused, not labelled as the argument while sysfs or the default answers
+    assert!(
+        super::call(&ro, "bench_gla_limits", &json!({"link_mbps": "12"}))
+            .unwrap_err()
+            .contains("link_mbps must be a number")
+    );
     // analyze reads a file of the output directory, with no device: a missing file is an error that names it
     let e = super::call(
         &ro,
