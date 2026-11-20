@@ -260,12 +260,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         redactions = [bytes.fromhex(r.replace(" ", "")) for r in args.redact]
         text = convert(args.rig, args.wire.read_text(), args.log.read_text(), redactions)
+        if args.out:
+            args.out.write_text(text)
     except (ValueError, OSError) as error:
         print(f"wire_to_transcript: {error}", file=sys.stderr)
         return 1
-    if args.out:
-        args.out.write_text(text)
-    else:
+    if not args.out:
         sys.stdout.write(text)
     return 0
 
