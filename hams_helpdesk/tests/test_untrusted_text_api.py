@@ -172,7 +172,12 @@ class TestUntrustedTextBuildingBlocks(BaseCase):
         self.assertEqual(ut._parse_color("#fff"), WHITE)
         self.assertEqual(ut._parse_color("#102030"), (16, 32, 48))
         self.assertEqual(ut._parse_color("#ffffff10"), "invisible")  # almost fully transparent
-        self.assertIsNone(ut._parse_color("transparent"))
+        self.assertIsNone(ut._parse_color("transparent"))  # as a background it means "the parent's"; as a text colour see test_08
+        # An hsl colour with an alpha channel hides text exactly as an rgb one does (rgba(0,0,0,0.05) is "invisible" above).
+        for hidden in ("hsla(0,0%,0%,0)", "hsla(0, 0%, 0%, 0.05)", "hsl(0 0% 0% / 0)", "hsl(0,0%,0%,0%)", "hsla(120deg 50% 50% / 10%)"):
+            self.assertEqual(ut._parse_color(hidden), "invisible", hidden)
+        self.assertEqual(ut._parse_color("hsl(0 0% 0%)"), (0, 0, 0))
+        self.assertEqual(ut._parse_color("hsla(0,0%,0%,0.5)"), (0, 0, 0))
         self.assertIsNone(ut._parse_color("#12345"))
         self.assertIsNone(ut._parse_color(None))
         self.assertEqual(ut._leading_number("12px"), 12.0)
@@ -214,6 +219,10 @@ class TestUntrustedTextBuildingBlocks(BaseCase):
             ("span", [("style", "transform:scale(0)")], "scaled_to_zero"),
             ("span", [("style", "color:#ffffff")], "low_contrast"),
             ("span", [("style", "color:rgba(0,0,0,0.05)")], "transparent_text"),
+            ("span", [("style", "color:transparent")], "transparent_text"),
+            ("span", [("style", "color:Transparent !important")], "transparent_text"),
+            ("span", [("style", "color:hsla(0,0%,0%,0)")], "transparent_text"),
+            ("span", [("style", "color:hsl(0 0% 0% / 0)")], "transparent_text"),
             ("span", [("style", "color:#010101;background-color:#000000")], "low_contrast"),
             # An !important flag does not change what a browser or mail client shows, so it must not hide the value from the check.
             ("span", [("style", "visibility:hidden !important")], "visibility_hidden"),
@@ -230,6 +239,7 @@ class TestUntrustedTextBuildingBlocks(BaseCase):
             with self.subTest(reason=reason, attrs=attrs):
                 self.assertEqual(ut._hidden_reason(tag, attrs, WHITE), reason)
         self.assertIsNone(ut._hidden_reason("span", [("style", "color:#000000")], WHITE))
+        self.assertIsNone(ut._hidden_reason("span", [("style", "background-color:transparent")], WHITE))  # a transparent background shows the parent's
         self.assertIsNone(ut._hidden_reason("p", [], WHITE))
         self.assertIsNone(ut._hidden_reason("details", [("open", "")], WHITE))
         self.assertEqual(ut._new_bg([("style", "background-color:#000")], WHITE), BLACK)
