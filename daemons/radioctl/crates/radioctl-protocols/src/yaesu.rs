@@ -39,7 +39,7 @@ use radioctl_core::description::{Family, RigDescription, YaesuClarifier};
 use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind, Request};
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::{Field, Observation, Op};
-use radioctl_core::units::{Hz, Level, Receiver, Vfo};
+use radioctl_core::units::{Hz, Level, Receiver, RepeaterShift, ToneMode, Vfo};
 
 use crate::attenuation;
 use crate::kenwood::{parse_digits, Token, Tokenizer};
@@ -51,6 +51,41 @@ const MAX_OFFSET_HZ: u16 = 9_999;
 const MAX_METER: u16 = 255;
 
 /// How a level is written on the wire.
+/// The CTCSS tone chart of the FT-991A CAT book (Table 1) in tenths of a hertz, by the tone number
+/// `CN00` takes (000 is 67.0 Hz, 049 is 254.1 Hz).
+const CTCSS_TENTHS: [u16; 50] = [
+    670, 693, 719, 744, 770, 797, 825, 854, 885, 915, 948, 974, 1000, 1035, 1072, 1109, 1148, 1188,
+    1230, 1273, 1318, 1365, 1413, 1462, 1514, 1567, 1598, 1622, 1655, 1679, 1713, 1738, 1773, 1799,
+    1835, 1862, 1899, 1928, 1966, 1995, 2035, 2065, 2107, 2181, 2257, 2291, 2336, 2418, 2503, 2541,
+];
+
+/// The DCS code chart of the FT-991A CAT book (Table 2) as the decimal number of the three octal
+/// digits (`023` is 23), by the code number `CN01` takes (000 is 023, 103 is 754).
+const DCS_CODES: [u16; 104] = [
+    23, 25, 26, 31, 32, 36, 43, 47, 51, 53, 54, 65, 71, 72, 73, 74, 114, 115, 116, 122, 125, 131,
+    132, 134, 143, 145, 152, 155, 156, 162, 165, 172, 174, 205, 212, 223, 225, 226, 243, 244, 245,
+    246, 251, 252, 255, 261, 263, 265, 266, 271, 274, 306, 311, 315, 325, 331, 332, 343, 346, 351,
+    356, 364, 365, 371, 411, 412, 413, 423, 431, 432, 445, 446, 452, 454, 455, 462, 464, 465, 466,
+    503, 506, 516, 523, 526, 532, 546, 565, 606, 612, 624, 627, 631, 632, 654, 662, 664, 703, 712,
+    723, 731, 732, 734, 743, 754,
+];
+
+// [@ANCHOR: radioctl_yaesu_tone_number]
+/// The number `CN` takes for a CTCSS tone in tenths of a hertz (`dcs` false) or for a DCS code
+/// (`dcs` true), or `None` when the rig's chart has no such entry.
+pub(crate) fn tone_number(dcs: bool, value: u16) -> Option<usize> {
+    let chart: &[u16] = if dcs { &DCS_CODES } else { &CTCSS_TENTHS };
+    chart.iter().position(|v| *v == value)
+}
+
+// [@ANCHOR: radioctl_yaesu_tone_value]
+/// The CTCSS tone in tenths of a hertz (`dcs` false) or the DCS code (`dcs` true) behind the
+/// number `CN` carries, or `None` past the end of the rig's chart.
+pub(crate) fn tone_value(dcs: bool, number: usize) -> Option<u16> {
+    let chart: &[u16] = if dcs { &DCS_CODES } else { &CTCSS_TENTHS };
+    chart.get(number).copied()
+}
+
 // [@ANCHOR: radioctl_yaesu_level_wire_struct]
 struct LevelWire {
     name: &'static str,
@@ -347,6 +382,26 @@ impl YaesuEngine {
                 .and_then(|v| u16::try_from(v).ok())
                 .map(Observation::ModelId),
             (Some(name @ ("RA" | "PA")), Some(digits)) => self.decode_front_end(name, digits),
+            // The repeater shift and tones, `P1` a fixed 0 (the FT-991A and FT-891 books): `OS0` then
+            // 0 simplex, 1 plus, 2 minus; `CT0` then 0 off, 1 CTCSS encode and decode, 2 CTCSS
+            // encode, 3 or 4 DCS; `CN00` and a tone number, `CN01` and a DCS code number.
+            (Some("OS"), Some("00")) => Some(Observation::RepeaterShift(RepeaterShift::Simplex)),
+            (Some("OS"), Some("01")) => Some(Observation::RepeaterShift(RepeaterShift::Plus)),
+            (Some("OS"), Some("02")) => Some(Observation::RepeaterShift(RepeaterShift::Minus)),
+            (Some("CT"), Some("00")) => Some(Observation::ToneMode(ToneMode::Off)),
+            (Some("CT"), Some("01")) => Some(Observation::ToneMode(ToneMode::Tsql)),
+            (Some("CT"), Some("02")) => Some(Observation::ToneMode(ToneMode::Tone)),
+            (Some("CT"), Some("03" | "04")) => Some(Observation::ToneMode(ToneMode::Dcs)),
+            (Some("CN"), Some(rest)) if rest.len() == 5 && rest.starts_with("00") => rest
+                .get(2..)
+                .and_then(parse_digits)
+                .and_then(|n| tone_value(false, usize::try_from(n).ok()?))
+                .map(Observation::CtcssTone),
+            (Some("CN"), Some(rest)) if rest.len() == 5 && rest.starts_with("01") => rest
+                .get(2..)
+                .and_then(parse_digits)
+                .and_then(|n| tone_value(true, usize::try_from(n).ok()?))
+                .map(Observation::DcsCode),
             // `ANp1p2p4;`: main band (p1 0), connector 1 to 3, p4 a fixed 0.
             (Some("AN"), Some(rest)) if self.has_antenna_ports() => match rest.as_bytes() {
                 [b'0', port @ b'1'..=b'3', b'0'] => {
@@ -571,6 +626,43 @@ impl ProtocolEngine for YaesuEngine {
                 Self::command(format!("{}{digit}{value:03};", wire.name), none)
             }
             Op::GetModelId => Self::command("ID;".into(), observe(Field::ModelId)),
+            Op::GetRepeaterShift => Self::command("OS0;".into(), observe(Field::RepeaterShift)),
+            Op::SetRepeaterShift(shift) => Self::command(
+                format!(
+                    "OS0{};",
+                    match shift {
+                        RepeaterShift::Simplex => 0,
+                        RepeaterShift::Plus => 1,
+                        RepeaterShift::Minus => 2,
+                    }
+                ),
+                none,
+            ),
+            Op::GetToneMode => Self::command("CT0;".into(), observe(Field::ToneMode)),
+            Op::SetToneMode(mode) => Self::command(
+                format!(
+                    "CT0{};",
+                    match mode {
+                        ToneMode::Off => 0,
+                        ToneMode::Tsql => 1,
+                        ToneMode::Tone => 2,
+                        ToneMode::Dcs => 3,
+                    }
+                ),
+                none,
+            ),
+            Op::GetCtcssTone => Self::command("CN00;".into(), observe(Field::CtcssTone)),
+            Op::SetCtcssTone(tenths) => match tone_number(false, *tenths) {
+                Some(n) => Self::command(format!("CN00{n:03};"), none),
+                None => return Err(Self::unsupported("the rig's CTCSS chart has no such tone")),
+            },
+            Op::GetDcsCode => Self::command("CN01;".into(), observe(Field::DcsCode)),
+            Op::SetDcsCode(code) => match tone_number(true, *code) {
+                Some(n) => Self::command(format!("CN01{n:03};"), none),
+                None => return Err(Self::unsupported("the rig's DCS chart has no such code")),
+            },
+            // The repeater offset is a menu item on these models, not a CAT command: refused
+            // by the catch-all below with the other ops the guides do not have.
             // No Morse over CAT: the three guides' `KY` plays back keyer memories 1 to 5 and
             // message keyer 1 to 5 only, and none documents a stop, so `StopCw` is refused with
             // the rest. Unkeying (`TX0;`) remains the stop path.
