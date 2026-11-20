@@ -4,6 +4,7 @@
 OnFailure unit waits out an Odoo restart instead of exiting 1 and leaving a failed hams-exception-report@ instance.
     python3 hams_helpdesk/daemon/test_exception_reporter.py
 """
+import http.client
 import io
 import json
 import os
@@ -154,6 +155,14 @@ class PostReportErrorClassTests(unittest.TestCase):
     def test_a_403_is_not(self):
         error = urllib.error.HTTPError("http://odoo", 403, "x", {}, None)
         self.assertNotIsInstance(self.post(error), er.OdooUnavailable)
+
+    def test_a_reply_cut_off_in_flight_is_unavailable_not_an_uncaught_http_client_error(self):
+        # Odoo or a proxy restarting mid-answer gives http.client.IncompleteRead or BadStatusLine, which are HTTPException, not
+        # OSError: they escaped post_report, so report_exception ("never raises") raised into the daemon's own failure and the
+        # OnFailure unit crashed instead of waiting out the restart.
+        for error in (http.client.IncompleteRead(b"x"), http.client.BadStatusLine("x"), http.client.LineTooLong("status line")):
+            with self.subTest(type(error).__name__):
+                self.assertIsInstance(self.post(error), er.OdooUnavailable)
 
     def test_the_message_never_holds_the_url(self):
         self.assertNotIn("odoo:8069", str(self.post(urllib.error.URLError(ConnectionRefusedError()))))

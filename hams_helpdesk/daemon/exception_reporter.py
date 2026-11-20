@@ -150,7 +150,7 @@ def post_report(payload, url=None, database=None, key_file=None, timeout=15):
         if error.code in UNAVAILABLE_HTTP_CODES:
             raise OdooUnavailable(f"Odoo answered HTTP {error.code}") from None
         raise ReportError(f"Odoo answered HTTP {error.code}") from None
-    except (urllib.error.URLError, OSError) as error:
+    except (urllib.error.URLError, OSError, http.client.HTTPException) as error:  # HTTPException: a reply cut off in flight (IncompleteRead, BadStatusLine)
         raise OdooUnavailable(f"could not reach Odoo ({type(error).__name__})") from None
     except ValueError as error:
         raise ReportError(f"could not reach Odoo ({type(error).__name__})") from None
