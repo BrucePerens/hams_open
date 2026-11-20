@@ -494,11 +494,20 @@ def _parse_color(value):
             if a < 0.15:
                 return "invisible"
         return tuple(min(255, max(0, c)) for c in chans)
-    m = re.fullmatch(r"hsla?\(\s*([\d.]+)(?:deg)?[\s,]+([\d.]+)%[\s,]+([\d.]+)%.*\)", value)
+    m = re.fullmatch(r"hsla?\(\s*([\d.]+)(?:deg)?[\s,]+([\d.]+)%[\s,]+([\d.]+)%(.*)\)", value)
     if m:
-        hue, saturation, lightness = (_css_number(part) for part in m.groups())
+        hue, saturation, lightness = (_css_number(part) for part in m.groups()[:3])
         if None in (hue, saturation, lightness):
             return None
+        # The alpha channel (`hsla(0,0%,0%,0)`, `hsl(0 0% 0% / 0)`) hides text exactly as it does in rgba() above.
+        alpha = re.fullmatch(r"[\s,/]+([\d.]+%?)\s*", m.group(4))
+        if alpha:
+            a = _css_number(alpha.group(1)[:-1] if alpha.group(1).endswith("%") else alpha.group(1))
+            if a is not None:
+                if alpha.group(1).endswith("%"):
+                    a /= 100
+                if a < 0.15:
+                    return "invisible"
         if lightness >= 97:
             return (255, 255, 255)
         # Pale grey or tinted text on a white page (hsl(0 0% 93%)) is as good as hidden, so it is compared like any other colour.
@@ -622,7 +631,8 @@ def _hidden_reason(tag, attrs, bg):
         eff_bg = local_bg if isinstance(local_bg, tuple) else bg
         if fg_raw:
             fg = _parse_color(fg_raw)
-            if fg == "invisible":
+            # `_parse_color` reads "transparent" as None (no colour: a background of it shows the parent's), but as a TEXT colour it is invisible.
+            if fg == "invisible" or fg_raw.replace("!important", "").strip().lower() == "transparent":
                 return "transparent_text"
             if isinstance(fg, tuple) and isinstance(eff_bg, tuple) and _contrast(fg, eff_bg) < 1.6:
                 return "low_contrast"
