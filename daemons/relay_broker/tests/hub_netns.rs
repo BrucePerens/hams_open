@@ -15,7 +15,9 @@ use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
 use common::temp_dir;
-use relay_broker::hub::{dnsmasq_conf, hostapd_conf, HubSettings};
+use relay_broker::hub::{
+    dnsmasq_conf, hostapd_conf, takeover_dnsmasq_conf, HubSettings, TakeoverSettings,
+};
 
 const HUB_NS: &str = "hamshub_ap";
 const CLIENT_NS: &str = "hamshub_cl";
@@ -43,6 +45,7 @@ fn in_ns(ns: &str, cmd: &[&str]) -> (bool, String) {
 /// Both namespaces (and with them the veth pair) and the `dnsmasq` child, removed when the test ends or fails.
 struct Lab {
     dnsmasq: Option<Child>,
+    namespaces: [&'static str; 2],
 }
 
 impl Lab {
@@ -52,7 +55,7 @@ impl Lab {
             let _ = Command::new("kill").arg(child.id().to_string()).status();
             let _ = child.wait();
         }
-        for ns in [HUB_NS, CLIENT_NS] {
+        for ns in self.namespaces {
             let _ = ip(&["netns", "del", ns]);
         }
     }
@@ -163,7 +166,10 @@ fn the_generated_hub_config_runs_in_real_dnsmasq_and_parses_in_real_hostapd() {
     assert!(run_hostapd(&bad).contains("unknown configuration item"));
 
     // The namespaces and the link between them.
-    let mut lab = Lab { dnsmasq: None };
+    let mut lab = Lab {
+        dnsmasq: None,
+        namespaces: [HUB_NS, CLIENT_NS],
+    };
     lab.teardown();
     for step in [
         vec!["netns", "add", HUB_NS],
@@ -272,4 +278,123 @@ fn the_generated_hub_config_runs_in_real_dnsmasq_and_parses_in_real_hostapd() {
         "",
         "other names are refused with no uplink"
     );
+}
+
+/// Phase 0 own-name DNS responder: the takeover `dnsmasq` answers the relay's name on the hub's LAN address (bound to addresses, never the wildcard), and refuses
+/// every other name when there is no uplink resolver. It is the same `dnsmasq` that hands out the leases, so it exists only while the takeover runs.
+#[test]
+fn the_takeover_answers_its_own_name_on_the_lan_address_only() {
+    if std::env::var("HAMS_HUB_NETNS").as_deref() != Ok("1") {
+        eprintln!("skipped: set HAMS_HUB_NETNS=1 (needs sudo ip, dnsmasq and dig)");
+        return;
+    }
+    const TK_HUB: &str = "hamstk_hub";
+    const TK_CL: &str = "hamstk_cl";
+    let dir = temp_dir("takeover_netns");
+    let mut lab = Lab {
+        dnsmasq: None,
+        namespaces: [TK_HUB, TK_CL],
+    };
+    lab.teardown();
+    for step in [
+        vec!["netns", "add", TK_HUB],
+        vec!["netns", "add", TK_CL],
+        vec![
+            "link", "add", "tkhub0", "netns", TK_HUB, "type", "veth", "peer", "name", "tkcl0",
+            "netns", TK_CL,
+        ],
+    ] {
+        let (ok, text) = ip(&step);
+        assert!(ok, "ip {step:?} failed: {text}");
+    }
+    for (ns, cmd) in [
+        (
+            TK_HUB,
+            &["ip", "addr", "add", "192.168.51.5/24", "dev", "tkhub0"][..],
+        ),
+        (TK_HUB, &["ip", "link", "set", "tkhub0", "up"]),
+        (TK_HUB, &["ip", "link", "set", "lo", "up"]),
+        (
+            TK_CL,
+            &["ip", "addr", "add", "192.168.51.77/24", "dev", "tkcl0"],
+        ),
+        (TK_CL, &["ip", "link", "set", "tkcl0", "up"]),
+    ] {
+        let (ok, text) = in_ns(ns, cmd);
+        assert!(ok, "{cmd:?} in {ns} failed: {text}");
+    }
+    let conf = dir.join("takeover.conf");
+    std::fs::write(
+        &conf,
+        takeover_dnsmasq_conf(&TakeoverSettings {
+            interface: "tkhub0".into(),
+            hub_address: Ipv4Addr::new(192, 168, 51, 5),
+            gateway: Ipv4Addr::new(192, 168, 51, 1),
+            relay_name: "relay".into(),
+            uplink_dns: None,
+        })
+        .unwrap(),
+    )
+    .unwrap();
+    lab.dnsmasq = Some(
+        Command::new("sudo")
+            .args([
+                "-n",
+                "ip",
+                "netns",
+                "exec",
+                TK_HUB,
+                "/usr/sbin/dnsmasq",
+                "-k",
+            ])
+            .arg(format!("--conf-file={}", conf.display()))
+            .arg("--pid-file=")
+            .arg("--dhcp-leasefile=/dev/null")
+            .arg(format!(
+                "--log-facility={}",
+                dir.join("dnsmasq.log").display()
+            ))
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("start dnsmasq"),
+    );
+    let dig = |ns: &str, server: &str, name: &str| {
+        in_ns(
+            ns,
+            &[
+                "dig",
+                "+short",
+                "+time=2",
+                "+tries=1",
+                &format!("@{server}"),
+                name,
+                "A",
+            ],
+        )
+        .1
+        .trim()
+        .to_string()
+    };
+    let mut attempts = 0;
+    while dig(TK_CL, "192.168.51.5", "relay") != "192.168.51.5" {
+        attempts += 1;
+        assert!(attempts < 20, "the takeover never answered its own name");
+        std::thread::sleep(Duration::from_millis(500));
+    }
+    assert_eq!(dig(TK_CL, "192.168.51.5", "relay.local"), "192.168.51.5");
+    assert_eq!(
+        dig(TK_CL, "192.168.51.5", "example.invalid"),
+        "",
+        "other names are refused with no uplink"
+    );
+    // Bound to addresses, never the wildcard (loopback is fine: only this machine reaches it).
+    let (_, sockets) = in_ns(TK_HUB, &["ss", "-uln"]);
+    for line in sockets.lines().filter(|l| l.contains(":53 ")) {
+        assert!(
+            !line.contains("0.0.0.0:53") && !line.contains("*:53") && !line.contains("[::]:53"),
+            "the responder must not bind the wildcard address: {sockets}"
+        );
+    }
+    assert!(sockets.contains("192.168.51.5:53"), "{sockets}");
 }

@@ -130,6 +130,11 @@ pub enum Request {
     HubTakeoverStop,
     /// Ask for a clean power-off of the machine (the hub's low-battery shutdown); only with `hub = true`. The broker only leaves a request file.
     Poweroff,
+    /// Bind the DHCP client port (UDP 68) on one named interface and pass the descriptor, so the relay can listen for a router's DHCP offer without a privilege (only with `hub = true`).
+    BindDhcpClient {
+        /// The interface the socket is bound to (SO_BINDTODEVICE); no other interface hears it.
+        interface: String,
+    },
 }
 
 /// The kind of source a clock step rests on.
@@ -432,6 +437,10 @@ impl Request {
             }
             Request::HubTakeoverStop => out.push(13),
             Request::Poweroff => out.push(15),
+            Request::BindDhcpClient { interface } => {
+                out.push(14);
+                put_string(&mut out, interface);
+            }
         }
         out
     }
@@ -521,6 +530,9 @@ impl Request {
             }),
             13 => Request::HubTakeoverStop,
             15 => Request::Poweroff,
+            14 => Request::BindDhcpClient {
+                interface: r.string()?,
+            },
             other => return Err(WireError::BadTag(other)),
         };
         r.finish()?;
@@ -802,6 +814,9 @@ mod tests {
             }),
             Request::HubTakeoverStop,
             Request::Poweroff,
+            Request::BindDhcpClient {
+                interface: "br0".into(),
+            },
             Request::UpdatePackage,
             Request::SetSystemTime {
                 target_unix_secs: 1_793_500_000,
