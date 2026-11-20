@@ -41,7 +41,7 @@ use radioctl_core::description::{Family, RigDescription};
 use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind, Request, PARTIAL_FRAME_TIMEOUT};
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::{Field, Observation, Op};
-use radioctl_core::units::{Hz, Level, Vfo};
+use radioctl_core::units::{Hz, Level, ToneMode, Vfo};
 
 use crate::attenuation;
 
@@ -130,6 +130,18 @@ impl Tokenizer {
     }
 }
 
+// [@ANCHOR: radioctl_kenwood_ts590_tone_number]
+/// The TS-590S tone number for a tone in tenths of a hertz, for the virtual rig.
+pub(crate) fn ts590_tone_number(tenths: u16) -> Option<usize> {
+    TS590_TONES.iter().position(|t| *t == tenths)
+}
+
+// [@ANCHOR: radioctl_kenwood_ts590_tone_value]
+/// The tone in tenths of a hertz behind a TS-590S tone number, for the virtual rig.
+pub(crate) fn ts590_tone_value(number: usize) -> Option<u16> {
+    TS590_TONES.get(number).copied()
+}
+
 // [@ANCHOR: radioctl_kenwood_parse_digits]
 /// Parses a string of ASCII digits only (no sign, no spaces).
 pub fn parse_digits(text: &str) -> Option<u64> {
@@ -168,7 +180,21 @@ pub struct KenwoodEngine {
     /// The auto-information the controller turned on (`AI` set to on, [`Op::SetTransceive`]) and
     /// the rig loses with the link; sent again by [`ProtocolEngine::link_restored`].
     transceive: bool,
+    /// The `TO` and `CT` flags as the last tone-mode read has collected them; the mode is
+    /// reported when the second arrives.
+    tone_flags: [Option<bool>; 2],
 }
+
+/// The TS-590S tone chart (its PC command reference, `TN`) in tenths of a hertz, by the tone
+/// number `TN` takes: 00 is 67.0 Hz, 41 is 254.1 Hz and 42 is 1750 Hz. `CN` takes 00 to 41.
+const TS590_TONES: [u16; 43] = [
+    670, 693, 719, 744, 770, 797, 825, 854, 885, 915, 948, 974, 1000, 1035, 1072, 1109, 1148, 1188,
+    1230, 1273, 1318, 1365, 1413, 1462, 1514, 1567, 1622, 1679, 1738, 1799, 1862, 1928, 2035, 2065,
+    2107, 2181, 2257, 2291, 2336, 2418, 2503, 2541, 17500,
+];
+
+/// The highest tone number `CN` (the CTCSS squelch tone) takes on the TS-590S.
+const TS590_CN_MAX: usize = 41;
 
 impl KenwoodEngine {
     // [@ANCHOR: radioctl_kenwood_engine_new]
@@ -208,6 +234,7 @@ impl KenwoodEngine {
             r5000: dialect == Some(KenwoodDialect::R5000),
             if_frequency: dialect == Some(KenwoodDialect::Trc80),
             transceive: false,
+            tone_flags: [None; 2],
         })
     }
 
@@ -224,6 +251,105 @@ impl KenwoodEngine {
             (2, Some(21)) => Ok(AntennaForm::Three),
             _ => Err(Self::unsupported("no antenna port list on this model")),
         }
+    }
+
+    // [@ANCHOR: radioctl_kenwood_engine_tone_chart]
+    /// The tone chart of this model, or `None` where no Kenwood guide with a chart has been
+    /// read: only the TS-590S (ID 21) has one.
+    fn tone_chart(&self) -> Option<&'static [u16]> {
+        match self.desc.kenwood.as_ref().map(|k| k.model_id) {
+            Some(21) => Some(&TS590_TONES),
+            _ => None,
+        }
+    }
+
+    // [@ANCHOR: radioctl_kenwood_engine_encode_repeater]
+    /// The tone ops of the `repeater` capability on a model with a chart (the TS-590S). The tone
+    /// mode is the two flags `TO` (tone) and `CT` (CTCSS, that is tone squelch): a set sends both
+    /// (`TO1;CT0;` is `Tone`, `TO0;CT1;` is `Tsql`), a read sends `TO;CT;` and reports the mode when
+    /// the second answer arrives. The tone is `TN` (encode) and `CN` (squelch, up to number 41),
+    /// both set together and `TN` read. The TS-590S has no DCS and no repeater shift or offset
+    /// command: those are refused. Facts from the TS-590S PC command reference; unverified.
+    fn encode_repeater(&mut self, op: &Op) -> Option<Result<Request, RigError>> {
+        let is_repeater_op = matches!(
+            op,
+            Op::GetRepeaterShift
+                | Op::SetRepeaterShift(_)
+                | Op::GetRepeaterOffset
+                | Op::SetRepeaterOffset(_)
+                | Op::GetToneMode
+                | Op::SetToneMode(_)
+                | Op::GetCtcssTone
+                | Op::SetCtcssTone(_)
+                | Op::GetDcsCode
+                | Op::SetDcsCode(_)
+        );
+        if !is_repeater_op {
+            return None;
+        }
+        let Some(chart) = self.tone_chart() else {
+            return Some(Err(Self::unsupported(
+                "no repeater commands are known for this Kenwood model",
+            )));
+        };
+        let none = ReplyKind::None;
+        Some(match op {
+            Op::GetToneMode => {
+                self.tone_flags = [None; 2];
+                Ok(Self::command(
+                    "TO;CT;".into(),
+                    ReplyKind::Observation(Field::ToneMode),
+                ))
+            }
+            Op::SetToneMode(mode) => match mode {
+                ToneMode::Off => Ok(Self::command("TO0;CT0;".into(), none)),
+                ToneMode::Tone => Ok(Self::command("TO1;CT0;".into(), none)),
+                ToneMode::Tsql => Ok(Self::command("TO0;CT1;".into(), none)),
+                ToneMode::Dcs => Err(Self::unsupported("the TS-590S has no DCS")),
+            },
+            Op::GetCtcssTone => Ok(Self::command(
+                "TN;".into(),
+                ReplyKind::Observation(Field::CtcssTone),
+            )),
+            Op::SetCtcssTone(tenths) => match chart.iter().position(|t| t == tenths) {
+                Some(n) if n <= TS590_CN_MAX => {
+                    Ok(Self::command(format!("TN{n:02};CN{n:02};"), none))
+                }
+                Some(n) => Ok(Self::command(format!("TN{n:02};"), none)),
+                None => Err(Self::unsupported("the rig's tone chart has no such tone")),
+            },
+            _ => Err(Self::unsupported(
+                "the TS-590S has no DCS, repeater shift or offset command",
+            )),
+        })
+    }
+
+    // [@ANCHOR: radioctl_kenwood_engine_decode_tone_flag]
+    /// Keeps a `TO` or `CT` answer of a tone-mode read; the `CT` answer, the second one asked
+    /// for, completes the mode when both flags were collected since the read. `None` for any
+    /// other answer, and for a flag on a model without a tone chart.
+    fn decode_tone_flag(&mut self, text: &str) -> Option<Vec<Inbound>> {
+        self.tone_chart()?;
+        let (index, state) = match text.as_bytes() {
+            [b'T', b'O', s @ (b'0' | b'1')] => (0, *s == b'1'),
+            [b'C', b'T', s @ (b'0' | b'1')] => (1, *s == b'1'),
+            _ => return None,
+        };
+        self.tone_flags[index] = Some(state);
+        if index == 0 {
+            return Some(Vec::new());
+        }
+        let [Some(tone), Some(tsql)] = self.tone_flags else {
+            return Some(Vec::new());
+        };
+        let mode = if tsql {
+            ToneMode::Tsql
+        } else if tone {
+            ToneMode::Tone
+        } else {
+            ToneMode::Off
+        };
+        Some(vec![Inbound::Observation(Observation::ToneMode(mode))])
     }
 
     // [@ANCHOR: radioctl_kenwood_engine_ky]
@@ -332,6 +458,11 @@ impl KenwoodEngine {
                 };
                 Some(Observation::Level(Level::Antenna, u16::from(port)))
             }),
+            (Some("TN"), Some(digits)) if digits.len() == 2 => self
+                .tone_chart()
+                .zip(parse_digits(digits))
+                .and_then(|(chart, n)| chart.get(usize::try_from(n).ok()?))
+                .map(|tenths| Observation::CtcssTone(*tenths)),
             (Some(name), Some(digits)) => decode_level(name, digits),
             _ => None,
         };
@@ -617,6 +748,9 @@ impl ProtocolEngine for KenwoodEngine {
                 return result;
             }
         }
+        if let Some(result) = self.encode_repeater(op) {
+            return result;
+        }
         let none = ReplyKind::None;
         let request = match op {
             Op::GetFrequency(Vfo::A) if self.if_frequency => Self::command(
@@ -758,7 +892,10 @@ impl ProtocolEngine for KenwoodEngine {
             .feed(bytes, now)
             .into_iter()
             .flat_map(|token| match token {
-                Token::Command(text) => self.decode(&text),
+                Token::Command(text) => match self.decode_tone_flag(&text) {
+                    Some(done) => done,
+                    None => self.decode(&text),
+                },
                 Token::Junk(junk) => vec![Inbound::Unrecognised(junk)],
             })
             .collect()

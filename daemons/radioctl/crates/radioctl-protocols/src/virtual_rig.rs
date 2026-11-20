@@ -193,6 +193,8 @@ pub struct VirtualRig {
     /// True when the last `0F` set was a duplex code: a `0F` read then answers with the duplex
     /// state instead of the split state (Hamlib: the one command reports both).
     civ_dup_last: bool,
+    /// The Kenwood `TO` (tone) and `CT` (CTCSS) flags of a model with a tone chart.
+    kenwood_tone_flags: [bool; 2],
     /// Kenwood: the VFO `FR` selected for receive (0 A, 1 B) and `FT` for transmit; split is
     /// when they differ.
     kenwood_rx_vfo: u8,
@@ -302,6 +304,7 @@ impl VirtualRig {
             civ_dual_watch: false,
             civ_tone_flags: [false; 3],
             civ_dup_last: false,
+            kenwood_tone_flags: [false; 2],
             kenwood_rx_vfo: 0,
             yaesu_tx_band: 0,
             kenwood_tx_vfo: 0,
@@ -1050,6 +1053,39 @@ impl VirtualRig {
                 attenuation::virtual_kenwood(&self.desc, &mut self.state.levels, name, arg)
             }
             ("AN", _) => self.kenwood_antenna(arg),
+            // TS-590S (id 21): the tone flags and the tone number (`TN` 00 to 42, `CN` 00 to 41).
+            ("TO", "") if self.kenwood_id() == 21 => {
+                Some(format!("TO{};", u8::from(self.kenwood_tone_flags[0])))
+            }
+            ("CT", "") if self.kenwood_id() == 21 => {
+                Some(format!("CT{};", u8::from(self.kenwood_tone_flags[1])))
+            }
+            ("TO" | "CT", flag @ ("0" | "1")) if self.kenwood_id() == 21 => {
+                self.kenwood_tone_flags[usize::from(name == "CT")] = flag == "1";
+                let [tone, tsql] = self.kenwood_tone_flags;
+                self.state.tone_mode = if tsql {
+                    ToneMode::Tsql
+                } else if tone {
+                    ToneMode::Tone
+                } else {
+                    ToneMode::Off
+                };
+                None
+            }
+            ("TN" | "CN", "") if self.kenwood_id() == 21 => {
+                kenwood::ts590_tone_number(self.state.ctcss_tenths)
+                    .map(|n| format!("{name}{n:02};"))
+            }
+            ("TN" | "CN", digits) if self.kenwood_id() == 21 && digits.len() == 2 => {
+                let number = digits.parse::<usize>().ok();
+                match number.and_then(kenwood::ts590_tone_value) {
+                    Some(tenths) if name == "TN" || number <= Some(41) => {
+                        self.state.ctcss_tenths = tenths;
+                        None
+                    }
+                    _ => Some("?;".to_string()),
+                }
+            }
             _ => Some("?;".to_string()),
         };
         reply.map(String::into_bytes).unwrap_or_default()

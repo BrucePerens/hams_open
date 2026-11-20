@@ -282,7 +282,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 2001 | Kenwood | TS-50S | A | kenwood_ascii | kenwood | `kenwood-ts-50s` | - | unverified | - | described |
 | 2004 | Kenwood | TS-570D | A | kenwood_ascii | kenwood | `kenwood-ts-570d` | - | manual-checked | - | described |
 | 2016 | Kenwood | TS-570S | A | kenwood_ascii | kenwood | `kenwood-ts-570s` | - | manual-checked | - | described |
-| 2031 | Kenwood | TS-590S | A | kenwood_ascii | kenwood | `kenwood-ts-590s` | - | manual-checked | - | described |
+| 2031 | Kenwood | TS-590S | A | kenwood_ascii | kenwood | `kenwood-ts-590s` | shift, offset, tones | manual-checked | - | described |
 | 2037 | Kenwood | TS-590SG | A | kenwood_ascii | kenwood | `kenwood-ts-590sg` | - | manual-checked | - | described |
 | 2024 | Kenwood | TS-680S | A | kenwood_ascii | kenwood | `kenwood-ts-680s` | - | unverified | - | described |
 | 2005 | Kenwood | TS-690S | A | kenwood_ascii | kenwood | `kenwood-ts-690s` | - | manual-checked | - | described |

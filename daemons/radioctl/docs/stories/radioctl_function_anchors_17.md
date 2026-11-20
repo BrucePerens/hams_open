@@ -153,3 +153,23 @@ Classifies a SmartSDR command line (without its `C<seq>|` prefix) as one that ca
 ### `pub fn cwx_text(text: &str) -> Result<String, RigError>` [@ANCHOR: radioctl:radioctl_flex_cwx_text]
 
 Builds the quoted argument of `cwx send`: spaces are replaced by byte 0x7f (as the protocol requires) and the whole text is wrapped in double quotes. `text` is borrowed. Errors, all `ErrorKind::Rejected` with a detail: empty text, more than 100 characters (our limit; the docs give none), a double quote or bar `|` (they would break the command framing), or any character that is not printable ASCII. Result is a new `String`. Pure, no I/O. The `cwx send` line it feeds is a transmit command: `line_may_transmit` classifies it as one, so only a transmit op (`SendCw`) that the actor has gated may produce it.
+
+### `fn tone_chart(&self) -> Option<&'static [u16]>` [@ANCHOR: radioctl:radioctl_kenwood_engine_tone_chart]
+
+Returns the tone chart of the engine's model: the 43-entry chart of the TS-590S (model id 21 in the description's `[kenwood]` block), in tenths of a hertz by the tone number `TN` takes (00 is 67.0 Hz, 41 is 254.1 Hz, 42 is 1750 Hz). `&self`; it reads the description only. Returns `None` for every other model, because no other Kenwood guide with a chart has been read; the tone ops and the `TN` answer are then refused or unrecognised. Pure, no I/O, no errors.
+
+### `fn encode_repeater(&mut self, op: &Op) -> Option<Result<Request, RigError>>` [@ANCHOR: radioctl:radioctl_kenwood_engine_encode_repeater]
+
+Encodes the repeater and tone ops for the Kenwood engine; `op` is the operation by reference and `&mut self` because a tone-mode read clears the collected flags. Returns `None` for any other operation so the normal encoder runs. On a model without a chart it refuses every repeater op with an `Unsupported` `RigError`. On the TS-590S the tone mode is two flags: a set sends `TO` and `CT` together (`TO1;CT0;` for `Tone`, `TO0;CT1;` for `Tsql`, both 0 for `Off`) with no reply expected, and a read sends `TO;CT;`. The tone is `TN` (encode) and `CN` (squelch, number 41 at most) set together, and `TN` read. A tone outside the chart, DCS, the repeater shift and the offset are refused as `Unsupported`; the guide has no command for them. Builds a request only.
+
+### `fn decode_tone_flag(&mut self, text: &str) -> Option<Vec<Inbound>>` [@ANCHOR: radioctl:radioctl_kenwood_engine_decode_tone_flag]
+
+Keeps a `TO` or `CT` answer (`TO1`, `CT0`, the text without its semicolon) of a tone-mode read. The `TO` answer is stored and reports nothing; the `CT` answer, the second asked for, reports `Observation::ToneMode` when both flags have been collected since the read (`CT` on is `Tsql`, else `TO` on is `Tone`, else `Off`). Returns `None` for any other text, or on a model without a chart, so the normal decoder handles it; returns `Some` with the observations (possibly none) when it consumed the answer. `&mut self`; no I/O, no errors.
+
+### `fn ts590_tone_number(tenths: u16) -> Option<usize>` [@ANCHOR: radioctl:radioctl_kenwood_ts590_tone_number]
+
+The TS-590S tone number for a CTCSS tone in tenths of a hertz (885 is 88.5 Hz, number 8), for the virtual rig. `tenths` is by value; returns the index into the guide's chart, or `None` when the chart has no such tone. Crate-private, pure, no I/O, no errors; the inverse is `ts590_tone_value`.
+
+### `fn ts590_tone_value(number: usize) -> Option<u16>` [@ANCHOR: radioctl:radioctl_kenwood_ts590_tone_value]
+
+The CTCSS tone in tenths of a hertz behind a TS-590S tone number, for the virtual rig. `number` is the two-digit number `TN` or `CN` carried; returns the chart entry, or `None` past number 42, so the virtual rig answers `?;` as a real rig refuses a number outside its chart. Crate-private, pure, no I/O, no errors; the inverse is `ts590_tone_number`.
