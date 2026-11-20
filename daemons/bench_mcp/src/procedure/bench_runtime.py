@@ -112,6 +112,17 @@ def finite(value):
     return value
 
 
+def strict_dumps(value):
+    """Strict JSON text of ``value``: a NaN or infinity anywhere in it (also inside a
+    converted numpy array or tuple) becomes null instead of an error, so a measurement
+    that came back as NaN does not end the run or lose its result."""
+    try:
+        return json.dumps(value, default=jsonable, allow_nan=False)
+    except ValueError:
+        plain = json.loads(json.dumps(value, default=jsonable))
+        return json.dumps(finite(plain), allow_nan=False)
+
+
 # [@ANCHOR: proc_py_bench_error_class]
 class BenchError(Exception):
     """A bench tool call failed; ``kind`` says why (tool, tier,
@@ -165,7 +176,7 @@ class Wire:
     def send(self, message):
         """Write one message; a closed pipe ends the process."""
         # [@ANCHOR: proc_py_wire_send]
-        text = json.dumps(message, default=jsonable, allow_nan=False)
+        text = strict_dumps(message)
         data = text.encode() + b"\n"
         with self.lock:
             try:
@@ -780,7 +791,7 @@ def execute(code, namespace):
         value = STATE["result"]
         if value is None:
             value = namespace.get("result")
-        text = json.dumps(value, default=jsonable, allow_nan=False)
+        text = strict_dumps(value)
         return "done", {"value": json.loads(text)}
     except BenchCancelled as error:
         return "cancelled", {
