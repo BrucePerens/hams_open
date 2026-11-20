@@ -103,6 +103,7 @@ impl Broker {
             Request::HubStatus => "hub_status",
             Request::HubTakeoverStart(_) => "hub_takeover_start",
             Request::HubTakeoverStop => "hub_takeover_stop",
+            Request::BindDhcpClient { .. } => "bind_dhcp_client",
             Request::UpdatePackage => "update_package",
             Request::SetSystemTime { .. } => "set_system_time",
             Request::TimeStatus => "time_status",
@@ -139,6 +140,7 @@ impl Broker {
             Request::HubStatus => self.hub_status(peer),
             Request::HubTakeoverStart(t) => self.hub_takeover_start(peer, t),
             Request::HubTakeoverStop => self.hub_takeover_stop(peer),
+            Request::BindDhcpClient { interface } => self.bind_dhcp_client(peer, interface),
             Request::UpdatePackage => self.update_package(peer),
             Request::SetSystemTime {
                 target_unix_secs,
@@ -270,6 +272,34 @@ impl Broker {
             }
             Err(e) => {
                 self.log(peer, "bind_udp", "failed", format!("port {port}: {e}"));
+                (Response::error(Status::Failed, format!("bind: {e}")), None)
+            }
+        }
+    }
+
+    // [@ANCHOR: relay_broker_broker_bind_dhcp_client]
+    /// The DHCP client port action: allowed only when the hub is enabled and the interface name is plain; the socket hears that one interface only.
+    fn bind_dhcp_client(&mut self, peer: Peer, interface: &str) -> (Response, Option<OwnedFd>) {
+        if !self.hub_enabled {
+            self.log(peer, "bind_dhcp_client", "denied", "hub not enabled".into());
+            return (Response::error(Status::Denied, "hub not enabled"), None);
+        }
+        if !hub::plain_interface_name(interface) {
+            self.log(peer, "bind_dhcp_client", "denied", "bad interface".into());
+            return (Response::error(Status::Denied, "bad interface name"), None);
+        }
+        match self.os.bind_dhcp_client(interface) {
+            Ok(fd) => {
+                self.log(peer, "bind_dhcp_client", "allowed", interface.to_string());
+                (Response::Opened, Some(fd))
+            }
+            Err(e) => {
+                self.log(
+                    peer,
+                    "bind_dhcp_client",
+                    "failed",
+                    format!("{interface}: {e}"),
+                );
                 (Response::error(Status::Failed, format!("bind: {e}")), None)
             }
         }
