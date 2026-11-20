@@ -860,6 +860,19 @@ fn the_decode_argument_picks_the_decoder_and_reads_pins_by_name() {
         let e = decode::run(&w, &json!({"type": "uart", "pin": "A1", k: v})).unwrap_err();
         assert!(e.contains(&format!("decode {k} must be")), "{k}: {e}");
     }
+    // a count that is negative or fractional is refused, not truncated into a different setting
+    for (k, v) in [
+        ("mode", json!(-1)),
+        ("mode", json!(1.5)),
+        ("bits", json!(8.5)),
+    ] {
+        let e =
+            decode::run(&w, &json!({"type": "spi", "sck": "A0", "copi": "A1", k: v})).unwrap_err();
+        assert!(
+            e.contains(&format!("decode {k} must be a whole number")),
+            "{k}: {e}"
+        );
+    }
     assert!(decode::run(&w, &json!({"type": "uart", "pin": "A1", "invert": null})).is_ok());
     assert!(decode::run(&w, &json!({"type": "can"}))
         .unwrap_err()

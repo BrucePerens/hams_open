@@ -288,6 +288,16 @@ pub fn run(w: &Wave, spec: &Value) -> Result<Value, String> {
                 .ok_or_else(|| format!("decode {k} must be a number")),
         }
     };
+    // A count (bits, mode) is a whole number: `-1` or `1.5` must not become 0 or 1 through a cast.
+    let whole = |k: &str, d: u32| -> Result<u32, String> {
+        match spec.get(k) {
+            None | Some(Value::Null) => Ok(d),
+            Some(v) => v
+                .as_u64()
+                .and_then(|n| u32::try_from(n).ok())
+                .ok_or_else(|| format!("decode {k} must be a whole number")),
+        }
+    };
     let flag = |k: &str, d: bool| -> Result<bool, String> {
         match spec.get(k) {
             None | Some(Value::Null) => Ok(d),
@@ -307,7 +317,7 @@ pub fn run(w: &Wave, spec: &Value) -> Result<Value, String> {
             w,
             pin("pin")?,
             num("baud", 115200.0)?,
-            num("bits", 8.0)? as u32,
+            whole("bits", 8)?,
             parity,
             flag("invert", false)?,
         ),
@@ -318,8 +328,8 @@ pub fn run(w: &Wave, spec: &Value) -> Result<Value, String> {
             pin("sck")?,
             opt("copi")?,
             opt("cipo")?,
-            num("mode", 0.0)? as u8,
-            num("bits", 8.0)? as u32,
+            u8::try_from(whole("mode", 0)?).unwrap_or(u8::MAX),
+            whole("bits", 8)?,
             flag("msb_first", true)?,
             flag("cs_active_low", true)?,
         ),
