@@ -345,7 +345,7 @@ pub fn vcd_summary(text: &str) -> Result<Value, String> {
                 0
             };
         let freq = if a.rises.len() >= 3 {
-            let span = (a.rises[a.rises.len() - 1] - a.rises[0]) as f64;
+            let span = a.rises[a.rises.len() - 1].saturating_sub(a.rises[0]) as f64;
             (span > 0.0).then(|| 1e9 * (a.rises.len() - 1) as f64 / span)
         } else {
             None

@@ -305,6 +305,12 @@ fn a_vcd_capture_is_summarised_per_pin() {
         (Some(4), Some(100_000), Some(0))
     );
     assert!(parse::vcd_summary("$enddefinitions $end\n").is_err());
+    // timestamps that run backwards (a damaged file) give no frequency instead of an underflow
+    let back = parse::vcd_summary(
+        "$var wire 1 ! a $end\n$enddefinitions $end\n#100\n0!\n#110\n1!\n#120\n0!\n#50\n1!\n#60\n0!\n#20\n1!\n",
+    )
+    .unwrap();
+    assert!(back["pins"]["a"]["rising_edge_frequency_hz"].is_null());
     let x = parse::vcd_summary("$var wire 1 ! a $end\n$enddefinitions $end\n#0\n0!\n#10\nx!\n")
         .unwrap();
     assert_eq!(x["pins"]["a"]["unknown_samples"], json!(1));
