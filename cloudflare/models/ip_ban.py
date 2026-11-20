@@ -187,6 +187,7 @@ class CloudflareIPBan(models.Model):
     @api.model
     def _cron_lift_expired_bans(self):
         """Lift active bans whose expires_at has passed, through the normal unban path."""
+        # Verified by [@ANCHOR: COMM_test_cf_lift_expired_bans]
         expired = self.search(
             [
                 ("state", "=", "active"),
