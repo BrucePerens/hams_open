@@ -96,7 +96,8 @@ def update_or_add_message(msg, name, sha):
     new_text = '{0}: {1}\n'.format(name, sha)
     pattern = re.compile(r'^' + re.escape(name) + r': .*\n?', re.MULTILINE)
     if pattern.search(msg):
-        return pattern.sub(new_text, msg, count=1)
+        # A function, not the string: a backslash in the value must not be read as a group reference.
+        return pattern.sub(lambda _match: new_text, msg, count=1)
     back = msg.rfind("```")
     if (back != -1):
         return '{0}{1}```'.format(msg[:back], new_text)

@@ -108,6 +108,12 @@ class UpdateOrAddMessageTest(unittest.TestCase):
         self.assertIn("cloudflared-linux-amd64-fips: fips-sum", msg)
         self.assertIn("cloudflared-linux-amd64: plain-sum", msg)
 
+    # Tests [@ANCHOR: github_message:update_or_add_message]
+    def test_a_replacement_value_with_a_backslash_is_written_literally(self):
+        msg = gm.update_or_add_message("", "a", "old")
+        msg = gm.update_or_add_message(msg, "a", r"x\1y")
+        self.assertIn("a: " + "x\\1y" + "\n", msg)
+
 
 class GetReleaseTest(unittest.TestCase):
     # Tests [@ANCHOR: github_message:get_release]
