@@ -43,3 +43,4 @@ cbindgen = { version = "0.29", default-features = false }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "sync", "time", "io-util", "net", "macros"] }
+libc = "0.2"

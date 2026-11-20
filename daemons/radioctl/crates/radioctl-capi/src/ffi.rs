@@ -868,11 +868,19 @@ pub unsafe extern "C" fn rctl_rotator_open_virtual(
             let control = serve_virtual_rotator(handle, listener, VirtualRotator::new(description));
             let mut config = NetConfig::new(address);
             config.first_attempts = 1;
-            let link = rt
-                .shared
-                .handle
-                .block_on(open_link(handle, config, Box::new(RawFraming)))
-                .map_err(|e| from_rig_error(&e))?;
+            let link =
+                match rt
+                    .shared
+                    .handle
+                    .block_on(open_link(handle, config, Box::new(RawFraming)))
+                {
+                    Ok(link) => link,
+                    Err(e) => {
+                        // The served rotator must not outlive the failed open.
+                        rt.shared.handle.block_on(control.stop());
+                        return Err(from_rig_error(&e));
+                    }
+                };
             let watch = link.watch();
             let (transport, monitor) = link.into_parts();
             let rotator = Rotator::new(engine, transport, Some(watch));
