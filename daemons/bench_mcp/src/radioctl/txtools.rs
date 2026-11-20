@@ -760,12 +760,15 @@ pub fn safe_state(c: &mut Client, inst: &Instrument, args: &Value) -> Result<Val
     };
     let dir = rigd::dir(&inst.radioctl);
     let was_active = tx::is_active(&inst.name);
-    let dump = tolerate(c.dump_state())?.ok();
+    // These reads only describe the rig for the report. A failure of any kind, a lost connection included, must not stop the
+    // release below: that is the one thing this tool is for, and its fallback handles a connection that does not work.
+    let dump = c.dump_state().ok();
     let min = dump.as_ref().and_then(|d| rfpower_min(&d.lines));
-    let before = tolerate(c.read("get_ptt"))?
+    let before = c
+        .read("get_ptt")
         .ok()
         .map(|r| r.kv("PTT").is_some_and(|p| p != "0"));
-    let prev_power = tolerate(c.read_number("get_level RFPOWER", None))?.ok();
+    let prev_power = c.read_number("get_level RFPOWER", None).ok();
     let mut last = String::new();
     let mut verified = None;
     for _ in 0..3 {
