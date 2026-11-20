@@ -49,6 +49,7 @@ MAX_TRANSMIT_CAP_S = 10
 # What a transmit check needs to have passed in this run first (runbook phase A and the read-only phase).
 TRANSMIT_PRECONDITIONS = ("A1", "A3", "A4", "A5", "B1", "B2")
 BARE_TTY = re.compile(r"^/dev/tty(USB|ACM)\d+$")
+DEVICE_PATH = re.compile(r"/dev/(?:serial/by-id|pts)/[A-Za-z0-9][A-Za-z0-9._:+=@-]*\Z")
 INDEX_ID = re.compile(r"^[A-Z]\d+$")
 SECTION = re.compile(r"^#### ([A-Z]\d+)\. (.+)$")
 
@@ -117,13 +118,13 @@ def port_refusal(port: str) -> str | None:
     """Why a port may not be used, or None. A bare ttyUSBn/ttyACMn is refused: on the dev box ttyUSB0 is the
     SainSmart relay board and the ATM6301 supply shares the radio cables' CH340 ids, so only a by-id path,
     `usb:VID:PID[:SERIAL]`, a pty or `virtual` names a radio."""
-    if ".." in port.split("/"):  # /dev/serial/by-id/../../ttyUSB0 and /dev/pts/../ttyUSB0 name the bare tty the next test refuses
-        return f"{port!r} has a '..' component; name the device itself"
     if BARE_TTY.match(port):
         return f"{port} is a bare tty name; use /dev/serial/by-id/... or usb:VID:PID (a CH340 board may sit on it)"
-    if port == "virtual" or port.startswith(("/dev/serial/by-id/", "/dev/pts/")):
+    # One plain name under the directory: no '..' (/dev/pts/../ttyUSB0 is the bare tty above) and no quote or newline, because
+    # daemon_config() writes the path into a TOML string.
+    if port == "virtual" or DEVICE_PATH.match(port):
         return None
-    if re.fullmatch(r"usb:[0-9a-fA-F]{4}:[0-9a-fA-F]{4}(:\S+)?", port):
+    if re.fullmatch(r"usb:[0-9a-fA-F]{4}:[0-9a-fA-F]{4}(:[A-Za-z0-9._-]+)?", port):
         return None
     return f"{port!r} is not a by-id path, usb:VID:PID, a pty or 'virtual'"
 
