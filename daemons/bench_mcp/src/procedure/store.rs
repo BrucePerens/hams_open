@@ -140,11 +140,16 @@ impl EventLog {
             }
         }
         let mut line = Value::Object(obj).to_string();
-        if self.bytes + line.len() as u64 >= EVENTS_CAP {
+        let truncated = self.bytes + line.len() as u64 >= EVENTS_CAP;
+        if truncated {
             line = json!({"seq": self.seq, "kind": "truncated", "msg": "the event list is full; later events are counted, not stored"}).to_string();
         }
         line.push('\n');
         self.bytes += line.len() as u64;
+        if truncated {
+            // The marker is the last line stored: the list counts as full, so later events are only counted.
+            self.bytes = self.bytes.max(EVENTS_CAP);
+        }
         let _ = self.file.write_all(line.as_bytes());
         self.seq
     }
