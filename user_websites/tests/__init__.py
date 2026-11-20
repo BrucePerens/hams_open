@@ -42,6 +42,7 @@ from . import test_owner_delete_dialog_hoot
 from . import test_rich_editor_hoot
 from . import test_violation_batch_write
 from . import test_migration_orphan_content_violation
+from . import test_migration_directory_listed_by_default
 from . import test_redis_credentials
 from . import test_user_arch_svg
 from . import test_user_arch_style_link
