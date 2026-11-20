@@ -271,6 +271,10 @@ class TestPooledChromeIsolation(HamsHttpCase):
 
     # Tests [@ANCHOR: zero_sudo:hams_http_case_teardown_class]
     def test_04_the_chrome_is_stopped_when_the_class_ends(self):
+        # Self-contained: test_03's fresh Chrome is replaced when a late console error (the 400 on /sw.js under load)
+        # marks that test unclean, so this test leases its own Chrome and hands it back without visiting anything.
+        browser = ChromeBrowser(self, headless=True)
+        browser.stop()
         self.assertIsNotNone(common._chrome_pool.chrome, "still there for the rest of the class")
         self.addClassCleanup(self._assert_pool_empty_after_class)
 
