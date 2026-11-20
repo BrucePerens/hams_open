@@ -124,6 +124,11 @@ pub fn combine_ranges(rig: &[(f64, f64)], owner: &[(f64, f64)]) -> (Vec<(f64, f6
                     }
                 }
             }
+            if out.is_empty() {
+                // No overlap: nothing is receivable. An empty list would mean "not range-checked", so give a range no
+                // positive frequency is in.
+                return (vec![(0.0, 0.0)], "the rig's reported receive range and rx_ranges_hz in the bench config do not overlap: no frequency is allowed".into());
+            }
             (out, "the rig's reported receive range narrowed by rx_ranges_hz in the bench config".into())
         }
     }

@@ -526,6 +526,11 @@ fn a_frequency_outside_the_receive_limits_is_refused_with_the_limit_and_its_sour
     let both = control::combine_ranges(&[(150e3, 1.5e9)], &[(1e6, 30e6), (144e6, 148e6)]);
     assert_eq!(both.0, [(1e6, 30e6), (144e6, 148e6)]);
     assert!(both.1.contains("narrowed"));
+    // Ranges that do not overlap allow nothing; they must not read as "no range check".
+    let apart = control::combine_ranges(&[(30e6, 50e6)], &[(1e6, 2e6)]);
+    assert!(control::check_freq(7.1e6, &apart.0, &apart.1).is_err());
+    assert!(control::check_freq(40e6, &apart.0, &apart.1).is_err());
+    assert!(apart.1.contains("do not overlap"));
     assert!(control::combine_ranges(&[], &[]).0.is_empty());
     assert_eq!(control::combine_ranges(&[(1.0, 2.0)], &[]).0, [(1.0, 2.0)]);
     assert!(control::check_freq(7.1e6, &both.0, &both.1).is_ok());
