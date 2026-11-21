@@ -50,3 +50,11 @@ class WebsiteVisitor(models.Model):
             token=str(token), url=request.httprequest.url, minutes=self.TRACK_DEDUP_MINUTES,
         ))
         return bool(self.env.cr.fetchone())
+
+    # [@ANCHOR: hams_base:visitor_cron_keeps_visitors]
+    # Verified by [@ANCHOR: hams_base:test_visitor_cron_keeps_visitors]
+    @api.model
+    def _cron_unlink_old_visitors(self, batch_size=1000):
+        """Core's daily "Visitors: clean inactive visitors" cron deleted visitors (and their tracks) idle for 60 days.
+        Visitor and track rows are log records and log records are permanent (Bruce, 2026-11-20), so nothing is deleted."""
+        return None
