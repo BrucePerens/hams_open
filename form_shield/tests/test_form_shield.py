@@ -266,7 +266,6 @@ class TestFormShield(HamsTransactionCase):
         for row in rows:
             self.assertEqual(row.day, fields.Date.today(), row.form_id)
 
-    # Rejection counters are log records and survive the purge cron (they are never deleted).
     # [@ANCHOR: form_shield:test_purge_drops_old_counters]
     def test_purge_drops_old_counters(self):
         # Tests [@ANCHOR: form_shield:purge]
@@ -277,8 +276,8 @@ class TestFormShield(HamsTransactionCase):
             {"day": today - timedelta(days=200), "form_id": "old", "reason": "x", "count": 5},
             {"day": today - timedelta(days=3), "form_id": "new", "reason": "x", "count": 1},
         ])
-        self.assertEqual(model._cron_purge(), 0)
-        self.assertCountEqual(model.search([("form_id", "in", ["old", "new"])]).mapped("form_id"), ["old", "new"])
+        self.assertEqual(model._cron_purge(), 1)
+        self.assertEqual(model.search([("form_id", "in", ["old", "new"])]).mapped("form_id"), ["new"])
 
     # [@ANCHOR: form_shield:test_post_init_hook_seeds_key_once]
     def test_post_init_hook_seeds_key_once(self):
