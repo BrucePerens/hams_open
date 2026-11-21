@@ -3,6 +3,7 @@
 
 # -*- coding: utf-8 -*-
 import grp
+import hashlib
 import os
 import logging
 import datetime
@@ -1182,3 +1183,43 @@ class DaemonKeyRegistry(models.Model):
         # Re-trigger only while a batch made progress: a batch of 10 that all failed would otherwise re-trigger forever.
         if len(registries) == 10 and rotated:
             self.env.ref("daemon_key_manager.ir_cron_rotate_daemon_keys")._trigger()
+
+
+# [@ANCHOR: daemon_key_manager:apikey_revocation_log]
+# Verified by [@ANCHOR: daemon_key_manager:test_apikey_revocation_log]
+class ResUsersApikeys(models.Model):
+    _inherit = "res.users.apikeys"
+
+    def unlink(self):
+        """Every revocation (core _remove, registry rotation, manual) goes through unlink: log first.
+
+        The log row is written in SQL so any revoking user can leave it without any create access
+        to the log model (which has none: read-only ACL, unlink/write raise)."""
+        # [@ANCHOR: daemon_key_manager:apikey_revocation_log_hook]
+        actor = self.env.user
+        for key in self:
+            owner = key.user_id
+            if self.env.context.get("apikey_revoke_source"):
+                source = self.env.context["apikey_revoke_source"]
+            elif actor == owner:
+                source = "user"
+            elif actor.id == 1:
+                source = "automatic"
+            else:
+                source = "admin"
+            self.env.cr.execute("SELECT key FROM res_users_apikeys WHERE id = %s", (key.id,))
+            stored_hash = self.env.cr.fetchone()[0] or ""
+            self.env.cr.execute(
+                "INSERT INTO apikey_revocation_log (name, owner_id, owner_login, revoked_by_id,"
+                " revoked_by_login, key_name, key_scope, key_id, key_fingerprint, source, revoked_at,"
+                " create_uid, create_date, write_uid, write_date)"
+                " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now() at time zone 'UTC',"
+                " %s, now() at time zone 'UTC', %s, now() at time zone 'UTC')",
+                (
+                    f"{key.name} ({key.id})", owner.id, owner.login, actor.id, actor.login,
+                    key.name, key.scope or "", key.id,
+                    hashlib.sha256(stored_hash.encode()).hexdigest()[:12], source,
+                    actor.id, actor.id,
+                ),
+            )
+        return super().unlink()

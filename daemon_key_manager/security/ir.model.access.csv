@@ -3,3 +3,5 @@ access_daemon_key_registry_manager,daemon.key.registry.manager,model_daemon_key_
 access_daemon_key_registry_apikeys_manager,daemon.key.registry.apikeys.manager,base.model_res_users_apikeys,group_daemon_key_manager,1,1,1,1
 access_daemon_key_registry_users_read,daemon.key.registry.users.read,base.model_res_users,group_daemon_key_manager,1,0,0,0
 access_daemon_key_registry_cron_trigger,daemon.key.registry.cron.trigger,base.model_ir_cron,group_daemon_key_manager,1,1,0,0
+access_apikey_revocation_log_manager,apikey.revocation.log.manager,model_apikey_revocation_log,group_daemon_key_manager,1,0,0,0
+access_apikey_revocation_log_admin,apikey.revocation.log.admin,model_apikey_revocation_log,base.group_system,1,0,0,0

@@ -8,5 +8,6 @@ from . import test_key_registry_refusals
 from . import test_multi_company
 from . import test_remote_self_rotation
 from . import test_os_group_key_file
+from . import test_apikey_revocation_log
 from . import test_unregister_daemon
 from . import test_register_daemon_race

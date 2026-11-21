@@ -30,6 +30,8 @@ _logger = logging.getLogger(__name__)
 LEAK_CHECK_FALLBACK_TABLES = frozenset({
     "bus_bus",
     "ir_logging",
+    # Permanent append-only log (unlink raises): tests cannot clean it.
+    "apikey_revocation_log",
     "base_registry_signaling",
     "ir_cron",
     "mail_message",

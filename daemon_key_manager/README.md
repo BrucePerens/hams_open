@@ -299,3 +299,13 @@ Argument `self`: exactly one record (`ensure_one`). The key expires `_lifetime_d
 Argument `self`: exactly one record (`ensure_one`). **Special concerns.** Read-only SQL on `res_users_apikeys`; rows with a past expiry date are ignored. The key is compared only by hash and is not logged. Safe to retry.
 
 **See also.** `test_two_phase_rotation_revokes_nothing_until_the_new_key_is_proven` in `tests/test_remote_self_rotation.py`.
+
+### API key revocation log [@ANCHOR: daemon_key_manager:apikey_revocation_log]
+
+Purpose: revoking a `res.users.apikeys` row is done by deleting it, which is what disables the key, so the deletion itself must stay; every revocation therefore first leaves a permanent record. Any path counts: the owner removing a key, an administrator, the registry's rotation, or `unregister_daemon`, because all of them end in `res.users.apikeys.unlink`. Arguments: none, the hook takes the records being deleted. Return: whatever `unlink` returns (True). Errors: none added; if the log row cannot be written the revocation fails, so a key is never revoked without a record. Special concerns: the secret is never stored, only a 12-character SHA-256 fingerprint of the stored key hash; keys removed by raw SQL (GDPR erasure of a user) bypass the ORM and are not logged.
+
+The revoke hook is `res.users.apikeys.unlink` [@ANCHOR: daemon_key_manager:apikey_revocation_log_hook]. It reads the owner, the acting user, the key name, scope and id, picks the source (`user` when the owner revokes their own key, `automatic` when the superuser does, otherwise `admin`, or the `apikey_revoke_source` context value if given), and inserts the row with SQL so that the revoking user needs no create access on the log model. A failure to insert propagates and aborts the revocation.
+
+The log model [@ANCHOR: daemon_key_manager:apikey_revocation_log_model] is `apikey.revocation.log`, read-only for the daemon key manager group and administrators. Fields (all readonly): `name` (key name and id), `owner_id` and `owner_login` (whose key; the login survives deletion of the user), `revoked_by_id` and `revoked_by_login` (who revoked), `key_name`, `key_scope`, `key_id` (the deleted row's id), `key_fingerprint`, `source` (user, admin, automatic) and `revoked_at` (UTC).
+
+The log refuses `write` [@ANCHOR: daemon_key_manager:apikey_revocation_log_write_refused] and `unlink` [@ANCHOR: daemon_key_manager:apikey_revocation_log_unlink_refused] with a UserError, so no ORM call can alter or delete a row: it is a permanent log with no purge and no retention limit.
