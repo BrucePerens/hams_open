@@ -149,6 +149,7 @@ class HamGdprExportToken(models.Model):
         # # Verified by [@ANCHOR: test_gdpr_export_token_single_use]
         return self.env["res.users"].browse(user_id)
 
+    # # Verified by [@ANCHOR: test_gdpr_token_vacuum]
     # Token rows are never deleted (Bruce, 2026-11-20: stored information is never purged). A token is refused by
     # _consume() once it is used or older than TOKEN_EXPIRY_MINUTES, and by export_page() once older than
     # EXPORT_WINDOW_MINUTES; both read the row's create_date and leave the row in place.

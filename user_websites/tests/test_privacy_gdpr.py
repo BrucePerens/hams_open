@@ -219,7 +219,7 @@ class TestPrivacyGDPR(HamsHttpCase):
             Token._consume("an-old-token")
 
     def test_01g_old_tokens_are_kept_and_the_vacuum_cron_is_gone(self):
-        # Tests [@ANCHOR: user_websites:gdpr_token]
+        # Tests [@ANCHOR: user_websites:gdpr_export_token]
         # [@ANCHOR: test_gdpr_token_vacuum]
         """Export tokens are never deleted: an old one survives, is still refused, and no vacuum cron or method exists."""
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
@@ -232,7 +232,7 @@ class TestPrivacyGDPR(HamsHttpCase):
             "UPDATE ham_gdpr_export_token SET create_date = %s WHERE id IN %s", (stale, tuple(old.ids))
         )
         old.invalidate_recordset(["create_date"])
-        self.assertFalse(hasattr(Token, "_cron_vacuum_tokens"), "no method may delete tokens")
+        self.assertNotIn("_cron_vacuum_tokens", dir(Token), "no method may delete tokens")
         self.assertFalse(
             self.env.ref("user_websites.ir_cron_vacuum_gdpr_export_tokens", raise_if_not_found=False),
             "the vacuum cron record must be gone",
