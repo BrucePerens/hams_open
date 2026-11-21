@@ -841,17 +841,28 @@ async fn start_refuses_what_it_should_before_touching_the_network() {
     let dir = testdir::TestDir::new("ha-secrets");
     let store = FileSecrets::new(&*dir);
     std::fs::write(dir.join("ha_token"), format!("{TOKEN}\n")).unwrap();
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::set_permissions(dir.join("ha_token"), std::fs::Permissions::from_mode(0o644)).unwrap();
-    let e = store.secret("ha_token").unwrap_err();
-    assert!(e.detail.contains("mode 0600") && !e.detail.contains(TOKEN));
-    std::fs::set_permissions(dir.join("ha_token"), std::fs::Permissions::from_mode(0o600)).unwrap();
+    // The mode check is Unix only (see FileSecrets::secret); Windows has no mode bits to read.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir.join("ha_token"), std::fs::Permissions::from_mode(0o644))
+            .unwrap();
+        let e = store.secret("ha_token").unwrap_err();
+        assert!(e.detail.contains("mode 0600") && !e.detail.contains(TOKEN));
+        std::fs::set_permissions(dir.join("ha_token"), std::fs::Permissions::from_mode(0o600))
+            .unwrap();
+    }
     assert_eq!(store.secret("ha_token").unwrap().expose(), TOKEN);
     for bad in ["", "../ha_token", "a/b", ".hidden", "no_such"] {
         assert!(store.secret(bad).is_err(), "{bad:?}");
     }
     std::fs::write(dir.join("blank"), "\n").unwrap();
-    std::fs::set_permissions(dir.join("blank"), std::fs::Permissions::from_mode(0o600)).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(dir.join("blank"), std::fs::Permissions::from_mode(0o600))
+            .unwrap();
+    }
     assert!(store.secret("blank").is_err());
     let _ = Secret::new("x");
 }

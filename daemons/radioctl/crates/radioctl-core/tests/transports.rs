@@ -4,6 +4,7 @@
 //! backoff, bounded failures, line keying behind the transmit gate, and TCP. No radio, no
 //! transmitter: the keying tests use a recording set of lines.
 #![allow(clippy::expect_used, clippy::panic)]
+#![cfg(unix)]
 
 use std::fs;
 use std::io::{Read, Write};
