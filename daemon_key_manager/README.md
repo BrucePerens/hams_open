@@ -299,3 +299,7 @@ Argument `self`: exactly one record (`ensure_one`). The key expires `_lifetime_d
 Argument `self`: exactly one record (`ensure_one`). **Special concerns.** Read-only SQL on `res_users_apikeys`; rows with a past expiry date are ignored. The key is compared only by hash and is not logged. Safe to retry.
 
 **See also.** `test_two_phase_rotation_revokes_nothing_until_the_new_key_is_proven` in `tests/test_remote_self_rotation.py`.
+
+### API key revocation log [@ANCHOR: daemon_key_manager:apikey_revocation_log]
+
+Revoking a `res.users.apikeys` row (any path: the user, an administrator, the registry's rotation or `unregister_daemon`) deletes the key, which is what disables it, and first writes a permanent `apikey.revocation.log` row: key owner, who revoked, key name, scope, key id, a 12-character SHA-256 fingerprint of the stored key hash (never the secret), timestamp and source (`user`, `admin`, `automatic`). The log is append-only: `unlink` and `write` raise, and the ACL is read-only. Keys removed by raw SQL (GDPR erasure) bypass the ORM and are not logged.

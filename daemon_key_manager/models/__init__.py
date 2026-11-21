@@ -4,3 +4,4 @@
 from . import key_registry
 from . import res_company
 from . import res_users
+from . import apikey_revocation_log
