@@ -431,6 +431,47 @@ class TestAlertBackends(HamsTransactionCase):
         with self.assertRaises(RuntimeError):
             alerts.raise_alarm(None, self.ALARM)
 
+    def test_raise_alarm_runs_later_backends_after_a_failure_then_reraises_the_first(self):
+        alerts.BACKENDS.clear()
+        ran = []
+
+        def boom(env, alarm):
+            raise RuntimeError("first")
+
+        def boom2(env, alarm):
+            raise ValueError("second")
+        alerts.register_backend("boom")(boom)
+        alerts.register_backend("boom2")(boom2)
+        alerts.register_backend("after")(lambda env, alarm: ran.append("after"))
+        with self.assertLogs("hams_secret_canary.alarm", "ERROR") as logs, self.assertRaises(RuntimeError):
+            alerts.raise_alarm(None, self.ALARM)
+        self.assertEqual(ran, ["after"])
+        self.assertEqual(len(logs.records), 2)
+        self.assertNotIn("first", logs.output[0])
+
+    def test_a_failing_later_backend_does_not_lose_the_earlier_ones_database_row(self):
+        alerts.BACKENDS.clear()
+        made = {}
+
+        def writes(env, alarm):
+            made["kept"] = env["res.partner"].create({"name": "canary-row-test"})
+
+        def boom(env, alarm):
+            made["lost"] = env["res.partner"].create({"name": "canary-row-rolled-back"})
+            raise RuntimeError("mail down")
+        alerts.register_backend("record")(writes)
+        alerts.register_backend("mail")(boom)
+        # Not assertRaises: Odoo's wraps the block in a savepoint and rolls it back, which would hide what raise_alarm kept.
+        with self.assertLogs("hams_secret_canary.alarm", "ERROR"):
+            try:
+                alerts.raise_alarm(self.env, self.ALARM)
+            except RuntimeError as error:
+                self.assertEqual(str(error), "mail down")
+            else:
+                self.fail("raise_alarm swallowed the failure")
+        self.assertTrue(made["kept"].exists())
+        self.assertFalse(made["lost"].exists())
+
     def test_the_logging_backend_writes_one_critical_line_and_works_without_an_env(self):
         with self.assertLogs("hams_secret_canary.alarm", "CRITICAL") as logs:
             alerts.logging_backend(None, self.ALARM)
@@ -969,7 +1010,7 @@ class TestScanAfterRequestUnits(HamsTransactionCase):
         self.safe_patch_object(alerts, "raise_alarm", new=boom)
         with self.assertLogs(secret_canary._logger, "ERROR") as logs:
             self.assertIsNone(secret_canary.scan_after_request("leak " + TOKEN, "/x"))
-        self.assertEqual(logs.records[0].getMessage(), "Secret canary: scanning a response failed")
+        self.assertEqual(logs.records[0].getMessage(), "Secret canary: an alarm backend failed")
         self.assertIsNotNone(logs.records[0].exc_info)
 
     def _post_dispatch(self, response, request):
