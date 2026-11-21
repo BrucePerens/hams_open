@@ -38,10 +38,10 @@
     
     <h4>3. Pending Submissions</h4>
     <p><strong>Path:</strong> SES Webhooks &gt; Pending Submissions</p>
-    <p>When an incoming email's sender does not match any user account, the email is not handed to Odoo's mail processing. It is held here instead, and the sender is sent an email asking them to create an account with the same address and then resend their message. Held emails are deleted automatically 7 days after they arrive.</p>
+    <p>When an incoming email's sender does not match any user account, the email is not handed to Odoo's mail processing. It is held here instead, and the sender is sent an email asking them to create an account with the same address and then resend their message. Held emails are kept; there is no deletion period.</p>
 
     <h4>4. Bounces and Complaints</h4>
     <p>Amazon SES bounce and complaint notifications arriving at the same webhook add the affected recipient addresses to Odoo's email blacklist, so no further mail is sent to them. Every spam complaint is blacklisted; a bounce is blacklisted only when Amazon SES reports it as permanent.</p>
 
-    <p>Logs older than 30 days are automatically deleted by a scheduled action to preserve database space.</p>
+    <p>Logs are kept; there is no deletion period.</p>
 </section>
