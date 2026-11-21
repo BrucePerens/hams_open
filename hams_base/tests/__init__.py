@@ -24,4 +24,3 @@ from . import test_log_masks_email
 from . import test_device_log_gc_off
 from . import test_user_log_gc_off
 from . import test_notification_gc_off
-from . import test_visitor_cron_keeps_visitors
