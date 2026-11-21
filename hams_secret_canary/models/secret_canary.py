@@ -74,7 +74,10 @@ def scan_after_request(text, where):
                         uid = cr.fetchone()[0]
                     env = api.Environment(cr, uid, {})
                     for label, kind in matches:
-                        alerts.raise_alarm(env, alerts.Alarm(label, kind, "response", where))
+                        try:
+                            alerts.raise_alarm(env, alerts.Alarm(label, kind, "response", where))
+                        except Exception:  # audit-ignore-catch-all: already logged per backend; keep the rows the others wrote
+                            _logger.exception("Secret canary: an alarm backend failed")
     except Exception:  # audit-ignore-catch-all: a detector must not break the response it is watching
         _logger.exception("Secret canary: scanning a response failed")
 

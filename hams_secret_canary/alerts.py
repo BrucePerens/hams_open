@@ -33,9 +33,22 @@ def register_backend(name):
 
 # [@ANCHOR: hams_secret_canary:raise_alarm]
 def raise_alarm(env, alarm):
-    """Runs every registered backend for `alarm`, in registration order; an exception propagates (fail fast)."""
-    for backend in list(BACKENDS.values()):
-        backend(env, alarm)
+    """Runs every registered backend for `alarm`, in registration order. A backend that raises is logged (its name and
+    exception class only) and rolled back alone (own savepoint when `env` has a cursor); the later backends still run,
+    then the first exception is re-raised so the caller sees the failure."""
+    first = None
+    for name, backend in list(BACKENDS.items()):
+        try:
+            if env is None or isinstance(env, str):  # the log watcher and unit tests pass no real environment
+                backend(env, alarm)
+            else:
+                with env.cr.savepoint():
+                    backend(env, alarm)
+        except Exception as error:  # audit-ignore-catch-all: one failing channel must not silence the others; re-raised below
+            _logger.error("Secret canary alarm backend %s failed (%s).", name, type(error).__name__)
+            first = first or error
+    if first is not None:
+        raise first
 
 
 @register_backend("logging")
