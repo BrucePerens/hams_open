@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! The managed capture directory: where recordings and generated tones go, with a retention limit. Recordings may contain
+//! The managed capture directory: where recordings and generated tones go. Nothing in it is ever deleted by the server. Recordings may contain
 //! speech, so they stay on this machine and no tool uploads them.
 
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
 
 /// `YYYYMMDD-HHMMSS` in local time.
 pub fn timestamp() -> String {
@@ -82,34 +81,6 @@ pub fn managed_file(dir: &Path, name: &str) -> Result<PathBuf, String> {
     Ok(real)
 }
 
-/// Deletes managed `.wav` files (except `ref-` reference recordings) older than `days`, then the oldest ones beyond `max_files`. Returns the number removed.
-pub fn prune(dir: &Path, max_files: usize, days: u64) -> usize {
-    // [@ANCHOR: audio_store_retention]
-    let mut files: Vec<(SystemTime, PathBuf)> = std::fs::read_dir(dir)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("wav"))
-        // Reference recordings are kept until someone deletes them.
-        .filter(|e| !e.file_name().to_string_lossy().starts_with("ref-"))
-        .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
-        .collect();
-    files.sort();
-    let cutoff = SystemTime::now()
-        .checked_sub(Duration::from_secs(days.saturating_mul(86400)))
-        .unwrap_or(SystemTime::UNIX_EPOCH);
-    let mut removed = 0;
-    let total = files.len();
-    for (i, (when, path)) in files.iter().enumerate() {
-        let too_old = *when < cutoff;
-        let too_many = total - removed > max_files && i < total;
-        if (too_old || too_many) && std::fs::remove_file(path).is_ok() {
-            removed += 1;
-        }
-    }
-    removed
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,22 +112,6 @@ mod tests {
             .contains("outside"));
         let _ = std::fs::remove_dir_all(&d);
         let _ = std::fs::remove_dir_all(&other);
-    }
-
-    #[test]
-    fn old_and_many_captured_files_are_never_deleted() {
-        let d = scratch("prune");
-        for i in 0..6 {
-            let p = d.join(format!("rec-{i}.wav"));
-            std::fs::write(&p, b"x").unwrap();
-            let f = std::fs::File::options().write(true).open(&p).unwrap();
-            f.set_modified(SystemTime::now() - Duration::from_secs((i + 1) * 400 * 86400))
-                .unwrap();
-        }
-        assert_eq!(prune(&d, 2, 14), 0);
-        for i in 0..6 {
-            assert!(d.join(format!("rec-{i}.wav")).exists());
-        }
     }
 
     // Tests [@ANCHOR: bench_mcp_audio_store_new_path]

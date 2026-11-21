@@ -131,7 +131,6 @@ Settings read, with the default (the default is the value of `Config::default()`
 | `quiet_volume` | number, above 0 to 1 | 0.15 | Silently lowered to `volume_cap` when higher. |
 | `quiet_hours` | `{"start":"22:00","end":"07:00"}` or `false` | 22:00 to 07:00 | `false` switches quiet hours off; start equal to end is an error; any other non-object value is an error. |
 | `capture_dir` | path string | none; `Config::capture_dir()` gives `<bench out dir>/audio` | Where recordings, references and the discovery file live. |
-| `retention_files`, `retention_days` | unsigned integers | 50, 14 | A value that is not an unsigned integer is an error (`<key> must be a whole number`). |
 | `max_record_s` | 1 to 600 seconds | 30 | Out of range is an error. |
 | `max_play_s` | 0.1 to 60 seconds | 10 | Out of range is an error. |
 | `tts_engine` | `auto`, `speech-dispatcher`, `espeak-ng`, `piper` | `auto` | Anything else is an error. |

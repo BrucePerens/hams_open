@@ -105,10 +105,10 @@ Errors: the recorder's timeouts (no stream data). Blocks the calling thread (sle
 | `label` | name part of the file | the device alias |
 
 Returns JSON: `input`, `alias`, `monitor_of_output`, `sample_rate_hz`, `seconds`, `levels` (peak, RMS, clipped samples, silence fraction, all-zero, DC offset), `note` (the room may
-be heard; the file stays in the capture directory and nothing uploads it), `file`, `retention_removed`; `warning` when every sample is exactly zero (muted, unplugged or dead).
+be heard; the file stays in the capture directory and nothing uploads it), `file`; `warning` when every sample is exactly zero (muted, unplugged or dead).
 If a threshold was set and not reached: `triggered: false`, `result` text and no file; if reached, `triggered: true` and `trigger_after_s`. Errors: a bad argument, a device that is
 reserved or not found, the recorder failing to start or timing out, a file write failure. Side effects: one `pw-record` subprocess for the duration, one WAV file (new name,
-owner-only directory), then old files are pruned by `retention_files` and `retention_days`. It never makes sound and never touches the volume. Test: `tests/hil_audio.rs`, unit tests in `tools.rs`.
+owner-only directory), The recording is kept; the server never deletes captured audio. It never makes sound and never touches the volume. Test: `tests/hil_audio.rs`, unit tests in `tools.rs`.
 
 ### `bench_mcp_audio_tools_meter` [@ANCHOR: bench_mcp_audio_tools_meter]
 
@@ -258,7 +258,7 @@ Pure, no I/O. Test: `audio_verify_judge` (many cases in `verify.rs`).
 
 The noise floor is the 90th percentile of the calibration frame levels (skipping the first 0.1 s start-up transient, or half of the calibration if shorter); with an expected pitch the events are tracked at that frequency, which hears a tone under broadband noise. Events are detected in the window; the dominant
 frequency and the spectrum peaks are taken from the active samples only (at least 256 samples, else no spectrum); similarity with the reference is the spectral similarity 100 Hz to 0.9 x Nyquist, 0 when the bin widths differ or there is nothing to compare.
-Returns `pass`, `reason`, `checks`, `evidence` (noise floor, threshold, calibration and window statistics, events, dominant frequency, median spectrum, peaks, reference similarity), `action` (the `run_action` result), `delay_s`, the note, and `file` (the whole recording, kept and pruned under retention) or
+Returns `pass`, `reason`, `checks`, `evidence` (noise floor, threshold, calibration and window statistics, events, dominant frequency, median spectrum, peaks, reference similarity), `action` (the `run_action` result), `delay_s`, the note, and `file` (the whole recording, kept) or
 `saved_reference`. An all-zero input is reported by `judge`. Errors: bad arguments, no such action, reference unreadable or outside the managed directory, recorder failure, `reference:` spectrum failure, file write failure. Makes no sound itself; the action may. Test: `tests/hil_audio.rs`, `audio_verify_judge`.
 
 ### `audio_events_tool` [@ANCHOR: audio_events_tool]
@@ -342,4 +342,4 @@ Errors: `text is required`, `text must be 1 to 600 characters`, a bad code, `rat
 | `wav_file` | a label: write the speech to a WAV in the capture directory instead of playing | none |
 | `dry_run` | the plan: engine, voice, language, rate, character count, volume, nothing spoken | false |
 
-With `wav_file` nothing is played and no volume is touched: the file is made (`synthesize`), old files are pruned, and the answer has `engine`, `voice`, `wav_file`, `seconds` and `audible: false`; speech-dispatcher gives an error here. Otherwise the speech runs inside `play_guarded`: the volume is applied and restored. Returns `output`, `alias`, `engine`, `voice`, `language`, `rate_wpm`, `seconds`, `volume_used`, `volume_limit`, `quiet_hours`, `volume_restored`, `mute_restored`, and a `warning` when muted. Errors: all of `pick`, `request`, volume outside 0 to 1, reserved device, synthesis or playback failure, restore failure. The quiet-hours and cap limits are never urgent here. Test: `audio_speak_tool` (speaking to a WAV and to a virtual output), `tests/hil_audio.rs`.
+With `wav_file` nothing is played and no volume is touched: the file is made (`synthesize`), and the answer has `engine`, `voice`, `wav_file`, `seconds` and `audible: false`; speech-dispatcher gives an error here. Otherwise the speech runs inside `play_guarded`: the volume is applied and restored. Returns `output`, `alias`, `engine`, `voice`, `language`, `rate_wpm`, `seconds`, `volume_used`, `volume_limit`, `quiet_hours`, `volume_restored`, `mute_restored`, and a `warning` when muted. Errors: all of `pick`, `request`, volume outside 0 to 1, reserved device, synthesis or playback failure, restore failure. The quiet-hours and cap limits are never urgent here. Test: `audio_speak_tool` (speaking to a WAV and to a virtual output), `tests/hil_audio.rs`.

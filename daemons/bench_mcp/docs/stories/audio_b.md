@@ -333,7 +333,7 @@ unwinding; there is no other recovery. Tests: `the_guard_lowers_to_the_cap_unmut
 ## The Managed Capture Folder (`store.rs`)
 
 Recordings and generated tones go in one folder, `capture_dir` of the audio config (default `<BENCH_MCP_OUT>/audio`), created owner-only. Recordings may contain speech, so they stay on
-this computer and no tool uploads them. The files are named `<prefix>-<YYYYMMDD-HHMMSS>[-<label>].wav`, kept by the retention rule below, and named back by callers only through
+this computer and no tool uploads them. The files are named `<prefix>-<YYYYMMDD-HHMMSS>[-<label>].wav`, kept (the server never deletes them), and named back by callers only through
 `managed_file`.
 
 ### `timestamp` [@ANCHOR: bench_mcp_audio_store_timestamp]
@@ -376,20 +376,6 @@ file inside that directory. It stops a tool argument from reading any other file
 Errors (`String`): the file or the directory does not exist or cannot be resolved (`"<name>: <os error>"`); the resolved path is not under the resolved directory
 (`"<name> is outside the managed audio directory <dir>"`, which also catches `..` and symbolic links pointing out); the extension is not exactly `wav`
 (`"<name> is not a .wav file"`). Reads the file system (canonicalisation) only. Used by the play tool and by the verify tool for references. Test: `only_wav_files_inside_the_directory_are_accepted` in `store.rs`.
-
-### `prune` [@ANCHOR: audio_store_retention]
-
-The retention rule for the managed directory: deletes `.wav` files older than `days`, then the oldest ones until no more than `max_files` remain, and returns how many it removed.
-
-| Argument | Type | Meaning |
-|---|---|---|
-| `dir` | `&Path` | The managed directory (not searched recursively). |
-| `max_files` | `usize` | Most files to keep (config `retention_files`, default 50). |
-| `days` | `u64` | Oldest age kept, by modification time (config `retention_days`, default 14). |
-
-Files whose name starts with `ref-` (reference recordings stored by verify) are never counted or deleted. Other files are sorted oldest first. A file that cannot be removed
-is skipped and not counted. An unreadable or missing directory gives 0, not an error. Side effect: files are deleted; no locking, so two processes pruning at once only race to delete the same
-files. Called after recordings and speech (`speak.rs`, `verify.rs`) and by the record tool (`tools.rs`). Test: `the_oldest_files_beyond_the_count_and_the_age_are_removed` in `store.rs`.
 
 ## WAV Files (`wav.rs`)
 

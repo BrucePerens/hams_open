@@ -21,7 +21,7 @@ pub struct Ctx<'a> {
     pub discovery: Option<&'a super::discover::Stored>,
 }
 
-pub const NOTE_HEARS_ROOM: &str = "The input hears the room and a recording can contain speech. It is kept only in the managed capture directory (retention applies) and no tool uploads it.";
+pub const NOTE_HEARS_ROOM: &str = "The input hears the room and a recording can contain speech. It is kept only in the managed capture directory (never deleted by the server) and no tool uploads it.";
 
 fn num(args: &Value, k: &str) -> Option<f64> {
     args.get(k).and_then(|v| v.as_f64())
@@ -202,9 +202,7 @@ pub fn record(ctx: &Ctx, args: &Value) -> Result<Value, String> {
             samples: t.samples,
         },
     )?;
-    let pruned = store::prune(&dir, ctx.cfg.retention_files, ctx.cfg.retention_days);
     out["file"] = json!(path);
-    out["retention_removed"] = json!(pruned);
     if st.all_zero {
         out["warning"] =
             json!("every sample is exactly zero: the input is muted, disconnected or dead");

@@ -393,7 +393,6 @@ pub fn speak(ctx: &Ctx, args: &Value) -> Result<Value, String> {
         let dir = ctx.cfg.capture_dir();
         let path: PathBuf = store::new_path(&dir, "speech", Some(name))?;
         let secs = synthesize(ctx, &r, &path)?;
-        store::prune(&dir, ctx.cfg.retention_files, ctx.cfg.retention_days);
         return Ok(
             json!({"engine": r.engine.name(), "voice": r.voice, "wav_file": path, "seconds": round3(secs), "audible": false}),
         );
