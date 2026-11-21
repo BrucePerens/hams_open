@@ -1,10 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-from datetime import timedelta
-
 from odoo import api, fields, models
 
 SERVICE_ACCOUNT = "form_shield.user_form_shield_service"
-DEFAULT_RETENTION_DAYS = 90
 
 
 # [@ANCHOR: form_shield_form_shield_rejection_form_shield_rejection]
@@ -75,10 +72,7 @@ class FormShieldRejection(models.Model):
     # Verified by [@ANCHOR: form_shield:test_purge_drops_old_counters]
     @api.model
     def _cron_purge(self):
-        days = self.env["form.shield"]._int_param(
-            "form_shield.retention_days", DEFAULT_RETENTION_DAYS
-        )
-        cutoff = fields.Date.today() - timedelta(days=days)
-        old = self.search([("day", "<", cutoff)], limit=100000)
-        old.unlink()
-        return len(old)
+        """Deletes nothing: log records are permanent (Bruce, 2026-11-20). The daily cron `ir_cron_form_shield_purge` still calls
+        this method, so databases that already hold the cron keep working. It used to delete counters older than
+        the `form_shield.retention_days` parameter (default 90); that parameter is no longer read."""
+        return 0
