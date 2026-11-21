@@ -2187,6 +2187,7 @@ fn a_full_event_list_gets_one_truncated_line_and_then_only_counts() {
 }
 
 // Tests [@ANCHOR: proc_py_finite]
+// Tests [@ANCHOR: proc_py_strict_dumps]
 // Tests [@ANCHOR: proc_py_execute]
 // Tests [@ANCHOR: proc_py_wire_send]
 #[test]

@@ -389,6 +389,12 @@ See also: `proc_py_execute`, `proc_py_main`, `proc_py_failure_init`, `proc_py_fr
 
 `finite(value)`: returns the value with every float that is NaN or infinite replaced by `None`, walking dicts and lists; other values, including strings that contain the word NaN, are returned unchanged. Pure. Used by `failure_report` on the context of a `ProcedureFailure` after its JSON round trip, so the report can be sent by `Wire.send` (which refuses NaN and infinity). Test: `a_failure_context_with_infinity_or_the_word_nan_still_gives_a_report` in `src/procedure/tests.rs`.
 
+### `strict_dumps` [@ANCHOR: proc_py_strict_dumps]
+
+`strict_dumps(value)`: returns the strict JSON text of the value (no `NaN` or `Infinity` tokens). It first tries `json.dumps` with `jsonable` as the default converter and `allow_nan=False`; if a NaN or infinity is found (also inside a converted numpy array or tuple) it dumps again through `finite`, so those numbers become `null`. A measurement that came back as NaN therefore neither ends the run nor loses its result. Used for emitted values and the result. Pure.
+
+See also: `proc_py_finite`, `proc_py_jsonable`; test `procedure/tests.rs` (cites `proc_py_strict_dumps`).
+
 ## The audit hook (not a sandbox)
 
 ### `path_inside` [@ANCHOR: proc_py_path_inside]

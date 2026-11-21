@@ -113,6 +113,7 @@ def finite(value):
 
 
 def strict_dumps(value):
+    # [@ANCHOR: proc_py_strict_dumps]
     """Strict JSON text of ``value``: a NaN or infinity anywhere in it (also inside a
     converted numpy array or tuple) becomes null instead of an error, so a measurement
     that came back as NaN does not end the run or lose its result."""
