@@ -28,7 +28,7 @@ class CloudflarePurgeQueue(models.Model):
         required=True,
     )
     state = fields.Selection(
-        [("pending", "Pending"), ("failed", "Failed")], default="pending", index=True
+        [("pending", "Pending"), ("failed", "Failed"), ("archived", "Archived")], default="pending", index=True
     )
     website_id = fields.Many2one("website", string="Website", ondelete="cascade")
 

@@ -21,6 +21,7 @@ from . import test_tunnel_multi_website
 from . import test_tunnel_credential_refusals
 from . import test_dns_record_unique
 from . import test_tunnel_unique
+from . import test_failed_purge_migration
 from . import test_dns_record_cname_and_length
 from . import test_tunnel_route_format
 from . import test_tunnel_ssh_hostname

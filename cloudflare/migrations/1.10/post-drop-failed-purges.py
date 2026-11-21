@@ -3,10 +3,11 @@
 
 Before 1.10 such purges were set to state `failed` and never looked at again (7,014 rows by 2026-10-29, all
 "missing API token or zone ID"). They are stale and cannot be sent, and a failed row now means a real Cloudflare
-API error and raises a pager incident, so the old pile is deleted here. After a token is saved, run
+API error and raises a pager incident, so the old pile is marked `archived` here (nothing is deleted: logs are permanent; the retry job only looks at `failed`). After a token is saved, run
 Cloudflare > Manual Cache Purge with "Everything" for the website.
 
-Raw SQL on the cursor, idempotent: with no failed rows it changes nothing."""
+Raw SQL on the cursor, idempotent: with no failed rows it changes nothing. (An earlier version of this script deleted the rows;
+it had already run on hams1 and the rows are gone there.)"""
 
 
 def migrate(cr, version):
@@ -19,5 +20,5 @@ def migrate(cr, version):
     if not cr.fetchone():
         return
     cr.execute(  # audit-ignore-sql: static SQL, no interpolated values
-        "DELETE FROM cloudflare_purge_queue WHERE state = 'failed'"
+        "UPDATE cloudflare_purge_queue SET state = 'archived' WHERE state = 'failed'"
     )
