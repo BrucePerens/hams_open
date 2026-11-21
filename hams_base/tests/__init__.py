@@ -21,4 +21,6 @@ from . import test_nul_in_request_params
 from . import test_bounded_int_converter
 from . import test_log_masks_email
 from . import test_device_log_gc_off
+from . import test_user_log_gc_off
+from . import test_notification_gc_off
 from . import test_visitor_cron_keeps_visitors
