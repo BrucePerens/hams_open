@@ -170,6 +170,10 @@ class UserWebsitesWeeklyDigestView(models.Model):
                 JOIN res_partner p ON u.partner_id = p.id
                 JOIN blog_post pst ON (pst.owner_user_id = u.id)
                 WHERE pst.is_published IS TRUE
+                AND u.active IS TRUE
+                AND u.is_service_account IS NOT TRUE
+                AND u.is_suspended_from_websites IS NOT TRUE
+                AND u.website_ineligible IS NOT TRUE
                 AND pst.create_date >= (now() AT TIME ZONE 'UTC') - interval '7 days'
                 -- A subscriber whose account is deactivated or erased gets no digest (erasure keeps the partner and its follower rows).
                 AND (NOT EXISTS (SELECT 1 FROM res_users fu WHERE fu.partner_id = f.partner_id)
@@ -191,6 +195,7 @@ class UserWebsitesWeeklyDigestView(models.Model):
                 JOIN user_websites_group g ON (f.res_model = 'user.websites.group' AND f.res_id = g.id)
                 JOIN blog_post pst ON (pst.user_websites_group_id = g.id)
                 WHERE pst.is_published IS TRUE
+                AND g.is_suspended_from_websites IS NOT TRUE
                 AND pst.create_date >= (now() AT TIME ZONE 'UTC') - interval '7 days'
                 AND (NOT EXISTS (SELECT 1 FROM res_users fu WHERE fu.partner_id = f.partner_id)
                      OR EXISTS (SELECT 1 FROM res_users fu WHERE fu.partner_id = f.partner_id AND fu.active))
