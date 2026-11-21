@@ -3,3 +3,5 @@ access_dmarc_report,dmarc_report,model_hams_base_dmarc_report,base.group_system,
 access_dmarc_record,dmarc_record,model_hams_base_dmarc_record,base.group_system,1,1,1,1
 access_res_users_lockout_svc,res.users lockout svc,base.model_res_users,zero_sudo.group_account_lockout_service,1,1,0,0
 access_mail_blacklist_mail_svc,mail.blacklist mail svc,mail.model_mail_blacklist,zero_sudo.group_mail_service,1,0,0,0
+access_dmarc_report_service,dmarc_report service,model_hams_base_dmarc_report,hams_base.group_dmarc_purge_service,1,0,0,1
+access_dmarc_record_service,dmarc_record service,model_hams_base_dmarc_record,hams_base.group_dmarc_purge_service,1,0,0,1

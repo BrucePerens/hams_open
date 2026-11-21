@@ -6,7 +6,7 @@ import gzip
 import io
 import itertools
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from odoo.addons.zero_sudo import public_rpc
 
 _logger = logging.getLogger(__name__)
@@ -22,6 +22,11 @@ _logger = logging.getLogger(__name__)
 _MAX_DECOMPRESSED_BYTES = 50 * 1024 * 1024
 # Rows kept from one report: 50 MB of XML holds hundreds of thousands, and they go into one create().
 _MAX_RECORDS = 10000
+# A report (its records and the mail that carried it) is deleted this many days after it arrived. The sender is
+# anyone who can mail the rua= address, so without it the table grows with whatever they send. Nothing legal
+# needs a DMARC report; the aggregate shows the same problems for a month.
+DMARC_RETENTION_DAYS = 180
+_PURGE_BATCH = 1000
 
 
 # [@ANCHOR: hams_base:COMM_safe_int]
@@ -84,6 +89,15 @@ class DmarcReport(models.Model):
     pct = fields.Integer(string="Percentage")
 
     record_ids = fields.One2many("hams_base.dmarc.record", "report_id", string="Records")
+
+    # [@ANCHOR: hams_base:dmarc_report_purge]
+    # Verified by [@ANCHOR: hams_base:test_dmarc_purge_drops_only_old_reports]
+    @api.model
+    def _cron_purge_old_reports(self):
+        """Delete reports (records cascade, mail goes with the thread) that arrived more than the retention ago."""
+        old = self.search([("create_date", "<", fields.Datetime.now() - timedelta(days=DMARC_RETENTION_DAYS))], limit=_PURGE_BATCH)
+        old.unlink()
+        return len(old)
 
     # [@ANCHOR: hams_base:COMM_dmarc_message_new]
     @public_rpc
