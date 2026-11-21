@@ -156,16 +156,25 @@ class CloudflareDNSRecord(models.Model):
                                         name=rec.name))
             self._check_glue(rec)
 
+    # [@ANCHOR: cloudflare:COMM_dns_record_allow_member_ns]
+    # Verified by [@ANCHOR: cloudflare:COMM_test_member_ns_allowed_by_setting]
+    @api.model
+    def _allow_member_ns(self):
+        """Off by default. While `ham_dns.allow_cloudflare_member_ns` is on (Bruce, 2026-11-21, until the registrar
+        cut-over), an NS row from `<callsign>.hams.com` to ns1/ns2.hams.com may be saved and pushed."""
+        return self.env["ir.config_parameter"].get_param("ham_dns.allow_cloudflare_member_ns") in ("1", "True", "true")
+
     # [@ANCHOR: cloudflare:COMM_dns_record_no_member_names]
     # Verified by [@ANCHOR: cloudflare:COMM_test_member_names_never_reach_cloudflare]
-    @api.constrains("name", "active")
+    @api.constrains("name", "active", "type", "content")
     def _check_not_a_member_name(self):
         """No active row may name a callsign (`k6bp.hams.com`, `www.k6bp.hams.com`): hams.com's own name servers
         answer for members, Cloudflare never holds their names (Bruce, 2026-11-11). Archiving a row is always
         allowed, so a row that already exists can be retired; only an active row is refused."""
+        allow = self._allow_member_ns()
         for rec in self.filtered("active"):
             label = dns_plan.callsign_label_in(rec.name)
-            if label:
+            if label and not (allow and dns_plan.is_allowed_member_ns(rec.name, rec.type, rec.content)):
                 raise ValidationError(_(
                     "%(name)s names a callsign (%(label)s). Names for members are served by hams.com's own name "
                     "servers and are never entered at Cloudflare.", name=rec.name, label=label))
@@ -327,11 +336,13 @@ class CloudflareDNSRecord(models.Model):
         """Refuse the whole push when any entry would create or update a record whose name is a callsign: even a
         row that got into the table some other way (SQL, an old release) is never sent. A delete, an adoption
         (an id stored in Odoo) and an unchanged row write nothing at Cloudflare and are allowed."""
+        allow = self._allow_member_ns()
         return [
             f"{entry['name']} names a callsign; member names are served by hams.com's own name servers and are "
             "never written to Cloudflare. Archive that row"
             for entry in entries
             if entry["action"] in (dns_plan.CREATE, dns_plan.UPDATE) and dns_plan.callsign_label_in(entry["name"])
+            and not (allow and dns_plan.is_allowed_member_ns(entry["name"], entry["type"], entry.get("content")))
         ]
 
     # [@ANCHOR: cloudflare:COMM_dns_capacity_guard]
@@ -343,6 +354,7 @@ class CloudflareDNSRecord(models.Model):
         when the plan grows them; a push that only updates or retires needs no reading. If Cloudflare cannot
         be asked, a growing push is refused: it must not guess about room."""
         problems = []
+        allow = self._allow_member_ns()
         by_zone = {}
         for entry in entries:
             if entry.get("zone_id") and entry["action"] in dns_plan.WRITING_ACTIONS:
@@ -354,6 +366,9 @@ class CloudflareDNSRecord(models.Model):
             website = self.env["website"].browse(zone_entries[0].get("website_id"))
             token = website._get_cloudflare_credentials()[0] if website else None
             delegations = [e for e in creates if dns_plan.is_member_delegation(e, zone_name)]
+            if allow:
+                # The wildcard NS pair at Cloudflare (2026-11-11) does not delegate; the allowed member NS rows are explicit.
+                delegations = [e for e in delegations if not dns_plan.is_allowed_member_ns(e["name"], e["type"], e.get("content"))]
             wildcard_creates = [e for e in creates if (e.get("name") or "").startswith("*.")]
             if delegations and wildcard_creates:
                 problems.append(f"{zone_name}: this push creates a wildcard record and member name delegations "
@@ -417,6 +432,7 @@ class CloudflareDNSRecord(models.Model):
                            "proxied": entry["proxied"], "ttl": entry.get("ttl", 1)}
                 if entry.get("comment"):
                     payload["comment"] = entry["comment"]
+                member_ns = {"allow_member_ns": True} if self._allow_member_ns() else {}
                 if action == dns_plan.DELETE:
                     ok, value = delete_dns_record(entry["zone_id"], entry["remote_id"], token)
                     if ok:
@@ -428,9 +444,9 @@ class CloudflareDNSRecord(models.Model):
                         results.append(f"FAILED delete {entry['type']} {entry['name']}: {value}")
                     continue
                 if action == dns_plan.CREATE:
-                    ok, value = create_dns_record(entry["zone_id"], payload, token)
+                    ok, value = create_dns_record(entry["zone_id"], payload, token, **member_ns)
                 else:
-                    ok, value = update_dns_record(entry["zone_id"], entry["remote_id"], payload, token)
+                    ok, value = update_dns_record(entry["zone_id"], entry["remote_id"], payload, token, **member_ns)
                 if ok:
                     vals = {"cf_last_result": f"{action}d"}
                     if action == dns_plan.CREATE and is_cloudflare_id(value):

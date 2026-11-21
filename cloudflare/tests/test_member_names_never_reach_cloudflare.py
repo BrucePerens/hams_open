@@ -271,3 +271,56 @@ class TestMemberNameRows(HamsTransactionCase):
         with self.assertRaises(ValidationError), self.cr.savepoint():
             ok.hostname = "w1aw.hams.com"
             self.env.flush_all()
+
+    # Tests [@ANCHOR: cloudflare:COMM_test_member_ns_allowed_by_setting]. Bruce, 2026-11-21: until the registrar cut-over,
+    # `ham_dns.allow_cloudflare_member_ns` lets the NS pair of a member zone reach Cloudflare.
+
+    def _allow(self, on=True):
+        self.env["ir.config_parameter"].set_param("ham_dns.allow_cloudflare_member_ns", "1" if on else "")
+
+    def test_20_the_name_test_for_the_one_allowed_row(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_plan_is_allowed_member_ns]
+        self.assertTrue(dns_plan.is_allowed_member_ns("k1io.hams.com", "NS", "ns1.hams.com."))
+        self.assertTrue(dns_plan.is_allowed_member_ns("k1io.hams.com", "NS", "NS2.hams.com"))
+        for name, rtype, content in (("k1io.hams.com", "NS", "ns.evil.example"), ("k1io.hams.com", "A", "192.0.2.1"),
+                                     ("www.k1io.hams.com", "NS", "ns1.hams.com"), ("hams.com", "NS", "ns1.hams.com"),
+                                     ("lab.hams.com", "NS", "ns1.hams.com")):
+            self.assertFalse(dns_plan.is_allowed_member_ns(name, rtype, content), (name, rtype, content))
+
+    def test_21_off_by_default_the_row_is_refused(self):
+        with self.assertRaises(ValidationError), self.cr.savepoint():
+            self._row("k1io.hams.com")
+            self.env.flush_all()
+        ok, why = cloudflare_api.create_dns_record("a" * 32, {"type": "NS", "name": "k1io.hams.com",
+                                                              "content": "ns1.hams.com"}, "tok", allow_member_ns=False)
+        self.assertFalse(ok)
+        self.assertIn("refused", why)
+
+    def test_22_on_the_ns_pair_saves_plans_and_pushes_but_nothing_else_does(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_record_allow_member_ns]
+        self._allow()
+        rows = self._row("k1io.hams.com") | self._row("k1io.hams.com", content="ns2.hams.com")
+        for bad in (dict(name="k1io.hams.com", content="ns.evil.example"), dict(name="www.k1io.hams.com"),
+                    dict(name="k1io.hams.com", rtype="A", content="192.0.2.1")):
+            with self.assertRaises(ValidationError), self.cr.savepoint():
+                self._row(bad["name"], bad.get("rtype", "NS"), bad.get("content", "ns1.hams.com"))
+                self.env.flush_all()
+        plan = rows.dns_push_plan()
+        self.assertEqual(plan["problems"], [])
+        rows.dns_push_apply(plan["hash"])
+        created = [c for c in self.cf.writes() if c[0] == "create"]
+        self.assertEqual(sorted(c[2]["content"] for c in created), ["ns1.hams.com", "ns2.hams.com"])
+
+    def test_23_a_wildcard_does_not_block_the_allowed_pair(self):
+        self._allow()
+        self.cf.records.append({"type": "NS", "name": "*.hams.com", "content": "ns1.hams.com", "id": _id(),
+                                "zone": self.cf.zones["hams.com"]})
+        row = self._row("k1io.hams.com")
+        self.assertEqual(row.dns_push_plan()["problems"], [])
+
+    def test_24_switching_it_off_again_refuses_a_smuggled_row_at_push(self):
+        self._allow()
+        row = self._row("k1io.hams.com")
+        self._allow(False)
+        plan = row.dns_push_plan()
+        self.assertTrue(any("names a callsign" in p for p in plan["problems"]), plan["problems"])

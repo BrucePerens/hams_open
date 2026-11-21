@@ -248,6 +248,20 @@ def callsign_label_in(name):
     return None
 
 
+# Bruce, 2026-11-21: until the registrar cut-over the parent hams.com zone is still at Cloudflare, so each member
+# zone needs an NS pair there, pointing at hams.com's own servers and nowhere else.
+MEMBER_NS_TARGETS = ("ns1.hams.com", "ns2.hams.com")
+
+
+# [@ANCHOR: cloudflare:COMM_dns_plan_is_allowed_member_ns]
+def is_allowed_member_ns(name, rtype, content):
+    """True for the one member row allowed at Cloudflare while `ham_dns.allow_cloudflare_member_ns` is on: an NS
+    record for `<callsign>.hams.com` itself (nothing below it) pointing at ns1.hams.com or ns2.hams.com."""
+    if rtype != "NS" or normalize_name(content) not in MEMBER_NS_TARGETS:
+        return False
+    return is_member_delegation({"name": name, "type": rtype}, MEMBER_DOMAIN) and bool(callsign_label_in(name))
+
+
 # [@ANCHOR: cloudflare:COMM_dns_plan_is_member_delegation]
 def is_member_delegation(entry, zone_name):
     """An NS row for a single label directly under the zone (a child zone delegated away from it)."""

@@ -570,10 +570,14 @@ def delete_cfd_tunnel(account_id, token, tunnel_id):
 
 # [@ANCHOR: cloudflare:COMM_member_name_refusal]
 # Verified by [@ANCHOR: cloudflare:COMM_test_member_names_never_reach_cloudflare]
-def member_name_refusal(name):
+def member_name_refusal(name, record=None, allow_member_ns=False):
     """A refusal message when `name` carries a callsign-shaped label, else None. Every function here that creates
     or changes a name at Cloudflare asks this first and sends nothing when it answers: a member's
-    `<callsign>.hams.com` is served by hams.com's own name servers only (Bruce, 2026-11-11)."""
+    `<callsign>.hams.com` is served by hams.com's own name servers only (Bruce, 2026-11-11). With
+    `allow_member_ns` (the setting `ham_dns.allow_cloudflare_member_ns`, Bruce 2026-11-21) the NS record that
+    delegates `<callsign>.hams.com` to ns1/ns2.hams.com is the one exception."""
+    if allow_member_ns and record and dns_plan.is_allowed_member_ns(name, record.get("type"), record.get("content")):
+        return None
     label = dns_plan.callsign_label_in(name)
     if not label:
         return None
@@ -719,11 +723,11 @@ def list_dns_records_named(zone_id, name, token):
 
 
 # [@ANCHOR: cloudflare:COMM_dns_api_create_record]
-def create_dns_record(zone_id, payload, token):
+def create_dns_record(zone_id, payload, token, allow_member_ns=False):
     # # Verified by [@ANCHOR: COMM_test_dns_api_calls]
     if not token or not is_cloudflare_id(zone_id):
         return False, "Missing credentials or zone"
-    refusal = member_name_refusal((payload or {}).get("name"))
+    refusal = member_name_refusal((payload or {}).get("name"), payload, allow_member_ns)
     if refusal:
         return False, refusal
     endpoint = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records"
@@ -738,11 +742,11 @@ def create_dns_record(zone_id, payload, token):
 
 
 # [@ANCHOR: cloudflare:COMM_dns_api_update_record]
-def update_dns_record(zone_id, record_id, payload, token):
+def update_dns_record(zone_id, record_id, payload, token, allow_member_ns=False):
     # # Verified by [@ANCHOR: COMM_test_dns_api_calls]
     if not token or not is_cloudflare_id(zone_id) or not is_cloudflare_id(record_id):
         return False, "Missing credentials, zone or record id"
-    refusal = member_name_refusal((payload or {}).get("name"))
+    refusal = member_name_refusal((payload or {}).get("name"), payload, allow_member_ns)
     if refusal:
         return False, refusal
     endpoint = f"https://api.cloudflare.com/client/v4/zones/{zone_id}/dns_records/{record_id}"
