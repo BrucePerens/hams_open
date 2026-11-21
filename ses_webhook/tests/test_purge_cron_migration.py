@@ -99,3 +99,14 @@ class TestSesWebhookPurgeCronMigration(HamsTransactionCase):
         svc = self.env.ref("ses_webhook.user_ses_webhook_service_internal")
         for model in (log, pending):
             self.assertFalse(model.with_user(svc).has_access("unlink"))
+
+    def test_05_documentation_says_held_emails_and_logs_are_kept(self):
+        """The user documentation promises no deletion period for held emails or logs."""
+        doc_path = os.path.join(os.path.dirname(MIGRATION_PATH), "..", "..", "data", "documentation.html")
+        with open(doc_path, encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("Held emails are kept; there is no deletion period.", text)
+        self.assertIn("Logs are kept; there is no deletion period.", text)
+        self.assertNotIn("7 days", text)
+        self.assertNotIn("30 days", text)
+        self.assertNotIn("deleted automatically", text)
