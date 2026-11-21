@@ -303,3 +303,5 @@ Argument `self`: exactly one record (`ensure_one`). **Special concerns.** Read-o
 ### API key revocation log [@ANCHOR: daemon_key_manager:apikey_revocation_log]
 
 Revoking a `res.users.apikeys` row (any path: the user, an administrator, the registry's rotation or `unregister_daemon`) deletes the key, which is what disables it, and first writes a permanent `apikey.revocation.log` row: key owner, who revoked, key name, scope, key id, a 12-character SHA-256 fingerprint of the stored key hash (never the secret), timestamp and source (`user`, `admin`, `automatic`). The log is append-only: `unlink` and `write` raise, and the ACL is read-only. Keys removed by raw SQL (GDPR erasure) bypass the ORM and are not logged.
+
+The revoke hook is `res.users.apikeys.unlink` [@ANCHOR: daemon_key_manager:apikey_revocation_log_hook]; the log refuses `write` [@ANCHOR: daemon_key_manager:apikey_revocation_log_write_refused] and `unlink` [@ANCHOR: daemon_key_manager:apikey_revocation_log_unlink_refused].
