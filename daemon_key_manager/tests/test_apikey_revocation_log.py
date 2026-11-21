@@ -17,6 +17,7 @@ class TestApikeyRevocationLog(RealTransactionCase):
     # [@ANCHOR: daemon_key_manager:test_apikey_revocation_log]
     # Tests [@ANCHOR: daemon_key_manager:apikey_revocation_log]
     # Tests [@ANCHOR: daemon_key_manager:apikey_revocation_log_hook]
+    # Tests [@ANCHOR: daemon_key_manager:apikey_revocation_log_model]
     # Tests [@ANCHOR: daemon_key_manager:apikey_revocation_log_write_refused]
     # Tests [@ANCHOR: daemon_key_manager:apikey_revocation_log_unlink_refused]
     def test_revoke_leaves_permanent_log_row(self):

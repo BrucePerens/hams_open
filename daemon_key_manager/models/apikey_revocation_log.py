@@ -8,6 +8,7 @@ from odoo import fields, models
 from odoo.exceptions import UserError
 
 
+# [@ANCHOR: daemon_key_manager:apikey_revocation_log_model]
 class ApikeyRevocationLog(models.Model):
     _name = "apikey.revocation.log"
     _description = "API Key Revocation Log (append-only, permanent)"
