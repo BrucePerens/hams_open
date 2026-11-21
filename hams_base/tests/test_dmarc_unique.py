@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""One DMARC report per reporting organization and report id, and the 1.1 migration removes existing duplicates."""
+"""One DMARC report per reporting organization and report id, and the 1.1 migration renames existing duplicates, deleting none."""
 import importlib.util
 import os
 
@@ -30,7 +30,7 @@ class TestDmarcUnique(common.TransactionCase):
         self.Report.create({"org_name": "uniq.example", "report_id": False})
 
     # Tests [@ANCHOR: hams_base:migration_dmarc_report_dedupe]
-    def test_migration_keeps_only_the_oldest_report(self):
+    def test_migration_renames_later_duplicates_and_is_idempotent(self):
         spec = importlib.util.spec_from_file_location("dmarc_report_dedupe", _MIGRATION)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
@@ -39,6 +39,12 @@ class TestDmarcUnique(common.TransactionCase):
         first = self.Report.create(self.vals)
         self.Report.flush_model()
         cr.execute("INSERT INTO hams_base_dmarc_report (org_name, report_id) VALUES (%s, %s)", ("uniq.example", "r-1"))
+        cr.execute("SELECT id FROM hams_base_dmarc_report WHERE org_name = 'uniq.example' AND id <> %s", (first.id,))
+        second_id = cr.fetchone()[0]
         module.migrate(cr, "1.0")
-        cr.execute("SELECT id FROM hams_base_dmarc_report WHERE org_name = 'uniq.example' AND report_id = 'r-1'")
-        self.assertEqual([r[0] for r in cr.fetchall()], [first.id])
+        cr.execute("SELECT id, report_id FROM hams_base_dmarc_report WHERE org_name = 'uniq.example' ORDER BY id")
+        after = cr.fetchall()
+        self.assertEqual(after, [(first.id, "r-1"), (second_id, "r-1 (duplicate %s)" % second_id)])
+        module.migrate(cr, "1.0")  # a re-run changes nothing
+        cr.execute("SELECT id, report_id FROM hams_base_dmarc_report WHERE org_name = 'uniq.example' ORDER BY id")
+        self.assertEqual(cr.fetchall(), after)
