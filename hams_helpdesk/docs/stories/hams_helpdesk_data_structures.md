@@ -112,7 +112,7 @@
 
 **Class attributes.** `_name = "hams_helpdesk.github_delivery"`.
 
-**Invariants, ownership and concurrency.** Each id is stored once (UNIQUE constraint). Rows are kept forever (no retention period): the row existing is the replay check, so an id can never be claimed again. Rows are created through the webhook service user only (see `security/ir.model.access.csv`).
+**Invariants, ownership and concurrency.** Each id is stored once (UNIQUE constraint). `_claim` deletes rows older than `RETENTION_DAYS` (7) before checking, so an id can be claimed again after the window. Rows are created through the webhook service user only (see `security/ir.model.access.csv`).
 
 **Methods.** `_claim`.
 
