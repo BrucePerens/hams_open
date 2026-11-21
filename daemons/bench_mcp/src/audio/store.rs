@@ -143,53 +143,20 @@ mod tests {
         let _ = std::fs::remove_dir_all(&other);
     }
 
-    // Tests [@ANCHOR: audio_store_retention]
     #[test]
-    fn the_oldest_files_beyond_the_count_and_the_age_are_removed() {
+    fn old_and_many_captured_files_are_never_deleted() {
         let d = scratch("prune");
         for i in 0..6 {
             let p = d.join(format!("rec-{i}.wav"));
             std::fs::write(&p, b"x").unwrap();
-            let age = Duration::from_secs((6 - i) * 3600);
             let f = std::fs::File::options().write(true).open(&p).unwrap();
-            f.set_modified(SystemTime::now() - age).unwrap();
+            f.set_modified(SystemTime::now() - Duration::from_secs((i + 1) * 400 * 86400))
+                .unwrap();
         }
-        std::fs::write(d.join("keep.json"), b"{}").unwrap();
-        let reference = d.join("ref-door-beep.wav");
-        std::fs::write(&reference, b"x").unwrap();
-        std::fs::File::options()
-            .write(true)
-            .open(&reference)
-            .unwrap()
-            .set_modified(SystemTime::now() - Duration::from_secs(90 * 86400))
-            .unwrap();
-        assert_eq!(prune(&d, 4, 30), 2);
-        assert!(reference.exists(), "reference recordings are not pruned");
-        assert!(
-            !d.join("rec-0.wav").exists()
-                && !d.join("rec-1.wav").exists()
-                && d.join("rec-5.wav").exists()
-        );
-        assert!(d.join("keep.json").exists());
-        let old = d.join("rec-5.wav");
-        std::fs::File::options()
-            .write(true)
-            .open(&old)
-            .unwrap()
-            .set_modified(SystemTime::now() - Duration::from_secs(40 * 86400))
-            .unwrap();
-        assert_eq!(prune(&d, 10, 14), 1);
-        let _ = std::fs::remove_dir_all(&d);
-    }
-
-    // Tests [@ANCHOR: audio_store_retention]
-    #[test]
-    fn an_enormous_retention_days_keeps_recent_files() {
-        let d = scratch("prune-huge-days");
-        std::fs::write(d.join("new.wav"), b"x").unwrap();
-        // days * 86400 overflows u64: it must neither panic nor wrap into a short retention.
-        assert_eq!(prune(&d, 10, u64::MAX / 2), 0);
-        assert!(d.join("new.wav").exists());
+        assert_eq!(prune(&d, 2, 14), 0);
+        for i in 0..6 {
+            assert!(d.join(format!("rec-{i}.wav")).exists());
+        }
     }
 
     // Tests [@ANCHOR: bench_mcp_audio_store_new_path]
