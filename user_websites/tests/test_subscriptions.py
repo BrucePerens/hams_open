@@ -126,6 +126,17 @@ class TestSubscriptionsAndDigest(HamsHttpCase):
         self.assertFalse(mails, "a deactivated subscriber must get no digest")
 
     # Tests [@ANCHOR: user_websites_sql_views_user_websites_weekly_digest_view]
+    def test_01g_weekly_digest_view_skips_a_suspended_author_but_not_a_normal_one(self):
+        """A suspended author's 404ing posts are not mailed; the normal creator's still are."""
+        view = self.env["user_websites.weekly_digest_view"]
+        domain = [("partner_id", "=", self.follower.partner_id.id)]
+        owners = lambda: set(view.search(domain).mapped("owner_record_id"))
+        self.assertIn(self.creator.partner_id.id, owners())
+        self.creator.is_suspended_from_websites = True
+        self.env.flush_all()
+        self.assertNotIn(self.creator.partner_id.id, owners())
+
+    # Tests [@ANCHOR: user_websites_sql_views_user_websites_weekly_digest_view]
     def test_01_weekly_digest_and_unsubscribe_headers(self):
         """
         Verify that the cron correctly generates emails, successfully injects the
