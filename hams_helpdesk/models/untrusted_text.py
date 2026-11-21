@@ -1113,7 +1113,7 @@ def inspect_mail(message, location="mail"):
             if part.is_multipart():
                 if ctype == "multipart/alternative":
                     plains = [p for p in part.iter_parts() if p.get_content_type() == "text/plain"]
-                    htmls = [p for p in part.iter_parts() if p.get_content_type() == "text/html"]
+                    htmls = [h for child in part.iter_parts() for h in child.walk() if h.get_content_type() == "text/html"]
                     for plain in plains:
                         for html in htmls:
                             findings.extend(compare_alternatives(_part_text(plain), _part_text(html), "%s:alternatives" % location))
