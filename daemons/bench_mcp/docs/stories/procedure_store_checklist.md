@@ -12,7 +12,7 @@ Two constants belong to the entries below and have no anchor of their own. `EVEN
 
 ### `proc_store_now` [@ANCHOR: proc_store_now]
 
-Returns the current wall-clock time as seconds since the Unix epoch, with fractions. It is the one clock the procedure store uses: run start and end times (`started_unix`, `ended_unix`), the time of an event relative to the start of its run, the run id (milliseconds), the retention cutoff in `purge`, and the time a saved procedure version was written. Called from `store.rs` itself and from `run.rs`, `saved.rs` and `procedure/mod.rs`.
+Returns the current wall-clock time as seconds since the Unix epoch, with fractions. It is the one clock the procedure store uses: run start and end times (`started_unix`, `ended_unix`), the time of an event relative to the start of its run, the run id (milliseconds), and the time a saved procedure version was written. Called from `store.rs` itself and from `run.rs`, `saved.rs` and `procedure/mod.rs`.
 
 | Argument | Type | Meaning |
 |---|---|---|
@@ -20,7 +20,7 @@ Returns the current wall-clock time as seconds since the Unix epoch, with fracti
 
 Returns `f64`, seconds since 1970-01-01 UTC (about 1.8e9 today; sub-millisecond resolution is available but callers use milliseconds). Special value: `0.0` when the system clock reads before the epoch (the `duration_since` error is swallowed). It cannot panic, blocks nothing, takes no lock and has no side effects. It is not monotonic: a clock step changes it, so differences across a step are meaningless (the run's wall-clock budget uses monotonic time in the Python runtime, not this).
 
-See also: `proc_store_purge` (uses it for the cutoff), `proc_store_new_run_dir` (uses it for the id), `proc_store_event_append`. Test: `src/procedure/tests.rs` cites it above the test that runs a procedure to the end and reads everything back.
+See also: `proc_store_new_run_dir` (uses it for the id), `proc_store_event_append`. Test: `src/procedure/tests.rs` cites it above the test that runs a procedure to the end and reads everything back.
 
 ### `proc_store_root` [@ANCHOR: proc_store_root]
 
@@ -32,7 +32,7 @@ Returns the managed directory under which all procedure files live: the `dir` en
 
 Returns an owned `PathBuf`. It does not create the `procedures` directory itself and does not check that `dir` exists, is writable or is absolute; a relative `dir` is relative to the server's working directory. It cannot fail or panic. Calling it creates the bench output directory as a side effect when `dir` is unset (through `out_dir`). Pure otherwise and safe to call from any thread.
 
-See also: `Config` in `src/procedure/mod.rs`, `proc_store_new_run_dir`, `proc_store_list_runs`, `proc_store_purge`.
+See also: `Config` in `src/procedure/mod.rs`, `proc_store_new_run_dir`, `proc_store_list_runs`.
 
 ### `proc_store_write_json` [@ANCHOR: proc_store_write_json]
 
@@ -51,7 +51,7 @@ See also: `proc_store_read_json`; callers in `run.rs` (`proc_run_persist`), `saf
 
 ### `proc_store_read_json` [@ANCHOR: proc_store_read_json]
 
-Reads a JSON file into a `serde_json::Value`. The matching reader of `write_json`; used for `state.json` (status, list, purge), `emitted.json`, `result.json`, `touched.json` and the saved-procedure `meta.json`.
+Reads a JSON file into a `serde_json::Value`. The matching reader of `write_json`; used for `state.json` (status, list), `emitted.json`, `result.json`, `touched.json` and the saved-procedure `meta.json`.
 
 | Argument | Type | Meaning |
 |---|---|---|
@@ -59,7 +59,7 @@ Reads a JSON file into a `serde_json::Value`. The matching reader of `write_json
 
 Returns `Result<Value, String>`. `Err` is `"<path>: <os or parse error>"` when the file does not exist, cannot be read, is not valid UTF-8 or is not valid JSON. There is no distinction between "missing" and "corrupt" in the type; callers that treat a missing file as normal (for example `bench_proc_output` reading `emitted.json`) map the error to an empty object themselves. Blocking file I/O, no locks, no side effects, safe from any thread. Because `write_json` renames into place, a reader never sees a half-written file from this module's writers.
 
-See also: `proc_store_write_json`, `proc_store_purge`, `proc_store_list_runs`.
+See also: `proc_store_write_json`, `proc_store_list_runs`.
 
 ## Creating and finding runs
 
@@ -86,9 +86,9 @@ Turns a run id received from a caller (an AI agent or user through `view.rs`: st
 | `cfg` | `&Config` (borrowed) | Gives the root. |
 | `id` | `&str` (borrowed) | The id as typed by the caller. |
 
-Returns `Result<PathBuf, String>`: `<root>/runs/<id>` when the directory exists. Errors: `"<id> is not a run id (see bench_proc_list)"` unless the id is exactly 15 bytes, starts with `r` and the remaining 14 are ASCII hex digits (upper case hex is accepted; `new_run_dir` makes lower case, so an upper-case id passes the check and then fails the directory test on a case-sensitive filesystem); `"no run <id> (see bench_proc_list; finished runs are deleted after the retention time)"` when the shape is right but there is no such directory. The error text is written for an AI agent and names the tool to call next. Read-only (one `is_dir` check), no locks, no side effects.
+Returns `Result<PathBuf, String>`: `<root>/runs/<id>` when the directory exists. Errors: `"<id> is not a run id (see bench_proc_list)"` unless the id is exactly 15 bytes, starts with `r` and the remaining 14 are ASCII hex digits (upper case hex is accepted; `new_run_dir` makes lower case, so an upper-case id passes the check and then fails the directory test on a case-sensitive filesystem); `"no run <id> (see bench_proc_list)"` when the shape is right but there is no such directory. The error text is written for an AI agent and names the tool to call next. Read-only (one `is_dir` check), no locks, no side effects.
 
-See also: `proc_store_new_run_dir`, `proc_store_purge`, `proc_view_status`, `proc_view_output`, `proc_view_result`.
+See also: `proc_store_new_run_dir`, `proc_view_status`, `proc_view_output`, `proc_view_result`.
 
 ## The event log
 
@@ -184,23 +184,9 @@ Returns `(String, u64, bool)`: the text, the next offset, and `more` (true when 
 
 See also: `proc_store_append_stream`, `proc_view_output`. Example: `read_stream(p, 0, 4000)` returns the first 4000 bytes and `next = 4000, more = true`; the caller passes 4000 next time.
 
-## Retention and listing
+## Listing
 
-### `proc_store_purge` [@ANCHOR: proc_store_purge]
-
-Deletes old finished runs. It runs at the start of every new run (`run::start`, before `new_run_dir`), so the managed directory is kept in bounds without a background task and without a separate tool.
-
-| Argument | Type | Meaning |
-|---|---|---|
-| `cfg` | `&Config` (borrowed) | `dir` (root), `retention_days` (`f64`, days, default 14; finished runs older than this are deleted) and `keep_runs` (`usize`, default 200; at most this many finished runs are kept, oldest deleted first). |
-
-Returns `usize`, the number of run directories removed (0 when the `runs` directory does not exist or nothing qualified). A directory whose removal fails is neither counted nor reported.
-
-Rules, in order: every directory in `runs/` whose `state.json` reads and parses is a candidate; one whose `state` is `starting`, `running`, `waiting_operator` or `cancelling` is skipped (it is active and never deleted); a directory with no readable `state.json` (for example a run still being created) is skipped. The rest are sorted by `ended_unix`, newest first. A run is deleted when its `ended_unix` is older than `now - retention_days * 86400`, or when its position is `keep_runs` or beyond. Deletion is `remove_dir_all`, so the run's whole directory including `scratch/` and checkpoints goes. Side effects: file deletion only. It is synchronous and its cost grows with the number of runs (one small JSON read each). It takes no lock; two server processes sharing a root could both try to delete the same directory, which is harmless.
-
-A state file with no `state` field is left alone (it is not known to be finished). A finished run whose `ended_unix` is missing or null counts as ended at time 0 and is therefore deleted first (intended: a finished run always has the field). `retention_days` is validated by the config (0 to 3650), so 0 or a very small value deletes every finished run at the next purge (the test sets it to 0.00001).
-
-See also: `proc_store_list_runs`, `proc_store_run_dir`. Test: `finished_runs_older_than_the_retention_time_are_deleted_when_the_next_run_starts` in `src/procedure/tests.rs`.
+There is no retention function in the store. Until 2026-11 `proc_store_purge` ran at every run start and deleted finished runs older than `retention_days` (14) or beyond `keep_runs` (200); Bruce removed it because bench_mcp must never remove files on its own. Nothing in the server now calls `remove_dir_all` on a run directory: a finished run, its `scratch/` and its checkpoints stay until the user clears the disk by hand, and the `retention_days` and `keep_runs` config keys are no longer read (a config that still has them parses, the keys are ignored like any unknown key). Test: `finished_runs_older_than_14_days_and_beyond_200_all_survive_a_new_run_start` in `src/procedure/tests.rs` plants 210 finished runs, 30 days old, starts a run and checks that every one of them is still there. Callers that listed runs by `proc_store_list_runs` therefore see an ever longer list, newest first, cut by `limit`.
 
 ### `proc_store_list_runs` [@ANCHOR: proc_store_list_runs]
 
@@ -213,7 +199,7 @@ Lists the runs that are on disk, newest first, for the tool `bench_proc_list`.
 
 Returns `Vec<Value>`; each item is `{"run", "state", "label", "started_unix", "ended_unix", "calls"}`, taken from the run's `state.json` (a field missing there is `null`; `ended_unix` is `null` while the run is going). The list is empty when `runs/` is missing or unreadable. Ordering: the directory names are sorted and reversed, which is newest first because ids begin with a fixed-width hex time. The `limit` is applied to directory names before `state.json` is read, so an entry without a readable `state.json` (a run still starting, or a foreign directory) uses up one place of the limit and is left out, and fewer than `limit` items can come back. It does not check that a name has the run id shape. Read-only; no locks; one JSON read per returned directory.
 
-See also: `proc_store_purge`, `proc_view_list`, `proc_run_persist` (what `state.json` holds).
+See also: `proc_view_list`, `proc_run_persist` (what `state.json` holds).
 
 ## The contributor checklist
 

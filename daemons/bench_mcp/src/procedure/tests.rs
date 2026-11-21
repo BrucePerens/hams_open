@@ -107,11 +107,8 @@ fn the_runner_entry_is_read_with_defaults_and_bad_values_are_refused() {
         (c.max_runs, c.grace_s, c.wrapper.as_str()),
         (2, 5.0, "none")
     );
-    let c = parse_config(&json!({"dir": "/var/tmp/p", "max_runs": 3, "retention_days": 1, "wrapper": "systemd-run", "python": "/usr/bin/python3"})).unwrap();
-    assert_eq!(
-        (c.max_runs, c.retention_days, c.wrapper.as_str()),
-        (3, 1.0, "systemd-run")
-    );
+    let c = parse_config(&json!({"dir": "/var/tmp/p", "max_runs": 3, "retention_days": 1, "keep_runs": 5, "wrapper": "systemd-run", "python": "/usr/bin/python3"})).unwrap();
+    assert_eq!((c.max_runs, c.wrapper.as_str()), (3, "systemd-run"));
     for bad in [
         json!({"dir": "relative"}),
         json!({"max_runs": 0}),
@@ -119,7 +116,6 @@ fn the_runner_entry_is_read_with_defaults_and_bad_values_are_refused() {
         json!({"grace_s": "x"}),
         json!({"wrapper": "docker"}),
         json!({"python": "python3"}),
-        json!({"retention_days": -1}),
     ] {
         assert!(parse_config(&bad).is_err(), "{bad}");
     }
@@ -831,7 +827,7 @@ bench.result({"peak_hz": peak, "amplitude": round(float(fit[0]), 1), "filtered":
 
 #[test]
 fn only_the_configured_number_of_runs_are_active_and_finished_runs_are_never_deleted() {
-    let b = bench_with("full", r#""max_runs":1,"keep_runs":2"#);
+    let b = bench_with("full", r#""max_runs":1"#);
     let first = start(&b, "while True:\n    bench.sleep(0.05)\n", json!({}));
     let e = tool(&b, "bench_proc_run", json!({"source": "pass"})).unwrap_err();
     assert!(
@@ -866,28 +862,27 @@ fn only_the_configured_number_of_runs_are_active_and_finished_runs_are_never_del
     assert!(tool(&b, "bench_proc_status", json!({"run": first})).is_ok());
 }
 
-// Tests [@ANCHOR: proc_store_purge]
 // Tests [@ANCHOR: proc_store_list_runs]
 #[test]
-fn finished_runs_are_never_deleted_however_old_when_the_next_run_starts() {
-    let b = bench_with("full", r#""retention_days":0.00001"#);
-    let old = run(&b, "bench.result(1)", json!({}))["run"]
-        .as_str()
-        .unwrap()
-        .to_string();
-    std::thread::sleep(Duration::from_millis(1500));
-    let newer = run(&b, "bench.result(2)", json!({}))["run"]
-        .as_str()
-        .unwrap()
-        .to_string();
-    assert_eq!(
-        tool(&b, "bench_proc_status", json!({"run": old})).unwrap()["state"],
-        "succeeded"
-    );
-    assert_eq!(
-        tool(&b, "bench_proc_status", json!({"run": newer})).unwrap()["state"],
-        "succeeded"
-    );
+fn finished_runs_older_than_14_days_and_beyond_200_all_survive_a_new_run_start() {
+    let b = bench_with("full", "");
+    let old_unix = store::now_unix() - 30.0 * 86400.0;
+    let mut ids = Vec::new();
+    for i in 0..210 {
+        let id = format!("20200101-{i:06}");
+        let d = b.dir.join("runs").join(&id);
+        std::fs::create_dir_all(&d).unwrap();
+        std::fs::write(
+            d.join("state.json"),
+            json!({"state": "succeeded", "ended_unix": old_unix + i as f64}).to_string(),
+        )
+        .unwrap();
+        ids.push(id);
+    }
+    run(&b, "bench.result(1)", json!({}));
+    for id in &ids {
+        assert!(b.dir.join("runs").join(id).is_dir(), "{id} survived");
+    }
 }
 
 // Tests [@ANCHOR: proc_py_retry]
@@ -2123,12 +2118,10 @@ fn the_calibration_example_waits_for_the_operator_at_each_standard_and_stops_on_
 }
 
 // Tests [@ANCHOR: proc_store_read_stream]
-// Tests [@ANCHOR: proc_store_purge]
 // Tests [@ANCHOR: proc_view_result]
 #[test]
-fn the_error_tail_is_the_end_of_the_output_and_a_run_without_a_state_is_not_purged() {
+fn the_error_tail_is_the_end_of_the_output() {
     let dir = crate::testdir::TestDir::new("bench_proc_tail");
-    std::fs::create_dir_all(dir.join("runs/odd")).unwrap();
     let f = dir.join("stderr.txt");
     std::fs::write(&f, format!("{}END", "x".repeat(5000))).unwrap();
     let tail = store::read_tail(&f, 2000);
@@ -2139,12 +2132,6 @@ fn the_error_tail_is_the_end_of_the_output_and_a_run_without_a_state_is_not_purg
     std::fs::write(&f, "short").unwrap();
     assert_eq!(store::read_tail(&f, 2000), "short");
     assert_eq!(store::read_tail(&dir.join("none"), 2000), "");
-    // A state file with no `state` field is left alone even with retention 0.
-    std::fs::write(dir.join("runs/odd/state.json"), "{}").unwrap();
-    let cfg =
-        parse_config(&json!({"dir": dir.display().to_string(), "retention_days": 0})).unwrap();
-    assert_eq!(store::purge(&cfg), 0);
-    assert!(dir.join("runs/odd").exists());
 }
 
 // Tests [@ANCHOR: proc_py_failure_report]

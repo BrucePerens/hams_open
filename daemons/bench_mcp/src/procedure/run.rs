@@ -775,7 +775,6 @@ pub fn start(
     p: Params,
 ) -> Result<String, String> {
     // [@ANCHOR: proc_run_start]
-    store::purge(cfg);
     let (id, dir) = store::new_run_dir(cfg)?;
     let started = store::now_unix();
     let index = ToolIndex::build(insts, p.cap);
@@ -938,9 +937,7 @@ pub fn recover_now(insts: &[Instrument]) -> Vec<Value> {
             let result = json!({"run": id, "state": "lost", "ok": false, "value": null, "failure": failure, "emitted": emitted,
                 "safe_state": results, "safe_state_ok": ok, "calls": st["calls"], "hook_violations": []});
             let _ = store::write_json(&dir.join("result.json"), &result);
-            found.push(
-                json!({"run": id, "safe_state": results, "retention_days": cfg.retention_days}),
-            );
+            found.push(json!({"run": id, "safe_state": results}));
         }
     }
     found

@@ -24,8 +24,6 @@ and refusing a bad value, so the server fails at config load rather than at the 
 |---|---|---|---|
 | `dir` | absolute path string | none, which means `procedures` under the bench output directory (`store::root`) | The managed directory: `runs/`, `saved/`, `locks/`. A relative path is refused. |
 | `max_runs` | number 1 to 16, cut to an integer | 2 | Runs active at once; `bench_proc_run` refuses the next one. |
-| `retention_days` | number 0 to 3650 | 14 | Finished runs older than this are purged. |
-| `keep_runs` | number 1 to 100000, cut to an integer | 200 | At most this many finished runs are kept. |
 | `python` | absolute path string | `/usr/bin/python3` | The interpreter of the CPython backend. |
 | `grace_s` | number 0.5 to 120 seconds | 5 | Time a cancelled program has for its cleanup handlers before it is killed. |
 | `max_wall_s` | number 1 to 31536000 seconds | 86400 | Largest `wall_s` a run may ask for. |
@@ -35,7 +33,7 @@ and refusing a bad value, so the server fails at config load rather than at the 
 | `lock_wait_s` | number 0 to 3600 seconds | 2 | How long a tool call waits for an instrument another run holds before it is refused. |
 | `operator_timeout_s` | number 1 to 604800 seconds | 3600 | How long a run may wait in `bench.ask_operator`; this wait is not counted in the wall-clock budget. |
 
-Returns `Ok(Config)`. Errors are strings: `<key> must be a number from <lo> to <hi>` (not a number, not finite, or out of range; JSON `null` is also refused here), `dir must be an absolute path`, `python must be an absolute path`, `safe_state_psu_off must be true or false`, and `wrapper must be "none" or "systemd-run"`. Keys it does not know are ignored without a message, so a misspelled key silently keeps its default. A fractional `max_runs`, `keep_runs` or `max_memory_mb` is truncated.
+Returns `Ok(Config)`. Errors are strings: `<key> must be a number from <lo> to <hi>` (not a number, not finite, or out of range; JSON `null` is also refused here), `dir must be an absolute path`, `python must be an absolute path`, `safe_state_psu_off must be true or false`, and `wrapper must be "none" or "systemd-run"`. Keys it does not know are ignored without a message (this includes the removed `retention_days` and `keep_runs`: old configs still load, and nothing deletes runs), so a misspelled key silently keeps its default. A fractional `max_runs` or `max_memory_mb` is truncated.
 
 Pure: no files, no locks, no instrument. `Config` itself is cloned into each run, so a config change applies to runs started afterwards.
 

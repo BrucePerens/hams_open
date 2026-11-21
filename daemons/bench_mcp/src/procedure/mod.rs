@@ -41,10 +41,6 @@ pub struct Config {
     pub dir: Option<PathBuf>,
     /// Runs at once.
     pub max_runs: usize,
-    /// Finished runs are deleted after this many days.
-    pub retention_days: f64,
-    /// At most this many finished runs are kept.
-    pub keep_runs: usize,
     /// The interpreter of the Python backend.
     pub python: String,
     /// Seconds a cancelled program has for its cleanup handlers before it is killed.
@@ -68,8 +64,6 @@ impl Default for Config {
         Config {
             dir: None,
             max_runs: 2,
-            retention_days: 14.0,
-            keep_runs: 200,
             python: "/usr/bin/python3".into(),
             grace_s: 5.0,
             max_wall_s: 86400.0,
@@ -107,12 +101,6 @@ pub fn parse_config(c: &Value) -> Result<Config, String> {
     }
     if let Some(x) = num("max_runs", 1.0, 16.0)? {
         cfg.max_runs = x as usize;
-    }
-    if let Some(x) = num("retention_days", 0.0, 3650.0)? {
-        cfg.retention_days = x;
-    }
-    if let Some(x) = num("keep_runs", 1.0, 100000.0)? {
-        cfg.keep_runs = x as usize;
     }
     if let Some(x) = num("grace_s", 0.5, 120.0)? {
         cfg.grace_s = x;
