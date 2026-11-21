@@ -29,7 +29,9 @@ class ApikeyRevocationLog(models.Model):
     revoked_at = fields.Datetime(default=fields.Datetime.now, readonly=True)
 
     def write(self, vals):
+        # [@ANCHOR: daemon_key_manager:apikey_revocation_log_write_refused]
         raise UserError(self.env._("The API key revocation log is append-only."))
 
     def unlink(self):
+        # [@ANCHOR: daemon_key_manager:apikey_revocation_log_unlink_refused]
         raise UserError(self.env._("The API key revocation log is permanent and cannot be deleted."))

@@ -1195,6 +1195,7 @@ class ResUsersApikeys(models.Model):
 
         The log row is written in SQL so any revoking user can leave it without any create access
         to the log model (which has none: read-only ACL, unlink/write raise)."""
+        # [@ANCHOR: daemon_key_manager:apikey_revocation_log_hook]
         actor = self.env.user
         for key in self:
             owner = key.user_id

@@ -16,6 +16,9 @@ KEY_FILE = "/opt/hams/etc/keys/revoke_log_test.env"
 class TestApikeyRevocationLog(RealTransactionCase):
     # [@ANCHOR: daemon_key_manager:test_apikey_revocation_log]
     # Tests [@ANCHOR: daemon_key_manager:apikey_revocation_log]
+    # Tests [@ANCHOR: daemon_key_manager:apikey_revocation_log_hook]
+    # Tests [@ANCHOR: daemon_key_manager:apikey_revocation_log_write_refused]
+    # Tests [@ANCHOR: daemon_key_manager:apikey_revocation_log_unlink_refused]
     def test_revoke_leaves_permanent_log_row(self):
         manager = self.env.ref("daemon_key_manager.user_daemon_key_manager_service")
         service = self.env["res.users"].create(
