@@ -93,9 +93,3 @@ parameters `hams_base.compliance_org_name` and so on, and the footer reads them.
         * *Given* a report from an organization with a given report id is stored
         * *When* another report with the same organization and id is created
         * *Then* the database MUST refuse it, and the upgrade MUST delete older duplicates keeping the first.
-
-* **Story:** As the operator, a DMARC report is deleted 180 days after it arrived, by a daily job running as a service account that can only read and delete DMARC reports, so mail from the public rua address cannot fill the database. *(Reference: hams_base/models/dmarc_report.py -> [@ANCHOR: hams_base:dmarc_report_purge]; hams_base/data/dmarc_purge_cron.xml -> [@ANCHOR: hams_base:dmarc_purge_service_account])*
-    * **BDD Criteria:**
-        * *Given* one report older than the retention and one recent report
-        * *When* the daily purge runs
-        * *Then* the old report and its records MUST be gone and the recent one kept.

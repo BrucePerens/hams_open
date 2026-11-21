@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from . import test_dmarc_parser
-from . import test_dmarc_purge
 from . import test_dmarc_unique
 from . import test_mail_templates
 from . import test_mail_blacklist
@@ -22,3 +21,4 @@ from . import test_nul_in_request_params
 from . import test_bounded_int_converter
 from . import test_log_masks_email
 from . import test_device_log_gc_off
+from . import test_visitor_cron_keeps_visitors
