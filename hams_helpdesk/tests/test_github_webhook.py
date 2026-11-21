@@ -458,7 +458,7 @@ class TestGithubWebhookHttp(HamsHttpCase):
     def test_github_webhook_redelivery_of_a_failed_delivery_is_processed(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_github_delivery_claim]
         # A delivery whose handling failed (HTTP 500, rolled back) is not "handled": GitHub's retry or a manual
-        # Redeliver must open the ticket, not be dropped for the retention window.
+        # Redeliver must open the ticket, not be dropped.
         self._configure_secret()
         payload = _dependabot_alert_payload()
         url = payload["alert"]["html_url"]
@@ -472,7 +472,7 @@ class TestGithubWebhookHttp(HamsHttpCase):
         self.assertEqual(self._post("dependabot_alert", payload, delivery="d-fail").status_code, 200)
         self.assertEqual(broken.call_count, 2, "the redelivery of the failed delivery must reach the handler")
 
-    def test_github_webhook_delivery_id_expires_after_the_retention_window(self):
+    def test_github_webhook_old_delivery_id_is_kept_and_still_refused(self):
         # Tests [@ANCHOR: hams_helpdesk:COMM_github_delivery_claim]
         Delivery = self.env["hams_helpdesk.github_delivery"]
         self.assertTrue(Delivery._claim("old-1"))
@@ -481,7 +481,8 @@ class TestGithubWebhookHttp(HamsHttpCase):
             "UPDATE hams_helpdesk_github_delivery SET create_date = now() - interval '8 days' WHERE name = 'old-1'"
         )
         Delivery.invalidate_model()
-        self.assertTrue(Delivery._claim("old-1"))
+        self.assertFalse(Delivery._claim("old-1"))
+        self.assertEqual(Delivery.search_count([("name", "=", "old-1")]), 1)
 
 
 @tagged("post_install", "-at_install", "standard")

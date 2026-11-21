@@ -4,15 +4,13 @@
 
 The signature proves a delivery came from GitHub, not that it is new. Without this, replaying one captured delivery
 after its ticket was closed opens a fresh ticket each time (a closed ticket does not count as covering the alert).
+
+Delivery ids are kept forever (Bruce, 2026-11-20: stored information is never purged). Earlier versions deleted ids
+older than seven days inside ``_claim``; that removed the replay check for old deliveries, which carry no timestamp
+to check. The row existing is the whole check, so nothing here deletes it and no retention period exists. GitHub
+retries a failed delivery within hours; a retried delivery whose first attempt succeeded is refused here as a repeat.
 """
-from datetime import timedelta
-
 from odoo import fields, models
-
-# A delivery id is remembered this long. GitHub retries within hours; a replay after the window is not caught
-# (the delivery carries no timestamp to check), which is the cost of not keeping the ids forever.
-RETENTION_DAYS = 7
-
 
 # [@ANCHOR: hams_helpdesk_github_delivery_github_delivery]
 class GithubDelivery(models.Model):
@@ -25,10 +23,8 @@ class GithubDelivery(models.Model):
 
     # [@ANCHOR: hams_helpdesk:COMM_github_delivery_claim]
     def _claim(self, delivery_id):
-        """True the first time ``delivery_id`` is seen inside the retention window, False for a repeat. Ids older
-        than the window are deleted first, so a very old id can be claimed again."""
-        cutoff = fields.Datetime.now() - timedelta(days=RETENTION_DAYS)
-        self.env[self._name].search([("create_date", "<", cutoff)]).unlink()
+        """True the first time ``delivery_id`` is seen, False for a repeat. Rows are kept forever: the row existing
+        is the replay check."""
         if self.env[self._name].search_count([("name", "=", delivery_id)]):
             return False
         self.env[self._name].create({"name": delivery_id})
