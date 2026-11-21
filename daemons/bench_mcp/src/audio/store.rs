@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! The managed capture directory: where recordings and generated tones go, with a retention limit. Recordings may contain
+//! The managed capture directory: where recordings and generated tones go. Nothing in it is ever deleted by the server. Recordings may contain
 //! speech, so they stay on this machine and no tool uploads them.
 
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
 
 /// `YYYYMMDD-HHMMSS` in local time.
 pub fn timestamp() -> String {
@@ -82,34 +81,6 @@ pub fn managed_file(dir: &Path, name: &str) -> Result<PathBuf, String> {
     Ok(real)
 }
 
-/// Deletes managed `.wav` files (except `ref-` reference recordings) older than `days`, then the oldest ones beyond `max_files`. Returns the number removed.
-pub fn prune(dir: &Path, max_files: usize, days: u64) -> usize {
-    // [@ANCHOR: audio_store_retention]
-    let mut files: Vec<(SystemTime, PathBuf)> = std::fs::read_dir(dir)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("wav"))
-        // Reference recordings are kept until someone deletes them.
-        .filter(|e| !e.file_name().to_string_lossy().starts_with("ref-"))
-        .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
-        .collect();
-    files.sort();
-    let cutoff = SystemTime::now()
-        .checked_sub(Duration::from_secs(days.saturating_mul(86400)))
-        .unwrap_or(SystemTime::UNIX_EPOCH);
-    let mut removed = 0;
-    let total = files.len();
-    for (i, (when, path)) in files.iter().enumerate() {
-        let too_old = *when < cutoff;
-        let too_many = total - removed > max_files && i < total;
-        if (too_old || too_many) && std::fs::remove_file(path).is_ok() {
-            removed += 1;
-        }
-    }
-    removed
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,55 +112,6 @@ mod tests {
             .contains("outside"));
         let _ = std::fs::remove_dir_all(&d);
         let _ = std::fs::remove_dir_all(&other);
-    }
-
-    // Tests [@ANCHOR: audio_store_retention]
-    #[test]
-    fn the_oldest_files_beyond_the_count_and_the_age_are_removed() {
-        let d = scratch("prune");
-        for i in 0..6 {
-            let p = d.join(format!("rec-{i}.wav"));
-            std::fs::write(&p, b"x").unwrap();
-            let age = Duration::from_secs((6 - i) * 3600);
-            let f = std::fs::File::options().write(true).open(&p).unwrap();
-            f.set_modified(SystemTime::now() - age).unwrap();
-        }
-        std::fs::write(d.join("keep.json"), b"{}").unwrap();
-        let reference = d.join("ref-door-beep.wav");
-        std::fs::write(&reference, b"x").unwrap();
-        std::fs::File::options()
-            .write(true)
-            .open(&reference)
-            .unwrap()
-            .set_modified(SystemTime::now() - Duration::from_secs(90 * 86400))
-            .unwrap();
-        assert_eq!(prune(&d, 4, 30), 2);
-        assert!(reference.exists(), "reference recordings are not pruned");
-        assert!(
-            !d.join("rec-0.wav").exists()
-                && !d.join("rec-1.wav").exists()
-                && d.join("rec-5.wav").exists()
-        );
-        assert!(d.join("keep.json").exists());
-        let old = d.join("rec-5.wav");
-        std::fs::File::options()
-            .write(true)
-            .open(&old)
-            .unwrap()
-            .set_modified(SystemTime::now() - Duration::from_secs(40 * 86400))
-            .unwrap();
-        assert_eq!(prune(&d, 10, 14), 1);
-        let _ = std::fs::remove_dir_all(&d);
-    }
-
-    // Tests [@ANCHOR: audio_store_retention]
-    #[test]
-    fn an_enormous_retention_days_keeps_recent_files() {
-        let d = scratch("prune-huge-days");
-        std::fs::write(d.join("new.wav"), b"x").unwrap();
-        // days * 86400 overflows u64: it must neither panic nor wrap into a short retention.
-        assert_eq!(prune(&d, 10, u64::MAX / 2), 0);
-        assert!(d.join("new.wav").exists());
     }
 
     // Tests [@ANCHOR: bench_mcp_audio_store_new_path]

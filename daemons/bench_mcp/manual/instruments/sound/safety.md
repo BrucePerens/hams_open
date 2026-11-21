@@ -17,5 +17,5 @@ verified: loopback on the dev box speaker and digital microphone at volume 0.2, 
 * `bench_audio_safe_state` stops any playback this server started and lowers any output above its cap to the cap; it makes no sound.
 * Generated sound is limited to `max_play_s`; recordings to `max_record_s`; tone level to -1 dBFS.
 * Files for playback come from the managed capture directory only.
-* Recordings can contain speech: they stay in the capture directory (owner only, pruned by `retention_files` and `retention_days`) and no tool uploads them. The tool descriptions of the recording tools say so.
+* Recordings can contain speech: they stay in the capture directory (owner only, never deleted by the server) and no tool uploads them. The tool descriptions of the recording tools say so.
 * The VNWA codecs (`08bb:29c0`) are reserved and refused by name in every tool; the check uses the kernel's usb id of each card, not the card number.

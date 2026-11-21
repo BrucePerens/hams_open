@@ -461,7 +461,6 @@ pub fn verify(ctx: &Ctx, args: &Value) -> Result<Value, String> {
                 samples: all.clone(),
             },
         )?;
-        store::prune(&dir, ctx.cfg.retention_files, ctx.cfg.retention_days);
         out["file"] = json!(path);
     }
     Ok(out)

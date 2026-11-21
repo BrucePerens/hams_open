@@ -99,8 +99,6 @@ pub struct Config {
     pub quiet_volume: f64,
     pub quiet_hours: Option<QuietHours>,
     pub capture_dir: Option<PathBuf>,
-    pub retention_files: usize,
-    pub retention_days: u64,
     pub max_record_s: f64,
     /// The longest generated tone or sound file that is played.
     pub max_play_s: f64,
@@ -132,8 +130,6 @@ impl Default for Config {
                 end: 7 * 60,
             }),
             capture_dir: None,
-            retention_files: 50,
-            retention_days: 14,
             max_record_s: 30.0,
             max_play_s: 10.0,
             verify_actions: BTreeMap::new(),
@@ -248,7 +244,7 @@ fn ports(c: &Value, key: &str) -> Result<BTreeMap<String, Port>, String> {
 /// Reads the `audio` settings of an instrument entry: `outputs` and `inputs` (alias to a name fragment, or
 /// `{"match": ..., "volume_cap": ...}`), `alert_output` and `verify_input` (`auto` or an alias), `volume_cap` and
 /// `quiet_volume` (wpctl scale, 0 to 1), `quiet_hours` (`{"start":"22:00","end":"07:00"}` or `false`), `capture_dir`,
-/// `retention_files`, `retention_days`, `max_record_s`, `max_play_s`, `tts_engine`, `tts_voice`, `tts_language`, `tts_rate`, `piper_model`, `verify_actions` (name to program and arguments, the only
+/// `max_record_s`, `max_play_s`, `tts_engine`, `tts_voice`, `tts_language`, `tts_rate`, `piper_model`, `verify_actions` (name to program and arguments, the only
 /// commands `bench_audio_verify` runs), and `reserved` (more `vid:pid` values or node-name fragments;
 /// `08bb:29c0` is always reserved).
 pub fn parse_config(c: &Value) -> Result<Config, String> {
@@ -263,8 +259,6 @@ pub fn parse_config(c: &Value) -> Result<Config, String> {
     for (k, whole) in [
         ("volume_cap", false),
         ("quiet_volume", false),
-        ("retention_files", true),
-        ("retention_days", true),
         ("max_record_s", false),
         ("max_play_s", false),
         ("tts_rate", true),
@@ -345,12 +339,6 @@ pub fn parse_config(c: &Value) -> Result<Config, String> {
         }
     }
     cfg.capture_dir = text("capture_dir").map(PathBuf::from);
-    if let Some(n) = c.get("retention_files").and_then(|x| x.as_u64()) {
-        cfg.retention_files = n as usize;
-    }
-    if let Some(n) = c.get("retention_days").and_then(|x| x.as_u64()) {
-        cfg.retention_days = n;
-    }
     if let Some(m) = num("max_record_s") {
         if !(1.0..=600.0).contains(&m) {
             return Err("max_record_s must be 1 to 600".into());
@@ -462,7 +450,7 @@ pub const SPECS: &[Spec] = &[
     Spec {
         name: "bench_audio_status",
         tier: Tier::ReadOnly,
-        desc: "The audio setup: which helper programs are installed (pw-dump, pw-play, pw-record, wpctl, espeak-ng, spd-say, piper, ...), the effective safety limits (volume cap, quiet volume, quiet hours and whether it is quiet now), the capture directory with its retention, the reserved list, and the aliases from the config. Opens no audio stream.",
+        desc: "The audio setup: which helper programs are installed (pw-dump, pw-play, pw-record, wpctl, espeak-ng, spd-say, piper, ...), the effective safety limits (volume cap, quiet volume, quiet hours and whether it is quiet now), the capture directory  the reserved list, and the aliases from the config. Opens no audio stream.",
         props: props!(r#""instrument":{"type":"string"}"#),
         required: &[],
     },
@@ -476,7 +464,7 @@ pub const SPECS: &[Spec] = &[
     Spec {
         name: "bench_audio_record",
         tier: Tier::ReadConfig,
-        desc: "RECORDS FROM A MICROPHONE OR LINE INPUT: it hears the room, and a recording can contain speech. Records `seconds` (0.1 up to the config's max_record_s, default 3) from an input (default: the configured verify input, else the one discovery found; the system default is never used, so name one or configure it) to a WAV file in the managed capture directory (private, retention-limited, never uploaded) and returns the file path, duration, sample rate, peak and RMS in dBFS, the number of clipped samples, the fraction of 20 ms windows under the silence threshold (default -60 dBFS), and an all_zero flag (a muted, disconnected or dead input records exact zeros). start_on_threshold_dbfs waits up to max_wait_s for the level to pass the threshold and keeps 0.1 s before it. monitor_of_output records what an output is playing (its monitor) instead of an input. Reserved devices are refused.",
+        desc: "RECORDS FROM A MICROPHONE OR LINE INPUT: it hears the room, and a recording can contain speech. Records `seconds` (0.1 up to the config's max_record_s, default 3) from an input (default: the configured verify input, else the one discovery found; the system default is never used, so name one or configure it) to a WAV file in the managed capture directory (private, kept, never uploaded) and returns the file path, duration, sample rate, peak and RMS in dBFS, the number of clipped samples, the fraction of 20 ms windows under the silence threshold (default -60 dBFS), and an all_zero flag (a muted, disconnected or dead input records exact zeros). start_on_threshold_dbfs waits up to max_wait_s for the level to pass the threshold and keeps 0.1 s before it. monitor_of_output records what an output is playing (its monitor) instead of an input. Reserved devices are refused.",
         props: props!(r#""instrument":{"type":"string"},"input":{"type":"string","description":"alias, node name or fragment; with monitor_of_output, an output"},"seconds":{"type":"number"},"sample_rate_hz":{"type":"integer"},"start_on_threshold_dbfs":{"type":"number"},"max_wait_s":{"type":"number"},"silence_threshold_dbfs":{"type":"number"},"label":{"type":"string"},"monitor_of_output":{"type":"boolean"}"#),
         required: &[],
     },
@@ -637,7 +625,7 @@ pub fn status(cfg: &Config, now_minute: u32) -> Value {
         "quiet_hours": cfg.quiet_hours.map(|q| json!({"start_minute": q.start, "end_minute": q.end})),
         "quiet_now": cfg.quiet_hours.is_some_and(|q| q.contains(now_minute)),
         "local_minute_of_day": now_minute,
-        "capture_dir": cfg.capture_dir(), "retention_files": cfg.retention_files, "retention_days": cfg.retention_days,
+        "capture_dir": cfg.capture_dir(),
         "max_record_s": cfg.max_record_s, "reserved": cfg.reserved,
         "alert_output": cfg.alert_output, "verify_input": cfg.verify_input,
         "outputs": cfg.outputs.iter().map(|(a, p)| json!({"alias": a, "match": p.matcher, "volume_cap": p.volume_cap})).collect::<Vec<_>>(),
@@ -859,8 +847,8 @@ mod tests {
         assert!(bad(
             r#","outputs":{"tv":{"match":"HDMI","volume_cap":"loud"}}"#
         ));
-        assert!(bad(r#","retention_days":"x""#));
-        assert!(bad(r#","retention_files":1.5"#));
+        // The removed retention keys are ignored: captured audio is never deleted.
+        assert!(!bad(r#","retention_days":"x","retention_files":1.5"#));
         assert!(bad(r#","tts_rate":"fast""#));
         assert!(bad(r#","tts_engine":5"#));
         assert!(!bad(r#","volume_cap":null"#));

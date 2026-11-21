@@ -24,7 +24,7 @@ what is listed and allowed:
           "alert_output": "auto", "verify_input": "auto",
           "volume_cap": 0.5, "quiet_volume": 0.15,
           "quiet_hours": {"start": "22:00", "end": "07:00"},
-          "capture_dir": "/var/lib/bench/audio", "retention_files": 50, "retention_days": 14, "max_record_s": 30,
+          "capture_dir": "/var/lib/bench/audio", "max_record_s": 30,
           "reserved": ["08bb:29c0"]}
 }}
 ```
@@ -32,7 +32,7 @@ what is listed and allowed:
 * `outputs`, `inputs`: aliases. The value is a name fragment (matched against the PipeWire node name and description), or an object with `match` and a `volume_cap` of its own. Persistent names are PipeWire node names; the numeric ids change when a device is re-plugged and are never stored.
 * `alert_output`, `verify_input`: `auto` or an alias. The automatic choice comes from the discovery result (heard by listening, not by name).
 * `volume_cap`: the highest volume any tool sets or plays at. `quiet_volume`: the volume for audible output during `quiet_hours` (local time; `"quiet_hours": false` turns them off). Both are in `wpctl` units, where the signal amplitude factor is the cube of the number (0.5 is about -18 dB).
-* `capture_dir` (default `<BENCH_MCP_OUT>/audio`), `retention_files`, `retention_days`, `max_record_s`.
+* `capture_dir` (default `<BENCH_MCP_OUT>/audio`), `max_record_s`.
 * `verify_actions`: named commands (a program and its arguments, no shell) that `bench_audio_verify` may run as its action, for example `{"relay": ["/usr/local/bin/click", "--once"]}`. The tool accepts only these names; it does not accept an arbitrary command line from the caller, because that would make the tool a remote shell. To verify the effect of another tool, call both in parallel and give `bench_audio_verify` a `delay_s`.
 * `tts_engine` (`auto`, `speech-dispatcher`, `espeak-ng`, `piper`), `tts_voice`, `tts_language` (default `en-us`), `tts_rate` (words per minute, default 160), `piper_model` (path of a Piper voice model).
 * `reserved`: more `vid:pid` values or node-name fragments to leave alone. `08bb:29c0` (the two PCM2900C codecs inside the VNWA 3E) is always reserved: the VNA (vector network analyzer) driver opens them exclusively, and a second opener breaks its sweeps. Reserved devices are listed and flagged, are refused by name everywhere, and are not even asked for their volume. The check uses the kernel's `/proc/asound/cardN/usbid`, never a card number, because a VNA power cycle renumbers the cards.
@@ -59,7 +59,7 @@ what is listed and allowed:
 
 ## Verification
 
-`bench_audio_verify` records `calibrate_s` of ambient sound first (the noise floor is the 90th percentile of 5 ms frame levels), then runs the action and listens for `window_s`. A sound event is a stretch of frames `min_over_noise_db` (default 10) over that floor. Checks: sound present, `min_peak_dbfs`, dominant frequency (`expect_hz` with `tolerance_hz`, default 5 %, or `freq_min_hz` to `freq_max_hz`), `min_duration_s`, `max_duration_s`, `expect_beeps` or `min_beeps`, and `reference` (spectral correlation of the sound against a stored recording, `min_similarity` default 0.8; `save_reference: NAME` stores the window as `ref-NAME.wav`, which retention never deletes). `expect_silence: true` verifies that nothing sounded. An input that records exact zeros is reported dead and never passes, not even for silence. A spectrogram image is not produced; the spectrum peaks are in the evidence.
+`bench_audio_verify` records `calibrate_s` of ambient sound first (the noise floor is the 90th percentile of 5 ms frame levels), then runs the action and listens for `window_s`. A sound event is a stretch of frames `min_over_noise_db` (default 10) over that floor. Checks: sound present, `min_peak_dbfs`, dominant frequency (`expect_hz` with `tolerance_hz`, default 5 %, or `freq_min_hz` to `freq_max_hz`), `min_duration_s`, `max_duration_s`, `expect_beeps` or `min_beeps`, and `reference` (spectral correlation of the sound against a stored recording, `min_similarity` default 0.8; `save_reference: NAME` stores the window as `ref-NAME.wav`, which is never deleted (as no recording is)). `expect_silence: true` verifies that nothing sounded. An input that records exact zeros is reported dead and never passes, not even for silence. A spectrogram image is not produced; the spectrum peaks are in the evidence.
 
 ## Audio path discovery
 
@@ -86,7 +86,7 @@ espeak-ng and Piper write a WAV file that is played on the chosen output node, s
 * In quiet hours (default 22:00 to 07:00, local time) audible operations use the quiet volume. `bench_audio_loopback` accepts `urgent: true` to use the cap.
 * Generated sound is limited to `max_play_s` (default 10 s); recordings to `max_record_s` (default 30 s).
 * `bench_audio_play` plays files only from the managed capture directory (no paths outside it, no symbolic links out of it).
-* Recordings are written to the capture directory with owner-only permissions, are pruned by `retention_files` and `retention_days`, and are never uploaded. A recording from a microphone can contain speech.
+* Recordings are written to the capture directory with owner-only permissions, are kept (the server never deletes them) and are never uploaded. A recording from a microphone can contain speech.
 * Reserved devices (the VNWA codecs) are refused by name in every tool before any stream is opened.
 
 ## Tests
@@ -104,7 +104,7 @@ Tests read a recording of this development machine's PipeWire graph in `tests/au
 * Was a tone heard: over the noise before it, over neighbouring frequencies, with onset and offset; dead input and noise bursts.
 * The volume limits: cap, per-output cap, quiet hours, urgent.
 * The volume guard lowers, unmutes and restores, and refuses reserved devices before asking anything.
-* Managed files only, and retention.
+* Managed files only.
 * Record, play, loopback and volume tools end to end on a virtual sink and source.
 * Events: thresholds, merging, pitch, clicks, quiet rooms.
 * Morse decoding of keyed tones with the speed.

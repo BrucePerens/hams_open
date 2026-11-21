@@ -10,7 +10,7 @@ verified: code only, 2026-10-29
 
 * Volume is the wpctl scale; the signal amplitude factor is its cube, so 0.5 is about -18 dB. The cap is `volume_cap` (default 0.5), per output no higher than that output's own cap. In quiet hours (default 22:00 to 07:00 local) the limit is `quiet_volume` (default 0.15), except for an `urgent` request.
 * Generated tones are at most `max_play_s` (default 10 s) and at most -1 dBFS (default -12); recordings at most `max_record_s` (default 30 s); an alert at most 30 s in all and 5 repeats; speech at most 600 characters.
-* Files for playback come only from the managed capture directory. Recordings are kept `retention_files` (default 50) files and `retention_days` (default 14) days.
+* Files for playback come only from the managed capture directory. Recordings are kept; the server never deletes them.
 * Levels are dBFS of the capture, not sound pressure: no microphone is calibrated. "Heard" means a tone's level at its exact frequency was over the noise before it and over neighbouring frequencies, by thresholds in the result.
 * A muted or disconnected input records exact zeros; the tools report `all_zero` and never pass such an input.
 * The latency from `bench_audio_loopback` includes process start-up and the graph's buffering; it is not the device latency.
