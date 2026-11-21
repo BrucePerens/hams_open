@@ -7,7 +7,7 @@
 # "CI-V Transceive" are set in the radio's own menu and must match what radioctl is told.
 # Hamlib modes with no entry in radioctl's mode vocabulary, not listed: PKTLSB PKTUSB FM-D AM-D PSK PSKR.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "split", "rit-xit", "filter", "levels", "identify", "read-meters", "repeater"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "split", "rit-xit", "filter", "levels", "identify", "read-meters", "repeater", "receivers"]
 
 [rig]
 id = "icom-ic-7760"
@@ -19,6 +19,7 @@ address = 0xB2
 controller = 0xE0
 model_id = 0xB2
 echo = false
+main_sub = "full"
 
 [levels]
 attenuator_db = [6, 12, 18]
@@ -113,6 +114,11 @@ verified = { state = "unverified" }
 [[facts]]
 key = "defaults.*"
 provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: starting frequency and mode of a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.main_sub"
+provenance = { kind = "manual", reference = "Icom IC-7760 CI-V Reference Guide, file IC-7760_ENG_CI-V_2.pdf (from /storage/manuals/icom/IC-7760), sha256 4a606129a6eb4f23c5e7db339d4fc530e96e092335266bda02720c38580bcb93: command table, PDF p. 4: command 07 sub commands B0 exchange, B1 equalize, C0 dualwatch off, C1 on, C2 send or read (00/01), D0 select the Main band, D1 select the Sub band, D2 send or read (00 Main, 01 Sub)", note = "`SelectReceiver` sends 07 D0 or 07 D1, `GetReceiver` 07 D2, `SetDualWatch` 07 C0 or C1, `GetDualWatch` 07 C2. Exchange and equalize are not used. Read from the manual's command table by Bruce's 2026-11-12 decision; manual on the box since 2026-11-21. Unverified on a radio." }
 verified = { state = "unverified" }
 
 [[facts]]

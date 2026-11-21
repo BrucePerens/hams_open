@@ -10,7 +10,7 @@
 # so `second-vfo` and `rit-xit` are not claimed here although Hamlib 4.6.2 claims a second VFO for it (`x25x26_always`). The Main/Sub radios swap bands with 07 B0 and select the sub band with 07 D1.
 # A radio with newer firmware than the manual may differ. Icom's download endpoint is excluded by robots.txt; read for facts under Bruce Perens' decision of 2026-10-31.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "split", "filter", "levels", "identify", "read-meters", "repeater"]
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "split", "filter", "levels", "identify", "read-meters", "repeater", "receivers"]
 
 [rig]
 id = "icom-ic-7600"
@@ -22,6 +22,7 @@ address = 0x7A
 controller = 0xE0
 model_id = 0x7A
 echo = false
+main_sub = "full"
 
 [levels]
 attenuator_db = [6, 12, 18]
@@ -107,6 +108,11 @@ verified = { state = "unverified" }
 [[facts]]
 key = "defaults.*"
 provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: starting frequency and mode of a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.main_sub"
+provenance = { kind = "manual", reference = "Icom IC-7600 instruction manual, file IC-7600_ENG_4.pdf (from /storage/manuals/icom/IC-7600), sha256 5ff4418a1a39d567f29097acc55afc86843e244403d032096c014955a06891b7: CI-V command table, PDF p. 169: command 07 sub commands B0 exchange, B1 equalize, C0 dualwatch off, C1 on, C2 send or read (00 off, 01 on), D0 select main band, D1 select sub band, D2 send or read (00 main, 01 sub)", note = "`SelectReceiver` sends 07 D0 or 07 D1, `GetReceiver` 07 D2, `SetDualWatch` 07 C0 or C1, `GetDualWatch` 07 C2. Exchange and equalize are not used. Read from the manual's command table by Bruce's 2026-11-12 decision; manual on the box since 2026-11-21. Unverified on a radio." }
 verified = { state = "unverified" }
 
 [[facts]]

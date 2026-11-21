@@ -552,7 +552,9 @@ impl VirtualRig {
                 self.civ_sub_selected = data == [0xD1];
                 CivReply::Ok
             }
-            (0x07, [0xD2]) if params.main_sub == CivMainSub::Full => {
+            (0x07, [0xD2])
+                if matches!(params.main_sub, CivMainSub::Full | CivMainSub::SelectRead) =>
+            {
                 CivReply::Data(0x07, vec![0xD2, u8::from(self.civ_sub_selected)])
             }
             (0x07, [0xC0 | 0xC1]) if params.main_sub == CivMainSub::Full => {
