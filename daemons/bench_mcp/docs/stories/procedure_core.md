@@ -87,6 +87,12 @@ The flags that matter for safety are `confirm_full_tier` (a run with tier `full`
 
 See also: test `procedure/tests.rs` (cites `proc_flag_arg`); `proc_number_arg`, `proc_run_params`, `proc_call`.
 
+### `proc_version_arg` [@ANCHOR: proc_version_arg]
+
+Reads the optional `version` tool argument of `bench_proc_run` (by name), `bench_proc_load` and `bench_proc_delete`. Signature: `fn version_arg(args: &Value) -> Result<Option<u64>, String>`. Absent or JSON `null` gives `None` (the latest version, or for delete every version); a whole number gives `Some(n)`; anything else, such as the string `"2"` or `1.5`, is the error `version must be a whole number`, so a mistyped version can never turn into "all versions". Pure.
+
+See also: test `procedure/tests.rs` (cites `proc_version_arg`); `proc_flag_arg`, `proc_run_params`.
+
 ### `proc_run_params` [@ANCHOR: proc_run_params]
 
 Turns the arguments of `bench_proc_run` into the `run::Params` the supervisor starts from, checking every value against the runner's limits so nothing reaches the supervisor unchecked. Called by `run_tool`. Signature: `fn run_params(inst: &Instrument, args: &Value) -> Result<run::Params, String>`; `inst` is the runner entry (borrowed) whose `procedure` config and `tier` give the limits, `args` the tool arguments (borrowed; the source and arguments are copied).

@@ -285,6 +285,7 @@ fn number(args: &Value, key: &str, default: f64, lo: f64, hi: f64) -> Result<f64
 /// The `version` argument: absent or null is "the latest" (or, for delete, every version); a present value must be a whole
 /// number, so a mistyped `"2"` can never turn into "all versions".
 fn version_arg(args: &Value) -> Result<Option<u64>, String> {
+    // [@ANCHOR: proc_version_arg]
     match args.get("version") {
         None | Some(Value::Null) => Ok(None),
         Some(v) => v
