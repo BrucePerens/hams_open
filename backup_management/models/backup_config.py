@@ -301,6 +301,21 @@ class BackupConfig(models.Model):
         jobs = self.env["backup.job"]
         created_jobs = []
 
+        # _crypt_field reads a credential it cannot decrypt (key changed or lost, damaged
+        # ciphertext) as the "***ERROR***" placeholder. Refuse before any job exists rather than
+        # hand the worker the placeholder as a password. Only refuses; no key is touched.
+        for rec in self:
+            for fname in ("secret_key", "kopia_password"):
+                if rec[fname] == "***ERROR***":
+                    raise UserError(
+                        _(
+                            "Backup configuration '%(name)s': the stored %(field)s cannot be decrypted "
+                            "with the current backup encryption key. Nothing was queued.",
+                            name=rec.name,
+                            field=rec._fields[fname].string or fname,
+                        )
+                    )
+
         for rec in self:
             if rec.engine == "kopia" and rec.storage_type == "local":
                 validate_backup_path(rec.target_path)

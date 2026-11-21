@@ -101,3 +101,19 @@ class TestBackupConfigRefusals(HamsTransactionCase):
         snap = self.env["backup.snapshot"].search([("config_id", "=", config.id), ("snapshot_id", "=", "20261115-100000F")])
         self.assertEqual(len(snap), 1)
         self.assertFalse(snap.start_time)
+
+    def test_publish_refuses_a_credential_that_reads_as_the_error_placeholder(self):
+        # Tests [@ANCHOR: backup_management:COMM_publish_to_worker]
+        os.environ["ODOO_BACKUP_CRYPTO_KEY"] = Fernet.generate_key().decode("utf-8")
+        config = self._config(secret_key="s3-secret", kopia_password="kopia-pw")
+        config.flush_recordset()
+        os.environ["ODOO_BACKUP_CRYPTO_KEY"] = Fernet.generate_key().decode("utf-8")
+        config.invalidate_recordset()
+        self.assertEqual(config.kopia_password, "***ERROR***")
+        jobs_before = self.env["backup.job"].search_count([("config_id", "=", config.id)])
+        postcommit_before = len(self.env.cr.postcommit._funcs)
+        with self.assertRaisesRegex(UserError, "cannot be decrypted") as ctx:
+            config._publish_to_worker("kopia")
+        self.assertNotIn("***ERROR***", str(ctx.exception))
+        self.assertEqual(self.env["backup.job"].search_count([("config_id", "=", config.id)]), jobs_before)
+        self.assertEqual(len(self.env.cr.postcommit._funcs), postcommit_before)
