@@ -893,14 +893,14 @@ pub fn stop_all(only: Option<&std::path::Path>) {
 pub fn recover_now(insts: &[Instrument]) -> Vec<Value> {
     // [@ANCHOR: proc_run_recover_now]
     let mut found = Vec::new();
-    let mut roots: BTreeMap<PathBuf, Config> = BTreeMap::new();
+    let mut roots: std::collections::BTreeSet<PathBuf> = std::collections::BTreeSet::new();
     for i in insts
         .iter()
         .filter(|i| i.kind == crate::config::Kind::Procedure)
     {
-        roots.insert(store::root(&i.procedure), i.procedure.clone());
+        roots.insert(store::root(&i.procedure));
     }
-    for (root, cfg) in roots {
+    for root in roots {
         let Ok(rd) = std::fs::read_dir(root.join("runs")) else {
             continue;
         };
