@@ -15,7 +15,7 @@ This module enables:
     "author": "Bruce Perens K6BP",
     "website": "https://perens.com/",
     "category": "Website",
-    "version": "0.11",
+    "version": "0.12",
     "license": "AGPL-3",
     "depends": [
         "base",
