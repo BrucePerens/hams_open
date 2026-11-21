@@ -87,6 +87,18 @@ async fn the_power_meter_is_a_fraction_and_watts_only_with_a_calibration() {
     assert_eq!(client.ask("T 0").await, "RPRT 0\n");
     daemon.stop().await;
 
+    // The IC-9700 CI-V guide (IC-9700_ENG_CI-V_4.pdf, PDF page 5) prints 0 = 0%, 143 = 50%, 213 = 100%
+    // of the 100 W rating (144 and 430 MHz): keyed raw 128 is 128/143 of 50 W.
+    let daemon = start(&config_text("", "ic9700", "icom-ic-9700.toml", true, false)).await;
+    let mut client = Client::connect(&daemon).await;
+    assert_eq!(client.ask("T 1").await, "RPRT 0\n");
+    let rig = daemon.rigs[0].virtual_control.clone().expect("virtual rig");
+    eventually("the virtual rig keyed", || rig.state().ptt).await;
+    wait_for(&mut client, "l RFPOWER_METER_WATTS", 128.0 / 143.0 * 50.0).await;
+    wait_for(&mut client, "l RFPOWER_METER", 128.0 / 143.0 * 0.5).await;
+    assert_eq!(client.ask("T 0").await, "RPRT 0\n");
+    daemon.stop().await;
+
     // The IC-7850/7851 manual prints scale points (0 = 0 W, 143 = 100 W, 213 = 200 W): the
     // keyed raw 128 is 128/143 of 100 W, and the fraction is of the 200 W full scale.
     let daemon = start(&config_text("", "ic7851", "icom-ic-7851.toml", true, false)).await;
