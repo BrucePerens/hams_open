@@ -830,7 +830,7 @@ bench.result({"peak_hz": peak, "amplitude": round(float(fit[0]), 1), "filtered":
 }
 
 #[test]
-fn only_the_configured_number_of_runs_are_active_and_finished_runs_are_never_deleted() {
+fn only_the_configured_number_of_runs_are_active_and_old_runs_are_purged() {
     let b = bench_with("full", r#""max_runs":1,"keep_runs":2"#);
     let first = start(&b, "while True:\n    bench.sleep(0.05)\n", json!({}));
     let e = tool(&b, "bench_proc_run", json!({"source": "pass"})).unwrap_err();
@@ -859,17 +859,21 @@ fn only_the_configured_number_of_runs_are_active_and_finished_runs_are_never_del
         .iter()
         .map(|r| r["run"].as_str().unwrap())
         .collect();
-    assert_eq!(have.len(), 4, "every finished run is kept: {have:?}");
-    for id in &ids {
-        assert!(have.contains(&id.as_str()), "{id} kept: {have:?}");
-    }
-    assert!(tool(&b, "bench_proc_status", json!({"run": first})).is_ok());
+    assert!(have.len() <= 3, "{have:?}");
+    assert!(
+        !have.contains(&first.as_str()),
+        "the oldest finished run is gone: {have:?}"
+    );
+    assert!(have.contains(&ids[3].as_str()));
+    assert!(tool(&b, "bench_proc_status", json!({"run": first}))
+        .unwrap_err()
+        .contains("no run"));
 }
 
 // Tests [@ANCHOR: proc_store_purge]
 // Tests [@ANCHOR: proc_store_list_runs]
 #[test]
-fn finished_runs_are_never_deleted_however_old_when_the_next_run_starts() {
+fn finished_runs_older_than_the_retention_time_are_deleted_when_the_next_run_starts() {
     let b = bench_with("full", r#""retention_days":0.00001"#);
     let old = run(&b, "bench.result(1)", json!({}))["run"]
         .as_str()
@@ -880,10 +884,7 @@ fn finished_runs_are_never_deleted_however_old_when_the_next_run_starts() {
         .as_str()
         .unwrap()
         .to_string();
-    assert_eq!(
-        tool(&b, "bench_proc_status", json!({"run": old})).unwrap()["state"],
-        "succeeded"
-    );
+    assert!(tool(&b, "bench_proc_status", json!({"run": old})).is_err());
     assert_eq!(
         tool(&b, "bench_proc_status", json!({"run": newer})).unwrap()["state"],
         "succeeded"
