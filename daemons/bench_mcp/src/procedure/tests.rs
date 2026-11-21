@@ -132,6 +132,16 @@ fn the_runner_entry_is_read_with_defaults_and_bad_values_are_refused() {
     );
 }
 
+// Tests [@ANCHOR: proc_version_arg]
+#[test]
+fn the_version_argument_is_absent_or_a_whole_number() {
+    assert_eq!(version_arg(&json!({})), Ok(None));
+    assert_eq!(version_arg(&json!({"version": null})), Ok(None));
+    assert_eq!(version_arg(&json!({"version": 3})), Ok(Some(3)));
+    assert!(version_arg(&json!({"version": "2"})).is_err());
+    assert!(version_arg(&json!({"version": 1.5})).is_err());
+}
+
 // Tests [@ANCHOR: proc_tool_defs]
 // Tests [@ANCHOR: proc_instrument]
 // Tests [@ANCHOR: proc_call]
