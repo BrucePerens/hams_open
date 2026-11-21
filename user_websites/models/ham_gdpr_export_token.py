@@ -23,6 +23,9 @@ TOKEN_EXPIRY_MINUTES = 5
 EXPORT_PAGE_ROWS = 5000
 EXPORT_WINDOW_MINUTES = 60
 
+# Rows the daily vacuum deletes per page.
+TOKEN_VACUUM_PAGE = 1000
+
 
 # [@ANCHOR: user_websites:COMM_gdpr_token_rejected]
 # Verified by [@ANCHOR: test_gdpr_export_token_unknown_rejected]
@@ -149,10 +152,22 @@ class HamGdprExportToken(models.Model):
         # # Verified by [@ANCHOR: test_gdpr_export_token_single_use]
         return self.env["res.users"].browse(user_id)
 
-    # # Verified by [@ANCHOR: test_gdpr_token_vacuum]
-    # Token rows are never deleted (Bruce, 2026-11-20: stored information is never purged). A token is refused by
-    # _consume() once it is used or older than TOKEN_EXPIRY_MINUTES, and by export_page() once older than
-    # EXPORT_WINDOW_MINUTES; both read the row's create_date and leave the row in place.
+    @api.model
+    # [@ANCHOR: user_websites:gdpr_token_vacuum]
+    def _cron_vacuum_tokens(self):
+        """Daily: deletes every token older than a day (a token is dead after TOKEN_EXPIRY_MINUTES, used or
+        not). Pages by id, a page at a time, until nothing old is left, so no row is skipped by a cap."""
+        # Verified by [@ANCHOR: test_gdpr_token_vacuum]
+        cutoff = fields.Datetime.now() - timedelta(days=1)
+        last_id = 0
+        while True:
+            page = self.search(
+                [("id", ">", last_id), ("create_date", "<", cutoff)], order="id", limit=TOKEN_VACUUM_PAGE
+            )
+            if not page:
+                break
+            last_id = page.ids[-1]
+            page.unlink()
 
     @api.model
     # [@ANCHOR: user_websites:COMM_gdpr_consume_and_export]
