@@ -83,9 +83,7 @@ pub fn run_dir(cfg: &Config, id: &str) -> Result<PathBuf, String> {
     if d.is_dir() {
         Ok(d)
     } else {
-        Err(format!(
-            "no run {id} (see bench_proc_list; finished runs are deleted after the retention time)"
-        ))
+        Err(format!("no run {id} (see bench_proc_list)"))
     }
 }
 
@@ -244,42 +242,6 @@ pub fn read_stream(path: &Path, from: u64, max: usize) -> (String, u64, bool) {
 pub fn read_tail(path: &Path, max: usize) -> String {
     let len = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     read_stream(path, len.saturating_sub(max as u64), max).0
-}
-
-/// Deletes finished runs older than the retention time and, beyond `keep_runs`, the oldest finished ones.
-pub fn purge(cfg: &Config) -> usize {
-    // [@ANCHOR: proc_store_purge]
-    let runs = root(cfg).join("runs");
-    let Ok(rd) = std::fs::read_dir(&runs) else {
-        return 0;
-    };
-    let mut finished: Vec<(f64, PathBuf)> = Vec::new();
-    for e in rd.flatten() {
-        let Ok(st) = read_json(&e.path().join("state.json")) else {
-            continue;
-        };
-        // A state file without a state is not known to be finished: leave it.
-        let Some(state) = st.get("state").and_then(|s| s.as_str()) else {
-            continue;
-        };
-        if matches!(
-            state,
-            "starting" | "running" | "waiting_operator" | "cancelling"
-        ) {
-            continue;
-        }
-        let ended = st.get("ended_unix").and_then(|t| t.as_f64()).unwrap_or(0.0);
-        finished.push((ended, e.path()));
-    }
-    finished.sort_by(|a, b| b.0.total_cmp(&a.0));
-    let cutoff = now_unix() - cfg.retention_days * 86400.0;
-    let mut removed = 0;
-    for (i, (ended, path)) in finished.iter().enumerate() {
-        if (*ended < cutoff || i >= cfg.keep_runs) && std::fs::remove_dir_all(path).is_ok() {
-            removed += 1;
-        }
-    }
-    removed
 }
 
 /// Summaries of the runs on disk, newest first (up to `limit`).

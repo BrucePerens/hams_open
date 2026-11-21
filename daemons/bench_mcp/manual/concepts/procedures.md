@@ -18,7 +18,7 @@ A long or repetitive job (a sweep series with retries, a soak round, "step the g
 4. [bench_proc_result](tools/bench_proc_result): the final value, or the structured failure report.
 5. [bench_proc_cancel](tools/bench_proc_cancel) stops a run; [bench_proc_list](tools/bench_proc_list) lists runs.
 
-States: `starting`, `running`, `cancelling`, `succeeded`, `failed`, `cancelled`, `timed_out`. Everything is kept in the managed directory (`dir` of the config entry) for `retention_days`, so the run id and its results stay readable after the run ended and after a restart of the server.
+States: `starting`, `running`, `cancelling`, `succeeded`, `failed`, `cancelled`, `timed_out`. Everything is kept in the managed directory (`dir` of the config entry) and never deleted by the server (the user clears the disk), so the run id and its results stay readable after the run ended and after a restart of the server.
 
 ## What the program sees
 

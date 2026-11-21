@@ -12,7 +12,7 @@ use super::Config;
 use super::{locks, safe};
 use crate::config::{Instrument, Tier};
 use serde_json::{json, Map, Value};
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Sender};
@@ -775,7 +775,6 @@ pub fn start(
     p: Params,
 ) -> Result<String, String> {
     // [@ANCHOR: proc_run_start]
-    store::purge(cfg);
     let (id, dir) = store::new_run_dir(cfg)?;
     let started = store::now_unix();
     let index = ToolIndex::build(insts, p.cap);
@@ -894,14 +893,14 @@ pub fn stop_all(only: Option<&std::path::Path>) {
 pub fn recover_now(insts: &[Instrument]) -> Vec<Value> {
     // [@ANCHOR: proc_run_recover_now]
     let mut found = Vec::new();
-    let mut roots: BTreeMap<PathBuf, Config> = BTreeMap::new();
+    let mut roots: std::collections::BTreeSet<PathBuf> = std::collections::BTreeSet::new();
     for i in insts
         .iter()
         .filter(|i| i.kind == crate::config::Kind::Procedure)
     {
-        roots.insert(store::root(&i.procedure), i.procedure.clone());
+        roots.insert(store::root(&i.procedure));
     }
-    for (root, cfg) in roots {
+    for root in roots {
         let Ok(rd) = std::fs::read_dir(root.join("runs")) else {
             continue;
         };
@@ -938,9 +937,7 @@ pub fn recover_now(insts: &[Instrument]) -> Vec<Value> {
             let result = json!({"run": id, "state": "lost", "ok": false, "value": null, "failure": failure, "emitted": emitted,
                 "safe_state": results, "safe_state_ok": ok, "calls": st["calls"], "hook_violations": []});
             let _ = store::write_json(&dir.join("result.json"), &result);
-            found.push(
-                json!({"run": id, "safe_state": results, "retention_days": cfg.retention_days}),
-            );
+            found.push(json!({"run": id, "safe_state": results}));
         }
     }
     found

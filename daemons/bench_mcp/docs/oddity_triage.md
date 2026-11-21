@@ -20,8 +20,7 @@ itself wrong. PR numbers are hams_open pull requests.
 | `bench_gla_capture` always refuses `pull` up/down (`confirm` not forwarded, not in schema) | bug, fixed | 1701 |
 | NanoVNA `stop_hz` defaults to `start_hz` then always fails `check_range` | dead default, now required with a clear message | 1701 |
 | `stderr_tail` is the first 2000 bytes, not the last | bug, fixed | 1702 |
-| purge deletes a run whose `state.json` has no `state` | bug, fixed (left alone) | 1702 |
-| purge: missing `ended_unix` counts as 0; `retention_days` "not validated" | first intended; second was wrong documentation (config validates 0 to 3650) | 1702 |
+| the server deleted old procedure runs (`purge`, `retention_days`, `keep_runs`) | removed: the server never deletes files on its own, the user clears the disk; old configs with the keys still load and the keys are ignored | 3088 |
 | runtime failure context: "NaN" replaced inside strings; infinity crashed `Wire.send` | bug, fixed (`finite`) | 1702 |
 | `clip_around` sliced the original text at a byte offset of the lower-cased copy | bug, fixed (panic or off-window with U+0130) | 1703 |
 | checklist scans failing on main: literal credential-word list and a serial-shaped example in two stories | doc bug, fixed | 1703 |
