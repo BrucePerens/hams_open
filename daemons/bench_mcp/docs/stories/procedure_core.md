@@ -262,7 +262,7 @@ See also: test `procedure/tests.rs` (cites `proc_safe_run`); `proc_safe_action_f
 
 ## Saved procedures (`saved.rs`)
 
-Saved procedures live under `<managed dir>/saved/<name>/`: `meta.json` (`{name, description, tier, versions: [{version, saved_unix, bytes, tier, note}]}`) and one source file `v<N>.py` per version. `KEEP_VERSIONS` (20) versions are kept; `MAX_SOURCE` is 262144 bytes. The three shipped examples are also listed and loadable under the reserved `example-` names, but are never on disk.
+Saved procedures live under `<managed dir>/saved/<name>/`: `meta.json` (`{name, description, tier, versions: [{version, saved_unix, bytes, tier, note}]}`) and one source file `v<N>.py` per version. Every version is kept (none is pruned); `MAX_SOURCE` is 262144 bytes. The three shipped examples are also listed and loadable under the reserved `example-` names, but are never on disk.
 
 ### `proc_saved_valid_name` [@ANCHOR: proc_saved_valid_name]
 

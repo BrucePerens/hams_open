@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Saved procedures: named, reusable programs in the managed directory (`saved/<name>/`) with versions, a description and the
-//! tier they need. Saving under an existing name adds a version; the last `KEEP_VERSIONS` are kept. The declared tier is checked
+//! tier they need. Saving under an existing name adds a version; all versions are kept. The declared tier is checked
 //! against the tools the source names as string literals, so a procedure cannot claim a lower tier than it uses.
 
 use super::examples;
@@ -10,8 +10,6 @@ use crate::config::{Instrument, Tier};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
-/// How many versions of one procedure are kept.
-pub const KEEP_VERSIONS: usize = 20;
 /// The largest source of a saved procedure, bytes.
 pub const MAX_SOURCE: usize = 262_144;
 
@@ -99,11 +97,6 @@ pub fn save(
     std::fs::write(dir.join(format!("v{version}.py")), source).map_err(|e| e.to_string())?;
     let mut versions = versions;
     versions.push(json!({"version": version, "saved_unix": store::now_unix(), "bytes": source.len(), "tier": tier, "note": note}));
-    while versions.len() > KEEP_VERSIONS {
-        let old = versions.remove(0);
-        let _ =
-            std::fs::remove_file(dir.join(format!("v{}.py", old["version"].as_u64().unwrap_or(0))));
-    }
     meta["versions"] = Value::Array(versions);
     if !description.is_empty() || meta["description"].is_null() {
         meta["description"] = json!(description);

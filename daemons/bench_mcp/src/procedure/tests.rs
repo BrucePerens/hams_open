@@ -1529,7 +1529,7 @@ fn saved_procedures_have_versions_a_declared_tier_and_run_by_name() {
 
 // Tests [@ANCHOR: proc_saved_save]
 #[test]
-fn a_saved_procedure_is_run_by_name_with_its_declared_tier_and_old_versions_are_pruned() {
+fn a_saved_procedure_is_run_by_name_with_its_declared_tier_and_no_version_is_pruned() {
     let b = bench();
     let src = "bench.result(bench.call('bench_example_status', instrument='gen')['model'])\n";
     tool(
@@ -1582,18 +1582,10 @@ fn a_saved_procedure_is_run_by_name_with_its_declared_tier_and_old_versions_are_
     }
     let l = tool(&b, "bench_proc_load", json!({"name": "model"})).unwrap();
     assert_eq!(l["version"], json!(26));
-    assert_eq!(
-        l["versions"].as_array().unwrap().len(),
-        saved::KEEP_VERSIONS
-    );
+    assert_eq!(l["versions"].as_array().unwrap().len(), 26, "no version is pruned");
     assert!(
-        tool(
-            &b,
-            "bench_proc_load",
-            json!({"name": "model", "version": 1})
-        )
-        .is_err(),
-        "the oldest versions were pruned"
+        tool(&b, "bench_proc_load", json!({"name": "model", "version": 1})).is_ok(),
+        "the oldest version is kept"
     );
     // Deleting needs a confirm; one version goes, then all.
     let e = tool(
