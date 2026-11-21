@@ -212,7 +212,7 @@ pub const SPECS: &[Spec] = &[
     Spec {
         name: "bench_proc_save",
         tier: Tier::ReadConfig,
-        desc: "PROCEDURE RUNNER: save a program under a name for later runs (bench_proc_run with `name`), as a new version of that name (the last 20 are kept). The source must compile, and the declared `tier` must be at least the tier of every tool the source names as a string literal in bench.call. Nothing is run.",
+        desc: "PROCEDURE RUNNER: save a program under a name for later runs (bench_proc_run with `name`), as a new version of that name (every version is kept). The source must compile, and the declared `tier` must be at least the tier of every tool the source names as a string literal in bench.call. Nothing is run.",
         props: r#""instrument":{"type":"string","description":"the procedure runner entry of the bench config; may be left out when there is one"},"name":{"type":"string","description":"1 to 60 characters of a-z, 0-9, _ and -, starting with a letter or digit"},"source":{"type":"string","description":"the Python source (at most 256 KiB)"},"description":{"type":"string","description":"what it does and which arguments (bench.args) it takes"},"tier":{"type":"string","enum":["read_only","read_config","full"],"description":"the highest tier of tool the procedure calls"},"note":{"type":"string","description":"what changed in this version"}"#,
         required: &["name", "source", "tier"],
     },
