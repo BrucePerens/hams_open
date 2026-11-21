@@ -12,7 +12,7 @@ use super::Config;
 use super::{locks, safe};
 use crate::config::{Instrument, Tier};
 use serde_json::{json, Map, Value};
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::fs::File;
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Sender};
