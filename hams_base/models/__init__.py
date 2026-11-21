@@ -10,4 +10,3 @@ from . import website
 from . import website_visitor
 from . import res_device_log
 from . import res_users_log
-from . import mail_notification
