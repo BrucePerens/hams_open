@@ -84,7 +84,7 @@ class FakeCloudflare:
             return False, "API Error"
         return True, [dict(r) for r in self.records if r["zone"] == zone_id and r["name"] == name]
 
-    def create_dns_record(self, zone_id, payload, token):
+    def create_dns_record(self, zone_id, payload, token, **kw):
         self.calls.append(("create", zone_id, dict(payload)))
         record = dict(payload, id=_id(), zone=zone_id)
         self.records.append(record)
@@ -95,7 +95,7 @@ class FakeCloudflare:
         self.records = [r for r in self.records if r["id"] != record_id]
         return True, record_id
 
-    def update_dns_record(self, zone_id, record_id, payload, token):
+    def update_dns_record(self, zone_id, record_id, payload, token, **kw):
         self.calls.append(("update", zone_id, record_id, dict(payload)))
         for record in self.records:
             if record["id"] == record_id:
