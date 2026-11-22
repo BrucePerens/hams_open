@@ -266,6 +266,7 @@ def ensure_executable(cmd_name):
 CERTBOT_MAX_REPORTED_DOMAINS = 10
 
 
+# [@ANCHOR: pager_duty:dig_addresses]
 def _dig_addresses(dig, domain, rtype):
     """Ask the resolver for one record type. Returns (status, addresses): status is the DNS response code
     (NOERROR, NXDOMAIN, SERVFAIL, ...) or "TIMEOUT" when no server answered."""

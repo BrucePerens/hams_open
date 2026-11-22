@@ -4,6 +4,7 @@
     python3 pager_duty/daemon/test_certbot_domain_dns.py
 """
 # Tests [@ANCHOR: pager_duty:certbot_domain_problem]
+# Tests [@ANCHOR: pager_duty:dig_addresses]
 import os
 import sys
 import unittest
