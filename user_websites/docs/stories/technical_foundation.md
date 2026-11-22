@@ -298,8 +298,8 @@ the description cut to 5000 characters. Tested by `test_tour_violation_report`.
 ### `COMM_api_domains` [@ANCHOR: user_websites:COMM_api_domains]
 
 `GET /api/v1/user_websites/domains` (public route, no CSRF; the caller must send the shared secret `pager_duty.domain_api_identity` in the `X-Api-Identity` header, else 401) returns `{"domains": [...]}` for the certificate
-automation: every `edge.routing.domain` name plus, when `ham_dns` is installed, every `ham.dns.zone` name,
-de-duplicated. Reads run as the module's service account and page through the tables by id, 5000 rows at a
+automation: every `edge.routing.domain` name plus, when `ham_dns` is installed, every `ham.dns.zone` name
+except personal alias zones (`<callsign>.hams.com`: DNS-only, never served from hams1), de-duplicated. Reads run as the module's service account and page through the tables by id, 5000 rows at a
 time, so no domain past the 5000th is silently left off (which would quietly stop its certificate renewing).
 A failure reading the DNS zones is logged and the routing domains are still returned. The handler is `api_domains` in
 `controllers/user_websites_api.py`; it takes no arguments and only answers GET. The result is a JSON object with HTTP 200;
