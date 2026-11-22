@@ -56,7 +56,7 @@ The descriptions are the files `rigs/*.toml` (<!--count:description_files-->293<
 | `read-mode` | the mode and passband can be read | <!--count:cap_read_mode-->248<!--/count--> |
 | `set-mode` | the mode and passband can be set | <!--count:cap_set_mode-->266<!--/count--> |
 | `read-ptt` | the keyed state can be read | <!--count:cap_read_ptt-->127<!--/count--> |
-| `set-ptt` | the radio can be keyed and unkeyed (a transmitting capability: the transmit gate applies) | <!--count:cap_set_ptt-->166<!--/count--> |
+| `set-ptt` | the radio can be keyed and unkeyed (a transmitting capability: the transmit gate applies) | <!--count:cap_set_ptt-->167<!--/count--> |
 | `read-signal` | the S-meter reading | <!--count:cap_read_signal-->100<!--/count--> |
 | `read-power` | the transmit power reading | <!--count:cap_read_power-->38<!--/count--> |
 | `send-cw` | text can be sent as CW by the radio's own keyer (a transmitting capability) | <!--count:cap_send_cw-->34<!--/count--> |

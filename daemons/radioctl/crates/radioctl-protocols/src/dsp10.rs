@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! TAPR DSP-10 2 m transceiver: sans-IO client engine and virtual twin, mode setting only.
+//! TAPR DSP-10 2 m transceiver: sans-IO client engine and virtual twin: mode, frequency and PTT.
 //!
 //! **Source.** "Notes on the PC/DSP interface for the DSP-10 transceiver", Version 2.00, Bob Larkin
 //! W7PUA, 10 Feb 2001 (`pc_dsp2.txt`, from http://janbob.com/electron/dsp10/pc_dsp2.txt, stored
@@ -26,10 +26,17 @@
 //! phase increment in Command 7 (`xl`, `lo`, `hi`; the v2.00 DSP takes `lo`, `hi`). The reference
 //! divider word `R10MHZ` (0x08FA1) is sent once at open. 2 m has no transverter offset.
 //!
-//! **Not covered, on purpose.** PTT: `UHFA.C` `t_r_toggle` keys the radio by a staged sequence of
-//! shift-register words (antenna relay, power amplifier, transmit) with 50 ms and 75 ms waits
-//! between stages and a Command 84 'T' with a power word. One request cannot carry those waits,
-//! so there is no PTT and the transmit gate has nothing to guard here.
+//! **PTT** (`UHFA.C` `t_r_toggle`, hardware branch). Keying is a timed sequence ([`ProtocolEngine::encode_stages`]):
+//! Command 10 audio gain 0, then the shift-register control byte `0x10` (antenna relay to transmit),
+//! 50 ms, `0x18` (power amplifier on), 75 ms, `0x1A` (hardware into transmit), then Command 84 'T'
+//! `ESC 84 3 2 pwrl pwrh` (DSP to transmit, power word 16421 = 32767 * 10^(-6/20), the PC program's
+//! default `xmit_power` 94) and 10 ms. Each control byte goes out as `send_shift_data(R10MHZ)`: three
+//! Command 8 words, Command 7 enable low, 10 ms, Command 7 enable high; the RF-gain byte is 0
+//! while transmitting. Unkey: Command 84 `ESC 84 2 2 ...`, control bytes `0x18`, 25 ms, `0x10`, 25 ms,
+//! `0x00`, 2 ms, then `0x04` with the RF-gain byte restored, then a retune to the current frequency.
+//! The microphone-gain de-thump, the end beep, FM tones and the PC program's own sequencing delays
+//! beyond these are not sent. The delays 50, 75, 25, 25 and 2 ms are the PC program's defaults
+//! (`dly_ant2amp`, `dly_amp2xmit`, `dly_xmit2amp`, `dly_amp2ant`); no radio has run this.
 //!
 //! The mode codes in the description are `0` LSB, `1` USB, `2` CW, `3` FM (ours). The microphone gain word sent with every mode command is [`MIKE_WORD`] (ours; the
 //! document gives no default).
@@ -37,7 +44,7 @@
 use std::time::Duration;
 
 use radioctl_core::description::RigDescription;
-use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind, Request};
+use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind, Request, Stage};
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::Op;
 use radioctl_core::transcript::Panel;
@@ -63,6 +70,17 @@ pub const CMD_SHIFT: u8 = 8;
 pub const SHIFT_RECEIVE: u8 = 0x04;
 /// RF-gain byte of the shift registers at 0 dB (`UHFA.C` `rfg[0].gainbyte`).
 pub const RF_GAIN_BYTE: u8 = 0x88;
+/// Third-LO increment sent while keyed or unkeyed when no frequency was set yet (`UHFA.C` defaults).
+const DPH_DEFAULT: u32 = 0x4AA6 << 8;
+/// Shift-register control bytes of the transmit sequence (`UHFA.C` `t_r_toggle`).
+const TX_ANTENNA: u8 = 0x10;
+const TX_AMP: u8 = 0x18;
+const TX_ON: u8 = 0x1A;
+const RX_ANTENNA_OFF: u8 = 0x00;
+/// Command 84 'T': DSP transmit/receive and power.
+pub const CMD_TX: u8 = 84;
+/// Transmit power word 4 * ... `fgain[94] * 32767` (`UHFA.C` default `xmit_power` 94).
+const POWER_WORD: u16 = 16421;
 /// The radio's range, 144 to 148 MHz.
 pub const RANGE: std::ops::RangeInclusive<u64> = 144_000_000..=148_000_000;
 /// Third LO phase increment per Hz (2^32 / 24000 / 2^8 ... `UHFA.C` `new_freq`: 349.525333).
@@ -152,8 +170,64 @@ pub fn synth_frames(t: &Tuning) -> Vec<u8> {
     shift_frames(t.synth_word, t.dph, true)
 }
 
+// [@ANCHOR: radioctl_dsp10_shift_stages]
+/// One `send_shift_data(R10MHZ)` of control byte `control` and RF-gain byte `gain`, as two stages
+/// (the 10 ms between enable low and high), the second waiting `after`; `prefix` is sent first.
+fn shift_stages(prefix: &[u8], control: u8, gain: u8, dph: u32, after: u64) -> [Stage; 2] {
+    let mut frames = prefix.to_vec();
+    frames.extend(shift_bytes(R10MHZ, control, gain, dph, false));
+    let tail = frames.split_off(frames.len() - FRAME_LEN);
+    [
+        Stage {
+            bytes: frames,
+            wait: Duration::from_millis(10),
+        },
+        Stage {
+            bytes: tail,
+            wait: Duration::from_millis(after),
+        },
+    ]
+}
+
+// [@ANCHOR: radioctl_dsp10_ptt_stages]
+/// The staged key-on (`on`) or unkey sequence for the third-LO increment `dph`, with the retune
+/// frames `retune` appended to an unkey.
+pub fn ptt_stages(on: bool, dph: u32, retune: &[u8]) -> Vec<Stage> {
+    let [pl, ph] = POWER_WORD.to_le_bytes();
+    let dsp_tx = [ESC, CMD_TX, 3, 2, pl, ph];
+    let dsp_rx = [ESC, CMD_TX, 2, 2, pl, ph];
+    let mut out = Vec::new();
+    if on {
+        let gain_off = [ESC, 10, 0, 0, 0, 4];
+        out.extend(shift_stages(&gain_off, TX_ANTENNA, 0, dph, 50));
+        out.extend(shift_stages(&[], TX_AMP, 0, dph, 75));
+        out.extend(shift_stages(&[], TX_ON, 0, dph, 0));
+        out.push(Stage {
+            bytes: dsp_tx.to_vec(),
+            wait: Duration::from_millis(10),
+        });
+    } else {
+        out.extend(shift_stages(&dsp_rx, TX_AMP, 0, dph, 25));
+        out.extend(shift_stages(&[], TX_ANTENNA, 0, dph, 25));
+        out.extend(shift_stages(&[], RX_ANTENNA_OFF, 0, dph, 2));
+        out.extend(shift_stages(&[], SHIFT_RECEIVE, RF_GAIN_BYTE, dph, 0));
+        if !retune.is_empty() {
+            out.push(Stage {
+                bytes: retune.to_vec(),
+                wait: Duration::ZERO,
+            });
+        }
+    }
+    out
+}
+
 // [@ANCHOR: radioctl_dsp10_shift_frames]
 fn shift_frames(word: u32, dph: u32, lo_first: bool) -> Vec<u8> {
+    shift_bytes(word, SHIFT_RECEIVE, RF_GAIN_BYTE, dph, lo_first)
+}
+
+// [@ANCHOR: radioctl_dsp10_shift_bytes]
+fn shift_bytes(word: u32, control: u8, gain: u8, dph: u32, lo_first: bool) -> Vec<u8> {
     let first = (word >> 16) & 7;
     let mid = word & 0xFFFF;
     let mut out = Vec::new();
@@ -162,7 +236,7 @@ fn shift_frames(word: u32, dph: u32, lo_first: bool) -> Vec<u8> {
     }
     out.extend([ESC, CMD_SHIFT, first as u8, 0, 3, 4]);
     out.extend([ESC, CMD_SHIFT, mid as u8, (mid >> 8) as u8, 3, 4]);
-    out.extend([ESC, CMD_SHIFT, SHIFT_RECEIVE, RF_GAIN_BYTE, 3, 4]);
+    out.extend([ESC, CMD_SHIFT, control, gain, 3, 4]);
     out.extend(lo_frame(0, dph));
     out.extend(lo_frame(1, dph));
     out
@@ -237,6 +311,20 @@ impl ProtocolEngine for Dsp10Engine {
         })
     }
 
+    // [@ANCHOR: radioctl_dsp10_engine_encode_stages]
+    fn encode_stages(&mut self, op: &Op) -> Result<Option<Vec<Stage>>, RigError> {
+        let Op::SetPtt(on) = op else {
+            return Ok(None);
+        };
+        if !self.desc.capabilities.has(op.required_capability()) {
+            return Err(unsupported("capability not in the rig description"));
+        }
+        let tuning = self.hz.and_then(|hz| tuning(hz, self.side));
+        let dph = tuning.map_or(DPH_DEFAULT, |t| t.dph);
+        let retune = tuning.map(|t| synth_frames(&t)).unwrap_or_default();
+        Ok(Some(ptt_stages(*on, dph, &retune)))
+    }
+
     // [@ANCHOR: radioctl_dsp10_engine_open_requests]
     fn open_requests(&mut self) -> Vec<Request> {
         // Loads the synthesizer reference divider (UHFA.C initialize); keeps the receive state.
@@ -266,6 +354,8 @@ pub struct Dsp10Twin {
     shift: Vec<u16>,
     dph: u32,
     pf7: bool,
+    tx_hw: bool,
+    tx_dsp: bool,
     synth_hz: Option<u64>,
     r_word: Option<u32>,
 }
@@ -288,6 +378,8 @@ impl Dsp10Twin {
             shift: Vec::new(),
             dph: 0,
             pf7: false,
+            tx_hw: false,
+            tx_dsp: false,
             synth_hz: None,
             r_word: None,
         })
@@ -329,6 +421,7 @@ impl Dsp10Twin {
                 self.sb = f[3];
                 self.mike = u16::from_le_bytes([f[4], f[5]]);
             }
+            CMD_TX => self.tx_dsp = f[2] & 1 == 1,
             CMD_SHIFT => self.shift.push(u16::from_le_bytes([f[2], f[3]])),
             CMD_LO => {
                 self.dph = u32::from_le_bytes([f[3], f[4], f[5], 0]);
@@ -346,9 +439,10 @@ impl Dsp10Twin {
     /// The enable line rose: the three shifted words become the synthesizer register.
     fn latch(&mut self) {
         let words = std::mem::take(&mut self.shift);
-        let [first, mid, _control] = words.as_slice() else {
+        let [first, mid, control] = words.as_slice() else {
             return;
         };
+        self.tx_hw = control & 0x02 != 0;
         let w = (u32::from(*first & 7) << 16) | u32::from(*mid);
         if w & 1 == 1 {
             self.r_word = Some(w);
@@ -371,7 +465,7 @@ impl VendorTwin for Dsp10Twin {
         Some(TwinSnapshot {
             frequency: self.tuned().unwrap_or(self.hz),
             mode_code: Some(code),
-            ptt: false,
+            ptt: self.tx_hw && self.tx_dsp,
         })
     }
 
