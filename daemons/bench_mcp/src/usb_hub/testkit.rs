@@ -23,43 +23,15 @@ fn recorded_encoded() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/usb_fixtures/devbox")
 }
 
-/// The recorded tree with the real device names (`1-0:1.0`, `pci0000:00`): a decoded copy made once and shared by every test and process.
+/// The recorded tree with the real device names (`1-0:1.0`, `pci0000:00`): a decoded copy made once per test process, removed when it exits.
 pub fn recorded() -> PathBuf {
     static DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
     DIR.get_or_init(|| {
-        let src = recorded_encoded();
-        let mut h = std::collections::hash_map::DefaultHasher::new();
-        hash_tree(&src, &mut h);
-        let name = format!("hams-usb-fixtures-{:016x}", std::hash::Hasher::finish(&h));
-        let fin = std::env::temp_dir().join(&name);
-        if !fin.exists() {
-            let tmp = std::env::temp_dir().join(format!("{name}.{}", std::process::id()));
-            let _ = std::fs::remove_dir_all(&tmp);
-            copy_all(&src, &tmp);
-            if std::fs::rename(&tmp, &fin).is_err() {
-                let _ = std::fs::remove_dir_all(&tmp);
-            }
-        }
-        fin
+        let dst = crate::testdir::scratch("usb_fixtures");
+        copy_all(&recorded_encoded(), &dst);
+        dst
     })
     .clone()
-}
-
-fn hash_tree(dir: &Path, h: &mut impl std::hash::Hasher) {
-    use std::hash::Hash;
-    let mut names: Vec<_> = std::fs::read_dir(dir).unwrap().flatten().collect();
-    names.sort_by_key(|e| e.file_name());
-    for e in names {
-        e.file_name().hash(h);
-        let ft = e.file_type().unwrap();
-        if ft.is_symlink() {
-            std::fs::read_link(e.path()).unwrap().hash(h);
-        } else if ft.is_dir() {
-            hash_tree(&e.path(), h);
-        } else {
-            std::fs::read(e.path()).unwrap().hash(h);
-        }
-    }
 }
 
 pub fn recorded_sys() -> PathBuf {
