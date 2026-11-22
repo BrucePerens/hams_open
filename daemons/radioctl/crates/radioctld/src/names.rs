@@ -450,6 +450,43 @@ pub fn level_range(description: &RigDescription, level: Level) -> Option<(u16, u
                 | Level::Antenna => None,
             }
         }
+        // The TS-870S dialect (its manual, Appendix D, PDF pp. 95-100: AG, MG, ML, RG 000-255, KS
+        // 001-100, PC 010-100) and the TS-570 dialect (PDF pp. 81-85: MG 000-100, KS 010-060, PC
+        // 005-100, no ML command), as the engine's `level_wire` takes them.
+        Family::KenwoodAscii
+            if description.kenwood.as_ref().is_some_and(|k| {
+                k.dialect == radioctl_core::description::KenwoodDialect::Ts870
+            }) =>
+        {
+            Some(match level {
+                Level::AfGain | Level::RfGain | Level::MicGain | Level::MonitorLevel => (0, 255),
+                Level::KeyerSpeed => (1, 100),
+                Level::RfPower => (10, 100),
+                Level::Attenuator
+                | Level::Preamp
+                | Level::Dither
+                | Level::Preselector
+                | Level::Antenna => (0, 0),
+            })
+        }
+        Family::KenwoodAscii
+            if description.kenwood.as_ref().is_some_and(|k| {
+                k.dialect == radioctl_core::description::KenwoodDialect::Ts570
+            }) =>
+        {
+            match level {
+                Level::AfGain | Level::RfGain => Some((0, 255)),
+                Level::MicGain => Some((0, 100)),
+                Level::KeyerSpeed => Some((10, 60)),
+                Level::RfPower => Some((5, 100)),
+                Level::MonitorLevel
+                | Level::Attenuator
+                | Level::Preamp
+                | Level::Dither
+                | Level::Preselector
+                | Level::Antenna => None,
+            }
+        }
         Family::KenwoodAscii => Some(match level {
             Level::AfGain | Level::RfGain => (0, 255),
             Level::MicGain => (0, 100),
