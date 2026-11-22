@@ -10,7 +10,7 @@
 # so `second-vfo` and `rit-xit` are not claimed here although Hamlib 4.6.2 claims a second VFO for it. The Main/Sub radios swap bands with 07 B0 and select the sub band with 07 D1.
 # A radio with newer firmware than the manual may differ. Icom's download endpoint is excluded by robots.txt; read for facts under Bruce Perens' decision of 2026-10-31.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "split", "filter", "levels", "identify", "read-meters", "repeater"]
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "split", "filter", "levels", "identify", "read-meters", "repeater", "receivers"]
 
 [rig]
 id = "icom-ic-7800"
@@ -22,6 +22,7 @@ address = 0x6A
 controller = 0xE0
 model_id = 0x6A
 echo = false
+main_sub = "full"
 
 [levels]
 attenuator_db = [3, 6, 9, 12, 15, 18, 21]
@@ -107,6 +108,11 @@ verified = { state = "unverified" }
 [[facts]]
 key = "defaults.*"
 provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: starting frequency and mode of a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.main_sub"
+provenance = { kind = "manual", reference = "Icom IC-7800 instruction manual, file IC-7800_ENG_16.pdf (from /storage/manuals/icom/IC-7800), sha256 7ff4a8704ae14fa2acd5dbd5b923d953608a34285e42bd2cf8d94a1dcb1c194c: CI-V command table, PDF p. 201: command 07 sub commands C0 dualwatch off, C1 on, C2 send or read (00 off, 01 on), D0 select main band, D1 select sub band, D2 send or read the band (the table prints 01 for both Main and Sub in its D2 rows; 00 main and 01 sub is taken from the same table of the IC-7600 and IC-7760)", note = "`SelectReceiver` sends 07 D0 or 07 D1, `GetReceiver` 07 D2, `SetDualWatch` 07 C0 or C1, `GetDualWatch` 07 C2. Exchange and equalize are not used. Read from the manual's command table by Bruce's 2026-11-12 decision; manual on the box since 2026-11-21. Unverified on a radio." }
 verified = { state = "unverified" }
 
 [[facts]]

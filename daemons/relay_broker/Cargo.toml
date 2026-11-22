@@ -32,7 +32,12 @@ panic = "deny"
 [dependencies]
 # Only the OS wrappers: no serde, no tokio, no web. The wire format and the config file are
 # hand-parsed so the whole input surface is in this crate and can be read in one sitting.
+[target.'cfg(unix)'.dependencies]
 nix = { version = "0.31", default-features = false, features = ["socket", "uio", "fs", "user", "poll", "signal", "net", "time"] }
+
+# Windows: only src/windows.rs (the named-pipe server, the pipe client's SID, SetSystemTime) uses this.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_Services", "Win32_System_SystemInformation", "Win32_System_Threading"] }
 
 [dev-dependencies]
 proptest = { version = "1.12", default-features = false, features = ["std"] }

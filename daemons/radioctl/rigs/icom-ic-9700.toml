@@ -3,7 +3,7 @@
 # download terms forbid reuse of its data); the facts come from Hamlib 4.6.2 source, read for facts only,
 # with the file and function named in each fact below. Gaps are listed in crates/radioctl-protocols/src/civ.rs.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "transceive", "split", "rit-xit", "filter", "levels", "identify", "read-meters", "repeater"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "transceive", "split", "rit-xit", "filter", "levels", "identify", "read-meters", "repeater", "receivers"]
 
 [rig]
 id = "icom-ic-9700"
@@ -15,6 +15,7 @@ address = 0xA2
 controller = 0xE0
 model_id = 0xA2
 echo = false
+main_sub = "select-read"
 
 [scope]
 receivers = 2
@@ -128,6 +129,11 @@ verified = { state = "unverified" }
 [[facts]]
 key = "defaults.*"
 provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: starting frequency and mode of a virtual rig", note = "The starting frequency (144,174,000 Hz, an in-band choice of our own) and mode are only the starting state of a virtual rig; they say nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.main_sub"
+provenance = { kind = "manual", reference = "Icom IC-9700 CI-V Reference Guide, file IC-9700_ENG_CI-V_4.pdf (from /storage/manuals/icom/IC-9700), sha256 875cde8faba30d333f11b7a9f46ab44b710de85f06e922badd47b7be3eb8bf3f: command table, PDF p. 5: command 07 sub commands B0 exchange MAIN and SUB, D0 select the main band, D1 select the sub band, D2 send or read the band selection (00 main, 01 sub); the table has no dualwatch command", note = "`SelectReceiver` sends 07 D0 or 07 D1, `GetReceiver` 07 D2; dual watch is not claimed (no such command in the table). Exchange and equalize are not used. Read from the manual's command table by Bruce's 2026-11-12 decision; manual on the box since 2026-11-21. Unverified on a radio." }
 verified = { state = "unverified" }
 
 [[facts]]

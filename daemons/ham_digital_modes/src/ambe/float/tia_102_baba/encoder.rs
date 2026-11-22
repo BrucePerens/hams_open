@@ -96,13 +96,13 @@ impl FrameAnalyzer {
 
     /// Shifts every frame's analysis centre by `samples` (may be negative) relative to `k*160`.
     pub fn set_center_offset(&mut self, samples: i32) {
-        // Bounded so `center()` can neither underflow after trimming nor push the tail frames past the input.
+        // Bounded so the tail frames stay inside the padded input; `center()` itself never falls before the retained samples.
         self.center_offset = samples.clamp(-160, 160);
     }
 
     fn center(&self, k: usize) -> usize {
-        (LEAD as i64 + (k * FRAME_SAMPLES) as i64 + self.center_offset as i64).max(MARGIN as i64)
-            as usize
+        (LEAD as i64 + (k * FRAME_SAMPLES) as i64 + self.center_offset as i64)
+            .max((self.trimmed + MARGIN) as i64) as usize
     }
 
     pub fn push_samples(&mut self, samples: &[f64]) {
@@ -395,5 +395,43 @@ mod tests {
             "only {checked} steady-state frames decoded to parameters"
         );
         assert_eq!(enc.failed_frames, 0);
+    }
+
+    /// Changing the centre offset after the analyzer has dropped old samples must not make a frame's centre fall
+    /// before the first retained sample (`center - trimmed` used to underflow and panic). Trimming happens every
+    /// 25 frames or so, so every input length from 20 to 70 frames is tried to hit the frame right after a trim.
+    #[test]
+    fn a_centre_offset_changed_after_trimming_does_not_underflow() {
+        let mut trimmed_somewhere = false;
+        for frames_before in 20..=70 {
+            let mut analyzer = FrameAnalyzer::new();
+            analyzer.set_center_offset(160);
+            analyzer.push_samples(&tone(60.0, 160 * frames_before));
+            while analyzer.next_analysis().is_some() {}
+            trimmed_somewhere |= analyzer.trimmed > 0;
+            analyzer.set_center_offset(-160);
+            analyzer.push_samples(&tone(60.0, 160 * 5));
+            analyzer.finish_input();
+            while analyzer.next_analysis().is_some() {}
+        }
+        assert!(trimmed_somewhere, "the test needs trimming to have begun");
+    }
+
+    /// Digital silence has no pitch evidence: every candidate's `E(P)` used to be `0/0 = NaN`, which poisoned the
+    /// look-back history (`prev1`/`prev2`) so that onset frames never used it. The error must be the worst value,
+    /// 1.0 (a NaN clamped by `.max(0.0)` would read as a perfect 0.0 match instead).
+    #[test]
+    fn silence_keeps_the_pitch_tracker_state_finite() {
+        let mut analyzer = FrameAnalyzer::new();
+        analyzer.push_samples(&[0.0; 160 * 12]);
+        let mut frames = 0;
+        while let Some(a) = analyzer.next_analysis() {
+            assert_eq!(a.initial_pitch_error, 1.0, "frame {frames}");
+            assert!(a.omega0_hat.is_finite() && a.omega0_hat > 0.0);
+            frames += 1;
+        }
+        assert!(frames > 0);
+        assert_eq!(analyzer.prev1.1, 1.0);
+        assert_eq!(analyzer.prev2.1, 1.0);
     }
 }

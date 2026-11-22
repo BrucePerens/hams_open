@@ -733,18 +733,20 @@ impl CivEngine {
 
     // [@ANCHOR: radioctl_civ_engine_encode_main_sub]
     /// The Main/Sub band commands of command `07` (`civ.main_sub`): `D0` selects Main and `D1` Sub
-    /// on a model that has `select` or `full`; `D2` reads the selection and `C0`, `C1`, `C2` set
-    /// and read dual watch on `full` only (the IC-7610). Anything else, the transmit band
+    /// on a model that has `select`, `select-read` or `full`; `D2` reads the selection on the last
+    /// two, and `C0`, `C1`, `C2` set and read dual watch on `full` only (IC-7610, IC-7600,
+    /// IC-7800, IC-7760; IC-9700 and IC-7851 are `select-read`). Anything else, the transmit band
     /// included, is refused as unsupported. Facts: IC-7610 CI-V guide and IC-9100 manual
     /// command tables (see the description facts). Unverified on a radio.
     fn encode_main_sub(&self, op: &Op) -> Option<Result<Request, RigError>> {
         let level = self.params.main_sub;
         let full = level == CivMainSub::Full;
+        let readable = full || level == CivMainSub::SelectRead;
         Some(match op {
             Op::SelectReceiver(rx) if level != CivMainSub::None => {
                 Ok(self.set(0x07, &[if *rx == Receiver::Sub { 0xD1 } else { 0xD0 }]))
             }
-            Op::GetReceiver if full => Ok(self.get(0x07, &[0xD2], Field::Receiver)),
+            Op::GetReceiver if readable => Ok(self.get(0x07, &[0xD2], Field::Receiver)),
             Op::SetDualWatch(on) if full => Ok(self.set(0x07, &[if *on { 0xC1 } else { 0xC0 }])),
             Op::GetDualWatch if full => Ok(self.get(0x07, &[0xC2], Field::DualWatch)),
             Op::SelectReceiver(_)

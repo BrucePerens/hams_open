@@ -729,7 +729,7 @@ mod tests {
     use std::path::PathBuf;
 
     pub fn fixture() -> PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/usb_fixtures/devbox/sys")
+        crate::usb_hub::testkit::recorded_sys()
     }
 
     // Tests [@ANCHOR: usb_hub_sysfs_tree]

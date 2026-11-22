@@ -179,7 +179,7 @@ struct CivSection {
     frequency_bytes: u8,
     #[serde(default)]
     command_set: CivCommandSetName,
-    /// `"select"` or `"full"` (see `CivMainSub`); absent means none.
+    /// `"select"`, `"select-read"` or `"full"` (see `CivMainSub`); absent means none.
     #[serde(default)]
     main_sub: CivMainSubName,
 }
@@ -191,6 +191,7 @@ enum CivMainSubName {
     #[default]
     None,
     Select,
+    SelectRead,
     Full,
 }
 
@@ -700,6 +701,7 @@ fn build_description(doc: &FileDoc) -> Result<RigDescription, RigError> {
         main_sub: match c.main_sub {
             CivMainSubName::None => CivMainSub::None,
             CivMainSubName::Select => CivMainSub::Select,
+            CivMainSubName::SelectRead => CivMainSub::SelectRead,
             CivMainSubName::Full => CivMainSub::Full,
         },
     });

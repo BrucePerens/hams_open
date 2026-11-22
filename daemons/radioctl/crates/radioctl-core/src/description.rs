@@ -371,8 +371,11 @@ pub enum CivMainSub {
     /// `07 D0` selects the Main band and `07 D1` the Sub band; the book has no read of the
     /// selection and no dual watch command (IC-9100).
     Select,
-    /// `Select` plus `07 D2` (read the selected band) and dual watch `07 C0` off, `07 C1` on,
-    /// `07 C2` read (IC-7610).
+    /// `Select` plus `07 D2` (read the selected band), no dual watch command (IC-9700, IC-7851:
+    /// the IC-7851 book's C0/C1 notes contradict the other books, so dual watch is not claimed).
+    SelectRead,
+    /// `SelectRead` plus dual watch `07 C0` off, `07 C1` on, `07 C2` read (IC-7610, IC-7600,
+    /// IC-7800, IC-7760).
     Full,
 }
 

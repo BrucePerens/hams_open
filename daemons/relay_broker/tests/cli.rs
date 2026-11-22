@@ -2,6 +2,7 @@
 //! The `hams-relay-broker` program run as a process: its exit codes and its idle exit, with a
 //! throwaway config and socket in a scratch directory. No privileges and no hardware.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
+#![cfg(unix)]
 
 use std::os::unix::fs::MetadataExt;
 use std::process::Command;

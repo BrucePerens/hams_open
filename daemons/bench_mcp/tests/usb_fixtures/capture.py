@@ -120,6 +120,19 @@ def run(command, path, scrub=True):
         handle.write(text)
 
 
+def encode_colons(root):
+    """':' is illegal in Windows file names: store it as %3A in names and link targets (the usb_hub testkit decodes it)."""
+    for d, dirs, files in os.walk(root, topdown=False):
+        for name in files + dirs:
+            path = os.path.join(d, name)
+            if os.path.islink(path) and ":" in os.readlink(path):
+                target = os.readlink(path).replace(":", "%3A")
+                os.unlink(path)
+                os.symlink(target, path)
+            if ":" in name:
+                os.rename(path, os.path.join(d, name.replace(":", "%3A")))
+
+
 def main():
     out = sys.argv[1]
     if os.path.isdir(out):
@@ -148,6 +161,7 @@ def main():
     )
     with open(out + "/kernel_journal.txt", "w") as handle:
         handle.write("\n".join(keep) + "\n")
+    encode_colons(out)
 
 
 def trim_journal(journal):
