@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from odoo import http
 from odoo.http import request
 
-SECURITY_CONTACT = "support@hams.com"
+SECURITY_CONTACT = "security@hams.com"
 # RFC 9116 asks for an Expires under a year ahead; it is generated per request, so it is never stale.
 EXPIRES_DAYS = 180
 

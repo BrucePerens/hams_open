@@ -17,7 +17,7 @@ class TestSecurityTxt(HamsHttpCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.headers["Content-Type"].startswith("text/plain"))
         text = response.text
-        self.assertIn("Contact: mailto:support@hams.com\n", text)
+        self.assertIn("Contact: mailto:security@hams.com\n", text)
         self.assertIn("Preferred-Languages: en\n", text)
         expires = re.search(r"^Expires: (\S+)$", text, re.M).group(1)
         when = datetime.strptime(expires, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
