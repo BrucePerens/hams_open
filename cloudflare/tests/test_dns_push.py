@@ -657,6 +657,13 @@ class TestDnsApiCalls(HamsTransactionCase):
         self.mock.side_effect = [pages[0], None]
         self.assertEqual(cloudflare_api.list_dns_records_named(zone, "a.hams.com", "t"), (False, "API Error"))
 
+    def test_02b_a_garbled_page_count_is_a_failed_read_not_an_exception(self):
+        # Tests [@ANCHOR: cloudflare:COMM_dns_api_list_records_named]
+        zone = _id()
+        for bad in ("many", ["2"], {"n": 2}, "2.5"):
+            self.mock.side_effect = [self._Response({"result": [{"id": "1"}], "result_info": {"total_pages": bad}})]
+            self.assertEqual(cloudflare_api.list_dns_records_named(zone, "a.hams.com", "t"), (False, "API Error"), bad)
+
     def test_03_create_posts_and_update_puts_and_ids_that_are_not_cloudflare_ids_are_refused(self):
         # Tests [@ANCHOR: cloudflare:COMM_dns_api_is_cloudflare_id]
         # Tests [@ANCHOR: cloudflare:COMM_dns_api_list_records_named]

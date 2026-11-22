@@ -134,6 +134,7 @@ fn the_worked_file_claims_no_verification_it_does_not_have() {
         "icom-ic-7300",
         "icom-ic-7610",
         "icom-ic-705",
+        "icom-ic-9700",
         "elecraft-k3",
         "elecraft-k3s",
         "elecraft-kx2",

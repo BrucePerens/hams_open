@@ -113,8 +113,18 @@ fn open_group(
     }
     let s = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
     s.set_reuse_address(true)?;
+    // Windows has no SO_REUSEPORT: there SO_REUSEADDR already lets several sockets share a multicast port.
+    #[cfg(not(windows))]
     s.set_reuse_port(true)?;
-    s.bind(&SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port).into())?;
+    // Bound to the group itself (not 0.0.0.0) so the kernel delivers only this group's datagrams: bound to any address,
+    // the socket also receives every other group joined by any socket on the host that uses the same port (a second
+    // `radiod` on another group, or our own other link). Windows cannot bind a multicast address.
+    let bind_ip = if cfg!(windows) {
+        Ipv4Addr::UNSPECIFIED
+    } else {
+        group
+    };
+    s.bind(&SocketAddrV4::new(bind_ip, port).into())?;
     s.join_multicast_v4(&group, &iface)?;
     s.set_multicast_if_v4(&iface)?;
     s.set_multicast_ttl_v4(0)?;
@@ -248,7 +258,7 @@ impl Control {
         let mut sent: Vec<u32> = Vec::new();
         while Instant::now() < deadline {
             sent.push(self.send(cmd).await?);
-            let retry = Instant::now() + RETRY_INTERVAL;
+            let retry = (Instant::now() + RETRY_INTERVAL).min(deadline);
             while Instant::now() < retry {
                 let left = retry.saturating_duration_since(Instant::now());
                 if let Some(status) = self.recv_status(left).await? {
@@ -653,6 +663,29 @@ mod tests {
         assert!(matches!(nothing, Ok(None)), "{nothing:?}");
     }
 
+    // Tests [@ANCHOR: radiod_client_net_control_request]
+    #[tokio::test]
+    async fn request_never_waits_past_its_deadline() {
+        let handle = Handle::current();
+        let (g, port) = (group(6), test_port(5));
+        let control = Control::open_on_port(&handle, g, port, LOOPBACK, Policy::default());
+        assert!(control.is_ok(), "multicast on loopback: {control:?}");
+        let Ok(mut control) = control else { return };
+        let poll = Command::Poll {
+            ssrc: ssrc(42),
+            lifetime_frames: 50,
+        };
+        let started = Instant::now();
+        let status = control.request(&poll, Duration::from_millis(30)).await;
+        assert!(matches!(status, Ok(None)), "{status:?}");
+        // A 30 ms wait used to run the whole 200 ms retry window.
+        assert!(
+            started.elapsed() < Duration::from_millis(120),
+            "request overshot its wait: {:?}",
+            started.elapsed()
+        );
+    }
+
     // Tests [@ANCHOR: radiod_client_net_control_front_end]
     // Tests [@ANCHOR: radiod_client_net_is_front_end]
     #[tokio::test]
@@ -700,5 +733,25 @@ mod tests {
             ..ChannelStatus::default()
         };
         assert!(!is_front_end(&channel));
+    }
+
+    // Tests [@ANCHOR: radiod_client_net_open_group]
+    #[cfg(not(windows))]
+    #[tokio::test]
+    async fn a_socket_hears_only_its_own_group() {
+        let handle = Handle::current();
+        let port = test_port(9);
+        let control = Control::open_on_port(&handle, group(7), port, LOOPBACK, Policy::default());
+        assert!(control.is_ok(), "multicast on loopback: {control:?}");
+        let Ok(control) = control else { return };
+        let other = open_group(group(8), port, LOOPBACK).and_then(|s| register(&handle, s));
+        assert!(other.is_ok(), "{other:?}");
+        let Ok(other) = other else { return };
+        let sent = other
+            .send_to(b"hello", SocketAddrV4::new(group(8), port))
+            .await;
+        assert!(sent.is_ok(), "{sent:?}");
+        let got = next_datagram(&control.sock, Duration::from_millis(300)).await;
+        assert!(got.is_none(), "heard another group's datagram: {got:?}");
     }
 }

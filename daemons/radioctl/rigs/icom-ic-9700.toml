@@ -3,7 +3,7 @@
 # download terms forbid reuse of its data); the facts come from Hamlib 4.6.2 source, read for facts only,
 # with the file and function named in each fact below. Gaps are listed in crates/radioctl-protocols/src/civ.rs.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "transceive", "split", "rit-xit", "filter", "levels", "identify", "repeater", "receivers"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "transceive", "split", "rit-xit", "filter", "levels", "identify", "read-meters", "repeater", "receivers"]
 
 [rig]
 id = "icom-ic-9700"
@@ -28,6 +28,22 @@ spans_hz = [5000, 10000, 20000, 50000, 100000, 200000, 500000, 1000000]
 attenuator_db = [10]
 attenuator_any_up_to_db = 0
 preamp_steps = 2
+
+[power_meter]
+raw_to_milliwatts = [[0, 0], [143, 50000], [213, 100000]]
+
+# Rated output differs by band: 100 W on 144 MHz, 75 W on 430/440 MHz, 10 W on 1200 MHz.
+[[power_meter.band]]
+max_hz = 250000000
+raw_to_milliwatts = [[0, 0], [143, 50000], [213, 100000]]
+
+[[power_meter.band]]
+max_hz = 700000000
+raw_to_milliwatts = [[0, 0], [143, 37500], [213, 75000]]
+
+[[power_meter.band]]
+max_hz = 1500000000
+raw_to_milliwatts = [[0, 0], [143, 5000], [213, 10000]]
 
 [timing]
 timeout_ms = 1000
@@ -144,3 +160,13 @@ verified = { state = "unverified" }
 key = "capability.repeater"
 provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/ic7300.c rig_caps (the model's .set_rptr_shift, .set_rptr_offs, .set_ctcss_tone and .set_dcs_code entries); rigs/icom/icom.c icom_set_rptr_shift (command 0F, 10 simplex, 11 minus, 12 plus), icom_set_rptr_offs (0D, three BCD bytes of 100 Hz units), icom_set_ctcss_tone (1B 00, tenths of a hertz), icom_set_dcs_code (1B 02), icom_set_func (16 42 tone, 16 43 tone squelch, 16 4B DCS); rigs/icom/icom_defs.h", note = "Facts only, no code or table copied. Icom's CI-V guide was not used (see the file header). The capability covers all five repeater ops; a model Hamlib lists without one of them (some have no offset or no tone) answers it with NG. No radio has been connected." }
 verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.read-meters"
+provenance = { kind = "manual", reference = "Icom IC-9700 CI-V Reference Guide (IC-9700_ENG_CI-V_4.pdf), command 15 table, PDF pages 5 and 6: 15 11 to 15 16 (Po, SWR, ALC, COMP, Vd, Id meter levels, 0000 to 0255)", note = "Per-model scale points are in radioctld meter_cal; facts only, nothing copied." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "power_meter.raw_to_milliwatts"
+provenance = { kind = "manual", reference = "Icom IC-9700 CI-V Reference Guide (IC-9700_ENG_CI-V_4.pdf), PDF page 5, command 15 11 (read the PO meter level, 0000 to 0255), page numbers as the PDF viewer counts them; rated output from Icom America's IC-9700 specifications page (https://www.icomamerica.com/lineup/products/IC-9700/, Transmitter, output power SSB/CW/RTTY/FM/DV/DD, read 2026-11-21)", note = "The command table prints the scale as percent of full output: 0000 is 0%, 0143 is 50% and 0213 is 100%. The rated output differs by band (144 MHz 0.5 to 100 W, 430/440 MHz 0.5 to 75 W, 1200 MHz 0.1 to 10 W), so each [[power_meter.band]] scales the same percent points to its band's rating, chosen by the transmit frequency; the base points (100 W) apply when the frequency is unknown and over-state the watts, which errs toward tripping. radioctl interpolates linearly and holds the last value beyond. Not measured at the load." }
+verified = { state = "manual-checked", reference = "Icom IC-9700 CI-V Reference Guide (IC-9700_ENG_CI-V_4.pdf), PDF page 5, command 15 11" }

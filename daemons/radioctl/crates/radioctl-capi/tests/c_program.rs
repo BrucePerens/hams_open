@@ -3,6 +3,7 @@
 //! header and run against the library built from this crate. Also pins the checked-in header to
 //! what cbindgen generates, so the header a C programmer reads is the code's.
 #![allow(clippy::expect_used, clippy::panic)]
+#![cfg(unix)]
 
 use std::path::{Path, PathBuf};
 use std::process::Command;

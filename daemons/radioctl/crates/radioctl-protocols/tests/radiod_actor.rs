@@ -56,6 +56,7 @@ fn ports_at(pair: u16) -> (u16, u16) {
 fn join(group: Ipv4Addr, port: u16) -> UdpSocket {
     let s = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP)).expect("socket");
     s.set_reuse_address(true).expect("reuse");
+    #[cfg(not(windows))]
     s.set_reuse_port(true).expect("reuse port");
     s.bind(&SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port).into())
         .expect("bind");

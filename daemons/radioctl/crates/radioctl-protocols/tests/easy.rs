@@ -2,6 +2,7 @@
 //! The one-call constructors of `radioctl_protocols::prelude`: a virtual rig of a named model, and
 //! a serial rig on a pseudo-terminal that a virtual radio answers. No hardware.
 #![allow(clippy::expect_used, clippy::panic)]
+#![cfg(unix)]
 
 use std::io::{Read, Write};
 use std::path::PathBuf;
