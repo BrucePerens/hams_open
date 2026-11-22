@@ -89,6 +89,20 @@ class TestMailIngest(HamsTransactionCase):
         )
         self.assertIn("Radio will not power on", tickets_after.name or "")
 
+    def _assert_role_address_makes_a_ticket(self, local_part):
+        subject = f"Role address check {local_part}"
+        before = self.env["hams_helpdesk.ticket"].search_count([])
+        self.env["hams_helpdesk.ticket"].with_user(self.ingest_user).ingest_inbound_email(
+            base64.b64encode(self._raw_email(f"{local_part}@hams.com", subject=subject)).decode("ascii")
+        )
+        self.assertEqual(self.env["hams_helpdesk.ticket"].search_count([]), before + 1, local_part)
+        self.assertTrue(self.env["hams_helpdesk.ticket"].search([("name", "ilike", subject)], limit=1), local_part)
+
+    def test_01b_psl_and_hostmaster_role_addresses_become_tickets_like_support(self):
+        # The PSL entry's "Submitted by" address (psl@) and the SOA contact (hostmaster@) feed the helpdesk.
+        self._assert_role_address_makes_a_ticket("psl")
+        self._assert_role_address_makes_a_ticket("hostmaster")
+
     # info@hams.com used to create a hams_helpdesk.ticket here; per Bruce's
     # own direction it now routes to pager_duty (pager.incident) instead --
     # see pager_duty/tests/test_hooks.py for the alias claim and
