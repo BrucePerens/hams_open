@@ -19,6 +19,7 @@ from odoo.addons.hams_helpdesk.models.inbound_spam_filter import (
     _domain_matches_brand,
     _extract_link_domains,
     _registrable_domain,
+    bulk_allowlisted,
     bulk_mail_findings,
     detect_bulk_mail_signals,
     detect_inbound_spam_signals,
@@ -363,6 +364,28 @@ class TestBulkMailSignals(HamsTransactionCase):
         self.assertFalse(own_authenticated_sender(forged))
         self.assertTrue(inbound_spam_reasons(subject, newsletter_body(), forged), "a forged From: hams.com is judged")
         self.assertFalse(own_authenticated_sender(dict(signals, from_domain="evil-hams.com", dkim="pass")))
+
+    def test_28b_github_notification_to_psl_is_not_scored_as_bulk(self):
+        # Tests [@ANCHOR: hams_helpdesk:inbound_bulk_allowlisted]
+        subject = REAL_MISSED_SPAM_NAMES[0]
+
+        def judged(to_addr="psl@hams.com", from_addr="notifications@github.com", headers=SES_PASS_HEADERS + BULK_HEADERS):
+            message = message_from_bytes(raw_message(to_addr, subject, from_addr=from_addr, headers=headers))
+            signals = mail_signals(message)
+            return signals, inbound_spam_reasons(subject, newsletter_body(), signals)
+
+        signals, reasons = judged()
+        self.assertTrue(signals["list_unsubscribe"])
+        self.assertTrue(bulk_allowlisted(signals))
+        self.assertEqual(reasons, [])
+        for label, kwargs in (
+            ("other sender", {"from_addr": "news@mailer.example.net"}),
+            ("other alias", {"to_addr": "support@hams.com"}),
+            ("no SES pass (forged sender)", {"headers": BULK_HEADERS}),
+        ):
+            signals, reasons = judged(**kwargs)
+            self.assertFalse(bulk_allowlisted(signals), label)
+            self.assertTrue(reasons, label)
 
     def test_29_the_new_lure_subjects_and_ses_fail_are_strong_signals(self):
         for subject in ("Your subscription renews soon", "Security alert for someone@gmail.com", "Trade receivable balance confirmation regarding the audit of K"):

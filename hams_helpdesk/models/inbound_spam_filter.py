@@ -41,7 +41,7 @@ adapter.py's and helpdesk_ticket.py's message_new() "spam" stage handling).
 """
 import logging
 import re
-from email.utils import parseaddr
+from email.utils import getaddresses, parseaddr
 from urllib.parse import urlsplit
 
 _logger = logging.getLogger(__name__)
@@ -325,6 +325,12 @@ STORED_TICKET_SCORE_THRESHOLD = 4
 # From line must not buy a pass.
 OWN_SENDER_DOMAINS = ("hams.com",)
 
+# (sender address, recipient alias) pairs whose bulk-mail score is ignored: GitHub notification mail from the Public
+# Suffix List maintainers to psl@ carries List-Unsubscribe like all GitHub mail. Honoured only when SES recorded a DKIM
+# or DMARC pass for the From line (a forged sender buys nothing) and only against the weighted bulk rules: the strong
+# spam/phishing rules still apply.
+BULK_ALLOWLIST = (("notifications@github.com", "psl@hams.com"),)
+
 # Health-supplement / "secret" / "researchers" clickbait subjects. A weak signal only (weight 1, counted once):
 # real mail can say "natural" or "researchers".
 CLICKBAIT_SUBJECT_PATTERNS = re.compile(
@@ -377,7 +383,7 @@ def html_shape(html):
 def mail_signals(message):
     """Header facts and HTML shape of one parsed inbound ``email.message.Message``, as a small JSON-able dict that
     detect_bulk_mail_signals() and own_authenticated_sender() read. Never raises; an unreadable part contributes
-    nothing. Keys: list_unsubscribe (bool), list_id (bool), precedence (str), auto_submitted (str), spf / dkim /
+    nothing. Keys: list_unsubscribe (bool), list_id (bool), from_address, recipients (To/Cc/Delivered-To/X-Original-To addresses), precedence (str), auto_submitted (str), spf / dkim /
     dmarc ("pass", "fail", ... or absent), from_domain, return_path_domain, has_plain (bool), plain_chars, html_chars, tables, table_depth, images, tracking_pixels."""
     signals = {}
 
@@ -391,6 +397,13 @@ def mail_signals(message):
         signals["precedence"] = str(message.get("Precedence") or "").strip().lower()[:16]
         signals["auto_submitted"] = str(message.get("Auto-Submitted") or "").strip().lower()[:32]
         signals["from_domain"] = domain_of(message.get("From"))
+        signals["from_address"] = parseaddr(str(message.get("From") or ""))[1].strip().lower()[:255]
+        signals["recipients"] = [
+            address.strip().lower()[:255]
+            for header in ("To", "Cc", "Delivered-To", "X-Original-To")
+            for _name, address in getaddresses([str(value) for value in (message.get_all(header) or [])])[:20]
+            if address
+        ][:40]
         signals["return_path_domain"] = domain_of(message.get("Return-Path"))
         # Only the Authentication-Results header written by Amazon SES (authserv-id amazonses.com) is believed: the sender
         # controls any other copy.
@@ -452,6 +465,19 @@ def own_authenticated_sender(signals):
     domain = signals.get("from_domain") or ""
     ours = any(domain == own or domain.endswith("." + own) for own in OWN_SENDER_DOMAINS)
     return ours and "pass" in (signals.get("dkim"), signals.get("dmarc"))
+
+
+# [@ANCHOR: hams_helpdesk:inbound_bulk_allowlisted]
+def bulk_allowlisted(signals):
+    """True when the message is from an allowlisted sender to its allowlisted alias (BULK_ALLOWLIST) and SES recorded a
+    DKIM or DMARC pass for the From line."""
+    signals = signals or {}
+    if "pass" not in (signals.get("dkim"), signals.get("dmarc")):
+        return False
+    return any(
+        signals.get("from_address") == sender and recipient in (signals.get("recipients") or ())
+        for sender, recipient in BULK_ALLOWLIST
+    )
 
 
 # [@ANCHOR: hams_helpdesk:inbound_bulk_mail_findings]
@@ -522,6 +548,8 @@ def detect_bulk_mail_signals(subject, body_html, signals=None, threshold=BULK_SC
     reason states the total; the rest list each contributing signal with its weight. Every message is judged,
     including one with In-Reply-To or References headers: the sender writes those, and a Message-ID they already
     received (from a mail we sent) must not exempt their mail from the rules."""
+    if bulk_allowlisted(signals):
+        return []
     findings = bulk_mail_findings(subject, body_html, signals)
     total = sum(weight for weight, _reason in findings)
     if total < threshold:
