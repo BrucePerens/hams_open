@@ -150,6 +150,14 @@ no side effects. **Status:** Verified by `test_30_hostile_input_never_raises`.
 authentication and returns False; `evil-hams.com` is not a sub-domain. Pure. `inbound_spam_reasons()` returns [] for such a sender.
 **Status:** Verified by `test_28_members_and_our_own_authenticated_senders_are_exempt`.
 
+### `bulk_allowlisted` [@ANCHOR: hams_helpdesk:inbound_bulk_allowlisted]
+
+`bulk_allowlisted(signals)`: `signals` is a `mail_signals()` dict (or None). Returns True only when SES recorded a `dkim` or `dmarc`
+pass AND the `from_address` and one of the `recipients` (To, Cc, Delivered-To, X-Original-To) match a pair in `BULK_ALLOWLIST`
+(today: `notifications@github.com` to `psl@hams.com`, the Public Suffix List maintainers' GitHub mail, which carries
+List-Unsubscribe). `detect_bulk_mail_signals()` then returns [] (the weighted bulk rules are skipped; the strong spam and phishing
+rules still apply). Pure. **Status:** Verified by `test_28b_github_notification_to_psl_is_not_scored_as_bulk`.
+
 ### `bulk_mail_findings` [@ANCHOR: hams_helpdesk:inbound_bulk_mail_findings]
 
 `bulk_mail_findings(subject, body_html, signals=None)`: `subject`, `body_html` as for `inbound_spam_reasons`; `signals` the
