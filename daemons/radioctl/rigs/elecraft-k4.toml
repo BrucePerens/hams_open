@@ -3,7 +3,7 @@
 # SOURCE: Elecraft K4 Programmer's Reference Rev. D11 (May 1, 2026), sha256 d21f56e329a749060f40e0a5ac4d968b3b04c264bf4804ca96763f71cef0c2cf.
 # The K4 speaks the K3 command set in its K3-compatible (K40) meta mode, the one used here: the engine never sends K41;. Only commands
 # whose K4 form is the same as the K3's are claimed. The K4 differs from the K3 in AG (000-060), RG (negative dB), KS (8-100), MG (000-080),
-# PC (power with a range letter) and RA/PA (3 dB steps, preamp 10/18/20 dB; K41 meta mode only, not used). It has no RO: rit-xit is claimed with the offset set by RC then RU/RD (PDF pp. 27 and 29) and read from IF; read-signal is the K3-compatible SMnnnn of K40 mode (PDF p. 31). Split is not claimed: the guide's FT takes 0/1 but has no FR to leave split.
+# PC (power with a range letter) and RA/PA (3 dB steps, preamp steps 1-3; K41 meta mode only: the engine sends K41; RA|PA ...; K4<previous>; in one write). It has no RO: rit-xit is claimed with the offset set by RC then RU/RD (PDF pp. 27 and 29) and read from IF; read-signal is the K3-compatible SMnnnn of K40 mode (PDF p. 31). Split is not claimed: the guide's FT takes 0/1 but has no FR to leave split.
 # EVERYTHING HERE IS UNVERIFIED: written from the guide, never run against a radio. Hamlib 4.6.2 lists serial 4800..115200 baud, 8N1, no handshake.
 schema = 1
 capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "send-cw", "transceive", "levels", "identify", "rit-xit", "read-signal"]
@@ -19,8 +19,8 @@ k4 = true
 levels = { af-gain = [0, 60], mic-gain = [0, 80], keyer-speed = [8, 100] }
 
 [levels]
-attenuator_db = []
-preamp_steps = 0
+attenuator_db = [3, 6, 9, 12, 15, 18, 21]
+preamp_steps = 3
 absent = ["rf-gain", "monitor-level", "rf-power"]
 
 [timing]
