@@ -982,6 +982,16 @@
 | Field | Type | Meaning |
 |---|---|---|
 | `raw_to_milliwatts` | `Vec<(u16, u32)>` | Calibration points as (raw, milliwatts), ascending. |
+| `band` | `Vec<PowerBandSection>` | Optional `[[power_meter.band]]` entries for a rig rated differently per band, ascending `max_hz`. |
+
+### `PowerBandSection` [@ANCHOR: radioctl:radioctl_core_rigfile_power_band_section]
+
+**Purpose and location.** One `[[power_meter.band]]` table, in `rigfile.rs` next to `PowerMeterSection`, a private `struct` that derives Deserialize and rejects unknown keys.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `max_hz` | `u64` | Highest transmit frequency in hertz the band covers; entries ascend. |
+| `raw_to_milliwatts` | `Vec<(u16, u32)>` | Calibration points as (raw, milliwatts) for this band, ascending. |
 
 **Invariants, ownership and concurrency.** Plain data: no locks, atomics or handles inside, so it is copied or moved by value as its derives allow. No invariant beyond the field types is stated in the source (unknown whether callers must keep any relation between fields).
 
