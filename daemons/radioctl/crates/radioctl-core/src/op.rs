@@ -101,6 +101,10 @@ pub enum Op {
     SelectReceiver(Receiver),
     /// Read which receiver (band) later commands act on.
     GetReceiver,
+    /// Read the frequency of a receiver (band) of a dual-receiver rig (TS-990S `FA`/`FB`).
+    GetReceiverFrequency(Receiver),
+    /// Read the S-meter of a receiver (band) of a dual-receiver rig (TS-990S `SM0`/`SM1`).
+    GetReceiverSignal(Receiver),
     /// Choose the band the transmitter follows (Yaesu `FT` on the dual-band FTDX models). Setting
     /// it does not key the rig.
     SetTxReceiver(Receiver),
@@ -187,6 +191,10 @@ pub enum Field {
     ScopeSetting(u8, ScopeSetting),
     /// The receiver (band) commands act on.
     Receiver,
+    /// A receiver's frequency.
+    ReceiverFrequency(Receiver),
+    /// A receiver's S-meter.
+    ReceiverSignal(Receiver),
     /// The band the transmitter follows.
     TxReceiver,
     /// Dual watch on or off.
@@ -279,6 +287,10 @@ pub enum Observation {
     ScopeSetting(u8, ScopeSetting, u8),
     /// The receiver (band) commands act on.
     Receiver(Receiver),
+    /// A receiver's frequency.
+    ReceiverFrequency(Receiver, Hz),
+    /// A receiver's S-meter reading, in the rig's own units.
+    ReceiverSignal(Receiver, u16),
     /// The band the transmitter follows.
     TxReceiver(Receiver),
     /// Dual watch on or off.
@@ -327,6 +339,8 @@ impl Observation {
             Observation::ScopeReference(rx, _) => Field::ScopeReference(*rx),
             Observation::ScopeSetting(rx, setting, _) => Field::ScopeSetting(*rx, *setting),
             Observation::Receiver(_) => Field::Receiver,
+            Observation::ReceiverFrequency(rx, _) => Field::ReceiverFrequency(*rx),
+            Observation::ReceiverSignal(rx, _) => Field::ReceiverSignal(*rx),
             Observation::TxReceiver(_) => Field::TxReceiver,
             Observation::DualWatch(_) => Field::DualWatch,
             Observation::RepeaterShift(_) => Field::RepeaterShift,
@@ -382,6 +396,8 @@ impl Op {
             | Op::ScopeAction(..) => Capability::Scope,
             Op::SelectReceiver(_)
             | Op::GetReceiver
+            | Op::GetReceiverFrequency(_)
+            | Op::GetReceiverSignal(_)
             | Op::SetTxReceiver(_)
             | Op::GetTxReceiver
             | Op::SetDualWatch(_)

@@ -418,6 +418,46 @@ impl KenwoodEngine {
                     _ => Inbound::Unrecognised(format!("{text};").into_bytes()),
                 }];
             }
+            // `FA`/`FB` (PDF p. 29) and `SM0<nnnn>`/`SM1<nnnn>` (PDF p. 54): per band.
+            if let Some(digits) = text.strip_prefix("FA").or_else(|| text.strip_prefix("FB")) {
+                let rx = if text.starts_with("FB") {
+                    Receiver::Sub
+                } else {
+                    Receiver::Main
+                };
+                let Some(hz) = parse_digits(digits).filter(|_| digits.len() == 11) else {
+                    return vec![Inbound::Unrecognised(format!("{text};").into_bytes())];
+                };
+                // The main band is also VFO A for the callers that read `FA`.
+                let mut seen = vec![Inbound::Observation(Observation::ReceiverFrequency(
+                    rx,
+                    Hz(hz),
+                ))];
+                if rx == Receiver::Main {
+                    seen.push(Inbound::Observation(Observation::Frequency(Vfo::A, Hz(hz))));
+                }
+                return seen;
+            }
+            if let Some(rest) = text.strip_prefix("SM") {
+                let band = match rest.get(..1) {
+                    Some("0") => Some(Receiver::Main),
+                    Some("1") => Some(Receiver::Sub),
+                    _ => None,
+                };
+                let value = rest
+                    .get(1..)
+                    .filter(|d| d.len() == 4)
+                    .and_then(parse_digits)
+                    .and_then(|v| u16::try_from(v).ok());
+                let (Some(rx), Some(v)) = (band, value) else {
+                    return vec![Inbound::Unrecognised(format!("{text};").into_bytes())];
+                };
+                let mut seen = vec![Inbound::Observation(Observation::ReceiverSignal(rx, v))];
+                if rx == Receiver::Main {
+                    seen.push(Inbound::Observation(Observation::Signal(v)));
+                }
+                return seen;
+            }
             // `OM0<m>`: the operating mode of the main band (the PC command reference, OM). It has
             // no `MD`, `FR` or `FT`, and the levels and front end have other forms here.
             if let Some(code) = text.strip_prefix("OM0").filter(|c| c.len() == 1) {
@@ -554,6 +594,15 @@ impl KenwoodEngine {
             Op::GetReceiver => Ok(Self::command(
                 "CB;".into(),
                 ReplyKind::Observation(Field::Receiver),
+            )),
+            // `FA`/`FB` (PDF p. 29) and `SM0`/`SM1` (PDF p. 54): a band's frequency and S-meter.
+            Op::GetReceiverFrequency(rx) => Ok(Self::command(
+                if *rx == Receiver::Sub { "FB;" } else { "FA;" }.into(),
+                ReplyKind::Observation(Field::ReceiverFrequency(*rx)),
+            )),
+            Op::GetReceiverSignal(rx) => Ok(Self::command(
+                format!("SM{};", u8::from(*rx == Receiver::Sub)),
+                ReplyKind::Observation(Field::ReceiverSignal(*rx)),
             )),
             // The sub band is a second receiver, `SP` starts a split-frequency setting and the
             // transmit state is not in `IF`: none of these is a VFO B, a split flag or a read of PTT.

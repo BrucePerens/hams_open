@@ -515,7 +515,7 @@ pub async fn active_tx_frequency(&self, freshness: Freshness) -> Result<Hz, RigE
 
 ## Main and Sub receivers
 
-A dual-receiver rig has the capability `receivers` and these ops (decision 2026-11-12; **implemented per model only where the model's manual is on hand, all unverified**): `SelectReceiver(Main|Sub)` and `GetReceiver` (which band later commands act on), `SetTxReceiver(Main|Sub)` and `GetTxReceiver` (which band the transmitter follows; it never keys the rig), and `SetDualWatch(bool)` and `GetDualWatch`. Each set updates the cache (`Observation::Receiver`, `TxReceiver`, `DualWatch`); an engine that has no command for an op refuses it as unsupported.
+A dual-receiver rig has the capability `receivers` and these ops (decision 2026-11-12; **implemented per model only where the model's manual is on hand, all unverified**): `SelectReceiver(Main|Sub)` and `GetReceiver` (which band later commands act on), `SetTxReceiver(Main|Sub)` and `GetTxReceiver` (which band the transmitter follows; it never keys the rig), and `SetDualWatch(bool)` and `GetDualWatch`, and `GetReceiverFrequency(Main|Sub)` and `GetReceiverSignal(Main|Sub)` (one band's frequency and S-meter; the TS-990S `FA`/`FB` and `SM0`/`SM1`; fields `Field::ReceiverFrequency` and `Field::ReceiverSignal`, observations `ReceiverFrequency` and `ReceiverSignal`). Each set updates the cache (`Observation::Receiver`, `TxReceiver`, `DualWatch`); an engine that has no command for an op refuses it as unsupported.
 
 ## Repeater shift and tones
 
@@ -608,6 +608,8 @@ caches), with the meaning taken from the doc comments in `radioctl-core/src/op.r
 | `ScopeAction(u8, ScopeAction)` | Run a one-shot scope command on a receiver (see `ScopeAction`). |
 | `SelectReceiver(Receiver)` | Make a receiver (band) the one later commands act on (Icom `07 D0`/`D1`). |
 | `GetReceiver` | Read which receiver (band) later commands act on. |
+| `GetReceiverFrequency(Receiver)` | Read the frequency of a receiver (band) of a dual-receiver rig (TS-990S `FA`/`FB`). |
+| `GetReceiverSignal(Receiver)` | Read the S-meter of a receiver (band) of a dual-receiver rig (TS-990S `SM0`/`SM1`). |
 | `SetTxReceiver(Receiver)` | Choose the band the transmitter follows (Yaesu `FT` on the dual-band FTDX models). Setting it does not key the rig. |
 | `GetTxReceiver` | Read the band the transmitter follows. |
 | `SetDualWatch(bool)` | Turn dual watch (both receivers listening) on or off (Icom `07 C0`/`C1`). |
@@ -653,6 +655,8 @@ caches), with the meaning taken from the doc comments in `radioctl-core/src/op.r
 | `ScopeSetting(u8, ScopeSetting)` | A receiver's scope setting. |
 | `Receiver` | The receiver (band) commands act on. |
 | `TxReceiver` | The band the transmitter follows. |
+| `ReceiverFrequency(Receiver)` | A receiver's frequency. |
+| `ReceiverSignal(Receiver)` | A receiver's S-meter. |
 | `DualWatch` | Dual watch on or off. |
 | `RepeaterShift` | The repeater shift direction. |
 | `RepeaterOffset` | The repeater offset. |

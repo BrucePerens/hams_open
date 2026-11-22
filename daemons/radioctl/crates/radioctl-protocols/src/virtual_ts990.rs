@@ -41,6 +41,8 @@ impl VirtualRig {
                 None
             }
             ("CB", _) => Some("?;".to_string()),
+            // `SM1;` reads the Sub band's meter: 0000 while receiving (PDF p. 54).
+            ("SM", "1") => Some("SM10000;".to_string()),
             // No `MD`, `FR`, `FT`, `SP` as the classic table has them, and the level and front end
             // forms are other ones (a band digit, other ranges).
             (
