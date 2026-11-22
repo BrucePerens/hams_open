@@ -454,6 +454,7 @@ struct PowerMeterSection {
     band: Vec<PowerBandSection>,
 }
 
+// [@ANCHOR: radioctl_core_rigfile_power_band_section]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PowerBandSection {
@@ -2152,6 +2153,7 @@ verified = { state = "unverified" }
     // Tests [@ANCHOR: radioctl_core_powermeter_cal]
     // Tests [@ANCHOR: radioctl_core_description_power_meter_params]
     // Tests [@ANCHOR: radioctl_core_rigfile_power_meter_section]
+    // Tests [@ANCHOR: radioctl_core_rigfile_power_band_section]
     #[test]
     fn a_power_meter_block_needs_a_calibration_and_its_fact() {
         let fact = "\n[[facts]]\nkey = \"power_meter.raw_to_milliwatts\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n";
