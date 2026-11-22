@@ -109,6 +109,7 @@ impl Ts990LanFraming {
         })
     }
 
+    // [@ANCHOR: radioctl_ts990lan_handle_frame]
     fn frame(&mut self, frame: &[u8], out: &mut Decoded) {
         let text = String::from_utf8_lossy(frame);
         match self.phase {
