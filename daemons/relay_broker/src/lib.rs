@@ -35,7 +35,6 @@ pub mod ratelimit;
 #[cfg(unix)]
 pub mod server;
 #[cfg(test)]
-#[cfg_attr(windows, allow(dead_code))]
 mod testdir;
 pub mod time_guard;
 #[cfg(unix)]
