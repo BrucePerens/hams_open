@@ -664,7 +664,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radiod_client_net_control_request]
-    #[tokio::test]
+    // Paused (virtual) clock: elapsed() is deterministic and load-independent.
+    #[tokio::test(start_paused = true)]
     async fn request_never_waits_past_its_deadline() {
         let handle = Handle::current();
         let (g, port) = (group(6), test_port(5));
