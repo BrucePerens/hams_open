@@ -4,7 +4,7 @@ The Kenwood TS-990S LAN stream as a network framing, written from Kenwood's PC c
 
 ### `fn utf16(ascii: &[u8]) -> Vec<u8>` [@ANCHOR: radioctl:radioctl_ts990_lan_utf16]
 
-Widens ASCII text to the UTF-16 little-endian bytes the LAN port speaks (each byte followed by a zero). Pure.
+Widens ASCII text to UTF-16 bytes, little endian (each byte followed by a zero). Pure. The manual (PDF p. 1) says UTF-16 but not the byte order, so this is unverified.
 
 ### `fn lan_connect_request() -> Vec<u8>` [@ANCHOR: radioctl:radioctl_ts990_lan_connect_request]
 
