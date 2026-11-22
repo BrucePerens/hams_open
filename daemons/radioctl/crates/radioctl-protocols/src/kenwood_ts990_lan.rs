@@ -175,17 +175,11 @@ impl Framing for Ts990LanFraming {
         self.unit.extend_from_slice(wire);
         // Keep the CAT text as ASCII; a unit above 0x7F is not part of any CAT form here.
         let whole = self.unit.len() / 2 * 2;
-        for pair in self
-            .unit
-            .drain(..whole)
-            .collect::<Vec<u8>>()
-            .chunks_exact(2)
-        {
-            self.text.push(if pair[1] == 0 && pair[0] < 0x80 {
-                pair[0]
-            } else {
-                b'?'
-            });
+        let units: Vec<u8> = self.unit.drain(..whole).collect();
+        for k in (0..units.len()).step_by(2) {
+            let (low, high) = (units[k], units[k + 1]);
+            self.text
+                .push(if high == 0 && low < 0x80 { low } else { b'?' });
         }
         let mut out = Decoded::default();
         while let Some(end) = self.text.iter().position(|b| *b == b';') {
