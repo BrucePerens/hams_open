@@ -85,8 +85,8 @@ impl FrameAnalyzer {
     }
 
     fn center(&self, k: usize) -> usize {
-        (LEAD as i64 + (k * FRAME_SAMPLES) as i64 + self.center_offset as i64).max(MARGIN as i64)
-            as usize
+        (LEAD as i64 + (k * FRAME_SAMPLES) as i64 + self.center_offset as i64)
+            .max((self.trimmed + MARGIN) as i64) as usize
     }
 
     pub fn push_samples(&mut self, samples: &[i16]) {
@@ -293,5 +293,36 @@ impl Encoder {
 impl Default for Encoder {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tone(period: f64, n: usize) -> Vec<i16> {
+        (0..n)
+            .map(|i| (3000.0 * (2.0 * std::f64::consts::PI * i as f64 / period).sin()) as i16)
+            .collect()
+    }
+
+    /// Changing the centre offset after the analyzer has dropped old samples must not make a frame's centre fall
+    /// before the first retained sample (`center - trimmed` used to underflow and panic). Trimming happens every
+    /// 25 frames or so, so every input length from 20 to 70 frames is tried to hit the frame right after a trim.
+    #[test]
+    fn a_centre_offset_changed_after_trimming_does_not_underflow() {
+        let mut trimmed_somewhere = false;
+        for frames_before in 20..=70 {
+            let mut analyzer = FrameAnalyzer::new();
+            analyzer.set_center_offset(160);
+            analyzer.push_samples(&tone(60.0, 160 * frames_before));
+            while analyzer.next_analysis().is_some() {}
+            trimmed_somewhere |= analyzer.trimmed > 0;
+            analyzer.set_center_offset(-160);
+            analyzer.push_samples(&tone(60.0, 160 * 5));
+            analyzer.finish_input();
+            while analyzer.next_analysis().is_some() {}
+        }
+        assert!(trimmed_somewhere, "the test needs trimming to have begun");
     }
 }
