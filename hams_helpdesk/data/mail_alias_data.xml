@@ -46,5 +46,21 @@
             <field name="alias_contact">everyone</field>
             <field name="alias_defaults">{'priority': '1'}</field>
         </record>
+
+        <!-- abuse@hams.com is the abuse contact registered with ARIN for our IPv6 network (RFC 2142 role address),
+             security@hams.com is the Contact of /.well-known/security.txt (RFC 9116). Same routing as psl@ above. -->
+        <record id="mail_alias_abuse_helpdesk" model="mail.alias">
+            <field name="alias_name">abuse</field>
+            <field name="alias_model_id" ref="hams_helpdesk.model_hams_helpdesk_ticket"/>
+            <field name="alias_contact">everyone</field>
+            <field name="alias_defaults">{'priority': '1'}</field>
+        </record>
+
+        <record id="mail_alias_security_helpdesk" model="mail.alias">
+            <field name="alias_name">security</field>
+            <field name="alias_model_id" ref="hams_helpdesk.model_hams_helpdesk_ticket"/>
+            <field name="alias_contact">everyone</field>
+            <field name="alias_defaults">{'priority': '1'}</field>
+        </record>
     </data>
 </odoo>

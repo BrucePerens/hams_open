@@ -103,6 +103,11 @@ class TestMailIngest(HamsTransactionCase):
         self._assert_role_address_makes_a_ticket("psl")
         self._assert_role_address_makes_a_ticket("hostmaster")
 
+    def test_01c_abuse_and_security_role_addresses_become_tickets_like_support(self):
+        # abuse@ is the ARIN abuse contact, security@ the security.txt contact.
+        self._assert_role_address_makes_a_ticket("abuse")
+        self._assert_role_address_makes_a_ticket("security")
+
     # info@hams.com used to create a hams_helpdesk.ticket here; per Bruce's
     # own direction it now routes to pager_duty (pager.incident) instead --
     # see pager_duty/tests/test_hooks.py for the alias claim and
