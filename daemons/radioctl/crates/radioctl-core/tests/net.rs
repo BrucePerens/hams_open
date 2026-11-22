@@ -67,17 +67,26 @@ struct Server {
     rig: Arc<Mutex<VirtualRig>>,
     task: Option<JoinHandle<()>>,
     addr: std::net::SocketAddr,
+    /// Bound (SO_REUSEADDR) but never listening: keeps the port ours while the server is down,
+    /// so a parallel test or process cannot be handed it before `restart`.
+    _reserved: tokio::net::TcpSocket,
 }
 
 impl Server {
     async fn start(desc: &RigDescription) -> Server {
         let rig = Arc::new(Mutex::new(VirtualRig::from_description(desc).expect("rig")));
-        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
-        let addr = listener.local_addr().expect("addr");
+        let reserved = tokio::net::TcpSocket::new_v4().expect("socket");
+        reserved.set_reuseaddr(true).expect("reuseaddr");
+        reserved
+            .bind("127.0.0.1:0".parse().expect("addr"))
+            .expect("bind");
+        let addr = reserved.local_addr().expect("addr");
+        let listener = TcpListener::bind(addr).await.expect("listen");
         let mut server = Server {
             rig,
             task: None,
             addr,
+            _reserved: reserved,
         };
         server.serve(listener);
         server
