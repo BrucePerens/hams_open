@@ -402,6 +402,10 @@
 
 **See also:** test `a_scope_block_is_icom_only_sane_and_needs_its_facts (src/rigfile.rs)`.
 
+### `PowerBand` [@ANCHOR: radioctl:radioctl_core_description_power_band]
+
+The power meter points of one band of a rig rated differently per band: `max_hz`, the highest frequency in hertz the band covers, and ascending `(raw reading, milliwatts)` points. Listed in the rig file as `[[power_meter.band]]` in ascending `max_hz`; `PowerMeterParams::cal_at` picks the first band at or above the transmit frequency.
+
 ### `PowerMeterParams` [@ANCHOR: radioctl:radioctl_core_description_power_meter_params]
 
 **Purpose and location.** The calibration points of a rig's raw power meter: `(raw, milliwatts)`, ascending in both. A rig that reports only a relative bar has none, and radioctl then reports a relative value. Defined in `daemons/radioctl/crates/radioctl-core/src/description.rs:665` as a pub `struct`. It derives Debug, Clone, PartialEq, Eq.

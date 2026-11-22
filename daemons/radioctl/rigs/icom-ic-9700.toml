@@ -31,6 +31,19 @@ preamp_steps = 2
 [power_meter]
 raw_to_milliwatts = [[0, 0], [143, 50000], [213, 100000]]
 
+# Rated output differs by band: 100 W on 144 MHz, 75 W on 430/440 MHz, 10 W on 1200 MHz.
+[[power_meter.band]]
+max_hz = 250000000
+raw_to_milliwatts = [[0, 0], [143, 50000], [213, 100000]]
+
+[[power_meter.band]]
+max_hz = 700000000
+raw_to_milliwatts = [[0, 0], [143, 37500], [213, 75000]]
+
+[[power_meter.band]]
+max_hz = 1500000000
+raw_to_milliwatts = [[0, 0], [143, 5000], [213, 10000]]
+
 [timing]
 timeout_ms = 1000
 retries = 3
@@ -149,5 +162,5 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "power_meter.raw_to_milliwatts"
-provenance = { kind = "manual", reference = "Icom IC-9700 CI-V Reference Guide (IC-9700_ENG_CI-V_4.pdf), PDF page 5, command 15 11 (read the PO meter level, 0000 to 0255), page numbers as the PDF viewer counts them", note = "The command table prints the scale as percent of full output: 0000 is 0%, 0143 is 50% and 0213 is 100%. The 100 W rating (144 and 430 MHz) is Icom's published output, not printed in the CI-V guide; on 1200 MHz (75 W) the reading over-states the watts, which errs toward tripping. radioctl interpolates linearly and holds the last value beyond. Not measured at the load." }
+provenance = { kind = "manual", reference = "Icom IC-9700 CI-V Reference Guide (IC-9700_ENG_CI-V_4.pdf), PDF page 5, command 15 11 (read the PO meter level, 0000 to 0255), page numbers as the PDF viewer counts them; rated output from Icom America's IC-9700 specifications page (https://www.icomamerica.com/lineup/products/IC-9700/, Transmitter, output power SSB/CW/RTTY/FM/DV/DD, read 2026-11-21)", note = "The command table prints the scale as percent of full output: 0000 is 0%, 0143 is 50% and 0213 is 100%. The rated output differs by band (144 MHz 0.5 to 100 W, 430/440 MHz 0.5 to 75 W, 1200 MHz 0.1 to 10 W), so each [[power_meter.band]] scales the same percent points to its band's rating, chosen by the transmit frequency; the base points (100 W) apply when the frequency is unknown and over-state the watts, which errs toward tripping. radioctl interpolates linearly and holds the last value beyond. Not measured at the load." }
 verified = { state = "manual-checked", reference = "Icom IC-9700 CI-V Reference Guide (IC-9700_ENG_CI-V_4.pdf), PDF page 5, command 15 11" }
