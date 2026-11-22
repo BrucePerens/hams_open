@@ -11,20 +11,34 @@
 //! `server` (the accept loop), `client` (the caller side), `config`, `audit`, `ratelimit`, and
 //! `os` (the OS trait with its Linux implementation; the tests supply a fake).
 
+#[cfg(unix)]
 pub mod audit;
+#[cfg(unix)]
 pub mod auth;
+#[cfg(unix)]
 pub mod broker;
+#[cfg(unix)]
 pub mod cli;
+#[cfg(unix)]
 pub mod client;
+#[cfg(unix)]
 pub mod config;
 pub mod hub;
+#[cfg(unix)]
 pub mod hub_runner;
+#[cfg(unix)]
 pub mod os;
+#[cfg(unix)]
 pub mod policy;
+#[cfg(unix)]
 pub mod ratelimit;
+#[cfg(unix)]
 pub mod server;
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod testdir;
 pub mod time_guard;
+#[cfg(unix)]
 pub mod transport;
+#[cfg(windows)]
+pub mod windows;
 pub mod wire;
