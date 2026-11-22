@@ -3,6 +3,7 @@
 //! module is written here independently of the driver: it parses hex itself and checks the LRC
 //! with its own arithmetic.
 #![allow(clippy::expect_used, clippy::panic)]
+#![cfg(unix)]
 
 use std::io::{Read, Write};
 use std::path::PathBuf;
