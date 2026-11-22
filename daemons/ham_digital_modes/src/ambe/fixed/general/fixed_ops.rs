@@ -85,7 +85,11 @@ pub fn div_q16_i64(a: i64, b: i64) -> i32 {
         return if a_s >= 0 { i32::MAX } else { i32::MIN };
     }
     let numerator = a_s << 16;
-    let quotient = numerator / b_s;
+    // `i64::MIN / -1` is the one overflowing division (a floored negative `a_s` of -2^47 against `b_s` of -1): its true
+    // quotient is +2^63, which saturates to the maximum.
+    let Some(quotient) = numerator.checked_div(b_s) else {
+        return i32::MAX;
+    };
     quotient.clamp(i32::MIN as i64, i32::MAX as i64) as i32
 }
 

@@ -325,6 +325,15 @@ fn div_q16_i64_gives_the_ratio_of_wide_values_and_saturates_instead_of_panicking
     assert_eq!(div_q16_i64(-(1 << 62), 1), i32::MIN);
 }
 
+// Tests [@ANCHOR: ambe_fixed_div_q16_i64]
+#[test]
+fn div_q16_i64_saturates_when_the_normalised_numerator_is_i64_min_over_minus_one() {
+    // 2^48 - 1 shifts right by one and floors the negative operand to -2^47; `-2^47 << 16` is i64::MIN and the divisor
+    // `-1 >> 1` is -1, so the plain division overflowed and panicked instead of saturating.
+    assert_eq!(div_q16_i64(-((1i64 << 48) - 1), -1), i32::MAX);
+    assert_eq!(div_q16_i64(i64::MIN, -1), i32::MAX);
+}
+
 // Tests [@ANCHOR: ambe_fixed_sqrt_q16]
 #[test]
 fn sqrt_q16_is_exact_to_the_nearest_q16_value_and_is_zero_for_a_negative() {
