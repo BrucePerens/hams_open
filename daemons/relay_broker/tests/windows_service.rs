@@ -19,13 +19,25 @@ fn exe() -> &'static str {
     env!("CARGO_BIN_EXE_hams-relay-broker")
 }
 
-fn write_config(tag: &str) -> std::path::PathBuf {
+struct ScratchDir(std::path::PathBuf);
+
+impl Drop for ScratchDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// A scratch directory holding `broker.conf`; the guard removes the directory when dropped.
+fn write_config(tag: &str) -> (ScratchDir, std::path::PathBuf) {
+    // temp-dir-helper: `ScratchDir` removes the directory in its Drop, also while a failing test unwinds
     let dir = std::env::temp_dir().join(format!("relay_broker_{tag}_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("temp dir");
+    let guard = ScratchDir(dir.clone());
     let path = dir.join("broker.conf");
     let sid = current_user_sid().expect("own sid");
     std::fs::write(&path, format!("set_time = false\nallow_sid = {sid}\n")).expect("config");
-    path
+    (guard, path)
 }
 
 fn status_when_up() -> Response {
@@ -59,7 +71,7 @@ fn powershell(script: &str) -> String {
 #[test]
 fn started_by_hand_the_broker_serves_the_pipe_and_a_second_copy_cannot_take_it() {
     let _one = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
-    let config = write_config("console");
+    let (_scratch, config) = write_config("console");
     let mut child = Command::new(exe())
         .arg("--config")
         .arg(&config)
@@ -97,7 +109,7 @@ fn started_by_hand_the_broker_serves_the_pipe_and_a_second_copy_cannot_take_it()
 #[test]
 fn started_and_stopped_by_the_service_control_manager_it_answers_and_stops_cleanly() {
     let _one = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
-    let config = write_config("service");
+    let (_scratch, config) = write_config("service");
     let name = "HamsRelayBrokerTest";
     let script = format!(
         "New-Service -Name {name} -BinaryPathName '\"{exe}\" --config \"{config}\"' -StartupType Manual | Out-Null; \
