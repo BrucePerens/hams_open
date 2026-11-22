@@ -1334,9 +1334,334 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 **Returns.** The bound, close-on-exec descriptor, owned by the caller. **Errors.** `io::Error` from `socket`, `setsockopt` or `bind` (address in use, permission denied for a privileged port when the broker has no `CAP_NET_BIND_SERVICE`); `EAFNOSUPPORT` on the IPv6 socket falls back to IPv4. **Side effects.** Takes the port system-wide until the descriptor is closed. **Tests.** `a_bound_udp_descriptor_is_a_real_socket_on_the_port_and_the_port_is_then_taken` (os.rs).
 
 
+## Windows functions (src/windows.rs)
+
+The Windows broker serves the clock requests over the named pipe `\\.\pipe\hams-relay-broker` (no descriptor passing exists on Windows, so every device, group, hub and package request is refused). It is built and its tests run only on Windows (`cargo test` on a Windows host; the real-pipe and `SetSystemTime` tests need an elevated account).
+
+### `valid_sid` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_valid_sid]
+
+**Purpose.** Accepts only a string that can be nothing but a SID: `S-1-` then digits and single dashes, not ending in a dash. Every SID that reaches a security descriptor or the allow list passes through it, so a config line cannot smuggle SDDL syntax such as `)(A;;GA;;;WD` into the pipe's ACL.
+
+**Signature.** `pub fn valid_sid(sid: &str) -> bool`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `sid`: `&str`, up to 184 bytes: a candidate SID such as `S-1-5-21-1-2-3-1001`. |
+
+**Returns.** `true` when acceptable. **Errors.** None. **Side effects.** None. **Tests.** `only_a_plain_sid_is_accepted` (windows.rs).
+
+### `parse_settings` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_parse_settings]
+
+**Purpose.** Reads the config the Windows installer writes: `allow_sid` (repeatable), `set_time`, `idle_exit_secs`, `max_unproven_step_secs`, `max_time_steps_per_hour`; `apply_groups` and `update_package` are accepted and ignored (Linux actions). Anything else is an error naming the line, so a typo never silently loosens the broker.
+
+**Signature.** `pub fn parse_settings(text: &str) -> Result<Settings, String>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `text`: `&str`: the config file, `key = value` lines and `#` comments. |
+
+**Returns.** The `Settings`. **Errors.** A `String` naming the line: no `=`, a value that is not `true`/`false` or a number, a `allow_sid` that is not a SID, an unknown key. **Side effects.** None. **Tests.** `the_installer_written_config_parses_and_junk_is_refused` (windows.rs).
+
+### `pipe_sddl` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_pipe_sddl]
+
+**Purpose.** Builds the pipe's DACL as SDDL: protected (`D:P`), SYSTEM and Administrators full control, and read-write for each listed SID. Nobody else, including remote machines (the pipe also sets `PIPE_REJECT_REMOTE_CLIENTS`), can open the pipe.
+
+**Signature.** `pub fn pipe_sddl(allow_sids: &[String]) -> Result<String, String>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `allow_sids`: the validated SIDs of the accounts allowed to connect. |
+
+**Returns.** The SDDL string. **Errors.** A SID that fails `valid_sid`. **Side effects.** None. **Tests.** `the_acl_is_system_admins_and_each_listed_sid_only and an_account_outside_the_acl_cannot_open_the_pipe` (windows.rs).
+
+### `civil_from_unix` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_civil_from_unix]
+
+**Purpose.** Converts Unix seconds to a UTC calendar date and time for the `SYSTEMTIME` that `SetSystemTime` takes, without a date library (the days-to-civil algorithm).
+
+**Signature.** `pub fn civil_from_unix(secs: u64) -> (u16, u16, u16, u16, u16, u16)`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `secs`: Unix seconds. |
+
+**Returns.** `(year, month, day, hour, minute, second)`. **Errors.** None. **Side effects.** None. **Tests.** `unix_seconds_become_the_right_utc_date` (windows.rs).
+
+### `system_time_unix_secs` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_system_time_unix_secs]
+
+**Purpose.** The system clock in Unix seconds, 0 if the clock is before 1970.
+
+**Signature.** `pub fn system_time_unix_secs() -> u64`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | None. |
+
+**Returns.** Unix seconds. **Errors.** None. **Side effects.** None. **Tests.** `a_listed_user_is_identified_over_the_real_pipe_and_served` (windows.rs).
+
+### `set_system_time` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_set_system_time]
+
+**Purpose.** Enables `SeSystemtimePrivilege` in the process token (a service holds it disabled) and calls `SetSystemTime`. The ceilings are not here: `handle_request` applies `time_guard` first.
+
+**Signature.** `pub fn set_system_time(unix_secs: u64) -> io::Result<()>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `unix_secs`: the UTC to set. |
+
+**Returns.** `Ok(())`. **Errors.** `io::Error` when the token does not hold the privilege or the OS refuses. **Side effects.** Steps the machine's clock. **Tests.** `the_real_clock_can_be_set_to_the_time_it_already_has (run elevated; it sets the clock to the time it already has)` (windows.rs).
+
+### `pipe_client_sid` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_pipe_client_sid]
+
+**Purpose.** The Windows counterpart of `SO_PEERCRED`: impersonates the pipe's client for the one query of its token's user SID, reverts at once, and returns the SID text.
+
+**Signature.** `fn pipe_client_sid(pipe: HANDLE) -> io::Result<String>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `pipe`: a connected server-side pipe instance from which the client has already sent bytes. |
+
+**Returns.** `S-1-5-...`. **Errors.** `io::Error` when impersonation or the token query fails (including a client that has sent nothing). **Side effects.** Impersonates and reverts on the calling thread; a token handle is opened and closed. **Tests.** `a_listed_user_is_identified_over_the_real_pipe_and_served` (windows.rs).
+
+### `handle_request` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_handle_request]
+
+**Purpose.** One request, one answer. A SID off the list gets `Denied` first. `TimeStatus` is read-only. `SetSystemTime` needs `set_time = true`, passes the same `TimeGuard` ceilings as Linux (build date, one year ahead, unproven large step, hourly count and breaker) and is counted only after the OS call succeeds. Every other request is `Denied` with `not available on Windows`.
+
+**Signature.** `pub fn handle_request(state: &mut State, clock: &mut dyn Clock, sid: &str, request: Request, now: Instant) -> Response`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `state`: settings and the `TimeGuard`; `clock`: the system clock or a test double; `sid`: the authenticated caller; `request`: the decoded request; `now`: monotonic time for the guard. |
+
+**Returns.** A `Response`; never panics. **Errors.** Reported as `Denied` or `Failed` responses. **Side effects.** May step the clock and record the step. **Tests.** `an_unlisted_sid_gets_nothing_and_the_clock_rules_match_linux` (windows.rs).
+
+### `serve_one` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_serve_one]
+
+**Purpose.** Serves one connection: create a pipe instance with the DACL, wait for the client, read the 4-byte header, identify the client by SID and refuse an unlisted one before reading the body, read and decode one framed request, answer it, flush until the client has read the answer, disconnect.
+
+**Signature.** `pub fn serve_one(name: &str, sddl: &str, first: bool, state: &mut State, clock: &mut dyn Clock) -> io::Result<String>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `name`: the pipe name; `sddl`: its DACL; `first`: true for the first instance (fails if the name is taken); `state`, `clock`: as in `handle_request`. |
+
+**Returns.** The caller's SID. **Errors.** `io::Error` from the pipe calls or a client that disconnects mid-frame. **Concurrency.** One connection at a time; a stalled client holds the pipe until it disconnects (only listed accounts can connect). **Side effects.** As `handle_request`. **Tests.** `a_listed_user_is_identified_over_the_real_pipe_and_served and an_account_the_acl_admits_but_the_sid_list_does_not_is_refused_by_the_sid_check` (windows.rs).
+
+
+### `current_user_sid` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_current_user_sid]
+
+**Purpose.** The user SID (`S-1-5-...`) of the account this process runs as, which is what a client of the pipe is identified as. Used by the tests to build an allow list that names the test's own account.
+
+**Signature.** `pub fn current_user_sid() -> io::Result<String>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | None. |
+
+**Returns.** The SID text. **Errors.** `io::Error` from the token calls. **Side effects.** Opens and closes the process token. **Tests.** `a_listed_user_is_identified_over_the_real_pipe_and_served` (windows.rs, tests/windows_service.rs).
+
+### `token_user_sid` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_token_user_sid]
+
+**Purpose.** Reads the user SID from a token with `GetTokenInformation(TokenUser)` and converts it to its text form with `ConvertSidToStringSidW`; shared by the pipe-client check and `current_user_sid`.
+
+**Signature.** `fn token_user_sid(token: HANDLE) -> io::Result<String>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `token`: a token handle opened with `TOKEN_QUERY`. |
+
+**Returns.** The SID text. **Errors.** `io::Error` from either call. **Side effects.** Allocates and frees (`LocalFree`) the Windows string; does not close `token`. **Tests.** `a_listed_user_is_identified_over_the_real_pipe_and_served` (windows.rs, tests/windows_service.rs).
+
+### `enable_privilege` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_enable_privilege]
+
+**Purpose.** Turns on one privilege that the process token holds but has disabled, which is how a service gets it. `AdjustTokenPrivileges` succeeds even when it assigned nothing, so the last-error value `ERROR_NOT_ALL_ASSIGNED` is checked and reported as an error.
+
+**Signature.** `fn enable_privilege(name: &str) -> io::Result<()>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `name`: a privilege name such as `SeSystemtimePrivilege`. |
+
+**Returns.** `Ok(())`. **Errors.** `io::Error` when the token cannot be opened, the privilege name is unknown, or the token does not hold it. **Side effects.** Changes the process token. **Tests.** `the_real_clock_can_be_set_to_the_time_it_already_has` (windows.rs, tests/windows_service.rs).
+
+### `instance_create` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_instance_create]
+
+**Purpose.** Creates one server-side pipe instance (byte mode, blocking, 255 instances allowed, `PIPE_REJECT_REMOTE_CLIENTS`) whose security descriptor is the SDDL; the first instance of a run uses `FILE_FLAG_FIRST_PIPE_INSTANCE`, so a second broker (or a squatter that got there first) is an error rather than a second server.
+
+**Signature.** `fn create(name: &str, sddl: &str, first: bool) -> io::Result<Instance>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `name`: pipe name; `sddl`: the DACL; `first`: refuse to create the pipe if another process already has the name. |
+
+**Returns.** The `Instance` (closed on drop). **Errors.** `io::Error` from the SDDL conversion or `CreateNamedPipeW`. **Side effects.** Creates a kernel pipe object. **Tests.** `a_listed_user_is_identified_over_the_real_pipe_and_served and started_by_hand_the_broker_serves_the_pipe_and_a_second_copy_cannot_take_it` (windows.rs, tests/windows_service.rs).
+
+### `instance_connect` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_instance_connect]
+
+**Purpose.** Blocks until a client connects. A client that connected between create and connect is the documented `ERROR_PIPE_CONNECTED` case and is not an error.
+
+**Signature.** `fn connect(&self) -> io::Result<()>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | None (a method on the instance). |
+
+**Returns.** `Ok(())`. **Errors.** `io::Error` from `ConnectNamedPipe`. **Side effects.** Blocks the calling thread. **Tests.** `a_listed_user_is_identified_over_the_real_pipe_and_served` (windows.rs, tests/windows_service.rs).
+
+### `call` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_call]
+
+**Purpose.** The client side: opens the pipe, writes one framed request, reads one framed response and decodes it. Used by the tests and by the `broker_pipe_client` example.
+
+**Signature.** `pub fn call(name: &str, request: &Request) -> io::Result<Response>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `name`: the pipe; `request`: what to ask. |
+
+**Returns.** The decoded `Response`. **Errors.** `io::Error` (not found, access denied by the ACL, a broken or malformed answer). **Side effects.** One pipe connection. **Tests.** `a_listed_user_is_identified_over_the_real_pipe_and_served` (windows.rs, tests/windows_service.rs).
+
+### `parse_args` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_parse_args]
+
+**Purpose.** Reads `--config PATH` (default `C:\\ProgramData\\hams-relay-broker\\broker.conf`); anything else is an error, which is what the installer's service command line `hams-relay-broker.exe --config PATH` needs and nothing more.
+
+**Signature.** `fn parse_args(argv: &[String]) -> Result<Args, String>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `argv`: the command line. |
+
+**Returns.** The `Args`. **Errors.** A `String` for an unknown option or a missing value. **Side effects.** None. **Tests.** `the_command_line_takes_only_a_config_path` (windows.rs, tests/windows_service.rs).
+
+### `serve_forever` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_serve_forever]
+
+**Purpose.** Loads the config, builds the pipe's DACL, then serves one connection after another with `serve_one` until the process is stopped. A failure on the very first instance (the name is taken, the config is bad) ends it; a later failed connection is logged and the loop continues.
+
+**Signature.** `fn serve_forever(path: &Path) -> io::Result<()>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `path`: the config file. |
+
+**Returns.** Does not return normally. **Errors.** `io::Error` from the config or the first pipe. **Side effects.** Serves the pipe; may step the clock. **Tests.** `started_by_hand_the_broker_serves_the_pipe_and_a_second_copy_cannot_take_it` (windows.rs, tests/windows_service.rs).
+
+### `report` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_report]
+
+**Purpose.** Tells the service control manager the service's state through the handle `service_main` registered; does nothing outside a service.
+
+**Signature.** `fn report(state: u32, accept: u32)`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `state`: `SERVICE_RUNNING` or `SERVICE_STOPPED`; `accept`: the controls accepted (stop, or none). |
+
+**Returns.** None. **Errors.** None (a failed report is ignored). **Side effects.** Calls `SetServiceStatus`. **Tests.** `started_and_stopped_by_the_service_control_manager_it_answers_and_stops_cleanly` (windows.rs, tests/windows_service.rs).
+
+### `control_handler` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_control_handler]
+
+**Purpose.** Handles a stop request: reports `STOPPED` and ends the process 200 ms later, after this handler has returned its reply (the pipe accept cannot be interrupted and the broker keeps no state to save). Other controls are ignored.
+
+**Signature.** `unsafe extern "system" fn control_handler(control: u32)`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `control`: the control code from the manager. |
+
+**Returns.** None. **Errors.** None. **Side effects.** Ends the process. **Tests.** `started_and_stopped_by_the_service_control_manager_it_answers_and_stops_cleanly` (windows.rs, tests/windows_service.rs).
+
+### `service_main` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_service_main]
+
+**Purpose.** The service entry: registers `control_handler`, reports `RUNNING`, serves the pipe with `serve_forever`, and reports `STOPPED` if that ever returns.
+
+**Signature.** `unsafe extern "system" fn service_main(_argc: u32, _argv: *mut *mut u16)`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | The control manager's arguments, unused (the config path comes from the command line the process started with). |
+
+**Returns.** None. **Errors.** A serve error is printed to stderr. **Side effects.** Runs the broker. **Tests.** `started_and_stopped_by_the_service_control_manager_it_answers_and_stops_cleanly` (windows.rs, tests/windows_service.rs).
+
+### `run_as_service` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_run_as_service]
+
+**Purpose.** Hands the process to the service control manager with `StartServiceCtrlDispatcherW`, which blocks until the service stops. When the process was started by hand the call fails with error 1063, which `run_main` treats as the cue to run in the console.
+
+**Signature.** `fn run_as_service() -> u32`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | None. |
+
+**Returns.** `0` after a service run, or the Win32 error code. **Errors.** The returned code. **Side effects.** Blocks for the life of the service. **Tests.** `started_by_hand_the_broker_serves_the_pipe_and_a_second_copy_cannot_take_it` (windows.rs, tests/windows_service.rs).
+
+### `run_main` (windows.rs) [@ANCHOR: relay_broker:relay_broker_windows_run_main]
+
+**Purpose.** The program: parse the command line, try the service dispatcher, and otherwise serve the pipe in this process (the way to try the broker by hand).
+
+**Signature.** `pub fn run_main() -> ExitCode`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | None. |
+
+**Returns.** Exit code 0 after a service run, 2 for a bad command line, 1 when serving fails. **Errors.** Printed to stderr. **Side effects.** Runs the broker. **Tests.** `started_by_hand_the_broker_serves_the_pipe_and_a_second_copy_cannot_take_it` (windows.rs, tests/windows_service.rs).
+
+
 ## Data structures
 
 Every data structure of the broker, explained in full (ADR 0113): purpose, fields, who builds and reads it. Each sits under the anchor on its definition in `src/`.
+
+### `Settings` [@ANCHOR: relay_broker:windows_settings_struct]
+
+**Purpose.** What the Windows broker reads from its config file (`parse_settings`), and what `handle_request` and the pipe's DACL are built from.
+
+**Definition.** `pub struct Settings` (struct) in `daemons/relay_broker/src/windows.rs`; derives `Debug`, `Clone`, `PartialEq`, `Eq`; `Default` is the safe state (nobody allowed, clock steps off).
+
+| Field | Type | Meaning |
+|---|---|---|
+| `allow_sids` | `Vec<String>` | User SIDs allowed to connect; each is validated by `valid_sid` before it is stored. Empty allows nobody. |
+| `set_time` | `bool` | Whether `set_system_time` is served (default false). |
+| `max_unproven_step_secs` | `u64` | The largest clock step without a GPS source or two agreeing sources (default 30). |
+| `max_time_steps_per_hour` | `u32` | Steps per hour before the breaker opens (default 4). |
+| `idle_exit_secs` | `u64` | Read for config compatibility with the Linux broker; a blocking pipe accept cannot time out, so it is not acted on (default 300). |
+
+### `SystemClock` [@ANCHOR: relay_broker:windows_system_clock_struct]
+
+**Purpose.** The real clock behind the `Clock` trait: reads the system time and steps it with `SetSystemTime`.
+
+**Definition.** `pub struct SystemClock;` (unit struct) in `daemons/relay_broker/src/windows.rs`; derives `Debug`, `Default`, `Clone`, `Copy`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `(none)` | `-` | No fields; the tests use a fake `Clock` instead. |
+
+### `State` [@ANCHOR: relay_broker:windows_state_struct]
+
+**Purpose.** What `handle_request` keeps between requests: the settings and the clock-step guard (history and breaker).
+
+**Definition.** `pub struct State` (struct) in `daemons/relay_broker/src/windows.rs`; derives `Debug`; built with `State::new`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `settings` | `Settings` | The parsed config. |
+| `guard` | `TimeGuard` | The same ceiling and breaker the Linux broker uses; it counts a step only after `SetSystemTime` succeeded. |
+
+### `Instance` [@ANCHOR: relay_broker:windows_instance_struct]
+
+**Purpose.** One server-side named-pipe instance; closing the handle on drop (after `DisconnectNamedPipe`) is what ends the connection.
+
+**Definition.** `struct Instance(HANDLE)` (tuple struct, private) in `daemons/relay_broker/src/windows.rs`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `0` | `HANDLE` | The pipe handle, owned by the instance and closed once in `Drop`. |
+
+### `Args` [@ANCHOR: relay_broker:windows_args_struct]
+
+**Purpose.** The command line of the Windows broker, as `parse_args` reads it from the arguments the service control manager passes (the installer's service command is `hams-relay-broker.exe --config PATH`). It is built once at start-up, never changes afterwards, and only `run_main` and `service_main` read it, to find the config file.
+
+**Definition.** `struct Args` (struct, private) in `daemons/relay_broker/src/windows.rs`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `config` | `PathBuf` | The config file (`--config`; default `C:\\ProgramData\\hams-relay-broker\\broker.conf`). |
 
 ### `AuditEvent` [@ANCHOR: relay_broker:audit_audit_event_struct]
 

@@ -7,6 +7,7 @@
 //! Skipped unless `HAMS_HUB_NETNS=1` (it needs passwordless `sudo ip`, `/usr/sbin/dnsmasq` and `/usr/sbin/hostapd`). Run it as a bounded job:
 //! `agent_procs.py run --tag NAME hubns -- timeout 120 env HAMS_HUB_NETNS=1 cargo test -p relay_broker --test hub_netns`.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
+#![cfg(unix)]
 
 mod common;
 

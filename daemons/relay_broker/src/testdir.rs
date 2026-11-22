@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! The one way a test of this crate makes a scratch directory: a fresh, empty directory that is removed with everything in it when the value
 //! is dropped, also while a failing test unwinds.
+// The Unix-only tests are its only users; on Windows it is unused.
+#![cfg_attr(windows, allow(dead_code))]
 
 use std::ops::Deref;
 use std::path::{Path, PathBuf};

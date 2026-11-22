@@ -5,6 +5,7 @@
 //! root-only paths (a real `/dev/ttyUSB0`, a real group change) go through the `Os` trait and
 //! are covered by the fake, as the README documents.
 #![allow(clippy::expect_used, clippy::unwrap_used)]
+#![cfg(unix)]
 
 mod common;
 

@@ -5,91 +5,108 @@
 //! For `open`, the received descriptor's device numbers are printed, proving the pass worked.
 #![allow(clippy::expect_used, clippy::panic)]
 
-use std::os::fd::AsFd;
-use std::path::Path;
+/// The client is Unix only: it passes descriptors over a Unix socket.
+#[cfg(unix)]
+mod unix_impl {
 
-use relay_broker::client::{connect_and_call_as, DEFAULT_SERVER_UIDS};
-use relay_broker::os::{LinuxOs, Os};
-use relay_broker::wire::{DeviceClass, Group, Request, Response};
+    use std::os::fd::AsFd;
+    use std::path::Path;
 
-fn class(s: &str) -> Option<DeviceClass> {
-    match s {
-        "serial" => Some(DeviceClass::Serial),
-        "audio" => Some(DeviceClass::Audio),
-        _ => None,
+    use relay_broker::client::{connect_and_call_as, DEFAULT_SERVER_UIDS};
+    use relay_broker::os::{LinuxOs, Os};
+    use relay_broker::wire::{DeviceClass, Group, Request, Response};
+
+    fn class(s: &str) -> Option<DeviceClass> {
+        match s {
+            "serial" => Some(DeviceClass::Serial),
+            "audio" => Some(DeviceClass::Audio),
+            _ => None,
+        }
+    }
+
+    pub fn main() {
+        let args: Vec<String> = std::env::args().collect();
+        let usage = "usage: broker_client SOCKET list [serial|audio] | open serial|audio PATH [ro] | grant dialout|audio | provision";
+        let socket = args.get(1).expect(usage);
+        let req = match (
+            args.get(2).map(String::as_str),
+            args.get(3),
+            args.get(4),
+            args.get(5),
+        ) {
+            (Some("list"), c, None, None) => Request::ListDevices {
+                class: c.and_then(|c| class(c)),
+            },
+            (Some("open"), Some(c), Some(path), ro) => Request::OpenDevice {
+                class: class(c).expect(usage),
+                read_only: ro.is_some_and(|r| r == "ro"),
+                path: path.clone(),
+            },
+            (Some("grant"), Some(g), None, None) => Request::GrantGroup {
+                group: match g.as_str() {
+                    "dialout" => Group::Dialout,
+                    "audio" => Group::Audio,
+                    _ => panic!("{usage}"),
+                },
+            },
+            (Some("provision"), None, None, None) => Request::ProvisionGroups,
+            (Some("update"), None, None, None) => Request::UpdatePackage,
+            (Some("time"), None, None, None) => Request::TimeStatus,
+            _ => panic!("{usage}"),
+        };
+        // The account that serves the socket: root unless BROKER_UID names another (a broker started by hand).
+        let uid: Vec<u32> = std::env::var("BROKER_UID")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .map(|u| vec![u])
+            .unwrap_or_else(|| DEFAULT_SERVER_UIDS.to_vec());
+        let (resp, fd) = connect_and_call_as(Path::new(socket), &req, &uid).expect("broker call");
+        match resp {
+            Response::Devices(devs) => {
+                for d in devs {
+                    println!(
+                        "{:?} {} {:04x}:{:04x} {} {}",
+                        d.class, d.path, d.vid, d.pid, d.manufacturer, d.product
+                    );
+                }
+            }
+            Response::Opened => {
+                let fd = fd.expect("descriptor");
+                println!("opened: {:?}", LinuxOs::default().fd_kind(fd.as_fd()));
+            }
+            Response::GroupReport {
+                applied,
+                user,
+                groups,
+            } => {
+                println!(
+                    "{user}: {} {}",
+                    if applied { "added" } else { "would add" },
+                    groups.join(",")
+                );
+            }
+            Response::Hub { access_point, dhcp } => {
+                println!("hub: access point {access_point}, dhcp {dhcp}")
+            }
+            Response::Updated => println!("the relay package was upgraded"),
+            Response::PoweroffRequested => println!("a power-off was requested"),
+            other @ (Response::TimeStatus { .. } | Response::TimeSet { .. }) => {
+                println!("{other:?}")
+            }
+            Response::Error { status, reason } => {
+                eprintln!("{status:?}: {reason}");
+                std::process::exit(1);
+            }
+        }
     }
 }
 
+#[cfg(unix)]
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    let usage = "usage: broker_client SOCKET list [serial|audio] | open serial|audio PATH [ro] | grant dialout|audio | provision";
-    let socket = args.get(1).expect(usage);
-    let req = match (
-        args.get(2).map(String::as_str),
-        args.get(3),
-        args.get(4),
-        args.get(5),
-    ) {
-        (Some("list"), c, None, None) => Request::ListDevices {
-            class: c.and_then(|c| class(c)),
-        },
-        (Some("open"), Some(c), Some(path), ro) => Request::OpenDevice {
-            class: class(c).expect(usage),
-            read_only: ro.is_some_and(|r| r == "ro"),
-            path: path.clone(),
-        },
-        (Some("grant"), Some(g), None, None) => Request::GrantGroup {
-            group: match g.as_str() {
-                "dialout" => Group::Dialout,
-                "audio" => Group::Audio,
-                _ => panic!("{usage}"),
-            },
-        },
-        (Some("provision"), None, None, None) => Request::ProvisionGroups,
-        (Some("update"), None, None, None) => Request::UpdatePackage,
-        (Some("time"), None, None, None) => Request::TimeStatus,
-        _ => panic!("{usage}"),
-    };
-    // The account that serves the socket: root unless BROKER_UID names another (a broker started by hand).
-    let uid: Vec<u32> = std::env::var("BROKER_UID")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .map(|u| vec![u])
-        .unwrap_or_else(|| DEFAULT_SERVER_UIDS.to_vec());
-    let (resp, fd) = connect_and_call_as(Path::new(socket), &req, &uid).expect("broker call");
-    match resp {
-        Response::Devices(devs) => {
-            for d in devs {
-                println!(
-                    "{:?} {} {:04x}:{:04x} {} {}",
-                    d.class, d.path, d.vid, d.pid, d.manufacturer, d.product
-                );
-            }
-        }
-        Response::Opened => {
-            let fd = fd.expect("descriptor");
-            println!("opened: {:?}", LinuxOs::default().fd_kind(fd.as_fd()));
-        }
-        Response::GroupReport {
-            applied,
-            user,
-            groups,
-        } => {
-            println!(
-                "{user}: {} {}",
-                if applied { "added" } else { "would add" },
-                groups.join(",")
-            );
-        }
-        Response::Hub { access_point, dhcp } => {
-            println!("hub: access point {access_point}, dhcp {dhcp}")
-        }
-        Response::Updated => println!("the relay package was upgraded"),
-        Response::PoweroffRequested => println!("a power-off was requested"),
-        other @ (Response::TimeStatus { .. } | Response::TimeSet { .. }) => println!("{other:?}"),
-        Response::Error { status, reason } => {
-            eprintln!("{status:?}: {reason}");
-            std::process::exit(1);
-        }
-    }
+    unix_impl::main()
+}
+
+#[cfg(not(unix))]
+fn main() {
+    eprintln!("broker_client talks to the Unix socket; on Windows use the named pipe (relay_broker::windows::call).");
 }
