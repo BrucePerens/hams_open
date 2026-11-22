@@ -717,7 +717,11 @@ def list_dns_records_named(zone_id, name, token):
         if body is None or not isinstance(body.get("result") or [], list):
             return False, "API Error"
         found.extend(body.get("result") or [])
-        if page >= int((body.get("result_info") or {}).get("total_pages") or 1):
+        try:
+            total_pages = int((body.get("result_info") or {}).get("total_pages") or 1)
+        except (TypeError, ValueError):
+            return False, "API Error"
+        if page >= total_pages:
             return True, found
         page += 1
 
