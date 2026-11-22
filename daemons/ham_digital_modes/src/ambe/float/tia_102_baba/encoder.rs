@@ -416,19 +416,20 @@ mod tests {
         }
         assert!(trimmed_somewhere, "the test needs trimming to have begun");
     /// Digital silence has no pitch evidence: every candidate's `E(P)` used to be `0/0 = NaN`, which poisoned the
-    /// look-back history (`prev1`/`prev2`) so that onset frames never used it. The error must stay finite.
+    /// look-back history (`prev1`/`prev2`) so that onset frames never used it. The error must be the worst value,
+    /// 1.0 (a NaN clamped by `.max(0.0)` would read as a perfect 0.0 match instead).
     #[test]
     fn silence_keeps_the_pitch_tracker_state_finite() {
         let mut analyzer = FrameAnalyzer::new();
         analyzer.push_samples(&[0.0; 160 * 12]);
         let mut frames = 0;
         while let Some(a) = analyzer.next_analysis() {
-            assert!(a.initial_pitch_error.is_finite(), "frame {frames}");
+            assert_eq!(a.initial_pitch_error, 1.0, "frame {frames}");
             assert!(a.omega0_hat.is_finite() && a.omega0_hat > 0.0);
             frames += 1;
         }
         assert!(frames > 0);
-        assert!(analyzer.prev1.0.is_finite() && analyzer.prev1.1.is_finite());
-        assert!(analyzer.prev2.0.is_finite() && analyzer.prev2.1.is_finite());
+        assert_eq!(analyzer.prev1.1, 1.0);
+        assert_eq!(analyzer.prev2.1, 1.0);
     }
 }
