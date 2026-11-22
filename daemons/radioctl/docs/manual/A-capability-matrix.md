@@ -51,7 +51,7 @@ The descriptions are the files `rigs/*.toml` (<!--count:description_files-->293<
 | Capability | Meaning | Descriptions listing it |
 |---|---|---:|
 | `read-frequency` | the VFO A frequency can be read | <!--count:cap_read_frequency-->269<!--/count--> |
-| `set-frequency` | a frequency can be set | <!--count:cap_set_frequency-->289<!--/count--> |
+| `set-frequency` | a frequency can be set | <!--count:cap_set_frequency-->290<!--/count--> |
 | `second-vfo` | VFO B can be read and set | <!--count:cap_second_vfo-->62<!--/count--> |
 | `read-mode` | the mode and passband can be read | <!--count:cap_read_mode-->248<!--/count--> |
 | `set-mode` | the mode and passband can be set | <!--count:cap_set_mode-->266<!--/count--> |

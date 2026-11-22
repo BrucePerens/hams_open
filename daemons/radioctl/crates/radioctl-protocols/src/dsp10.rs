@@ -13,12 +13,23 @@
 //! * Command 77 ('M'): `ESC 77 mode sb mikel mikeh`, `mode` 0 single sideband, 1 CW, 2 FM; `sb` 0 LSB,
 //!   1 USB, 2 I-Q binaural; the microphone gain is 4 * (256 * mikeh + mikel).
 //!
-//! **Not covered, on purpose.** The document gives no frequency command: Command 7 sets the third
-//! LO and the synthesizer enable, and Command 8 shifts a 16-bit word to the synthesizer shift
-//! registers, but the meaning of that word (the 126 MHz synthesizer divider) is hardware knowledge
-//! the document does not contain, so there is no set-frequency. Command 84 ('T') only switches the
-//! DSP between receive and transmit; the transmit hardware is steered by Commands 7 and 8, so
-//! there is no PTT either and the transmit gate has nothing to guard here.
+//! **Frequency** (not in pc_dsp2.txt, which does not say what the synthesizer word means). From the
+//! GPL PC program source (`UHF396.ZIP`, from http://janbob.com/electron/dsp10/UHF396.ZIP, sha256
+//! 482bf48728d980ae9633036871abf733d6ae57120264b615a1bb9a25025ef967, stored outside the
+//! repositories), file `UHFA.C` v3.96, functions `new_freq` and `send_shift_data`, and `UHFA.H`
+//! (`R10MHZ`): the receive frequency is quantised to a 5 kHz first-I-F step (rounding offset
+//! +250 Hz for the DSP's USB side i.e. LSB on air, +4000 Hz for USB and CW, +2500 Hz for FM),
+//! the 126 MHz synthesizer is `step - 19.665 MHz` in 5 kHz units `N`, sent as the 19-bit word
+//! `(a << 1) | (b << 8)` with `b = N / 64`, `a = N % 64`, shifted out by three Command 8 words
+//! (3 bits, 16 bits, then the control byte and the RF-gain byte) and latched by Command 7 with
+//! `data` bit 0 low then high; the third LO is `349.5253333 * (step - f + 15000)` as a 24-bit
+//! phase increment in Command 7 (`xl`, `lo`, `hi`; the v2.00 DSP takes `lo`, `hi`). The reference
+//! divider word `R10MHZ` (0x08FA1) is sent once at open. 2 m has no transverter offset.
+//!
+//! **Not covered, on purpose.** PTT: `UHFA.C` `t_r_toggle` keys the radio by a staged sequence of
+//! shift-register words (antenna relay, power amplifier, transmit) with 50 ms and 75 ms waits
+//! between stages and a Command 84 'T' with a power word. One request cannot carry those waits,
+//! so there is no PTT and the transmit gate has nothing to guard here.
 //!
 //! The mode codes in the description are `0` LSB, `1` USB, `2` CW, `3` FM (ours). The microphone gain word sent with every mode command is [`MIKE_WORD`] (ours; the
 //! document gives no default).
@@ -30,6 +41,7 @@ use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind, Request};
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::Op;
 use radioctl_core::transcript::Panel;
+use radioctl_core::units::{Hz, Vfo};
 
 use crate::serial_vendor::{vendor_of, TwinSnapshot, VendorTwin};
 
@@ -41,6 +53,20 @@ pub const CMD_MODE: u8 = 77;
 pub const FRAME_LEN: usize = 6;
 /// The microphone gain word `256 * mikeh + mikel` we send (gain 4 * this).
 pub const MIKE_WORD: u16 = 1;
+/// The synthesizer reference-divider word sent at open (`UHFA.H` `R10MHZ`).
+pub const R10MHZ: u32 = 0x08FA1;
+/// Command 7: third LO phase increment and the synthesizer enable (`PF7`).
+pub const CMD_LO: u8 = 7;
+/// Command 8: shifts a 16-bit word into the synthesizer shift registers.
+pub const CMD_SHIFT: u8 = 8;
+/// Control byte of the shift registers in receive (`UHFA.C` `shift_reg` 0x04).
+pub const SHIFT_RECEIVE: u8 = 0x04;
+/// RF-gain byte of the shift registers at 0 dB (`UHFA.C` `rfg[0].gainbyte`).
+pub const RF_GAIN_BYTE: u8 = 0x88;
+/// The radio's range, 144 to 148 MHz.
+pub const RANGE: std::ops::RangeInclusive<u64> = 144_000_000..=148_000_000;
+/// Third LO phase increment per Hz (2^32 / 24000 / 2^8 ... `UHFA.C` `new_freq`: 349.525333).
+const DPH_PER_HZ: f64 = 349.525_333_333_333;
 
 fn unsupported(what: &str) -> RigError {
     RigError::new(ErrorKind::Unsupported, what.to_string())
@@ -69,11 +95,86 @@ pub fn mode_frame(mode: u8, sb: u8) -> Vec<u8> {
     vec![ESC, CMD_MODE, mode, sb, lo, hi]
 }
 
+/// Which sideband the first conversion is quantised for.
+// [@ANCHOR: radioctl_dsp10_side]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Side {
+    /// USB or CW on air (the DSP's LSB side).
+    Usb,
+    /// LSB on air.
+    Lsb,
+    /// FM.
+    Fm,
+}
+
+/// The words that tune the radio to one frequency.
+// [@ANCHOR: radioctl_dsp10_tuning_struct]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Tuning {
+    /// The 19-bit synthesizer word.
+    pub synth_word: u32,
+    /// The 24-bit third-LO phase increment.
+    pub dph: u32,
+}
+
+// [@ANCHOR: radioctl_dsp10_tuning]
+/// The synthesizer word and third-LO increment for `hz`, or `None` outside 144 to 148 MHz
+/// (`UHFA.C` `new_freq`).
+pub fn tuning(hz: u64, side: Side) -> Option<Tuning> {
+    if !RANGE.contains(&hz) {
+        return None;
+    }
+    let round = match side {
+        Side::Usb => 4000,
+        Side::Lsb => 250,
+        Side::Fm => 2500,
+    };
+    let step = 5000 * ((hz + round) / 5000);
+    let n = (step - 19_665_000) / 5000;
+    let b = (n / 64) & 0x7FF;
+    let a = (n - 64 * b) & 0x7F;
+    let dph = (DPH_PER_HZ * (step as f64 - hz as f64 + 15000.0) + 0.5) as u32;
+    Some(Tuning {
+        synth_word: ((a << 1) | (b << 8)) as u32,
+        dph,
+    })
+}
+
+fn lo_frame(data: u8, dph: u32) -> [u8; 6] {
+    let [xl, lo, hi, _] = dph.to_le_bytes();
+    [ESC, CMD_LO, data, xl, lo, hi]
+}
+
+// [@ANCHOR: radioctl_dsp10_synth_frames]
+/// The frames that load a synthesizer word and set the third LO: the LO increment, three
+/// shift-register words, then the enable low and high (`UHFA.C` `new_freq`, `send_shift_data`).
+pub fn synth_frames(t: &Tuning) -> Vec<u8> {
+    shift_frames(t.synth_word, t.dph, true)
+}
+
+// [@ANCHOR: radioctl_dsp10_shift_frames]
+fn shift_frames(word: u32, dph: u32, lo_first: bool) -> Vec<u8> {
+    let first = (word >> 16) & 7;
+    let mid = word & 0xFFFF;
+    let mut out = Vec::new();
+    if lo_first {
+        out.extend(lo_frame(0, dph));
+    }
+    out.extend([ESC, CMD_SHIFT, first as u8, 0, 3, 4]);
+    out.extend([ESC, CMD_SHIFT, mid as u8, (mid >> 8) as u8, 3, 4]);
+    out.extend([ESC, CMD_SHIFT, SHIFT_RECEIVE, RF_GAIN_BYTE, 3, 4]);
+    out.extend(lo_frame(0, dph));
+    out.extend(lo_frame(1, dph));
+    out
+}
+
 /// The DSP-10 client engine.
 // [@ANCHOR: radioctl_dsp10_dsp10_engine]
 #[derive(Debug)]
 pub struct Dsp10Engine {
     desc: RigDescription,
+    side: Side,
+    hz: Option<u64>,
 }
 
 impl Dsp10Engine {
@@ -84,7 +185,11 @@ impl Dsp10Engine {
         if name != "dsp10" {
             return Err(unsupported("unknown DSP-10 dialect in the description"));
         }
-        Ok(Dsp10Engine { desc })
+        Ok(Dsp10Engine {
+            desc,
+            side: Side::Usb,
+            hz: None,
+        })
     }
 }
 
@@ -98,19 +203,47 @@ impl ProtocolEngine for Dsp10Engine {
         if !self.desc.capabilities.has(op.required_capability()) {
             return Err(unsupported("capability not in the rig description"));
         }
-        let Op::SetMode(mode) = op else {
-            return Err(unsupported("not implemented for the DSP-10 engine"));
-        };
-        let code = self
-            .desc
-            .mode_code(*mode)
-            .ok_or_else(|| unsupported("mode not in the description"))?;
-        let (m, sb) = mode_bytes(code)
-            .ok_or_else(|| unsupported("mode code unknown to the DSP-10 engine"))?;
+        let mut bytes = Vec::new();
+        match op {
+            Op::SetMode(mode) => {
+                let code = self
+                    .desc
+                    .mode_code(*mode)
+                    .ok_or_else(|| unsupported("mode not in the description"))?;
+                let (m, sb) = mode_bytes(code)
+                    .ok_or_else(|| unsupported("mode code unknown to the DSP-10 engine"))?;
+                bytes.extend(mode_frame(m, sb));
+                self.side = match code {
+                    b'0' => Side::Lsb,
+                    b'3' => Side::Fm,
+                    _ => Side::Usb,
+                };
+                // The 5 kHz grid depends on the sideband: retune, as the PC program does.
+                if let Some(t) = self.hz.and_then(|hz| tuning(hz, self.side)) {
+                    bytes.extend(synth_frames(&t));
+                }
+            }
+            Op::SetFrequency(Vfo::A, Hz(hz)) => {
+                let t = tuning(*hz, self.side)
+                    .ok_or_else(|| unsupported("frequency outside 144 to 148 MHz"))?;
+                self.hz = Some(*hz);
+                bytes.extend(synth_frames(&t));
+            }
+            _ => return Err(unsupported("not implemented for the DSP-10 engine")),
+        }
         Ok(Request {
-            bytes: mode_frame(m, sb),
+            bytes,
             reply: ReplyKind::None,
         })
+    }
+
+    // [@ANCHOR: radioctl_dsp10_engine_open_requests]
+    fn open_requests(&mut self) -> Vec<Request> {
+        // Loads the synthesizer reference divider (UHFA.C initialize); keeps the receive state.
+        vec![Request {
+            bytes: shift_frames(R10MHZ, 0x4AA6 << 8, false),
+            reply: ReplyKind::None,
+        }]
     }
 
     // [@ANCHOR: radioctl_dsp10_engine_feed]
@@ -129,7 +262,12 @@ pub struct Dsp10Twin {
     sb: u8,
     mike: u16,
     last_cmd: u8,
-    hz: radioctl_core::units::Hz,
+    hz: Hz,
+    shift: Vec<u16>,
+    dph: u32,
+    pf7: bool,
+    synth_hz: Option<u64>,
+    r_word: Option<u32>,
 }
 
 impl Dsp10Twin {
@@ -147,6 +285,11 @@ impl Dsp10Twin {
             mike: 0,
             last_cmd: 0,
             hz: desc.default_frequency,
+            shift: Vec::new(),
+            dph: 0,
+            pf7: false,
+            synth_hz: None,
+            r_word: None,
         })
     }
 
@@ -155,9 +298,64 @@ impl Dsp10Twin {
         4 * u32::from(self.mike)
     }
 
+    /// The reference-divider word the synthesizer was last loaded with, if any.
+    // [@ANCHOR: radioctl_dsp10_twin_reference_word]
+    pub fn reference_word(&self) -> Option<u32> {
+        self.r_word
+    }
+
     /// The last command byte received (status byte +2 of the receive status).
     pub fn last_command(&self) -> u8 {
         self.last_cmd
+    }
+}
+
+impl Dsp10Twin {
+    // [@ANCHOR: radioctl_dsp10_twin_tuned]
+    /// The receive frequency the synthesizer and third LO make, if both were loaded.
+    fn tuned(&self) -> Option<Hz> {
+        let step = self.synth_hz? + 19_665_000;
+        let f = step as f64 + 15000.0 - f64::from(self.dph) / DPH_PER_HZ;
+        Some(Hz(f.round() as u64))
+    }
+
+    // [@ANCHOR: radioctl_dsp10_twin_apply]
+    /// Applies one complete command frame.
+    fn apply(&mut self, f: &[u8]) {
+        self.last_cmd = f[1];
+        match f[1] {
+            CMD_MODE if f[2] <= 2 && f[3] <= 2 => {
+                self.mode = f[2];
+                self.sb = f[3];
+                self.mike = u16::from_le_bytes([f[4], f[5]]);
+            }
+            CMD_SHIFT => self.shift.push(u16::from_le_bytes([f[2], f[3]])),
+            CMD_LO => {
+                self.dph = u32::from_le_bytes([f[3], f[4], f[5], 0]);
+                let on = f[2] & 1 == 1;
+                if on && !self.pf7 {
+                    self.latch();
+                }
+                self.pf7 = on;
+            }
+            _ => {}
+        }
+    }
+
+    // [@ANCHOR: radioctl_dsp10_twin_latch]
+    /// The enable line rose: the three shifted words become the synthesizer register.
+    fn latch(&mut self) {
+        let words = std::mem::take(&mut self.shift);
+        let [first, mid, _control] = words.as_slice() else {
+            return;
+        };
+        let w = (u32::from(*first & 7) << 16) | u32::from(*mid);
+        if w & 1 == 1 {
+            self.r_word = Some(w);
+        } else {
+            let n = 64 * u64::from((w >> 8) & 0x7FF) + u64::from((w >> 1) & 0x7F);
+            self.synth_hz = Some(n * 5000);
+        }
     }
 }
 
@@ -171,7 +369,7 @@ impl VendorTwin for Dsp10Twin {
             _ => b'3',
         };
         Some(TwinSnapshot {
-            frequency: self.hz,
+            frequency: self.tuned().unwrap_or(self.hz),
             mode_code: Some(code),
             ptt: false,
         })
@@ -187,12 +385,7 @@ impl VendorTwin for Dsp10Twin {
             self.frame.push(b);
             if self.frame.len() == FRAME_LEN {
                 let f = std::mem::take(&mut self.frame);
-                self.last_cmd = f[1];
-                if f[1] == CMD_MODE && f[2] <= 2 && f[3] <= 2 {
-                    self.mode = f[2];
-                    self.sb = f[3];
-                    self.mike = u16::from_le_bytes([f[4], f[5]]);
-                }
+                self.apply(&f);
             }
         }
         Vec::new()
@@ -273,12 +466,97 @@ mod tests {
         // Out of range mode and sideband bytes are ignored.
         t.feed(&[0x24, 77, 5, 0, 1, 0], T0);
         assert_eq!(t.snapshot().expect("snapshot").mode_code, Some(b'0'));
-        // No frequency, no PTT: the document has no command for either.
+        // Only VFO A and 144 to 148 MHz; no PTT.
         assert!(e
-            .encode(&Op::SetFrequency(Vfo::A, Hz(145_000_000)))
+            .encode(&Op::SetFrequency(Vfo::B, Hz(145_000_000)))
             .is_err());
         assert!(e.encode(&Op::SetPtt(true)).is_err());
         assert!(e.encode(&Op::SetMode(Mode::Am)).is_err());
         assert!(t.front_panel(Panel::Ptt(true)).is_err());
+    }
+
+    // Tests [@ANCHOR: radioctl_dsp10_tuning]
+    // Tests [@ANCHOR: radioctl_dsp10_shift_frames]
+    // Tests [@ANCHOR: radioctl_dsp10_twin_tuned]
+    // Tests [@ANCHOR: radioctl_dsp10_twin_apply]
+    // Tests [@ANCHOR: radioctl_dsp10_twin_latch]
+    // Tests [@ANCHOR: radioctl_dsp10_side]
+    // Tests [@ANCHOR: radioctl_dsp10_tuning_struct]
+    // Tests [@ANCHOR: radioctl_dsp10_engine_open_requests]
+    // Tests [@ANCHOR: radioctl_dsp10_twin_reference_word]
+    // Tests [@ANCHOR: radioctl_dsp10_synth_frames]
+    #[test]
+    fn tuning_words_follow_the_pc_program() {
+        // 145.000000 MHz, USB on air (DSP LSB side): I-F 145.000 MHz, synthesizer 125.335 MHz,
+        // N = 25067 = 64 * 391 + 43, third LO 15 kHz.
+        let t = tuning(145_000_000, Side::Usb).expect("in range");
+        assert_eq!(t.synth_word, (43 << 1) | (391 << 8));
+        assert_eq!(t.dph, 0x50_0000);
+        assert!(tuning(143_999_999, Side::Usb).is_none());
+        assert!(tuning(148_000_001, Side::Usb).is_none());
+        // The quantisation to 5 kHz depends on the sideband: the same 145.003 MHz lands on
+        // 145.005 (USB) and 145.000 (LSB); FM rounds to nearest.
+        assert_eq!(tuning(145_003_000, Side::Usb).expect("t").dph, 5_941_931);
+        assert_eq!(tuning(145_003_000, Side::Lsb).expect("t").dph, 4_194_304);
+        assert_eq!(tuning(145_002_000, Side::Fm).expect("t").dph, 4_543_829);
+        assert_eq!(
+            synth_frames(&t),
+            vec![
+                0x24, 7, 0, 0, 0, 0x50, //
+                0x24, 8, 1, 0, 3, 4, //
+                0x24, 8, 0x56, 0x87, 3, 4, //
+                0x24, 8, 0x04, 0x88, 3, 4, //
+                0x24, 7, 0, 0, 0, 0x50, //
+                0x24, 7, 1, 0, 0, 0x50,
+            ]
+        );
+    }
+
+    #[test]
+    fn frequency_reaches_the_virtual_dsp_and_follows_the_mode() {
+        let desc = shipped();
+        let mut e = Dsp10Engine::new(desc.clone()).expect("engine");
+        let mut t = Dsp10Twin::new(&desc).expect("twin");
+        // The reference divider goes out when the rig is opened (UHFA.C initialize).
+        for r in e.open_requests() {
+            t.feed(&r.bytes, T0);
+        }
+        assert_eq!(t.reference_word(), Some(R10MHZ));
+        for (mode, hz) in [
+            (Mode::Usb, 145_000_000),
+            (Mode::Usb, 145_123_456),
+            (Mode::Lsb, 144_000_000),
+            (Mode::Lsb, 147_999_999),
+            (Mode::Fm, 146_520_000),
+            (Mode::Cw, 144_100_050),
+        ] {
+            let r = e.encode(&Op::SetMode(mode)).expect("mode");
+            t.feed(&r.bytes, T0);
+            let r = e.encode(&Op::SetFrequency(Vfo::A, Hz(hz))).expect("freq");
+            assert_eq!(r.reply, ReplyKind::None);
+            t.feed(&r.bytes, T0);
+            assert_eq!(
+                t.snapshot().expect("snapshot").frequency,
+                Hz(hz),
+                "{mode:?} {hz}"
+            );
+        }
+        // Changing the sideband retunes (the 5 kHz grid moves), as the PC program does.
+        let r = e
+            .encode(&Op::SetFrequency(Vfo::A, Hz(145_003_000)))
+            .expect("f");
+        t.feed(&r.bytes, T0);
+        let r = e.encode(&Op::SetMode(Mode::Usb)).expect("usb");
+        assert_eq!(r.bytes.len(), 6 + 6 * 6);
+        t.feed(&r.bytes, T0);
+        assert_eq!(t.snapshot().expect("snapshot").frequency, Hz(145_003_000));
+        // Out of the 144 to 148 MHz range, and no PTT.
+        assert!(e
+            .encode(&Op::SetFrequency(Vfo::A, Hz(143_000_000)))
+            .is_err());
+        assert!(e
+            .encode(&Op::SetFrequency(Vfo::B, Hz(145_000_000)))
+            .is_err());
+        assert!(e.encode(&Op::SetPtt(true)).is_err());
     }
 }

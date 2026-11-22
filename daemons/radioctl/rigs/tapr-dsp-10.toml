@@ -1,9 +1,9 @@
 # Rig description: TAPR DSP-10 (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
 # Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
 # Facts come from Bob Larkin W7PUA, "Notes on the PC/DSP interface for the DSP-10 transceiver", Version 2.00, 10 Feb 2001 (pc_dsp2.txt, http://janbob.com/electron/dsp10/pc_dsp2.txt, sha256 5bb540cfa331306c7fb768e13ce3fc2f0384823f640dba0bc72e138f35387746), section "PC to DSP Commands": the six-byte frame and Command 77 ('M'); no code or table was copied. For DSP program UHF3.EXE 2.00, which the PC must load into the EZ-KIT Lite first.
-# Dialect dsp10 (dsp10.rs): mode only. The document has no frequency command (Commands 7 and 8 carry a synthesizer word whose meaning it does not give) and no PTT (Command 84 only switches the DSP; the transmit hardware is steered by Commands 7 and 8), so neither is claimed and the transmit gate has nothing to guard. The radio covers 144 to 148 MHz. Mode codes (ours): `0` LSB, `1` USB, `2` CW, `3` FM.
+# Dialect dsp10 (dsp10.rs): mode and frequency. pc_dsp2.txt does not say what the Command 7/8 synthesizer word means; it is taken from the GPL PC program source UHFA.C v3.96 (UHF396.ZIP, http://janbob.com/electron/dsp10/UHF396.ZIP, sha256 482bf48728d980ae9633036871abf733d6ae57120264b615a1bb9a25025ef967), functions new_freq and send_shift_data, and UHFA.H R10MHZ; facts only, no code copied. No PTT: the source keys the radio by a staged shift-register sequence with 50 and 75 ms waits that one request cannot carry, so the transmit gate has nothing to guard. The radio covers 144 to 148 MHz. Mode codes (ours): `0` LSB, `1` USB, `2` CW, `3` FM.
 schema = 1
-capabilities = ["set-mode"]
+capabilities = ["set-frequency", "set-mode"]
 
 [rig]
 id = "tapr-dsp-10"
@@ -60,7 +60,7 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "capability.*"
-provenance = { kind = "manual", reference = "pc_dsp2.txt version 2.00, Command 77 ('M'); the document has no frequency command (Commands 7 and 8 carry an undocumented synthesizer word) and Command 84 does not key the transmit hardware", note = "Only set-mode is claimed." }
+provenance = { kind = "manual", reference = "pc_dsp2.txt version 2.00, Command 77 ('M'), Commands 7 and 8; UHFA.C v3.96 new_freq and send_shift_data for the synthesizer word", note = "set-mode and set-frequency are claimed; PTT is not (staged keying with waits, UHFA.C t_r_toggle)." }
 verified = { state = "unverified" }
 
 [[facts]]
