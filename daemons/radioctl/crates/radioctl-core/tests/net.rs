@@ -300,10 +300,13 @@ async fn a_cut_connection_is_reconnected_and_the_rig_is_unkeyed_first() {
 // Tests [@ANCHOR: radioctl_core_net_supervisor]
 #[tokio::test]
 async fn the_first_connection_gives_up_after_its_attempts() {
-    let dead = {
-        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
-        listener.local_addr().expect("addr")
-    };
+    // A bound socket that never listens: connects are refused, and the port stays reserved so a
+    // parallel test or process cannot be handed it (a freed port was reused and accepted).
+    let reserved = tokio::net::TcpSocket::new_v4().expect("socket");
+    reserved
+        .bind("127.0.0.1:0".parse().expect("addr"))
+        .expect("bind");
+    let dead = reserved.local_addr().expect("addr");
     let mut config = fast(dead.to_string());
     config.first_attempts = 3;
     let error = match open_link(&Handle::current(), config, Box::new(RawFraming)).await {
