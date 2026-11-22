@@ -12,7 +12,7 @@ use radioctl_core::engine::{Inbound, ProtocolEngine};
 use radioctl_core::error::ErrorKind;
 use radioctl_core::op::{Observation, Op};
 use radioctl_core::rigfile;
-use radioctl_core::units::{Hz, Level, Mode, Vfo};
+use radioctl_core::units::{Hz, Level, Mode, Receiver, Vfo};
 use radioctl_protocols::kenwood::KenwoodEngine;
 use radioctl_protocols::virtual_rig::VirtualRig;
 
@@ -189,4 +189,57 @@ fn the_engine_and_the_virtual_ts990s_agree() {
     for bad in [&b"MD;"[..], b"FR0;", b"FT1;", b"AG0;", b"RA;", b"SP1;"] {
         assert_eq!(rig.feed(bad, NOW), b"?;", "{bad:?}");
     }
+}
+
+// Tests [@ANCHOR: radioctl_kenwood_engine_encode_ts990]
+// Tests [@ANCHOR: radioctl_kenwood_engine_decode]
+// Tests [@ANCHOR: radioctl_virtual_ts990_command]
+#[test]
+fn the_sub_receiver_is_selected_and_read_with_cb() {
+    // CB, Operating Band (PDF p. 12): P1 0 Main band, 1 Sub band; read `CB;`, answer `CBn;`.
+    let desc = description();
+    assert!(desc.capabilities.has(Capability::Receivers));
+    let mut engine = KenwoodEngine::new(desc.clone()).expect("engine");
+    let mut rig = VirtualRig::from_description(&desc).expect("rig");
+    let wire = |e: &mut KenwoodEngine, op: Op| e.encode(&op).expect("encodes").bytes;
+    assert_eq!(
+        wire(&mut engine, Op::SelectReceiver(Receiver::Sub)),
+        b"CB1;"
+    );
+    assert_eq!(
+        wire(&mut engine, Op::SelectReceiver(Receiver::Main)),
+        b"CB0;"
+    );
+    assert_eq!(wire(&mut engine, Op::GetReceiver), b"CB;");
+    assert_seen(
+        exchange(&mut engine, &mut rig, Op::GetReceiver),
+        Observation::Receiver(Receiver::Main),
+    );
+    exchange(&mut engine, &mut rig, Op::SelectReceiver(Receiver::Sub));
+    assert_seen(
+        exchange(&mut engine, &mut rig, Op::GetReceiver),
+        Observation::Receiver(Receiver::Sub),
+    );
+    assert_seen(
+        engine.feed(b"CB0;", NOW),
+        Observation::Receiver(Receiver::Main),
+    );
+    assert!(matches!(
+        engine.feed(b"CB2;", NOW).as_slice(),
+        [Inbound::Unrecognised(_)]
+    ));
+    // Nothing else of the Main/Sub set exists here.
+    for op in [
+        Op::SetTxReceiver(Receiver::Sub),
+        Op::GetTxReceiver,
+        Op::SetDualWatch(true),
+        Op::GetDualWatch,
+    ] {
+        assert_eq!(
+            engine.encode(&op).expect_err("not here").kind,
+            ErrorKind::Unsupported,
+            "{op:?}"
+        );
+    }
+    assert_eq!(rig.feed(b"CB2;", NOW), b"?;");
 }

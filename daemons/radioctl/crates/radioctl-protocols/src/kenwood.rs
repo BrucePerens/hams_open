@@ -41,7 +41,7 @@ use radioctl_core::description::{Family, KenwoodDialect, RigDescription};
 use radioctl_core::engine::{Inbound, ProtocolEngine, ReplyKind, Request, PARTIAL_FRAME_TIMEOUT};
 use radioctl_core::error::{ErrorKind, RigError};
 use radioctl_core::op::{Field, Observation, Op};
-use radioctl_core::units::{Hz, Level, ToneMode, Vfo};
+use radioctl_core::units::{Hz, Level, Receiver, ToneMode, Vfo};
 
 use crate::attenuation;
 
@@ -410,6 +410,14 @@ impl KenwoodEngine {
             return vec![Inbound::Unrecognised(format!("{text};").into_bytes())];
         }
         if self.ts990 {
+            // `CB<n>` (PDF p. 12): the operating band, 0 Main or 1 Sub.
+            if let Some(band) = text.strip_prefix("CB") {
+                return vec![match band {
+                    "0" => Inbound::Observation(Observation::Receiver(Receiver::Main)),
+                    "1" => Inbound::Observation(Observation::Receiver(Receiver::Sub)),
+                    _ => Inbound::Unrecognised(format!("{text};").into_bytes()),
+                }];
+            }
             // `OM0<m>`: the operating mode of the main band (the PC command reference, OM). It has
             // no `MD`, `FR` or `FT`, and the levels and front end have other forms here.
             if let Some(code) = text.strip_prefix("OM0").filter(|c| c.len() == 1) {
@@ -538,6 +546,15 @@ impl KenwoodEngine {
                 .mode_code(*mode)
                 .map(|code| Self::command(format!("OM0{};", char::from(code)), ReplyKind::None))
                 .ok_or_else(|| Self::unsupported("mode not in the description")),
+            // `CB`, Operating Band (PDF p. 12): P1 0 Main, 1 Sub; the band later commands act on.
+            Op::SelectReceiver(rx) => Ok(Self::command(
+                format!("CB{};", u8::from(*rx == Receiver::Sub)),
+                ReplyKind::None,
+            )),
+            Op::GetReceiver => Ok(Self::command(
+                "CB;".into(),
+                ReplyKind::Observation(Field::Receiver),
+            )),
             // The sub band is a second receiver, `SP` starts a split-frequency setting and the
             // transmit state is not in `IF`: none of these is a VFO B, a split flag or a read of PTT.
             Op::GetTxVfo
@@ -545,7 +562,11 @@ impl KenwoodEngine {
             | Op::GetSplit
             | Op::GetPtt
             | Op::GetLevel(_)
-            | Op::SetLevel(..) => Err(Self::unsupported("not in the TS-990S command set")),
+            | Op::SetLevel(..)
+            | Op::SetTxReceiver(_)
+            | Op::GetTxReceiver
+            | Op::SetDualWatch(_)
+            | Op::GetDualWatch => Err(Self::unsupported("not in the TS-990S command set")),
             _ => return None,
         })
     }

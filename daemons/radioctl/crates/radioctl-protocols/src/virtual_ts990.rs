@@ -34,6 +34,13 @@ impl VirtualRig {
             ("OM", rest) if rest.len() == 2 && rest.starts_with(['0', '1']) => {
                 self.set_kenwood_mode(&rest[1..])
             }
+            // `CB;` reads the operating band, `CB<0|1>;` sets it (PDF p. 12).
+            ("CB", "") => Some(format!("CB{};", u8::from(self.kenwood_sub_selected))),
+            ("CB", band @ ("0" | "1")) => {
+                self.kenwood_sub_selected = band == "1";
+                None
+            }
+            ("CB", _) => Some("?;".to_string()),
             // No `MD`, `FR`, `FT`, `SP` as the classic table has them, and the level and front end
             // forms are other ones (a band digit, other ranges).
             (
