@@ -281,15 +281,16 @@ fn the_ts570_files_follow_their_manual_and_pin_what_the_engine_cannot_do() {
         // The manual's modes 7 (CW-R) and 9 (FSK-R) are in the file.
         assert_eq!(desc.mode_code(Mode::CwR), Some(b'7'), "{id}");
         assert_eq!(desc.mode_code(Mode::RttyR), Some(b'9'), "{id}");
-        // RU and RD take no parameter (printed page 79): the engine's RUnnnnn; cannot be sent, so no
-        // RIT offset. AG is AGnnn with no leading 0 (the engine writes AG0nnn;), SM is SMnnnn: so no
-        // levels and no signal. These pins fail if a later edit claims what the manual contradicts.
-        for cap in [
-            Capability::RitXit,
-            Capability::Levels,
-            Capability::ReadSignal,
-        ] {
-            assert!(!desc.capabilities.has(cap), "{id} claims {cap:?}");
+        // RU and RD take no parameter (PDF p. 85, RD/RU entries; format table p. 79): the engine's
+        // RUnnnnn; cannot be sent, so no RIT offset. Levels and signal are claimed since #3133: AG
+        // is AGnnn (format 31), MG 000-100 (p. 79), KS 010-060 (format 42), PC 005-100 (format 47,
+        // command p. 85), SM read as SM (format 22). The pin fails if the RIT claim returns.
+        assert!(
+            !desc.capabilities.has(Capability::RitXit),
+            "{id} claims rit-xit"
+        );
+        for cap in [Capability::Levels, Capability::ReadSignal] {
+            assert!(desc.capabilities.has(cap), "{id} lacks {cap:?}");
         }
         assert_eq!(
             engine
@@ -300,10 +301,24 @@ fn the_ts570_files_follow_their_manual_and_pin_what_the_engine_cannot_do() {
         );
         assert_eq!(
             engine
-                .encode(&Op::GetLevel(Level::AfGain))
-                .expect_err("no levels")
-                .kind,
-            ErrorKind::Unsupported
+                .encode(&Op::SetLevel(Level::AfGain, 128))
+                .expect("af")
+                .bytes,
+            b"AG128;"
         );
+        assert_eq!(
+            engine
+                .encode(&Op::SetLevel(Level::RfPower, 5))
+                .expect("pc")
+                .bytes,
+            b"PC005;"
+        );
+        assert!(engine.encode(&Op::SetLevel(Level::RfPower, 4)).is_err());
+        assert!(engine.encode(&Op::SetLevel(Level::KeyerSpeed, 60)).is_ok());
+        assert!(engine.encode(&Op::SetLevel(Level::KeyerSpeed, 61)).is_err());
+        assert!(engine.encode(&Op::SetLevel(Level::MicGain, 101)).is_err());
+        assert!(engine
+            .encode(&Op::SetLevel(Level::MonitorLevel, 1))
+            .is_err());
     }
 }
