@@ -44,6 +44,7 @@ pub mod kenwood;
 pub mod kenwood_hh;
 pub mod kenwood_ts890;
 pub mod kenwood_ts890_lan;
+pub mod kenwood_ts990_lan;
 pub mod lowe;
 pub mod mds;
 pub mod micom;
