@@ -46,7 +46,7 @@ How far radioctl's descriptions cover each of these families, and at what verifi
 
 ## radioctl's rig descriptions
 
-The descriptions are the files `rigs/*.toml` (<!--count:description_files-->292<!--/count--> of them). A capability that a description lists is one the handle accepts (chapter [4](04-api.md)); the engine must also implement it (chapter [7](07-protocol-engines.md)), and a listed capability that the engine does not implement answers `Unsupported`. Which radio lists what is not copied here: it was a hand-written table of twenty-three files that went stale, and the same facts are in each description (`grep capabilities rigs/<name>.toml`) and, with each radio's verification level, in [`RIG_SUPPORT.md`](../RIG_SUPPORT.md). What this appendix keeps is what each capability means and how many descriptions list it; the counts are checked against `rigs/*.toml` by `tools/doc_counts.py --check`, and a capability that has no row here fails `tools/test_doc_counts.py`.
+The descriptions are the files `rigs/*.toml` (<!--count:description_files-->293<!--/count--> of them). A capability that a description lists is one the handle accepts (chapter [4](04-api.md)); the engine must also implement it (chapter [7](07-protocol-engines.md)), and a listed capability that the engine does not implement answers `Unsupported`. Which radio lists what is not copied here: it was a hand-written table of twenty-three files that went stale, and the same facts are in each description (`grep capabilities rigs/<name>.toml`) and, with each radio's verification level, in [`RIG_SUPPORT.md`](../RIG_SUPPORT.md). What this appendix keeps is what each capability means and how many descriptions list it; the counts are checked against `rigs/*.toml` by `tools/doc_counts.py --check`, and a capability that has no row here fails `tools/test_doc_counts.py`.
 
 | Capability | Meaning | Descriptions listing it |
 |---|---|---:|
@@ -54,7 +54,7 @@ The descriptions are the files `rigs/*.toml` (<!--count:description_files-->292<
 | `set-frequency` | a frequency can be set | <!--count:cap_set_frequency-->289<!--/count--> |
 | `second-vfo` | VFO B can be read and set | <!--count:cap_second_vfo-->62<!--/count--> |
 | `read-mode` | the mode and passband can be read | <!--count:cap_read_mode-->248<!--/count--> |
-| `set-mode` | the mode and passband can be set | <!--count:cap_set_mode-->265<!--/count--> |
+| `set-mode` | the mode and passband can be set | <!--count:cap_set_mode-->266<!--/count--> |
 | `read-ptt` | the keyed state can be read | <!--count:cap_read_ptt-->127<!--/count--> |
 | `set-ptt` | the radio can be keyed and unkeyed (a transmitting capability: the transmit gate applies) | <!--count:cap_set_ptt-->166<!--/count--> |
 | `read-signal` | the S-meter reading | <!--count:cap_read_signal-->100<!--/count--> |

@@ -89,6 +89,8 @@ pub enum VendorProtocol {
     Guohe,
     /// Dorji DRA818U and DRA818V modules (`dorji.rs`).
     Dorji,
+    /// TAPR DSP-10 (`dsp10.rs`).
+    Dsp10,
     /// MDS 4710 and 9710 data radios (`mds.rs`).
     Mds,
     /// Elecraft XG3 signal source (`xg3.rs`).
@@ -130,6 +132,7 @@ impl VendorProtocol {
             "lowe" => Some(VendorProtocol::Lowe),
             "guohe" => Some(VendorProtocol::Guohe),
             "dorji" => Some(VendorProtocol::Dorji),
+            "dsp10" => Some(VendorProtocol::Dsp10),
             "mds" => Some(VendorProtocol::Mds),
             "xg3" => Some(VendorProtocol::Xg3),
             "transfox" => Some(VendorProtocol::Transfox),
@@ -164,6 +167,7 @@ impl VendorProtocol {
             VendorProtocol::Lowe => "lowe",
             VendorProtocol::Guohe => "guohe",
             VendorProtocol::Dorji => "dorji",
+            VendorProtocol::Dsp10 => "dsp10",
             VendorProtocol::Mds => "mds",
             VendorProtocol::Xg3 => "xg3",
             VendorProtocol::Transfox => "transfox",
