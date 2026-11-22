@@ -39,7 +39,7 @@ use tokio::sync::{broadcast, mpsc, oneshot, watch, Notify};
 use tokio::time::{sleep_until, timeout_at, Instant};
 
 use crate::capability::{Capability, CapabilitySet};
-use crate::engine::{Inbound, LineStep, ProtocolEngine, ReplyKind, Request};
+use crate::engine::{Inbound, LineStep, ProtocolEngine, ReplyKind, Request, Stage};
 use crate::error::{ErrorKind, RigError};
 use crate::event::{Change, RigEvent, Source};
 use crate::keyer::ControlLines;
@@ -1321,6 +1321,27 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
     async fn unkey_fail_closed(&mut self, why: &str, source: Source) {
         self.transcript
             .push_back(format!("FAIL CLOSED unkey: {why}"));
+        let unkey = Op::SetPtt(false);
+        let staged = if self.shared.capabilities.has(Capability::SetPtt) {
+            self.engine.encode_stages(&unkey).ok().flatten()
+        } else {
+            None
+        };
+        if let Some(stages) = staged {
+            // A timed unkey sequence: runs every stage; its own failure is the alarm below.
+            let far = deadline_after(Instant::now(), Duration::from_secs(60));
+            let done = self.write_stages(&stages, far, true).await.is_none();
+            if done {
+                self.apply_set(&unkey, source);
+            } else {
+                self.shared
+                    .counters
+                    .unkey_failures
+                    .fetch_add(1, Ordering::Relaxed);
+                self.alarm(Alarm::UnkeyFailed, source);
+            }
+            return;
+        }
         let request = if self.shared.capabilities.has(Capability::SetPtt) {
             self.engine.encode(&Op::SetPtt(false)).ok()
         } else {
@@ -1515,6 +1536,78 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         Ok(None)
     }
 
+    // [@ANCHOR: radioctl_core_actor_write_stages]
+    /// Writes a timed sequence: each stage's bytes, then its wait. A keying sequence (`keep_going`
+    /// false) stops at the first failed write or passed deadline; an unkey (`keep_going`) ignores
+    /// the deadline, gives each write the rig's timeout and runs every stage whatever happens.
+    /// Returns the first error.
+    async fn write_stages(
+        &mut self,
+        stages: &[Stage],
+        deadline: Instant,
+        keep_going: bool,
+    ) -> Option<RigError> {
+        let write_timeout = self.engine.description().timing.timeout;
+        let mut first: Option<RigError> = None;
+        for stage in stages {
+            let limit = if keep_going {
+                deadline_after(Instant::now(), write_timeout)
+            } else {
+                deadline
+            };
+            if !keep_going && Instant::now() >= limit {
+                return Some(self.error(
+                    ErrorKind::Timeout,
+                    "timed sequence did not finish before the deadline",
+                ));
+            }
+            let failure = match timeout_at(limit, self.transport.write_all(&stage.bytes)).await {
+                Ok(Ok(())) => {
+                    self.last_write = Some(Instant::now());
+                    self.log("TX", &stage.bytes);
+                    None
+                }
+                Ok(Err(error)) => {
+                    self.link_down(&error.to_string());
+                    Some(self.error(ErrorKind::LinkDown, &error.to_string()))
+                }
+                Err(_) => Some(self.error(ErrorKind::Timeout, "write did not finish in time")),
+            };
+            if let Some(error) = failure {
+                first.get_or_insert(error);
+                if !keep_going {
+                    break;
+                }
+            }
+            if !stage.wait.is_zero() {
+                sleep_until(deadline_after(Instant::now(), stage.wait)).await;
+            }
+        }
+        first
+    }
+
+    // [@ANCHOR: radioctl_core_actor_run_stages]
+    /// Runs a timed sequence for `op` (the transmit gate was checked by `run_command`). If a
+    /// key-on sequence fails part way, the rig may be half keyed (relays moved), so it unkeys
+    /// fail-closed.
+    async fn run_stages(
+        &mut self,
+        op: &Op,
+        stages: &[Stage],
+        deadline: Instant,
+        source: Source,
+    ) -> Reply {
+        if let Some(error) = self.write_stages(stages, deadline, op.is_unkey()).await {
+            if op.transmits() {
+                self.unkey_fail_closed("timed key-on sequence failed", source)
+                    .await;
+            }
+            return Err(error);
+        }
+        self.apply_set(op, source);
+        Ok(None)
+    }
+
     // [@ANCHOR: radioctl_core_actor_run_command]
     async fn run_command(
         &mut self,
@@ -1554,6 +1647,9 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
         }
         if let Some(steps) = self.engine.encode_lines(op)? {
             return self.run_line_steps(op, &steps, deadline, source).await;
+        }
+        if let Some(stages) = self.engine.encode_stages(op)? {
+            return self.run_stages(op, &stages, deadline, source).await;
         }
         let request = self.engine.encode(op)?;
         let timing = self.engine.description().timing;

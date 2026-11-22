@@ -52,6 +52,16 @@ pub struct LineStep {
     pub hold: Duration,
 }
 
+// [@ANCHOR: radioctl_core_engine_stage]
+/// One stage of a timed byte sequence: write `bytes`, then wait `wait` before the next stage.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Stage {
+    /// Bytes to write to the transport (no reply is expected).
+    pub bytes: Vec<u8>,
+    /// How long to wait after writing them.
+    pub wait: Duration,
+}
+
 // [@ANCHOR: radioctl_core_engine_inbound]
 /// Something decoded from received bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,6 +100,17 @@ pub trait ProtocolEngine: Send + 'static {
     /// an ordinary byte request. Never transmit-capable: the actor refuses a transmitting op
     /// here, and the gate and the unkey are not the engine's business.
     fn encode_lines(&mut self, op: &Op) -> Result<Option<Vec<LineStep>>, RigError> {
+        let _ = op;
+        Ok(None)
+    }
+
+    /// A command that is sent as several writes with timed waits between them (a key-on that must
+    /// switch the antenna relay, wait, switch the amplifier, wait, then key). `Ok(Some(stages))`
+    /// means the actor writes each stage's bytes in order and waits as the stage says; `encode`
+    /// is not called, and no reply is read. For a transmitting op the actor has already checked the
+    /// transmit gate; an unkey runs every stage even if one fails. `Ok(None)`, the default, means
+    /// an ordinary single request.
+    fn encode_stages(&mut self, op: &Op) -> Result<Option<Vec<Stage>>, RigError> {
         let _ = op;
         Ok(None)
     }
@@ -137,6 +158,12 @@ impl ProtocolEngine for Box<dyn ProtocolEngine> {
     /// Forwards the control-line hook to the boxed engine.
     fn encode_lines(&mut self, op: &Op) -> Result<Option<Vec<LineStep>>, RigError> {
         self.as_mut().encode_lines(op)
+    }
+
+    // [@ANCHOR: radioctl_core_engine_box_encode_stages]
+    /// Forwards the timed-sequence hook to the boxed engine.
+    fn encode_stages(&mut self, op: &Op) -> Result<Option<Vec<Stage>>, RigError> {
+        self.as_mut().encode_stages(op)
     }
 
     // [@ANCHOR: radioctl_core_engine_box_link_restored]
