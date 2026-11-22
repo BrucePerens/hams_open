@@ -94,3 +94,18 @@ class TestDomainsApi(HamsHttpCase):
         response = self.url_open("/api/v1/user_websites/domains", headers=self.IDENTITY_HEADERS)
         self.assertEqual(response.status_code, 503)
         self.assertNotIn("domains", response.json())
+
+    # Tests [@ANCHOR: user_websites:COMM_api_domains]
+    def test_domains_api_leaves_out_personal_alias_zones(self):
+        if "ham.dns.zone" not in self.env:
+            return  # a combined run with ham_dns covers this
+        zones = self.env["ham.dns.zone"].with_user(self.env.ref("base.user_admin"))
+        zones.create({"name": "k6zzz.hams.com", "is_personal_alias_zone": True})
+        zones.create({"name": "plainzone-example.org"})
+        self.env.flush_all()
+        response = self.url_open("/api/v1/user_websites/domains", headers=self.IDENTITY_HEADERS)
+        self.assertEqual(response.status_code, 200)
+        domains = response.json()["domains"]
+        self.assertNotIn("k6zzz.hams.com", domains)
+        self.assertIn("plainzone-example.org", domains)
+        self.assertIn("testdomain1.com", domains)

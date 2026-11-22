@@ -135,6 +135,21 @@ class TestDomainPush(HamsTransactionCase):
         posted_domains = kwargs.get('json', {}).get('params', {}).get('domains', [])
         self.assertEqual(len(posted_domains), total_domains)
 
+    def test_push_all_to_pager_duty_leaves_out_personal_alias_zones(self):
+        # Tests [@ANCHOR: edge_routing:COMM_domain_push_pagerduty]
+        if "ham.dns.zone" not in self.env:
+            return  # a combined run with ham_dns covers this
+        admin = self.env.ref("base.user_admin")
+        zones = self.env["ham.dns.zone"].with_user(admin)
+        zones.create({"name": "k6zzz.hams.com", "is_personal_alias_zone": True})
+        zones.create({"name": "plainzone-example.org"})
+        self._configure_api_identity()
+        mock_post = self._mock_post_accepted()
+        self.env["edge.routing.domain"].with_user(admin).push_all_to_pager_duty()
+        posted = mock_post.call_args[1]["json"]["params"]["domains"]
+        self.assertNotIn("k6zzz.hams.com", posted)
+        self.assertIn("plainzone-example.org", posted)
+
     def test_push_all_to_pager_duty_sends_the_configured_api_identity(self):
         # Tests [@ANCHOR: edge_routing:COMM_domain_push_pagerduty]
         # This POST must carry an `api_identity`, not only {"domains": [...]}: without it
