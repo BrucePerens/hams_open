@@ -11,7 +11,6 @@ Source of every fact: Larkin W7PUA, "Notes on the PC/DSP interface for the DSP-1
 | Field | Type | Meaning |
 |---|---|---|
 | `desc` | `RigDescription` | The rig description the engine was built from; returned by `description()`. |
-| `sideband` | `u8` | The sideband byte last sent (0 LSB, 1 USB); CW and FM reuse it. |
 
 **Notes.** The DSP sends no answer to a command, so a request waits for nothing.
 
@@ -32,9 +31,9 @@ Source of every fact: Larkin W7PUA, "Notes on the PC/DSP interface for the DSP-1
 
 ## Functions
 
-### `pub fn mode_bytes(code: u8, sideband: u8) -> Option<(u8, u8)>` [@ANCHOR: radioctl:radioctl_dsp10_mode_bytes]
+### `pub fn mode_bytes(code: u8) -> Option<(u8, u8)>` [@ANCHOR: radioctl:radioctl_dsp10_mode_bytes]
 
-Maps the description's mode code (`0` LSB, `1` USB, `2` CW, `3` FM) to the `mode` and `sb` bytes of Command 77. CW and FM carry the sideband given. Returns `None` for another code. Pure.
+Maps the description's mode code (`0` LSB, `1` USB, `2` CW, `3` FM) to the `mode` and `sb` bytes of Command 77. On 2 m the DSP's I-F sideband is the opposite of the one on air: LSB sends `sb` 1, USB, CW and FM send 0 (PC program UHFA.C v3.96, `set_mode`). Returns `None` for another code. Pure.
 
 ### `pub fn mode_frame(mode: u8, sb: u8) -> Vec<u8>` [@ANCHOR: radioctl:radioctl_dsp10_mode_frame]
 
@@ -46,7 +45,7 @@ Builds the engine; refuses a description whose vendor dialect is not `dsp10` wit
 
 ### `fn encode(&mut self, op: &Op) -> Result<Request, RigError>` [@ANCHOR: radioctl:radioctl_dsp10_engine_encode]
 
-Encodes `SetMode` as Command 77 with reply `None` and remembers the sideband. Every other operation, a mode the description lacks, or a capability the description does not claim is refused with `Unsupported`; there is no frequency or PTT command in the document.
+Encodes `SetMode` as Command 77 with reply `None` Every other operation, a mode the description lacks, or a capability the description does not claim is refused with `Unsupported`; there is no frequency or PTT command in the document.
 
 ### `fn feed(&mut self, _bytes: &[u8], _now: Duration) -> Vec<Inbound>` [@ANCHOR: radioctl:radioctl_dsp10_engine_feed]
 

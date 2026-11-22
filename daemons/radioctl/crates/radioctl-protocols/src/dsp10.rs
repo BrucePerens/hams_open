@@ -20,8 +20,7 @@
 //! DSP between receive and transmit; the transmit hardware is steered by Commands 7 and 8, so
 //! there is no PTT either and the transmit gate has nothing to guard here.
 //!
-//! The mode codes in the description are `0` LSB, `1` USB, `2` CW, `3` FM (ours). CW and FM keep the
-//! last sideband. The microphone gain word sent with every mode command is [`MIKE_WORD`] (ours; the
+//! The mode codes in the description are `0` LSB, `1` USB, `2` CW, `3` FM (ours). The microphone gain word sent with every mode command is [`MIKE_WORD`] (ours; the
 //! document gives no default).
 
 use std::time::Duration;
@@ -48,14 +47,17 @@ fn unsupported(what: &str) -> RigError {
 }
 
 // [@ANCHOR: radioctl_dsp10_mode_bytes]
-/// The `mode` and `sb` bytes of Command 77 for a description mode code, given the sideband in
-/// force; `None` for a code the DSP has no mode for.
-pub fn mode_bytes(code: u8, sideband: u8) -> Option<(u8, u8)> {
+/// The `mode` and `sb` bytes of Command 77 for a description mode code; `None` for a code the
+/// DSP has no mode for. On 2 m the DSP's I-F sideband is the opposite of the one on the air
+/// (the upper-side 19.68 MHz conversion): USB, CW and FM send `sb` 0 and LSB sends 1, as the PC
+/// program does for its 144 MHz band (UHFA.C v3.96, `set_mode`, the `case USB`, `LSB`, `CW` and
+/// `FM` arms where `tvtr[band].sb` is -1).
+pub fn mode_bytes(code: u8) -> Option<(u8, u8)> {
     match code {
-        b'0' => Some((0, 0)),
-        b'1' => Some((0, 1)),
-        b'2' => Some((1, sideband)),
-        b'3' => Some((2, sideband)),
+        b'0' => Some((0, 1)),
+        b'1' => Some((0, 0)),
+        b'2' => Some((1, 0)),
+        b'3' => Some((2, 0)),
         _ => None,
     }
 }
@@ -72,7 +74,6 @@ pub fn mode_frame(mode: u8, sb: u8) -> Vec<u8> {
 #[derive(Debug)]
 pub struct Dsp10Engine {
     desc: RigDescription,
-    sideband: u8,
 }
 
 impl Dsp10Engine {
@@ -83,7 +84,7 @@ impl Dsp10Engine {
         if name != "dsp10" {
             return Err(unsupported("unknown DSP-10 dialect in the description"));
         }
-        Ok(Dsp10Engine { desc, sideband: 1 })
+        Ok(Dsp10Engine { desc })
     }
 }
 
@@ -104,9 +105,8 @@ impl ProtocolEngine for Dsp10Engine {
             .desc
             .mode_code(*mode)
             .ok_or_else(|| unsupported("mode not in the description"))?;
-        let (m, sb) = mode_bytes(code, self.sideband)
+        let (m, sb) = mode_bytes(code)
             .ok_or_else(|| unsupported("mode code unknown to the DSP-10 engine"))?;
-        self.sideband = sb;
         Ok(Request {
             bytes: mode_frame(m, sb),
             reply: ReplyKind::None,
@@ -143,7 +143,7 @@ impl Dsp10Twin {
         Ok(Dsp10Twin {
             frame: Vec::new(),
             mode: 0,
-            sb: 1,
+            sb: 0,
             mike: 0,
             last_cmd: 0,
             hz: desc.default_frequency,
@@ -165,7 +165,7 @@ impl VendorTwin for Dsp10Twin {
     // [@ANCHOR: radioctl_dsp10_twin_snapshot]
     fn snapshot(&self) -> Option<TwinSnapshot> {
         let code = match (self.mode, self.sb) {
-            (0, 0) => b'0',
+            (0, 1) => b'0',
             (0, _) => b'1',
             (1, _) => b'2',
             _ => b'3',
@@ -225,12 +225,12 @@ mod tests {
     // Tests [@ANCHOR: radioctl_dsp10_mode_frame]
     #[test]
     fn command_77_bytes_follow_the_document() {
-        assert_eq!(mode_bytes(b'0', 1), Some((0, 0)));
-        assert_eq!(mode_bytes(b'1', 0), Some((0, 1)));
-        assert_eq!(mode_bytes(b'2', 0), Some((1, 0)));
-        assert_eq!(mode_bytes(b'3', 1), Some((2, 1)));
-        assert_eq!(mode_bytes(b'9', 1), None);
-        assert_eq!(mode_frame(2, 1), vec![0x24, 77, 2, 1, 1, 0]);
+        assert_eq!(mode_bytes(b'0'), Some((0, 1)));
+        assert_eq!(mode_bytes(b'1'), Some((0, 0)));
+        assert_eq!(mode_bytes(b'2'), Some((1, 0)));
+        assert_eq!(mode_bytes(b'3'), Some((2, 0)));
+        assert_eq!(mode_bytes(b'9'), None);
+        assert_eq!(mode_frame(2, 0), vec![0x24, 77, 2, 0, 1, 0]);
     }
 
     // Tests [@ANCHOR: radioctl_dsp10_engine_new]
@@ -252,10 +252,10 @@ mod tests {
         let mut e = Dsp10Engine::new(desc.clone()).expect("engine");
         let mut t = Dsp10Twin::new(&desc).expect("twin");
         for (mode, wire, code) in [
-            (Mode::Lsb, [0x24, 77, 0, 0, 1, 0], b'0'),
-            (Mode::Usb, [0x24, 77, 0, 1, 1, 0], b'1'),
-            (Mode::Cw, [0x24, 77, 1, 1, 1, 0], b'2'),
-            (Mode::Fm, [0x24, 77, 2, 1, 1, 0], b'3'),
+            (Mode::Lsb, [0x24, 77, 0, 1, 1, 0], b'0'),
+            (Mode::Usb, [0x24, 77, 0, 0, 1, 0], b'1'),
+            (Mode::Cw, [0x24, 77, 1, 0, 1, 0], b'2'),
+            (Mode::Fm, [0x24, 77, 2, 0, 1, 0], b'3'),
         ] {
             let r = e.encode(&Op::SetMode(mode)).expect("encodes");
             assert_eq!(r.bytes, wire, "{mode:?}");
@@ -266,16 +266,13 @@ mod tests {
         }
         assert_eq!(t.last_command(), 77);
         assert_eq!(t.mike_gain(), 4);
-        // CW after LSB keeps the LSB sideband.
-        e.encode(&Op::SetMode(Mode::Lsb)).expect("encodes");
-        assert_eq!(e.encode(&Op::SetMode(Mode::Cw)).expect("cw").bytes[3], 0);
-        // A frame split across reads, and junk before ESC, still lands.
+        // A frame split across reads, and junk before ESC, still lands (sb 1 is LSB on 2 m).
         t.feed(&[0, 0x24, 77, 0], T0);
         t.feed(&[1, 1, 0], T0);
-        assert_eq!(t.snapshot().expect("snapshot").mode_code, Some(b'1'));
+        assert_eq!(t.snapshot().expect("snapshot").mode_code, Some(b'0'));
         // Out of range mode and sideband bytes are ignored.
         t.feed(&[0x24, 77, 5, 0, 1, 0], T0);
-        assert_eq!(t.snapshot().expect("snapshot").mode_code, Some(b'1'));
+        assert_eq!(t.snapshot().expect("snapshot").mode_code, Some(b'0'));
         // No frequency, no PTT: the document has no command for either.
         assert!(e
             .encode(&Op::SetFrequency(Vfo::A, Hz(145_000_000)))
