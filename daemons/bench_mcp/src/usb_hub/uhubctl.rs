@@ -395,9 +395,7 @@ pub mod tests {
 
     pub fn fx(name: &str) -> String {
         std::fs::read_to_string(
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("tests/usb_fixtures/devbox")
-                .join(name),
+            crate::usb_hub::testkit::recorded().join(name),
         )
         .unwrap()
     }

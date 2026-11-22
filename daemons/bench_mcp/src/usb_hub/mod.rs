@@ -537,7 +537,7 @@ mod tests {
     use super::*;
 
     fn fixture() -> std::path::PathBuf {
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/usb_fixtures/devbox/sys")
+        testkit::recorded_sys()
     }
 
     fn cfg() -> Config {

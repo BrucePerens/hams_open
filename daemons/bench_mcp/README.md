@@ -317,7 +317,7 @@ overlap (the burst overwrites the generator's settings): one VNA call at a time 
 
 `bench_usb_topology`, `bench_usb_find`, `bench_usb_hubs`, `bench_usb_protection`, `bench_usb_history`, `bench_usb_watch`, `bench_usb_bandwidth`, `bench_usb_diagnose` and `bench_usb_port_power` (and the ladder tools `bench_usb_reset`, `_authorize`, `_driver`, `_autosuspend`) describe and control the host's USB hubs and ports (read from sysfs without root; power through `sudo -n uhubctl`).
 Registration, tiers, labels and the safety rules are in `docs/USB_HUB_TOOLS.md`. Tests read a recording of this development machine's `/sys`, `uhubctl`, `lsusb` and kernel journal in
-`tests/usb_fixtures/devbox` (made by `tests/usb_fixtures/capture.py`).
+`tests/usb_fixtures/devbox` (made by `tests/usb_fixtures/capture.py`; `:` in names is stored as `%3A` so the repository checks out on Windows, and `usb_hub/testkit.rs` decodes it).
 
 * The USB tree, its per-device JSON and the label lookup are checked against the recorded tree.
 * The `usb_hub` config entry (labels, critical ports and devices) parses and refuses bad entries.

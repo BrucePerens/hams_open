@@ -18,21 +18,65 @@ impl Dir {
     }
 }
 
-pub fn recorded() -> PathBuf {
+/// The recorded tree as committed: `:` in names (and in link targets) is stored as `%3A` because `:` is illegal in Windows file names.
+fn recorded_encoded() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/usb_fixtures/devbox")
+}
+
+/// The recorded tree with the real device names (`1-0:1.0`, `pci0000:00`): a decoded copy made once and shared by every test and process.
+pub fn recorded() -> PathBuf {
+    static DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+    DIR.get_or_init(|| {
+        let src = recorded_encoded();
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        hash_tree(&src, &mut h);
+        let name = format!("hams-usb-fixtures-{:016x}", std::hash::Hasher::finish(&h));
+        let fin = std::env::temp_dir().join(&name);
+        if !fin.exists() {
+            let tmp = std::env::temp_dir().join(format!("{name}.{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&tmp);
+            copy_all(&src, &tmp);
+            if std::fs::rename(&tmp, &fin).is_err() {
+                let _ = std::fs::remove_dir_all(&tmp);
+            }
+        }
+        fin
+    })
+    .clone()
+}
+
+fn hash_tree(dir: &Path, h: &mut impl std::hash::Hasher) {
+    use std::hash::Hash;
+    let mut names: Vec<_> = std::fs::read_dir(dir).unwrap().flatten().collect();
+    names.sort_by_key(|e| e.file_name());
+    for e in names {
+        e.file_name().hash(h);
+        let ft = e.file_type().unwrap();
+        if ft.is_symlink() {
+            std::fs::read_link(e.path()).unwrap().hash(h);
+        } else if ft.is_dir() {
+            hash_tree(&e.path(), h);
+        } else {
+            std::fs::read(e.path()).unwrap().hash(h);
+        }
+    }
 }
 
 pub fn recorded_sys() -> PathBuf {
     recorded().join("sys")
 }
 
+fn decode(s: &std::ffi::OsStr) -> std::ffi::OsString {
+    s.to_string_lossy().replace("%3A", ":").into()
+}
+
 fn copy_all(from: &Path, to: &Path) {
     std::fs::create_dir_all(to).unwrap();
     for e in std::fs::read_dir(from).unwrap().flatten() {
-        let (src, dst) = (e.path(), to.join(e.file_name()));
+        let (src, dst) = (e.path(), to.join(decode(&e.file_name())));
         let ft = e.file_type().unwrap();
         if ft.is_symlink() {
-            std::os::unix::fs::symlink(std::fs::read_link(&src).unwrap(), &dst).unwrap();
+            std::os::unix::fs::symlink(decode(std::fs::read_link(&src).unwrap().as_os_str()), &dst).unwrap();
         } else if ft.is_dir() {
             copy_all(&src, &dst);
         } else {
