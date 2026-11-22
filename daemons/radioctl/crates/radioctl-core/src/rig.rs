@@ -1628,7 +1628,8 @@ impl<E: ProtocolEngine, T: Transport> Actor<E, T> {
                 "transmit gate is closed for this rig",
             ));
         }
-        if op.transmits() {
+        // A rig that cannot set a frequency (the DSP-10 so far) has no transmit frequency to know.
+        if op.transmits() && self.shared.capabilities.has(Capability::SetFrequency) {
             self.require_known_tx_frequency()?;
         }
         // An antenna change moves the RF path: refused while the rig is known keyed. Some rigs

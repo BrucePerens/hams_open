@@ -98,8 +98,15 @@ impl ProtocolEngine for Seq {
 }
 
 fn start(fail_at: Option<usize>) -> (radioctl_core::rig::RigHandle, Wire) {
+    start_with(&[Capability::SetPtt, Capability::SetFrequency], fail_at)
+}
+
+fn start_with(
+    caps: &[Capability],
+    fail_at: Option<usize>,
+) -> (radioctl_core::rig::RigHandle, Wire) {
     let mut desc = RigDescription::ic7300();
-    desc.capabilities = CapabilitySet::of(&[Capability::SetPtt, Capability::SetFrequency]);
+    desc.capabilities = CapabilitySet::of(caps);
     let wire = Wire {
         log: Arc::default(),
         start: Instant::now(),
@@ -199,4 +206,13 @@ async fn an_unkey_runs_every_stage_even_when_one_fails() {
     let sent: Vec<_> = w.iter().map(|x| x.1.clone()).collect();
     assert_eq!(sent, vec![b"X".to_vec(), b"Y".to_vec(), b"Z".to_vec()]);
     assert_eq!(w[1].0 - w[0].0, 20);
+}
+
+// Tests [@ANCHOR: radioctl_core_actor_run_command]
+#[tokio::test(start_paused = true)]
+async fn a_rig_that_cannot_set_a_frequency_keys_without_a_known_transmit_frequency() {
+    let (rig, wire) = start_with(&[Capability::SetPtt], None);
+    rig.open_transmit_gate(TransmitPermit::new("stages test"));
+    rig.set_ptt(true).await.expect("key on");
+    assert_eq!(writes(&wire).len(), 3);
 }
