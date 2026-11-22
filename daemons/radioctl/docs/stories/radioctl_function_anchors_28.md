@@ -170,14 +170,14 @@ Display and output (`10`, `11`) are read with no data and set with one flag byte
 Decodes the answer to the Kenwood `IF` (information) command. `&self`; `body` is the answer without `IF` and `;`, which must be 35 ASCII characters (an R-5000 answer of 30 is widened by inserting five zeros after the frequency). Fields read: frequency (11 digits), the RIT/XIT offset region (10 characters, `parse_if_offset`), RIT (receiver incremental tuning) flag, XIT flag, transmit flag and split flag.
 Returns `Some(list of Inbound observations)` or `None` when the length, character set or any field is wrong. Pure. The transmit flag is only reported, nothing is keyed.
 
-### `fn level_wire(level: Level, ts870: bool) -> LevelWire` [@ANCHOR: radioctl:radioctl_kenwood_level_wire]
+### `fn level_wire(level: Level, dialect: KenwoodDialect) -> LevelWire` [@ANCHOR: radioctl:radioctl_kenwood_level_wire]
 
-Describes how a level is written on the Kenwood wire. `level` is by value and `ts870` is true for a `kenwood.dialect = "ts870"` description, which has the TS-870S manual's forms instead: no main digit on `AG`, `AG`/`MG`/`ML` 0 to 255, `KS` 1 to 100, `PC` 10 to 100; the result is `LevelWire` with the two-letter command name, whether it carries a main/sub receiver digit, and the minimum and maximum values. AF gain `AG` 0 to 255 (with the digit), RF gain `RG` 0 to 255, mic gain `MG` 0 to 100, monitor `ML` 0 to 9, keyer speed `KS` 10 to 60, RF power `PC` 5 to 100.
+Describes how a level is written on the Kenwood wire. `level` is by value and `dialect` is the description's `kenwood.dialect`; `ts870` has the TS-870S manual's forms instead: no main digit on `AG`, `AG`/`MG`/`ML` 0 to 255, `KS` 1 to 100, `PC` 10 to 100; `ts570` has `nnn` `AG`, `MG` 0 to 100, `KS` 10 to 60, `PC` 5 to 100 and no `ML`; the result is `LevelWire` with the two-letter command name, whether it carries a main/sub receiver digit, and the minimum and maximum values. AF gain `AG` 0 to 255 (with the digit), RF gain `RG` 0 to 255, mic gain `MG` 0 to 100, monitor `ML` 0 to 9, keyer speed `KS` 10 to 60, RF power `PC` 5 to 100.
 The ranges are the intersection of the TS-2000 and TS-590 guides. Attenuator (`RA`) and preamplifier (`PA`) have their own forms and range 0 here; dither, preselector and antenna have no Kenwood command, and the encoder refuses them first. Pure.
 
-### `fn decode_level(name: &str, digits: &str, ts870: bool) -> Option<Observation>` [@ANCHOR: radioctl:radioctl_kenwood_decode_level]
+### `fn decode_level(name: &str, digits: &str, dialect: KenwoodDialect) -> Option<Observation>` [@ANCHOR: radioctl:radioctl_kenwood_decode_level]
 
-Decodes a Kenwood level answer. `name` is the two-letter command (`AG`) and `digits` the rest (`0128` for AF gain 128, where the leading `0` is the main receiver digit). `ts870` selects the TS-870S forms of `level_wire`. It finds the level whose wire name is `name` among AF gain, RF gain, mic gain, monitor level, keyer speed and RF power.
+Decodes a Kenwood level answer. `name` is the two-letter command (`AG`) and `digits` the rest (`0128` for AF gain 128, where the leading `0` is the main receiver digit). `dialect` selects the forms of `level_wire`. It finds the level whose wire name is `name` among AF gain, RF gain, mic gain, monitor level, keyer speed and RF power.
 For levels with the main digit it strips a leading `0`; the number must then be exactly 3 digits. Returns `Some(Observation::Level(level, value))` or `None` for an unknown name, a missing digit or a non-numeric or wrong-length number. Pure.
 
 ### `fn parse_if_offset(region: &str) -> Option<i16>` [@ANCHOR: radioctl:radioctl_kenwood_parse_if_offset]
