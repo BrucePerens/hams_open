@@ -177,6 +177,8 @@ pub struct KenwoodEngine {
     r5000: bool,
     /// The TRC-80 dialect: the frequency is read from `IF`.
     if_frequency: bool,
+    /// The TS-870S dialect: its own level forms and ranges, `SM;` read (`kenwood.dialect = "ts870"`).
+    ts870: bool,
     /// The auto-information the controller turned on (`AI` set to on, [`Op::SetTransceive`]) and
     /// the rig loses with the link; sent again by [`ProtocolEngine::link_restored`].
     transceive: bool,
@@ -233,6 +235,7 @@ impl KenwoodEngine {
             ts990,
             r5000: dialect == Some(KenwoodDialect::R5000),
             if_frequency: dialect == Some(KenwoodDialect::Trc80),
+            ts870: dialect == Some(KenwoodDialect::Ts870),
             transceive: false,
             tone_flags: [None; 2],
         })
@@ -435,6 +438,10 @@ impl KenwoodEngine {
                 .next()
                 .and_then(|c| self.desc.code_mode(c))
                 .map(Observation::Mode),
+            // TS-870S (manual PDF p. 100, format 22): `SMnnnn`, 0000-0030, no leading P1.
+            (Some("SM"), Some(rest)) if self.ts870 && rest.len() == 4 => parse_digits(rest)
+                .and_then(|v| u16::try_from(v).ok())
+                .map(Observation::Signal),
             (Some("SM"), Some(rest)) if rest.len() == 5 && rest.starts_with('0') => rest
                 .get(1..)
                 .and_then(parse_digits)
@@ -463,7 +470,7 @@ impl KenwoodEngine {
                 .zip(parse_digits(digits))
                 .and_then(|(chart, n)| chart.get(usize::try_from(n).ok()?))
                 .map(|tenths| Observation::CtcssTone(*tenths)),
-            (Some(name), Some(digits)) => decode_level(name, digits),
+            (Some(name), Some(digits)) => decode_level(name, digits, self.ts870),
             _ => None,
         };
         vec![match observation {
@@ -660,8 +667,16 @@ struct LevelWire {
 
 // [@ANCHOR: radioctl_kenwood_level_wire]
 /// The wire form of a level. Ranges are the intersection of the TS-2000 and TS-590 guides.
-fn level_wire(level: Level) -> LevelWire {
+fn level_wire(level: Level, ts870: bool) -> LevelWire {
+    // TS-870S (instruction manual, appendix D, PDF pp. 90-91 formats 31, 42, 46, 47; command
+    // pages 95 AG, 97 KS, 98 MG and ML, 99 PC, 100 RG): `nnn` with no leading `0` on AG, gains and
+    // monitor 000-255, KS 001-100, PC 010-100. Unverified on a radio.
     let (name, main_digit, min, max) = match level {
+        Level::AfGain if ts870 => ("AG", false, 0, 255),
+        Level::MicGain if ts870 => ("MG", false, 0, 255),
+        Level::MonitorLevel if ts870 => ("ML", false, 0, 255),
+        Level::KeyerSpeed if ts870 => ("KS", false, 1, 100),
+        Level::RfPower if ts870 => ("PC", false, 10, 100),
         Level::AfGain => ("AG", true, 0, 255),
         Level::RfGain => ("RG", false, 0, 255),
         Level::MicGain => ("MG", false, 0, 100),
@@ -685,7 +700,7 @@ fn level_wire(level: Level) -> LevelWire {
 
 // [@ANCHOR: radioctl_kenwood_decode_level]
 /// A level answer: the command name and its digits (`AG0128` is name `AG`, digits `0128`).
-fn decode_level(name: &str, digits: &str) -> Option<Observation> {
+fn decode_level(name: &str, digits: &str, ts870: bool) -> Option<Observation> {
     let level = [
         Level::AfGain,
         Level::RfGain,
@@ -695,8 +710,8 @@ fn decode_level(name: &str, digits: &str) -> Option<Observation> {
         Level::RfPower,
     ]
     .into_iter()
-    .find(|l| level_wire(*l).name == name)?;
-    let wire = level_wire(level);
+    .find(|l| level_wire(*l, ts870).name == name)?;
+    let wire = level_wire(level, ts870);
     let number = if wire.main_digit {
         digits.strip_prefix('0')?
     } else {
@@ -781,7 +796,10 @@ impl ProtocolEngine for KenwoodEngine {
             }
             Op::SetPtt(true) => Self::command("TX;".into(), none),
             Op::SetPtt(false) => Self::command("RX;".into(), none),
-            Op::GetSignal => Self::command("SM0;".into(), ReplyKind::Observation(Field::Signal)),
+            Op::GetSignal => Self::command(
+                if self.ts870 { "SM;" } else { "SM0;" }.into(),
+                ReplyKind::Observation(Field::Signal),
+            ),
             // AI2 (extended format) is the "on" of both guides; AI1 and AI3, the old format, are
             // refused by the TS-2000 and are not offered by the TS-590.
             Op::SetTransceive(on) => {
@@ -835,7 +853,7 @@ impl ProtocolEngine for KenwoodEngine {
             }
             Op::GetLevel(level @ (Level::Attenuator | Level::Preamp)) => {
                 attenuation::step_of(&self.desc, *level, 0)?;
-                let name = level_wire(*level).name;
+                let name = level_wire(*level, self.ts870).name;
                 Self::command(
                     format!("{name};"),
                     ReplyKind::Observation(Field::Level(*level)),
@@ -845,7 +863,7 @@ impl ProtocolEngine for KenwoodEngine {
                 return self.front_end_set(*level, *value);
             }
             Op::GetLevel(level) => {
-                let wire = level_wire(*level);
+                let wire = level_wire(*level, self.ts870);
                 let digit = if wire.main_digit { "0" } else { "" };
                 Self::command(
                     format!("{}{digit};", wire.name),
@@ -853,7 +871,7 @@ impl ProtocolEngine for KenwoodEngine {
                 )
             }
             Op::SetLevel(level, value) => {
-                let wire = level_wire(*level);
+                let wire = level_wire(*level, self.ts870);
                 if *value < wire.min || *value > wire.max {
                     return Err(Self::unsupported("level outside the range of the guides"));
                 }

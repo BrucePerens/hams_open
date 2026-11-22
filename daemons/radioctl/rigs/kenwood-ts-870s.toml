@@ -2,9 +2,9 @@
 # Nothing here is hardware-verified: no radio has been connected (docs/VOLUNTEER_TESTING.md). The command facts marked manual-checked were compared with the TS-870S Instruction Manual's computer control appendix (sha256 in each fact); timing and the model name are Hamlib 4.6.2 (rigs/kenwood/ts870s.c, `rigctl -m 2010 --dump-caps`, facts only).
 # Hamlib lists: serial 1200..57600 baud, 8N1, no handshake; the manual's menu 56 offers 1200 to 57600 baud; receive 0.1 to 30 MHz in 2 ranges; transmit 1.8 to 29.7 MHz in 36 ranges; RIT range -9.990kHz/+9.990kHz; attenuator 6/12/18 dB (RA 00..03 in the manual).
 # Engine: the classic Kenwood engine (IF answer of 38 characters with the semicolon, MD digits, FA/FB 11 digits): the manual agrees on all three.
-# Pinned disagreements with the classic engine (the manual's tables, appendix D): this radio's RU and RD take no parameter (one step per command), so the engine's RC;RUnnnnn; offset set cannot work and `rit-xit` is therefore not declared; AG and RG are AGnnn and RGnnn (no leading 0 on AG, 000 to 255), SM is SMnnnn (0000 to 0030) and KS is 001 to 100, PC 010 to 100: all differ from the engine's forms, so no levels and no signal are declared. A TS-870S dialect in the engine would lift these.
+# Pinned disagreements with the classic engine (the manual's tables, appendix D): this radio's RU and RD take no parameter (one step per command), so the engine's RC;RUnnnnn; offset set cannot work and `rit-xit` is therefore not declared; AG and RG are AGnnn and RGnnn (no leading 0 on AG, 000 to 255), SM is SMnnnn (0000 to 0030) and KS is 001 to 100, PC 010 to 100: all differ from the classic engine's forms. The engine's `ts870` dialect (kenwood.dialect) sends these forms, so `levels` and `read-signal` are declared; the RIT offset stays out: one RU/RD step per command has no documented size.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "transceive", "split", "identify"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "transceive", "split", "identify", "read-signal", "levels"]
 
 [rig]
 id = "kenwood-ts-870s"
@@ -13,6 +13,7 @@ family = "kenwood-ascii"
 
 [kenwood]
 model_id = 15
+dialect = "ts870"
 [kenwood.ky]
 form = "padded"
 width = 24
@@ -77,6 +78,11 @@ verified = { state = "unverified" }
 [[facts]]
 key = "defaults.*"
 provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: --freq 14074000, --mode USB", note = "Only the starting state of a virtual rig; the frequency is moved inside this model's receive range where needed." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "kenwood.dialect"
+provenance = { kind = "manual", reference = "Kenwood TS-870S Instruction Manual, Appendix D, file ts870s_manual.pdf (from /storage/manuals/kenwood/TS-870S), sha256 143e8273bd352fd0e4fb3bc25c1f095d6d5ba3ec2a0289d1dd6fc11c881f165a: parameter formats 22, 31, 42, 46, 47 (PDF pp. 90-91); AG p. 95, KS p. 97, MG and ML p. 98, PC p. 99, RG, RU/RD and SM p. 100", note = "Our name for the command set (radioctl-protocols kenwood.rs, dialect ts870): AG, RG, MG, ML as nnn with 000-255 and no leading 0, KS 001-100, PC 010-100, SM read as SM; and answered SMnnnn (0000-0030), RU and RD take no parameter. Unverified on a radio." }
 verified = { state = "unverified" }
 
 [[facts]]
