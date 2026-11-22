@@ -201,6 +201,8 @@ pub struct VirtualRig {
     /// The band the transmitter follows on a Yaesu with `yaesu.tx_band`: 0 Main, 1 Sub.
     yaesu_tx_band: u8,
     kenwood_tx_vfo: u8,
+    /// TS-990S: whether the Sub band is the operating band (`CB1`).
+    kenwood_sub_selected: bool,
     /// TS-890S: the bandscope settings and the sweep counter.
     ts890_scope: virtual_ts890::Ts890Scope,
 }
@@ -301,6 +303,7 @@ impl VirtualRig {
             scope: desc.scope.as_ref().map(ScopeSim::new),
             civ_b_selected: false,
             civ_sub_selected: false,
+            kenwood_sub_selected: false,
             civ_dual_watch: false,
             civ_tone_flags: [false; 3],
             civ_dup_last: false,
