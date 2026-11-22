@@ -87,6 +87,10 @@ Serves `RFPOWER_METER` for a rig that has watt calibration points. It converts t
 
 Reads the engine's raw power value through the rig actor with `Op::GetPower`, in the family's own scale: a CI-V 0 to 255 deflection, Yaesu `RM5`, or Elecraft `PO` watts. It is a read-only query and never keys the rig. Awaits the actor, so it may wait on the serial port and its timeouts. Errors are `i32` rigctl codes: whatever `read` returns, or `EIO` when the observation is of a different kind than a power value.
 
+### `async fn power_cal(&self) -> Option<radioctl_core::power::PowerCal>` [@ANCHOR: radioctl:radioctld_service_power_cal]
+
+The power meter calibration for the band the rig transmits on. A description with per-band points gets the transmit VFO's frequency read from the rig and picks that band's points (`PowerMeterParams::cal_at`); a description without bands, or a frequency that cannot be read, uses the base points (the highest rating, which over-states the watts). `None` when the description has no power meter. Used by the watts level, the fraction level and `power_reading`. Reads the rig once when bands exist; never keys it.
+
 ### `pub async fn power_reading(&self) -> Option<radioctl_core::power::PowerReading>` [@ANCHOR: radioctl:radioctld_service_power_reading]
 
 Public entry for the rig's own transmit-power reading, for stations that publish telemetry. It reads the raw value with `power_raw` and converts it with `rig_reading` using the description's `power_meter` calibration when present: watts with a calibration, otherwise a relative 0 to 100 bar. Any read error returns `None` (no power, not an old number). Async and read-only, it never keys the rig, and blocks only as long as the rig query takes.

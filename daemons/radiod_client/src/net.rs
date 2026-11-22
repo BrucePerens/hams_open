@@ -113,6 +113,8 @@ fn open_group(
     }
     let s = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
     s.set_reuse_address(true)?;
+    // Windows has no SO_REUSEPORT: there SO_REUSEADDR already lets several sockets share a multicast port.
+    #[cfg(not(windows))]
     s.set_reuse_port(true)?;
     s.bind(&SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, port).into())?;
     s.join_multicast_v4(&group, &iface)?;

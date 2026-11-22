@@ -4,7 +4,7 @@
 //! `COMP_METER` (decibels), `VD_METER` (volts), `ID_METER` (amperes) and the power bar.
 //!
 //! Each model has its own scale points, printed in its CI-V command table. The IC-9100, IC-7300,
-//! IC-7610 and IC-705 points below are those tables' printed points (read for facts only; see the
+//! IC-7610, IC-705 and IC-9700 points below are those tables' printed points (read for facts only; see the
 //! `capability.read-meters` fact of each description for the document and page). Any other rig is
 //! served from [`DEFAULT`]: the IC-7850 points (SWR 0 = 1.0, 48 = 1.5, 80 = 2.0, 120 = 3.0; ALC
 //! 0 to 120) for SWR and ALC, and Hamlib 4.6.2's IC-7300 points (read for facts only) for
@@ -81,6 +81,16 @@ const IC705: MeterCal = MeterCal {
     power: &[(0.0, 0.0), (143.0, 0.5), (213.0, 1.0)],
 };
 
+/// IC-9700 CI-V guide (IC-9700_ENG_CI-V_4.pdf, PDF pages 5 and 6), command 15 11 to 15 16.
+const IC9700: MeterCal = MeterCal {
+    swr: &[(0.0, 1.0), (48.0, 1.5), (80.0, 2.0), (120.0, 3.0)],
+    alc_full: 120.0,
+    comp: &[(0.0, 0.0), (130.0, 15.0), (210.0, 25.5)],
+    vd: DEFAULT_VD,
+    id: &[(0.0, 0.0), (121.0, 10.0), (241.0, 20.0)],
+    power: &[(0.0, 0.0), (143.0, 0.5), (213.0, 1.0)],
+};
+
 // [@ANCHOR: radioctld_meter_cal_for_rig]
 /// The scale points for the rig description `id` (`icom-ic-9100`, ...); [`DEFAULT`] when the model
 /// has none of its own.
@@ -90,6 +100,7 @@ pub fn for_rig(id: &str) -> &'static MeterCal {
         "icom-ic-7300" => &IC7300,
         "icom-ic-7610" => &IC7610,
         "icom-ic-705" => &IC705,
+        "icom-ic-9700" => &IC9700,
         _ => &DEFAULT,
     }
 }
@@ -311,6 +322,9 @@ mod tests {
         assert!((vd_volts(for_rig("icom-ic-705"), 75) - 5.0).abs() < 1e-9);
         assert!((id_amps(for_rig("icom-ic-7610"), 165) - 20.0).abs() < 1e-9);
         assert!((id_amps(for_rig("icom-ic-705"), 241) - 4.0).abs() < 1e-9);
+        assert!((id_amps(for_rig("icom-ic-9700"), 121) - 10.0).abs() < 1e-9);
+        assert!((comp_db(for_rig("icom-ic-9700"), 210) - 25.5).abs() < 1e-9);
+        assert!((power_fraction(for_rig("icom-ic-9700"), 213) - 1.0).abs() < 1e-9);
         assert!((full_scale(for_rig("icom-ic-7610"), Meter::Id) - 30.0).abs() < 1e-9);
         assert!((full_scale(for_rig("icom-ic-705"), Meter::Comp) - 25.5).abs() < 1e-9);
         for id in [

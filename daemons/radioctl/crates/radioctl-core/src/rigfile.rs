@@ -29,7 +29,7 @@ use crate::capability::{Capability, CapabilitySet};
 use crate::description::{
     CivCommandSet, CivMainSub, CivParams, ElecraftParams, Family, FlexParams, HhDialect,
     HpsdrParams, KenwoodDialect, KenwoodHhParams, KenwoodParams, KyForm, KyParams, KyStop,
-    LegacyBlock, LegacyCommand, LegacyFlag, LegacyFreqForm, LegacyRead, LevelParams,
+    LegacyBlock, LegacyCommand, LegacyFlag, LegacyFreqForm, LegacyRead, LevelParams, PowerBand,
     PowerMeterParams, ReceiverParams, ReceiverProtocol, RigDescription, ScopeParams, Timing,
     UsbParams, UsbProtocol, VendorParams, VendorProtocol, YaesuClarifier, YaesuLegacyParams,
     YaesuParams, DEFAULT_MAX_FREQUENCY,
@@ -448,6 +448,17 @@ struct LevelsSection {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PowerMeterSection {
+    raw_to_milliwatts: Vec<(u16, u32)>,
+    /// Optional per-band points (`[[power_meter.band]]`), ascending `max_hz`.
+    #[serde(default)]
+    band: Vec<PowerBandSection>,
+}
+
+// [@ANCHOR: radioctl_core_rigfile_power_band_section]
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PowerBandSection {
+    max_hz: u64,
     raw_to_milliwatts: Vec<(u16, u32)>,
 }
 
@@ -1058,10 +1069,29 @@ fn build_power_meter(
     };
     let params = PowerMeterParams {
         points: section.raw_to_milliwatts.clone(),
+        bands: section
+            .band
+            .iter()
+            .map(|b| PowerBand {
+                max_hz: b.max_hz,
+                points: b.raw_to_milliwatts.clone(),
+            })
+            .collect(),
     };
     if params.cal().is_none() {
         return Err(bad(
             "power_meter.raw_to_milliwatts needs at least two points, ascending in raw value and not falling in power",
+        ));
+    }
+    let ascending = params.bands.windows(2).all(|w| w[0].max_hz < w[1].max_hz);
+    if !ascending
+        || params
+            .bands
+            .iter()
+            .any(|b| crate::description::points_cal(&b.points).is_none())
+    {
+        return Err(bad(
+            "power_meter.band needs ascending max_hz and, in each band, at least two points ascending in raw value and not falling in power",
         ));
     }
     Ok(Some(params))
@@ -2092,10 +2122,38 @@ verified = { state = "unverified" }
         );
     }
 
+    // Tests [@ANCHOR: radioctl_core_powermeter_cal_at]
+    // Tests [@ANCHOR: radioctl_core_description_power_band]
+    // Tests [@ANCHOR: radioctl_core_description_points_cal]
+    #[test]
+    fn power_bands_pick_the_rating_by_frequency_and_must_ascend() {
+        let fact = "\n[[facts]]\nkey = \"power_meter.raw_to_milliwatts\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n";
+        let block = "\n[power_meter]\nraw_to_milliwatts = [[0, 0], [100, 100000]]\n\
+            [[power_meter.band]]\nmax_hz = 100\nraw_to_milliwatts = [[0, 0], [100, 100000]]\n\
+            [[power_meter.band]]\nmax_hz = 200\nraw_to_milliwatts = [[0, 0], [100, 10000]]\n";
+        let d = parse(&format!("{GOOD}{block}{fact}")).expect("parses");
+        let params = d.description.power_meter.expect("power meter");
+        assert_eq!(params.cal_at(Some(50)).unwrap().watts(100.0).watts(), 100.0);
+        assert_eq!(
+            params.cal_at(Some(100)).unwrap().watts(100.0).watts(),
+            100.0
+        );
+        assert_eq!(params.cal_at(Some(150)).unwrap().watts(100.0).watts(), 10.0);
+        // Above every band, or an unknown frequency: the base points.
+        assert_eq!(
+            params.cal_at(Some(900)).unwrap().watts(100.0).watts(),
+            100.0
+        );
+        assert_eq!(params.cal_at(None).unwrap().watts(100.0).watts(), 100.0);
+        let descending = block.replace("max_hz = 200", "max_hz = 50");
+        assert!(parse(&format!("{GOOD}{descending}{fact}")).is_err());
+    }
+
     // Tests [@ANCHOR: radioctl_core_rigfile_build_power_meter]
     // Tests [@ANCHOR: radioctl_core_powermeter_cal]
     // Tests [@ANCHOR: radioctl_core_description_power_meter_params]
     // Tests [@ANCHOR: radioctl_core_rigfile_power_meter_section]
+    // Tests [@ANCHOR: radioctl_core_rigfile_power_band_section]
     #[test]
     fn a_power_meter_block_needs_a_calibration_and_its_fact() {
         let fact = "\n[[facts]]\nkey = \"power_meter.raw_to_milliwatts\"\nprovenance = { kind = \"manual\", reference = \"x\" }\nverified = { state = \"unverified\" }\n";

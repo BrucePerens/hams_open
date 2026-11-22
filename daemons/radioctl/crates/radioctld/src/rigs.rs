@@ -673,7 +673,13 @@ mod tests {
         .expect("backend");
         let why = attempt(backend).await.detail;
         assert!(
-            why.contains("/home/nobody/.config/radioctl/firmware/perseus/fx2.hex"),
+            why.contains(
+                &std::path::Path::new("/home/nobody")
+                    .join(".config/radioctl/firmware/perseus")
+                    .join("fx2.hex")
+                    .display()
+                    .to_string()
+            ),
             "{why}"
         );
         // The environment variable wins over the default.
@@ -686,10 +692,12 @@ mod tests {
             false,
         )
         .expect("backend");
-        assert!(attempt(backend)
-            .await
-            .detail
-            .contains("/srv/perseus/fx2.hex"));
+        assert!(attempt(backend).await.detail.contains(
+            &std::path::Path::new("/srv/perseus")
+                .join("fx2.hex")
+                .display()
+                .to_string()
+        ));
         // No directory to look in at all.
         assert!(radioctl_protocols::usb_family::backend_for(
             &description,
