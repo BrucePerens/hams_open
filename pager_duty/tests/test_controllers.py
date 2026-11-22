@@ -276,6 +276,19 @@ class TestPagerControllers(HamsHttpCase):
         certbot = self.env["pager.check"].search([("check_type", "=", "certbot")], limit=1)
         self.assertEqual(len(certbot.target.split(",")), 1500)
 
+    def test_04e_update_domains_takes_an_empty_list_and_clears_the_target(self):
+        # Tests [@ANCHOR: pager_duty:update_domains]
+        # With only DNS-only member zones left, edge_routing pushes []: it replaces the stale target, no error.
+        self.env["ir.config_parameter"].set_param("pager_duty.domain_api_identity", "the-real-secret")
+        for domains in (["old.example.org"], []):
+            response = self.url_open(
+                "/api/v1/pager_duty/update_domains",
+                json={"jsonrpc": "2.0", "method": "call", "params": {"domains": domains, "api_identity": "the-real-secret"}},
+            )
+            self.assertEqual(response.json()["result"]["status"], "success")
+        certbot = self.env["pager.check"].search([("check_type", "=", "certbot")], limit=1)
+        self.assertEqual(certbot.target, "")
+
     def test_02d_log_search_routes_reject_non_string_parameters_cleanly(self):
         # Tests [@ANCHOR: pager_duty:search_logs]
         # Tests [@ANCHOR: pager_duty:search_logs_poll]

@@ -50,12 +50,12 @@ class UserWebsitesApi(http.Controller):
         # gets renewed. Paginate by id instead (same keyset idiom used
         # elsewhere in this module, e.g. res_users.py's GDPR export loops)
         # so growth past 5000 rows can't silently drop domains again.
-        def read_all_names(model_env):
+        def read_all_names(model_env, extra_domain=()):
             names = []
             last_id = 0
             while True:
                 batch = model_env.search_read(
-                    [("id", ">", last_id)], ["id", "name"], limit=5000, order="id asc"
+                    [("id", ">", last_id), *extra_domain], ["id", "name"], limit=5000, order="id asc"
                 )
                 if not batch:
                     break
@@ -74,7 +74,11 @@ class UserWebsitesApi(http.Controller):
         if "ham.dns.zone" in env_svc:
             try:
                 dns_env_svc = utils._get_service_env("ham_dns.user_dns_api_service")
-                all_domains.extend(read_all_names(dns_env_svc["ham.dns.zone"]))
+                all_domains.extend(read_all_names(
+                        dns_env_svc["ham.dns.zone"],
+                        # Personal member zones are DNS-only (no site on hams1): certbot must not be asked for them.
+                        [("is_personal_alias_zone", "=", False)],
+                    ))
             except Exception as e:  # audit-ignore-catch-all: Tested by [@ANCHOR: test_domains_api_returns_all_domains]
                 # Verified by [@ANCHOR: COMM_test_domains_api_refuses_a_partial_list]
                 # A list without the DNS zones would be taken as the full one: those domains' certificates would

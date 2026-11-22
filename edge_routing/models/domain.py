@@ -91,7 +91,11 @@ class EdgeRoutingDomain(models.Model):
                     dns_env_svc = env_svc["zero_sudo.security.utils"]._get_service_env("ham_dns.user_dns_api_service")
                     last_id = 0
                     while True:
-                        dns_batch = dns_env_svc["ham.dns.zone"].search([("id", ">", last_id)], limit=1000, order="id ASC")
+                        dns_batch = dns_env_svc["ham.dns.zone"].search(
+                            # Personal member zones (<callsign>.hams.com) are DNS-only, never served from hams1, so
+                            # the certbot check must not require them to resolve there.
+                            [("id", ">", last_id), ("is_personal_alias_zone", "=", False)], limit=1000, order="id ASC"
+                        )
                         if not dns_batch:
                             break
                         all_domains.extend(dns_batch.mapped("name"))
