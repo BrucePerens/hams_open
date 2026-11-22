@@ -631,7 +631,11 @@ fn report(state: u32, accept: u32) {
 unsafe extern "system" fn control_handler(control: u32) {
     if control == SERVICE_CONTROL_STOP {
         report(SERVICE_STOPPED, 0);
-        std::process::exit(0);
+        // Exit a moment later so the control manager gets this handler's reply first.
+        std::thread::spawn(|| {
+            std::thread::sleep(Duration::from_millis(200));
+            std::process::exit(0);
+        });
     }
 }
 
