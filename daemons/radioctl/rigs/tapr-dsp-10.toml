@@ -1,0 +1,79 @@
+# Rig description: TAPR DSP-10 (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
+# Everything here is UNVERIFIED until a volunteer confirms it (docs/VOLUNTEER_TESTING.md): no radio has been connected.
+# Facts come from Bob Larkin W7PUA, "Notes on the PC/DSP interface for the DSP-10 transceiver", Version 2.00, 10 Feb 2001 (pc_dsp2.txt, http://janbob.com/electron/dsp10/pc_dsp2.txt, sha256 5bb540cfa331306c7fb768e13ce3fc2f0384823f640dba0bc72e138f35387746), section "PC to DSP Commands": the six-byte frame and Command 77 ('M'); no code or table was copied. For DSP program UHF3.EXE 2.00, which the PC must load into the EZ-KIT Lite first.
+# Dialect dsp10 (dsp10.rs): mode only. The document has no frequency command (Commands 7 and 8 carry a synthesizer word whose meaning it does not give) and no PTT (Command 84 only switches the DSP; the transmit hardware is steered by Commands 7 and 8), so neither is claimed and the transmit gate has nothing to guard. The radio covers 144 to 148 MHz. Mode codes (ours): `0` LSB, `1` USB, `2` CW, `3` FM.
+schema = 1
+capabilities = ["set-mode"]
+
+[rig]
+id = "tapr-dsp-10"
+name = "TAPR DSP-10"
+family = "serial-vendor"
+
+[vendor]
+protocol = "dsp10"
+dialect = "dsp10"
+data_bits = 8
+parity = "N"
+stop_bits = 1
+flow = "none"
+
+[timing]
+timeout_ms = 1000
+retries = 0
+inter_command_ms = 0
+
+[defaults]
+frequency_hz = 145000000
+mode = "usb"
+
+[[modes]]
+mode = "lsb"
+code = "0"
+
+[[modes]]
+mode = "usb"
+code = "1"
+
+[[modes]]
+mode = "cw"
+code = "2"
+
+[[modes]]
+mode = "fm"
+code = "3"
+
+[[facts]]
+key = "rig.*"
+provenance = { kind = "manual", reference = "pc_dsp2.txt (W7PUA, version 2.00, 10 Feb 2001) title; Hamlib 4.6.2 rigs/tapr/dsp10.c model name", note = "Identity and family are our own labelling." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "timing.*"
+provenance = { kind = "repo-code", reference = "radioctl default timing for a set-only serial rig", note = "The DSP does not answer commands, so nothing waits; not a measurement of the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "defaults.*"
+provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: starting frequency and mode of a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "capability.*"
+provenance = { kind = "manual", reference = "pc_dsp2.txt version 2.00, Command 77 ('M'); the document has no frequency command (Commands 7 and 8 carry an undocumented synthesizer word) and Command 84 does not key the transmit hardware", note = "Only set-mode is claimed." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.*"
+provenance = { kind = "manual", reference = "pc_dsp2.txt version 2.00, Command 77 ('M'): mode 0 single sideband, 1 CW, 2 FM; sb 0 LSB, 1 USB, 2 I-Q binaural", note = "The one-character codes are ours; the wire carries the mode and sideband bytes. I-Q binaural is experimental in the document and is not offered." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "vendor.protocol"
+provenance = { kind = "manual", reference = "pc_dsp2.txt version 2.00 (sha256 5bb540cfa331306c7fb768e13ce3fc2f0384823f640dba0bc72e138f35387746): control is through the 9600 baud serial port; 'PC to DSP Commands': all commands are six bytes, ESC '$' (24 hex), command byte, four data bytes", note = "Parity, stop bits and flow control are not stated in the document; 8N1 without flow control is assumed." }
+verified = { state = "manual-checked", reference = "pc_dsp2.txt, intro and 'PC to DSP Commands', frame layout" }
+
+[[facts]]
+key = "vendor.dialect"
+provenance = { kind = "manual", reference = "pc_dsp2.txt version 2.00, Command 77 ('M'): ESC 77 mode sb mikel mikeh; mike gain 4*(256*mikeh+mikel)", note = "The microphone word sent with each mode command (1) is ours: the document gives no default." }
+verified = { state = "manual-checked", reference = "pc_dsp2.txt, Command 77" }

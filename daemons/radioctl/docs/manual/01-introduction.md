@@ -34,7 +34,7 @@ so that:
 - every fact about a radio says where it came from and what has been checked.
 
 It is **not** a drop-in replacement for Hamlib for third-party programs. Hamlib 4.6.2 lists <!--count:models-->313<!--/count--> radio models ([appendix A](A-capability-matrix.md));
-radioctl has descriptions for <!--count:described-->283<!--/count--> of the <!--count:real_radios-->283<!--/count--> that are real radios (<!--count:not_applicable-->30<!--/count--> more are not radios or have no transport radioctl speaks; [RIG_SUPPORT.md](../RIG_SUPPORT.md) has the list), none verified on hardware yet. It is not a drop-in `libhamlib`; a C ABI exists as a sketch (`radioctl-capi`, [chapter 14](14-station.md#the-c-abi))
+radioctl has descriptions for <!--count:described-->284<!--/count--> of the <!--count:real_radios-->284<!--/count--> that are real radios (<!--count:not_applicable-->29<!--/count--> more are not radios or have no transport radioctl speaks; [RIG_SUPPORT.md](../RIG_SUPPORT.md) has the list), none verified on hardware yet. It is not a drop-in `libhamlib`; a C ABI exists as a sketch (`radioctl-capi`, [chapter 14](14-station.md#the-c-abi))
 ([chapter 13](13-roadmap.md)). The decision (Bruce, 2026-11-03) is radioctl only for the relay: Hamlib is being removed from the relay
 build, radios radioctl has no verified description for are labelled by verification level, and transmit stays behind
 the safety gate. Hamlib is kept only as an offline differential-test oracle on the bench ([chapter 11](11-testing.md)), never shipped.
@@ -75,8 +75,8 @@ Phase 0/1 foundation, as the crate README says. What is implemented:
   the splitter; `radioctld`; the station layer; the rig description format with provenance and
   verification states; transcript replay; differential tests against Hamlib's own binaries; and the
   self-test a volunteer runs on a radio. The number of radios with a description is in
-  [`RIG_SUPPORT.md`](../RIG_SUPPORT.md): <!--count:described-->283<!--/count--> of the
-  <!--count:real_radios-->283<!--/count--> real radios among Hamlib 4.6.2's <!--count:models-->313<!--/count--> models.
+  [`RIG_SUPPORT.md`](../RIG_SUPPORT.md): <!--count:described-->284<!--/count--> of the
+  <!--count:real_radios-->284<!--/count--> real radios among Hamlib 4.6.2's <!--count:models-->313<!--/count--> models.
 - **Unverified:** nearly all of the above against real radios. Exactly <!--count:hardware_verified-->1<!--/count-->
   description has `hardware-verified` facts: the Elecraft KX3, bench run on 2026-11-05 including a keyed
   transmission into a dummy load. The Icom files were read from Hamlib's source or from manuals found on

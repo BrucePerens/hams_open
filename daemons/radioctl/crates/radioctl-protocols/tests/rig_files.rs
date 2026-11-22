@@ -114,6 +114,7 @@ fn the_worked_file_claims_no_verification_it_does_not_have() {
         "aor-ar7030",
         "aor-ar7030p",
         "dorji-dra818u",
+        "tapr-dsp-10",
         "tentec-tt-550",
         "elecraft-xg3",
         "yaesu-ft-450d",

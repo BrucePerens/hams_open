@@ -26,6 +26,7 @@ pub mod conformance;
 pub mod dorji;
 pub mod drake;
 pub mod drt1;
+pub mod dsp10;
 pub mod dwt;
 pub mod elecraft;
 pub mod elektor507;

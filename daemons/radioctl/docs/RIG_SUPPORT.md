@@ -9,23 +9,23 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 ## Counts
 
 - Hamlib 4.6.2 models: **313**
-- Not applicable (not a radio, or no transport radioctl has): **30**
-- Real radios (models less not applicable): **283**; with a radioctl description: **283** (292 description files), **100%** of the real radios
+- Not applicable (not a radio, or no transport radioctl has): **29**
+- Real radios (models less not applicable): **284**; with a radioctl description: **284** (293 description files), **100%** of the real radios
 - Hardware-verified: **1**
 
 | Status | Models |
 |---|---:|
-| described | 283 |
+| described | 284 |
 | engine only | 0 |
 | needs variant | 0 |
 | needs engine | 0 |
 | odd device | 0 |
-| not applicable | 30 |
+| not applicable | 29 |
 
 | Verification level | Models |
 |---|---:|
-| unverified | 250 |
-| manual-checked | 62 |
+| unverified | 249 |
+| manual-checked | 63 |
 | transcript-checked | 0 |
 | hardware-verified | 1 |
 
@@ -36,13 +36,13 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | A | data only on an existing engine | 135 | 135 |
 | B | variants of an existing engine | 42 | 42 |
 | C | new engine | 82 | 74 |
-| D | odd device | 54 | 32 |
+| D | odd device | 54 | 33 |
 
 ### By family
 
 | Family | Tier | Engine | Models | Described | Hardware-verified |
 |---|---|---|---:|---:|---:|
-| other_serial | C/D | aor | 94 | 86 | 0 |
+| other_serial | C/D | aor | 94 | 87 | 0 |
 | icom_civ | A | civ | 79 | 79 | 0 |
 | yaesu_legacy | B | yaesu_legacy | 31 | 31 | 0 |
 | kenwood_ascii | A | kenwood | 25 | 25 | 0 |
@@ -88,7 +88,6 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 - OpenHPSDR PiHPSDR (2040): not a radio: a software SDR program that imitates a Kenwood CAT server; radioctl drives the radio itself (the Kenwood TS-2000 and TS-480 descriptions fit a program that imitates them)
 - SDR Radio SDRConsole (2056): not a radio: a software SDR program that imitates a Kenwood CAT server; radioctl drives the radio itself (the Kenwood TS-2000 and TS-480 descriptions fit a program that imitates them)
 - SDRPlay SDRUno (2051): not a radio: a software SDR program that imitates a Kenwood CAT server; radioctl drives the radio itself (the Kenwood TS-2000 and TS-480 descriptions fit a program that imitates them)
-- TAPR DSP-10 (22001): TAPR DSP-10 (a 2 m transceiver whose DSP program is loaded by the PC first): Hamlib's backend states it does not work; both setters return not-implemented (the tuning-word formula is dead code after an early return, dsp10.c and tapr.c, 4.6.2), and the only wire fact is a six-byte frame, '$', a command byte and four argument bytes. The command document Hamlib cites (Larkin's pc_dsp2.txt) is not retrievable and no vendor protocol document is published at files.tapr.org, so there is no command to transcribe; no transmit-capable guess is made
 - Thetis  (2054): not a radio: a software SDR program that imitates a Kenwood CAT server; radioctl drives the radio itself (the Kenwood TS-2000 and TS-480 descriptions fit a program that imitates them)
 - TRXManager TRXManager 5.7.630+ (5): not a radio: a client of another rig server or logging program; radioctl talks to the radio itself
 - Video4Linux SW/FM radio (26001): Video4Linux: Hamlib reaches the tuner only through the kernel's V4L ioctl interface (a driver, not a wire protocol), and it is an FM/AM broadcast tuner card; radioctl has no device-driver transport
@@ -333,7 +332,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 14004 | Skanti | TRP 8255 S R | C | other_serial | - | `skanti-trp-8255-s-r` | - | unverified | - | described |
 | 14002 | Skanti | TRP8000 | C | other_serial | - | `skanti-trp8000` | - | unverified | - | described |
 | 25009 | SoftRock | Si570 AVR-USB | D | other_usb | si570_usb | `softrock-si570-avr-usb` | - | unverified | - | described |
-| 22001 | TAPR | DSP-10 | D | other_serial | - | - | - | unverified | - | not applicable |
+| 22001 | TAPR | DSP-10 | D | other_serial | - | `tapr-dsp-10` | - | manual-checked | - | described |
 | 3064 | Ten-Tec | Delta II | C | other_serial | - | `tentec-delta-ii` | - | unverified | - | described |
 | 3051 | Ten-Tec | Omni VI Plus | C | other_serial | - | `tentec-omni-vi-plus` | - | unverified | - | described |
 | 16003 | Ten-Tec | RX-320 | C | other_serial | - | `tentec-rx-320` | - | unverified | - | described |

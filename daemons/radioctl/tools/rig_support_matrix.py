@@ -254,6 +254,7 @@ HAMLIB_IDS: dict[str, list[int]] = {
     "codan-ngt": [34002],
     "dorji-dra818u": [31002],
     "dorji-dra818v": [31001],
+    "tapr-dsp-10": [22001],
     "guohe-pmr-171": [1052],
     "guohe-q900": [1051],
     "kachina-505dsp": [18001],
@@ -366,15 +367,7 @@ _BIT_BANGED_SERIAL = (
     "a DRM receiver kit whose DDS chip Hamlib steers by bit-banging the serial port's TX, RTS and DTR lines: "
     "there is no byte protocol on the wire, and radioctl's serial transport sends bytes, not line toggles"
 )
-_DSP10 = (
-    "TAPR DSP-10 (a 2 m transceiver whose DSP program is loaded by the PC first): Hamlib's backend states it does "
-    "not work; both setters return not-implemented (the tuning-word formula is dead code after an early return, "
-    "dsp10.c and tapr.c, 4.6.2), and the only wire fact is a six-byte frame, '$', a command byte and four argument "
-    "bytes. The command document Hamlib cites (Larkin's pc_dsp2.txt) is not retrievable and no vendor protocol "
-    "document is published at files.tapr.org, so there is no command to transcribe; no transmit-capable guess is made"
-)
 NOT_APPLICABLE: dict[int, str] = {
-    22001: _DSP10,
     1: _NOT_A_RADIO,
     6: _NOT_A_RADIO,
     2: _RIG_SERVER_CLIENT,

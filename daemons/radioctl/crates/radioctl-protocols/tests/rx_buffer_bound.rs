@@ -42,8 +42,9 @@ fn unterminated_flood_is_handed_back_not_buffered_forever() {
                 }
             }
         }
-        // These two resynchronise on a frame header and drop leading garbage in place: bounded.
-        if junk == 0 && d.id != "guohe-pmr-171" && d.id != "micom-2-3" {
+        // These resynchronise on a frame header and drop leading garbage in place, or (the DSP-10
+        // engine) keep no receive buffer and discard its status stream: bounded.
+        if junk == 0 && !["guohe-pmr-171", "micom-2-3", "tapr-dsp-10"].contains(&d.id.as_str()) {
             unbounded.push(d.id.clone());
         }
     }
