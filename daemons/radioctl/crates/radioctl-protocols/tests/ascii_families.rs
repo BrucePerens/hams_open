@@ -72,7 +72,10 @@ fn ascii_files() -> Vec<RigDescription> {
             let text = std::fs::read_to_string(&path).expect("read");
             let desc = rigfile::parse(&text).expect("loads").description;
             let classic = desc.kenwood.as_ref().is_none_or(|k| {
-                matches!(k.dialect, KenwoodDialect::Classic | KenwoodDialect::Ts870)
+                matches!(
+                    k.dialect,
+                    KenwoodDialect::Classic | KenwoodDialect::Ts870 | KenwoodDialect::Ts570
+                )
             });
             if matches!(
                 desc.family,
@@ -146,6 +149,61 @@ fn model_id(desc: &RigDescription) -> u16 {
 // Tests [@ANCHOR: radioctl_kenwood_engine_feed]
 // Tests [@ANCHOR: radioctl_elecraft_engine_encode]
 // Tests [@ANCHOR: radioctl_elecraft_engine_feed]
+#[test]
+fn the_ts_570_takes_the_nnn_levels_and_sm_read_with_its_own_ranges() {
+    // TS-570D/S instruction manual, appendix (PDF p. 79 parameter table, formats 22, 31, 42, 47;
+    // command pages AG p. 81, KS p. 83, MG p. 84, PC and RG p. 85, SM p. 86): AG and RG nnn
+    // 000-255, MG 000-100, KS 010-060, PC 005-100, SM; answered SMnnnn; no ML command.
+    for id in ["kenwood-ts-570d", "kenwood-ts-570s"] {
+        let desc = described(id);
+        assert!(desc.capabilities.has(Capability::Levels), "{id}");
+        assert!(desc.capabilities.has(Capability::ReadSignal), "{id}");
+        let mut engine = engine_for(&desc).expect("engine");
+        let wire = |e: &mut dyn ProtocolEngine, op: Op| e.encode(&op).expect("encode").bytes;
+        assert_eq!(wire(engine.as_mut(), Op::GetSignal), b"SM;", "{id}");
+        assert_eq!(wire(engine.as_mut(), Op::GetLevel(Level::AfGain)), b"AG;");
+        assert_eq!(
+            wire(engine.as_mut(), Op::SetLevel(Level::AfGain, 255)),
+            b"AG255;"
+        );
+        assert_eq!(
+            wire(engine.as_mut(), Op::SetLevel(Level::MicGain, 100)),
+            b"MG100;"
+        );
+        assert_eq!(
+            wire(engine.as_mut(), Op::SetLevel(Level::KeyerSpeed, 10)),
+            b"KS010;"
+        );
+        assert_eq!(
+            wire(engine.as_mut(), Op::SetLevel(Level::RfPower, 5)),
+            b"PC005;"
+        );
+        for op in [
+            Op::SetLevel(Level::MicGain, 101),
+            Op::SetLevel(Level::KeyerSpeed, 9),
+            Op::SetLevel(Level::KeyerSpeed, 61),
+            Op::SetLevel(Level::RfPower, 4),
+            Op::SetLevel(Level::MonitorLevel, 5),
+            Op::GetLevel(Level::MonitorLevel),
+            Op::SetRitOffset(150),
+        ] {
+            assert!(engine.encode(&op).is_err(), "{id} {op:?}");
+        }
+        let mut rig = VirtualRig::from_description(&desc).expect("virtual rig");
+        let request = engine
+            .encode(&Op::SetLevel(Level::AfGain, 200))
+            .expect("set");
+        assert!(rig.feed(&request.bytes, NOW).is_empty());
+        let request = engine.encode(&Op::GetLevel(Level::AfGain)).expect("get");
+        let answer = rig.feed(&request.bytes, NOW);
+        assert_eq!(
+            engine.feed(&answer, NOW),
+            vec![Inbound::Observation(Observation::Level(Level::AfGain, 200))],
+            "{id}"
+        );
+    }
+}
+
 // Tests [@ANCHOR: radioctl_yaesu_engine_encode]
 // Tests [@ANCHOR: radioctl_yaesu_engine_feed]
 // Tests [@ANCHOR: radioctl_virtual_from_description]
