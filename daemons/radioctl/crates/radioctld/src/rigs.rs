@@ -27,6 +27,7 @@ use radioctl_protocols::conformance::engine_for;
 use radioctl_protocols::drt1::Drt1Twin;
 use radioctl_protocols::io::{spawn_virtual_rig, VirtualRigControl};
 use radioctl_protocols::kenwood_ts890_lan::{LanCredentials, Ts890LanFraming, KEEPALIVE_EVERY};
+use radioctl_protocols::kenwood_ts990_lan::Ts990LanFraming;
 use radioctl_protocols::radiod_io::{serve_radiod, RadiodControl, RadiodLink};
 use radioctl_protocols::virtual_rig::VirtualRig;
 use radioctl_station::homeassistant::{FileSecrets, SecretStore};
@@ -138,6 +139,33 @@ pub fn tcp_framing(
             Ok((
                 Box::new(Ts890LanFraming::new(credentials)),
                 Some(idle_timeout.unwrap_or(KEEPALIVE_EVERY * 3)),
+            ))
+        }
+        TcpFraming::Ts990Lan {
+            account,
+            password_secret,
+        } => {
+            let dir = server.secrets_dir.as_ref().ok_or_else(|| {
+                format!(
+                    "rig {}: the ts990-lan framing needs server.secrets_dir",
+                    rig.name
+                )
+            })?;
+            let password = FileSecrets::new(dir)
+                .secret(password_secret)
+                .map_err(|e| format!("rig {}: secret {password_secret}: {}", rig.name, e.detail))?;
+            let framing = Ts990LanFraming::new(account, password.expose()).map_err(|e| {
+                format!(
+                    "rig {}: LAN account {account:?} or its password cannot be sent: {}",
+                    rig.name, e.detail
+                )
+            })?;
+            Ok((
+                Box::new(framing),
+                Some(
+                    idle_timeout
+                        .unwrap_or(radioctl_protocols::kenwood_ts990_lan::KEEPALIVE_EVERY * 3),
+                ),
             ))
         }
     }
