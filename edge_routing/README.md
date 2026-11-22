@@ -43,7 +43,7 @@ The `edge_routing` module is the foundational routing layer for high-speed slug 
 list of domains it should check for Let's Encrypt readiness. Steps: (1) if the `edge_routing_service_account` user exists
 (a SQL check on `ir_model_data`, so the method also works while the module is installing), it works as that account;
 (2) it reads every `edge.routing.domain` name in batches of 1000 ordered by id; (3) when `ham.dns.zone` is installed it
-adds those zone names, read as `ham_dns.user_dns_api_service` inside a savepoint, and any failure there raises a `UserError` (a partial list would replace the full one); (4) it de-duplicates the names; (5) it reads the system parameter
+adds the names of those zones that are not personal alias zones (a `<callsign>.hams.com` zone is DNS-only and never served from hams1, so the certificate check must not require it to resolve there), read as `ham_dns.user_dns_api_service` inside a savepoint, and any failure there raises a `UserError` (a partial list would replace the full one); (4) it de-duplicates the names; (5) it reads the system parameter
 `pager_duty.domain_api_identity` and, if it is not set, raises a `UserError` without sending (a request the endpoint
 would refuse also increments its failed-attempt counter for this source address, so retrying blind would lock the sender
 out); (6) it POSTs a JSON-RPC body `{"jsonrpc": "2.0", "method": "call", "params": {"domains": [...], "api_identity":
