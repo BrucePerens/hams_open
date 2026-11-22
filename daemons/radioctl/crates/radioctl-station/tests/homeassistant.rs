@@ -792,7 +792,15 @@ async fn a_rejected_service_call_is_an_error_and_an_audit_entry() {
         .any(|e| e.action == "service switch.turn_on" && e.result.starts_with("error: ")));
     ha.stop().await;
     let down = d.write_line(1, true).await.expect_err("unreachable");
+    // A refused loopback connect takes about two seconds to fail on Windows (it retries), which
+    // is longer than the driver's deadline, so there it reports a timeout.
+    #[cfg(not(windows))]
     assert_eq!(down.kind, StationErrorKind::Driver);
+    #[cfg(windows)]
+    assert!(matches!(
+        down.kind,
+        StationErrorKind::Driver | StationErrorKind::Timeout
+    ));
     drop(d);
 }
 
