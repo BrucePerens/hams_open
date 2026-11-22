@@ -64,6 +64,7 @@ pub fn lan_login(account: &str, password: &str) -> Result<Vec<u8>, RigError> {
     .into_bytes())
 }
 
+// [@ANCHOR: radioctl_kenwood_ts990_lan_phase]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Phase {
     AwaitConnect,

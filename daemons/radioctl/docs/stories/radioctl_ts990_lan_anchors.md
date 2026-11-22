@@ -14,9 +14,31 @@ The first LAN frame, `##CN;`, as ASCII.
 
 The login frame `##ID<len><len><account><password>;` with one-digit lengths. Account and password must each be 1 to 8 printable ASCII characters without `;`, else `Unsupported`.
 
-### `struct Ts990LanFraming` [@ANCHOR: radioctl:radioctl_kenwood_ts990_lan_framing]
+## `Phase` [@ANCHOR: radioctl:radioctl_kenwood_ts990_lan_phase]
 
-The session state: connect, login, then the CAT stream, with a keep-alive. The password is only inside the stored login frame and is hidden from `Debug`.
+**Purpose.** How far the TS-990S LAN session's login has got.
+
+**Definition.** `enum Phase` (enum) in `daemons/radioctl/crates/radioctl-protocols/src/kenwood_ts990_lan.rs`; derives `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`.
+
+| Variant | Type | Meaning |
+|---|---|---|
+| `AwaitConnect` | - | Waiting for the radio's `##CN` reply to the connect request. |
+| `AwaitLogin` | - | Waiting for the radio's `##ID` reply to the login. |
+| `Up` | - | The session is up; CAT frames pass through and keep-alive probes run. |
+
+## `Ts990LanFraming` [@ANCHOR: radioctl:radioctl_kenwood_ts990_lan_framing]
+
+**Purpose.** The TS-990S LAN session framing: connect, login, then the CAT stream with a keep-alive.
+
+**Definition.** `pub struct Ts990LanFraming` (struct) in `daemons/radioctl/crates/radioctl-protocols/src/kenwood_ts990_lan.rs`; implements `Debug` by hand (the login frame holding the password is hidden).
+
+| Field | Type | Meaning |
+|---|---|---|
+| `login` | `Vec<u8>` | The ready `##ID` login frame (ASCII) sent after `##CN1;`. |
+| `phase` | `Phase` | Where the login handshake stands (`Phase`). |
+| `unit` | `Vec<u8>` | Wire bytes not yet a whole UTF-16 unit. |
+| `text` | `Vec<u8>` | Decoded ASCII text not yet a whole `;`-terminated frame. |
+| `probes_out` | `u32` | Keep-alive probes sent and not yet answered. |
 
 ### `fn new(account: &str, password: &str) -> Result<Ts990LanFraming, RigError>` [@ANCHOR: radioctl:radioctl_ts990lan_new]
 
