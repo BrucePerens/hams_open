@@ -234,6 +234,14 @@ pub enum TcpFraming {
         /// The name of the secret (a file in `server.secrets_dir`) holding the password.
         password_secret: String,
     },
+    /// The Kenwood TS-990S LAN session (`##CN;`, `##ID` login, UTF-16): the account (1 to 8
+    /// characters) and the name of the secret holding the password.
+    Ts990Lan {
+        /// The LAN account name (not a secret).
+        account: String,
+        /// The name of the secret (a file in `server.secrets_dir`) holding the password.
+        password_secret: String,
+    },
 }
 
 // [@ANCHOR: radioctl_d_config_baud_setting]
@@ -519,7 +527,30 @@ fn tcp_framing(
                 password_secret,
             })
         }
-        other => Err(format!("framing {other:?} is not \"raw\" or \"ts890-lan\"")),
+        "ts990-lan" => {
+            if lan_administrator.is_some() {
+                return Err("lan_administrator does not apply to framing = \"ts990-lan\"".into());
+            }
+            let account = lan_account
+                .filter(|a| !a.is_empty())
+                .ok_or("framing = \"ts990-lan\" needs lan_account (the LAN account name)")?;
+            let password_secret = lan_password_secret
+                .filter(|s| !s.is_empty())
+                .ok_or("framing = \"ts990-lan\" needs lan_password_secret (a secret name)")?;
+            if !has_secrets_dir {
+                return Err(
+                    "framing = \"ts990-lan\" needs server.secrets_dir to read the password from"
+                        .to_string(),
+                );
+            }
+            Ok(TcpFraming::Ts990Lan {
+                account,
+                password_secret,
+            })
+        }
+        other => Err(format!(
+            "framing {other:?} is not \"raw\", \"ts890-lan\" or \"ts990-lan\""
+        )),
     }
 }
 
@@ -1321,6 +1352,38 @@ kind = "virtual"
     // Tests [@ANCHOR: radioctld_config_server]
     // Tests [@ANCHOR: radioctld_config_transport]
     // Tests [@ANCHOR: radioctl_d_config_tcp_framing]
+    #[test]
+    fn the_ts990_lan_framing_needs_an_account_a_secret_name_and_a_secret_store() {
+        let tcp = |extra: &str, server: &str| {
+            let text = format!("kind = \"tcp\"\naddress = \"192.168.1.50:60000\"\n{extra}");
+            parse(&format!(
+                "{server}{}",
+                MINIMAL.replace("kind = \"virtual\"", &text)
+            ))
+        };
+        let store = "[server]\nsecrets_dir = \"secrets\"\n";
+        let full = "framing = \"ts990-lan\"\nlan_account = \"kenwood\"\n\
+                    lan_password_secret = \"ts990-password\"";
+        let config = tcp(full, store).expect("ts990-lan");
+        match &config.rigs[0].transport {
+            TransportConfig::Tcp { framing, .. } => assert_eq!(
+                *framing,
+                TcpFraming::Ts990Lan {
+                    account: "kenwood".to_string(),
+                    password_secret: "ts990-password".to_string(),
+                }
+            ),
+            other => panic!("{other:?}"),
+        }
+        assert!(tcp(full, "").is_err(), "no secret store");
+        assert!(tcp(
+            "framing = \"ts990-lan\"\nlan_password_secret = \"x\"",
+            store
+        )
+        .is_err());
+        assert!(tcp(&format!("{full}\nlan_administrator = true"), store).is_err());
+    }
+
     #[test]
     fn the_ts890_lan_framing_needs_an_account_a_secret_name_and_a_secret_store() {
         let tcp = |extra: &str, server: &str| {

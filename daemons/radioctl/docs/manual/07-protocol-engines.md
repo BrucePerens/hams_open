@@ -198,6 +198,8 @@ fact of `rigs/kenwood-ts-890s.toml`).
   diverge (`rigctld_oracle.rs` records which). A bench run would show whether a real TS-890S answers `IF;`;
   until then radioctl follows the guide.
 
+  The TS-990S has its own LAN session, `Ts990LanFraming` (`kenwood_ts990_lan`): the same `##CN;`, then `##ID` with two one-digit lengths (no account type), UTF-16 text on the wire (byte order assumed little endian), an `ID;` keep-alive. `radioctld` serves it as `framing = "ts990-lan"` with `lan_account` and `lan_password_secret` (chapter [9](09-radioctld.md)); fake radio only, unverified.
+
 ## Elecraft (`elecraft.rs`)
 
 Written from Elecraft's Programmer's Reference Rev. G5 only; no Hamlib source was read. Only the "Basic"
