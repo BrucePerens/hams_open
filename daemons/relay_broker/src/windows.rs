@@ -63,6 +63,7 @@ pub const PIPE_NAME: &str = r"\\.\pipe\hams-relay-broker";
 /// Where `install_relay_broker.ps1` puts the config.
 pub const DEFAULT_CONFIG: &str = r"C:\ProgramData\hams-relay-broker\broker.conf";
 
+// [@ANCHOR: windows_settings_struct]
 /// What the config file says.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Settings {
@@ -356,6 +357,7 @@ pub trait Clock {
     fn set_unix_secs(&mut self, secs: u64) -> io::Result<()>;
 }
 
+// [@ANCHOR: windows_system_clock_struct]
 /// The system clock.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct SystemClock;
@@ -369,6 +371,7 @@ impl Clock for SystemClock {
     }
 }
 
+// [@ANCHOR: windows_state_struct]
 /// Everything the handler keeps between requests.
 #[derive(Debug)]
 pub struct State {
@@ -440,6 +443,7 @@ pub fn handle_request(
     }
 }
 
+// [@ANCHOR: windows_instance_struct]
 /// One server-side pipe instance, closed on drop.
 struct Instance(HANDLE);
 
@@ -579,6 +583,7 @@ pub fn call(name: &str, request: &Request) -> io::Result<Response> {
     Response::decode(&body).map_err(|e| io::Error::other(format!("{e:?}")))
 }
 
+// [@ANCHOR: windows_args_struct]
 struct Args {
     config: PathBuf,
 }
@@ -780,6 +785,8 @@ mod tests {
         }
     }
 
+    // Tests [@ANCHOR: windows_args_struct]
+    // Tests [@ANCHOR: windows_settings_struct]
     // Tests [@ANCHOR: relay_broker_windows_parse_args]
     #[test]
     fn the_command_line_takes_only_a_config_path() {
@@ -855,6 +862,8 @@ mod tests {
         }
     }
 
+    // Tests [@ANCHOR: windows_state_struct]
+    // Tests [@ANCHOR: windows_system_clock_struct]
     // Tests [@ANCHOR: relay_broker_windows_handle_request]
     #[test]
     fn an_unlisted_sid_gets_nothing_and_the_clock_rules_match_linux() {
@@ -997,6 +1006,7 @@ mod tests {
         (answer, served)
     }
 
+    // Tests [@ANCHOR: windows_instance_struct]
     // Tests [@ANCHOR: relay_broker_windows_serve_one]
     // Tests [@ANCHOR: relay_broker_windows_instance_create]
     // Tests [@ANCHOR: relay_broker_windows_instance_connect]

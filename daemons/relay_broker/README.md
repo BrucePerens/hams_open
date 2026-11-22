@@ -1608,6 +1608,61 @@ The Windows broker serves the clock requests over the named pipe `\\.\pipe\hams-
 
 Every data structure of the broker, explained in full (ADR 0113): purpose, fields, who builds and reads it. Each sits under the anchor on its definition in `src/`.
 
+### `Settings` [@ANCHOR: relay_broker:windows_settings_struct]
+
+**Purpose.** What the Windows broker reads from its config file (`parse_settings`), and what `handle_request` and the pipe's DACL are built from.
+
+**Definition.** `pub struct Settings` (struct) in `daemons/relay_broker/src/windows.rs`; derives `Debug`, `Clone`, `PartialEq`, `Eq`; `Default` is the safe state (nobody allowed, clock steps off).
+
+| Field | Type | Meaning |
+|---|---|---|
+| `allow_sids` | `Vec<String>` | User SIDs allowed to connect; each is validated by `valid_sid` before it is stored. Empty allows nobody. |
+| `set_time` | `bool` | Whether `set_system_time` is served (default false). |
+| `max_unproven_step_secs` | `u64` | The largest clock step without a GPS source or two agreeing sources (default 30). |
+| `max_time_steps_per_hour` | `u32` | Steps per hour before the breaker opens (default 4). |
+| `idle_exit_secs` | `u64` | Read for config compatibility with the Linux broker; a blocking pipe accept cannot time out, so it is not acted on (default 300). |
+
+### `SystemClock` [@ANCHOR: relay_broker:windows_system_clock_struct]
+
+**Purpose.** The real clock behind the `Clock` trait: reads the system time and steps it with `SetSystemTime`.
+
+**Definition.** `pub struct SystemClock;` (unit struct) in `daemons/relay_broker/src/windows.rs`; derives `Debug`, `Default`, `Clone`, `Copy`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `(none)` | `-` | No fields; the tests use a fake `Clock` instead. |
+
+### `State` [@ANCHOR: relay_broker:windows_state_struct]
+
+**Purpose.** What `handle_request` keeps between requests: the settings and the clock-step guard (history and breaker).
+
+**Definition.** `pub struct State` (struct) in `daemons/relay_broker/src/windows.rs`; derives `Debug`; built with `State::new`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `settings` | `Settings` | The parsed config. |
+| `guard` | `TimeGuard` | The same ceiling and breaker the Linux broker uses; it counts a step only after `SetSystemTime` succeeded. |
+
+### `Instance` [@ANCHOR: relay_broker:windows_instance_struct]
+
+**Purpose.** One server-side named-pipe instance; closing the handle on drop (after `DisconnectNamedPipe`) is what ends the connection.
+
+**Definition.** `struct Instance(HANDLE)` (tuple struct, private) in `daemons/relay_broker/src/windows.rs`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `0` | `HANDLE` | The pipe handle, owned by the instance and closed once in `Drop`. |
+
+### `Args` [@ANCHOR: relay_broker:windows_args_struct]
+
+**Purpose.** The command line of the Windows broker.
+
+**Definition.** `struct Args` (struct, private) in `daemons/relay_broker/src/windows.rs`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `config` | `PathBuf` | The config file (`--config`; default `C:\\ProgramData\\hams-relay-broker\\broker.conf`). |
+
 ### `AuditEvent` [@ANCHOR: relay_broker:audit_audit_event_struct]
 
 **Purpose.** One audit record.
