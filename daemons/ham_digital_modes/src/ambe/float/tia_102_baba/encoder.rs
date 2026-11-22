@@ -415,6 +415,8 @@ mod tests {
             while analyzer.next_analysis().is_some() {}
         }
         assert!(trimmed_somewhere, "the test needs trimming to have begun");
+    }
+
     /// Digital silence has no pitch evidence: every candidate's `E(P)` used to be `0/0 = NaN`, which poisoned the
     /// look-back history (`prev1`/`prev2`) so that onset frames never used it. The error must be the worst value,
     /// 1.0 (a NaN clamped by `.max(0.0)` would read as a perfect 0.0 match instead).
