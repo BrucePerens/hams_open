@@ -76,8 +76,8 @@ frame is skipped.
   tables (`1A 03`), levels (`14`: AF gain, RF gain, RF power, mic gain, monitor level and the keyer speed,
   6 to 48 wpm), the attenuator (`11`) and preamplifier (`16 02`) of a description with a `[levels]` block,
   model id (`19 00`), the Main/Sub commands of command `07` (select the band `D0`/`D1` on a description with
-  `main_sub = "select"` or `"full"`; read the selected band `D2` and dual watch `C0` to `C2` on `"full"`, the
-  IC-7610), the core scope operations (command `27`, below), the IC-F8101's own frequency and mode commands
+  `main_sub = "select"`, `"select-read"` or `"full"`; read the selected band `D2` on the last two and dual watch `C0` to `C2` on `"full"`: IC-7610,
+  IC-7600, IC-7800, IC-7760; `"select-read"`: IC-9700, IC-7851), the core scope operations (command `27`, below), the IC-F8101's own frequency and mode commands
   (`1A 34` to `1A 36`), the repeater and tone ops of the `repeater` capability (shift `0F 10`/`11`/`12`,
   offset `0C` read and `0D` set as three BCD bytes of 100 Hz units, CTCSS tone `1B 00` in tenths of a hertz,
   DCS code `1B 02`, and the tone mode as the three flags `16 42` tone, `16 43` tone squelch and `16 4B`
@@ -93,7 +93,7 @@ frame is skipped.
   but with no field in the description format yet), filter-number selection, AM-D and FM-D (no mode
   name for them), the older `1A 06` data-mode form, the IC-9700's XIT, the
   transmit-band selection of the Main/Sub radios (`SetTxReceiver`, `GetTxReceiver`), and the Main/Sub
-  commands on a description with no `main_sub` key (every model but the IC-7610 and IC-9100). Whether `06` clears DATA on a real radio,
+  commands on a description with no `main_sub` key (every model but the IC-7610, IC-7600, IC-7800, IC-7760, IC-7851, IC-9700 and IC-9100). Whether `06` clears DATA on a real radio,
   and whether the filter byte of `26 00` may be left out, are IC-7300 bench questions.
 - **VFO labels:** `Vfo::A` is the *selected* VFO and `Vfo::B` the *unselected* one (the transmit VFO in
   split). The engine does not

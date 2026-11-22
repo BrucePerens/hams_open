@@ -7,7 +7,7 @@
 # "CI-V Transceive" are set in the radio's own menu and must match what radioctl is told.
 # Hamlib modes with no entry in radioctl's mode vocabulary, not listed: PKTLSB PKTUSB FM-D AM-D PSK PSKR.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "transceive", "split", "rit-xit", "filter", "levels", "identify", "read-meters", "scope", "repeater"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "transceive", "split", "rit-xit", "filter", "levels", "identify", "read-meters", "scope", "repeater", "receivers"]
 
 [rig]
 id = "icom-ic-7851"
@@ -19,6 +19,7 @@ address = 0x8E
 controller = 0xE0
 model_id = 0x8E
 echo = false
+main_sub = "select-read"
 
 [scope]
 receivers = 2
@@ -128,6 +129,11 @@ verified = { state = "unverified" }
 [[facts]]
 key = "defaults.*"
 provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: starting frequency and mode of a virtual rig", note = "Only the starting state of a virtual rig; says nothing about the radio." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "civ.main_sub"
+provenance = { kind = "manual", reference = "Icom IC-7850/IC-7851 instruction manual, file IC-7850_7851_ENG_IM_3.pdf (from /storage/manuals/icom/IC-7850_7851), sha256 46d3828526846e2d7f1af48266a38552a1c2ec26004c6b88510d7703cf4ad29a: CI-V command table, PDF p. 252: command 07 sub commands B0 exchange, B1 equalize, C2 send or read dualwatch, D2 send or read band selection (00 Main, 01 Sub), D0 and D1 usable for setting only", note = "`SelectReceiver` sends 07 D0 or 07 D1, `GetReceiver` 07 D2; dual watch is not claimed (the book's C0/C1 notes contradict the other books). Exchange and equalize are not used. Read from the manual's command table by Bruce's 2026-11-12 decision; manual on the box since 2026-11-21. Unverified on a radio." }
 verified = { state = "unverified" }
 
 [[facts]]

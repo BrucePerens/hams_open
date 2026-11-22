@@ -534,3 +534,93 @@ fn the_ic_7610_and_ic_9100_select_the_main_or_sub_band_as_their_command_tables_g
     let mut engine = engine_for(d).expect("engine");
     assert!(engine.encode(&Op::SelectReceiver(Receiver::Sub)).is_err());
 }
+
+#[test]
+fn the_ic_7600_7760_7800_9700_and_7851_select_the_main_or_sub_band_as_their_books_give() {
+    let files = icom_files();
+    let find = |id: &str| files.iter().find(|d| d.id == id).expect("file");
+    let frame = |d: &RigDescription, cmd: u8, data: &[u8]| {
+        let c = d.civ.as_ref().expect("civ");
+        let mut v = vec![0xFE, 0xFE, c.address, c.controller, cmd];
+        v.extend_from_slice(data);
+        v.push(0xFD);
+        v
+    };
+    let wire = |e: &mut dyn ProtocolEngine, op: Op| e.encode(&op).expect("encode").bytes;
+
+    // IC-7600 (book PDF p. 169), IC-7800 (PDF p. 201), IC-7760 (CI-V guide PDF p. 4): D0/D1/D2 and
+    // dual watch C0/C1/C2, as the IC-7610.
+    for id in ["icom-ic-7600", "icom-ic-7800", "icom-ic-7760"] {
+        let d = find(id);
+        assert!(d.capabilities.has(Capability::Receivers), "{id}");
+        let mut engine = engine_for(d).expect("engine");
+        let mut rig = VirtualRig::from_description(d).expect("virtual rig");
+        assert_eq!(
+            wire(engine.as_mut(), Op::SelectReceiver(Receiver::Sub)),
+            frame(d, 0x07, &[0xD1]),
+            "{id}"
+        );
+        assert_eq!(
+            wire(engine.as_mut(), Op::SetDualWatch(true)),
+            frame(d, 0x07, &[0xC1]),
+            "{id}"
+        );
+        assert_eq!(
+            wire(engine.as_mut(), Op::GetDualWatch),
+            frame(d, 0x07, &[0xC2]),
+            "{id}"
+        );
+        write(
+            engine.as_mut(),
+            &mut rig,
+            &Op::SelectReceiver(Receiver::Sub),
+        );
+        assert_eq!(
+            read(engine.as_mut(), &mut rig, &Op::GetReceiver),
+            Observation::Receiver(Receiver::Sub),
+            "{id}"
+        );
+        write(engine.as_mut(), &mut rig, &Op::SetDualWatch(true));
+        assert_eq!(
+            read(engine.as_mut(), &mut rig, &Op::GetDualWatch),
+            Observation::DualWatch(true),
+            "{id}"
+        );
+    }
+
+    // IC-9700 (CI-V guide PDF p. 5) and IC-7851 (book PDF p. 252): select and read the band, no
+    // dual watch command claimed.
+    for id in ["icom-ic-9700", "icom-ic-7851"] {
+        let d = find(id);
+        assert!(d.capabilities.has(Capability::Receivers), "{id}");
+        let mut engine = engine_for(d).expect("engine");
+        let mut rig = VirtualRig::from_description(d).expect("virtual rig");
+        assert_eq!(
+            wire(engine.as_mut(), Op::SelectReceiver(Receiver::Main)),
+            frame(d, 0x07, &[0xD0]),
+            "{id}"
+        );
+        assert_eq!(
+            wire(engine.as_mut(), Op::GetReceiver),
+            frame(d, 0x07, &[0xD2]),
+            "{id}"
+        );
+        write(
+            engine.as_mut(),
+            &mut rig,
+            &Op::SelectReceiver(Receiver::Sub),
+        );
+        assert_eq!(
+            read(engine.as_mut(), &mut rig, &Op::GetReceiver),
+            Observation::Receiver(Receiver::Sub),
+            "{id}"
+        );
+        for op in [Op::SetDualWatch(true), Op::GetDualWatch] {
+            assert_eq!(
+                engine.encode(&op).expect_err("refused").kind,
+                ErrorKind::Unsupported,
+                "{id} {op:?}"
+            );
+        }
+    }
+}
