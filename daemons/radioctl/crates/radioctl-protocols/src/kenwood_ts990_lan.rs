@@ -11,9 +11,11 @@
 //! is answered `##ID1;` or `##ID0;` (PDF p. 62), e.g. `##ID75kenwoodadmin`. Unlike the TS-890S
 //! there is no account-type digit and the lengths are one digit.
 //!
-//! **Not in the reference, so assumed and unverified:** the byte order of the UTF-16 (little
-//! endian, no byte-order mark, is used) and the keep-alive (the read-only `ID;`, as the TS-890S
-//! session does; its answer is swallowed). The scope frames `##DD2`/`##DD3` pass through as payload.
+//! **Byte order: the manual is silent.** PDF p. 1 names the encoding "UTF-16" and gives no byte
+//! order or byte-order mark; PDF p. 62 says the `##ID` account and password are "entered as ASCII
+//! code". The code writes UTF-16 little endian, no byte-order mark, unverified against a radio.
+//! The keep-alive (the read-only `ID;`, as the TS-890S session does; its answer is swallowed) is
+//! not in the reference either. The scope frames `##DD2`/`##DD3` pass through as payload.
 //! Never run against a radio.
 
 use std::time::Duration;
@@ -29,7 +31,8 @@ pub const KEEPALIVE_EVERY: Duration = Duration::from_secs(4);
 const MAX_FRAME: usize = 4096;
 
 // [@ANCHOR: radioctl_ts990_lan_utf16]
-/// ASCII text as the UTF-16 (little endian) the LAN port speaks.
+/// ASCII text as UTF-16, low byte first (little endian). The manual (PDF p. 1) says UTF-16 but
+/// not the byte order; see the module note.
 pub fn utf16(ascii: &[u8]) -> Vec<u8> {
     ascii.iter().flat_map(|b| [*b, 0]).collect()
 }
