@@ -391,7 +391,6 @@ pub fn hub_descriptor(run: &dyn Runner, bus: u32, devnum: u32) -> Result<HubDesc
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use std::path::Path;
 
     pub fn fx(name: &str) -> String {
         std::fs::read_to_string(crate::usb_hub::testkit::recorded().join(name)).unwrap()
