@@ -174,9 +174,13 @@ fn the_engine_and_the_virtual_ts990s_agree() {
         exchange(&mut engine, &mut rig, Op::GetXit),
         Observation::Xit(true),
     );
+    // The main band's meter is both the plain signal and the Main receiver's.
     assert!(matches!(
         exchange(&mut engine, &mut rig, Op::GetSignal).as_slice(),
-        [Inbound::Observation(Observation::Signal(_))]
+        [
+            Inbound::Observation(Observation::ReceiverSignal(Receiver::Main, _)),
+            Inbound::Observation(Observation::Signal(_))
+        ]
     ));
     // Keying changes nothing a read can see: P8 of IF is always 0 on this model.
     exchange(&mut engine, &mut rig, Op::SetPtt(true));
@@ -242,4 +246,68 @@ fn the_sub_receiver_is_selected_and_read_with_cb() {
         );
     }
     assert_eq!(rig.feed(b"CB2;", NOW), b"?;");
+}
+
+// Tests [@ANCHOR: radioctl_kenwood_engine_encode_ts990]
+// Tests [@ANCHOR: radioctl_kenwood_engine_decode]
+// Tests [@ANCHOR: radioctl_virtual_ts990_command]
+#[test]
+fn the_sub_band_frequency_and_meter_are_read_with_fb_and_sm1() {
+    // FB, Sub Band Frequency (PDF p. 29) and SM, S-Meter (PDF p. 54): P1 0 Main, 1 Sub.
+    let desc = description();
+    let mut engine = KenwoodEngine::new(desc.clone()).expect("engine");
+    let mut rig = VirtualRig::from_description(&desc).expect("rig");
+    let wire = |e: &mut KenwoodEngine, op: Op| e.encode(&op).expect("encodes").bytes;
+    assert_eq!(
+        wire(&mut engine, Op::GetReceiverFrequency(Receiver::Main)),
+        b"FA;"
+    );
+    assert_eq!(
+        wire(&mut engine, Op::GetReceiverFrequency(Receiver::Sub)),
+        b"FB;"
+    );
+    assert_eq!(
+        wire(&mut engine, Op::GetReceiverSignal(Receiver::Main)),
+        b"SM0;"
+    );
+    assert_eq!(
+        wire(&mut engine, Op::GetReceiverSignal(Receiver::Sub)),
+        b"SM1;"
+    );
+    rig.feed(b"FB00007074000;", NOW);
+    assert_seen(
+        exchange(
+            &mut engine,
+            &mut rig,
+            Op::GetReceiverFrequency(Receiver::Sub),
+        ),
+        Observation::ReceiverFrequency(Receiver::Sub, Hz(7_074_000)),
+    );
+    assert_seen(
+        exchange(
+            &mut engine,
+            &mut rig,
+            Op::GetReceiverFrequency(Receiver::Main),
+        ),
+        Observation::ReceiverFrequency(Receiver::Main, Hz(14_074_000)),
+    );
+    assert_seen(
+        engine.feed(b"SM10012;", NOW),
+        Observation::ReceiverSignal(Receiver::Sub, 12),
+    );
+    assert_seen(
+        engine.feed(b"SM00030;", NOW),
+        Observation::ReceiverSignal(Receiver::Main, 30),
+    );
+    assert!(matches!(
+        exchange(&mut engine, &mut rig, Op::GetReceiverSignal(Receiver::Sub)).as_slice(),
+        [Inbound::Observation(Observation::ReceiverSignal(
+            Receiver::Sub,
+            _
+        ))]
+    ));
+    assert!(matches!(
+        engine.feed(b"SM20012;", NOW).as_slice(),
+        [Inbound::Unrecognised(_)]
+    ));
 }
