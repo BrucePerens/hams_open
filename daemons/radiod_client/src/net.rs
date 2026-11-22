@@ -248,7 +248,7 @@ impl Control {
         let mut sent: Vec<u32> = Vec::new();
         while Instant::now() < deadline {
             sent.push(self.send(cmd).await?);
-            let retry = Instant::now() + RETRY_INTERVAL;
+            let retry = (Instant::now() + RETRY_INTERVAL).min(deadline);
             while Instant::now() < retry {
                 let left = retry.saturating_duration_since(Instant::now());
                 if let Some(status) = self.recv_status(left).await? {
@@ -651,6 +651,29 @@ mod tests {
         // The listener sees our own commands, which recv_status skips.
         let nothing = control.recv_status(Duration::from_millis(50)).await;
         assert!(matches!(nothing, Ok(None)), "{nothing:?}");
+    }
+
+    // Tests [@ANCHOR: radiod_client_net_control_request]
+    #[tokio::test]
+    async fn request_never_waits_past_its_deadline() {
+        let handle = Handle::current();
+        let (g, port) = (group(6), test_port(5));
+        let control = Control::open_on_port(&handle, g, port, LOOPBACK, Policy::default());
+        assert!(control.is_ok(), "multicast on loopback: {control:?}");
+        let Ok(mut control) = control else { return };
+        let poll = Command::Poll {
+            ssrc: ssrc(42),
+            lifetime_frames: 50,
+        };
+        let started = Instant::now();
+        let status = control.request(&poll, Duration::from_millis(30)).await;
+        assert!(matches!(status, Ok(None)), "{status:?}");
+        // A 30 ms wait used to run the whole 200 ms retry window.
+        assert!(
+            started.elapsed() < Duration::from_millis(120),
+            "request overshot its wait: {:?}",
+            started.elapsed()
+        );
     }
 
     // Tests [@ANCHOR: radiod_client_net_control_front_end]
