@@ -3,11 +3,10 @@
 # SOURCE: Elecraft K4 Programmer's Reference Rev. D11 (May 1, 2026), sha256 d21f56e329a749060f40e0a5ac4d968b3b04c264bf4804ca96763f71cef0c2cf.
 # The K4 speaks the K3 command set in its K3-compatible (K40) meta mode, the one used here: the engine never sends K41;. Only commands
 # whose K4 form is the same as the K3's are claimed. The K4 differs from the K3 in AG (000-060), RG (negative dB), KS (8-100), MG (000-080),
-# PC (power with a range letter), RA/PA (3 dB steps, preamp 10/18/20 dB) and has no RO, so rit-xit and read-signal are NOT claimed (open
-# to-do in docs/RIG_COVERAGE_PLAN.md). Split is not claimed: the guide's FT takes 0/1 but has no FR to leave split.
+# PC (power with a range letter) and RA/PA (3 dB steps, preamp 10/18/20 dB; K41 meta mode only, not used). It has no RO: rit-xit is claimed with the offset set by RC then RU/RD (PDF pp. 27 and 29) and read from IF; read-signal is the K3-compatible SMnnnn of K40 mode (PDF p. 31). Split is not claimed: the guide's FT takes 0/1 but has no FR to leave split.
 # EVERYTHING HERE IS UNVERIFIED: written from the guide, never run against a radio. Hamlib 4.6.2 lists serial 4800..115200 baud, 8N1, no handshake.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "send-cw", "transceive", "levels", "identify"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "send-cw", "transceive", "levels", "identify", "rit-xit", "read-signal"]
 
 [rig]
 id = "elecraft-k4"
@@ -16,6 +15,7 @@ family = "elecraft-ascii"
 
 [elecraft]
 model_id = 17
+k4 = true
 levels = { af-gain = [0, 60], mic-gain = [0, 80], keyer-speed = [8, 100] }
 
 [levels]
@@ -76,6 +76,11 @@ verified = { state = "unverified" }
 [[facts]]
 key = "elecraft.model_id"
 provenance = { kind = "manual", reference = "Elecraft 'K4 Programmer's Reference' Rev. D11 (May 1, 2026; the file is named 'K4 Programmer's Reference, rev. D12.pdf' on the server), https://ftp.elecraft.com/K4/Manuals%20Downloads/K4%20Programmer's%20Reference,%20rev.%20D12.pdf, sha256 d21f56e329a749060f40e0a5ac4d968b3b04c264bf4804ca96763f71cef0c2cf (page numbers are PDF pages): ID, PDF p. 16: ID017; in K40 mode (GET only, for K3 compatibility); in K41 mode the K4 returns its ID text instead", note = "Not a unique identifier of a K4; the engine never switches to K41. Hamlib's kenwood.c comment also says the Elecraft K2, K3 and KX3 return 17." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "elecraft.k4"
+provenance = { kind = "manual", reference = "Elecraft 'K4 Programmer's Reference' rev. D12 (sha256 d21f56e329a749060f40e0a5ac4d968b3b04c264bf4804ca96763f71cef0c2cf; PDF pages): RC$ and RD$ p. 27, RT$ and RU$ p. 29 (RU$nnnnn, 000001-09999 Hz; maximum offset +-9.999 kHz), XT p. 39; IF p. 16 (offset in the K3-compatible IF); no RO command is listed", note = "The engine sets the offset with RC; then RU or RD in Hz and reads it from IF; unverified on a radio." }
 verified = { state = "unverified" }
 
 [[facts]]

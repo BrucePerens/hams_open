@@ -660,6 +660,8 @@ pub struct ElecraftParams {
     /// `level_wire` (the KX3's `AG` is 0-60, `RG` 190-250, `MG` 0-80 and `PC` 0-15). Empty means
     /// the K3 ranges apply.
     pub level_ranges: Vec<(Level, u16, u16)>,
+    /// The K4: no `RO`, the RIT/XIT offset is set with `RC;` then `RU`/`RD` and read from `IF`.
+    pub k4: bool,
 }
 
 impl ElecraftParams {
@@ -668,6 +670,7 @@ impl ElecraftParams {
         ElecraftParams {
             model_id,
             level_ranges: Vec::new(),
+            k4: false,
         }
     }
 

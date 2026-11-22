@@ -8,7 +8,7 @@
 //!
 //! Keys: `rig.id`, `rig.name`, `rig.family`, `timing.timeout_ms`, `timing.retries`,
 //! `timing.inter_command_ms`, `defaults.frequency_hz`, `defaults.mode`, `civ.address`,
-//! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `kenwood.dialect` (only when not `classic`), `kenwood.scope_link` (`lan`, the default, or `serial`: how a TS-890S sends its scopes), `kenwood.ky` (a `[kenwood.ky]` block: `form`, `width`, `lowercase`, `at_sign`, `stop`), `elecraft.model_id`, `elecraft.levels` (a table `level-name = [min, max]`), `yaesu.model_id`,
+//! `civ.controller`, `civ.model_id`, `civ.echo`, `kenwood.model_id`, `kenwood.dialect` (only when not `classic`), `kenwood.scope_link` (`lan`, the default, or `serial`: how a TS-890S sends its scopes), `kenwood.ky` (a `[kenwood.ky]` block: `form`, `width`, `lowercase`, `at_sign`, `stop`), `elecraft.model_id`, `elecraft.levels` (a table `level-name = [min, max]`), `elecraft.k4` (true for the K4's offset commands), `yaesu.model_id`,
 //! `yaesu.frequency_digits` (only when not 9), `yaesu.levels` (a table `level-name = [min, max]`, as `elecraft.levels`), `yaesu.clarifier` (`"cf-receive"` when the clarifier is the receive-only `CF` command, `"cf-rx-tx"` when `CF` switches both, `"rt-receive"` when it is `RT` with no `XT`; `"rt-xt"` or absent otherwise),
 //! `yaesu.split` (`"st"` when split is the `ST` command; `"ft"` or absent otherwise), `yaesu.tx_band` (true when `FT` picks the Main or Sub transmit band),
 //! `scope.receivers`, `scope.line_length`, `scope.samples_per_frame`, `scope.amplitude_max`,
@@ -244,6 +244,9 @@ struct ElecraftSection {
     /// Per-model level ranges, `level-name = [min, max]` (see `ElecraftParams::level_ranges`).
     #[serde(default)]
     levels: BTreeMap<String, (u16, u16)>,
+    /// The K4's offset commands (`RC`, `RU`, `RD`, no `RO`).
+    #[serde(default)]
+    k4: bool,
 }
 
 // [@ANCHOR: radioctl_core_rigfile_yaesu_section]
@@ -1023,6 +1026,7 @@ const MAX_ANTENNA_PORTS: u8 = 8;
 fn build_elecraft(section: &ElecraftSection) -> Result<ElecraftParams, RigError> {
     let mut params = ElecraftParams::new(section.model_id);
     params.level_ranges = build_level_ranges("elecraft", &section.levels)?;
+    params.k4 = section.k4;
     Ok(params)
 }
 
@@ -1488,6 +1492,9 @@ pub fn expected_keys(description: &RigDescription) -> Vec<String> {
         keys.push("elecraft.model_id".to_string());
         if !elecraft.level_ranges.is_empty() {
             keys.push("elecraft.levels".to_string());
+        }
+        if elecraft.k4 {
+            keys.push("elecraft.k4".to_string());
         }
     }
     if let Some(yaesu) = &description.yaesu {

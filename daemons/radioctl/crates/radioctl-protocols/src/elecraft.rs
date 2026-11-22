@@ -212,6 +212,11 @@ pub struct ElecraftEngine {
 }
 
 impl ElecraftEngine {
+    /// True for a K4 description (`elecraft.k4`).
+    fn k4(&self) -> bool {
+        self.desc.elecraft.as_ref().is_some_and(|e| e.k4)
+    }
+
     // [@ANCHOR: radioctl_elecraft_engine_new]
     /// Builds an engine from an Elecraft description.
     pub fn new(desc: RigDescription) -> Result<ElecraftEngine, RigError> {
@@ -293,6 +298,15 @@ impl ElecraftEngine {
             Op::SetRitOffset(hz) => {
                 if hz.unsigned_abs() > MAX_RIT_HZ.unsigned_abs() {
                     return Err(Self::unsupported("RIT/XIT offset beyond +-9999 Hz"));
+                }
+                if self.k4() {
+                    // The K4 has no `RO`: clear, then step by the Hz amount ("RC$", "RU$", "RD$").
+                    let step = match *hz {
+                        0 => String::new(),
+                        h if h > 0 => format!("RU{:05};", h),
+                        h => format!("RD{:05};", h.unsigned_abs()),
+                    };
+                    return Ok(Self::set(format!("RC;{step}")));
                 }
                 Self::set(format!("RO{};", signed_offset(*hz)))
             }
@@ -488,6 +502,8 @@ impl ProtocolEngine for ElecraftEngine {
             Op::GetTxVfo => Self::get("FT;", Field::TxVfo),
             Op::GetRit => Self::get("RT;", Field::Rit),
             Op::GetXit => Self::get("XT;", Field::Xit),
+            // The K4 has no `RO`: the offset is in the K3-compatible `IF` answer.
+            Op::GetRitOffset if self.k4() => Self::get("IF;", Field::RitOffset),
             Op::GetRitOffset => Self::get("RO;", Field::RitOffset),
             Op::GetFilterWidth => Self::get("BW;", Field::FilterWidth),
             Op::GetLevel(level) => level_get(*level)?,
