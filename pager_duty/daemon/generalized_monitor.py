@@ -285,6 +285,7 @@ def _dig_addresses(dig, domain, rtype):
     return status.group(1), addresses
 
 
+# [@ANCHOR: pager_duty:certbot_domain_problem]
 def certbot_domain_problem(domain, my_ip):
     """One plain-language line saying why Let's Encrypt cannot validate this domain, or None when it can.
     Tells apart: the name does not exist, the name exists without an A/AAAA record, an address that is not

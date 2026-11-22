@@ -3,7 +3,7 @@
 """The domain DNS pre-check of the "certbot" check type. Plain unittest, no Odoo:
     python3 pager_duty/daemon/test_certbot_domain_dns.py
 """
-# Tests [@ANCHOR: pager_duty:daemon_execute_check]
+# Tests [@ANCHOR: pager_duty:certbot_domain_problem]
 import os
 import sys
 import unittest
