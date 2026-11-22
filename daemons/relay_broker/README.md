@@ -1655,7 +1655,7 @@ Every data structure of the broker, explained in full (ADR 0113): purpose, field
 
 ### `Args` [@ANCHOR: relay_broker:windows_args_struct]
 
-**Purpose.** The command line of the Windows broker.
+**Purpose.** The command line of the Windows broker, as `parse_args` reads it from the arguments the service control manager passes (the installer's service command is `hams-relay-broker.exe --config PATH`). It is built once at start-up, never changes afterwards, and only `run_main` and `service_main` read it, to find the config file.
 
 **Definition.** `struct Args` (struct, private) in `daemons/relay_broker/src/windows.rs`.
 
