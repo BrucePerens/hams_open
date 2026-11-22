@@ -312,7 +312,7 @@ fn example_binary(name: &str) -> PathBuf {
         .and_then(Path::parent)
         .expect("target profile directory")
         .join("examples")
-        .join(name)
+        .join(format!("{name}{}", std::env::consts::EXE_SUFFIX))
 }
 
 /// Builds the examples once, so that running this test file alone (which builds no examples)

@@ -3,6 +3,7 @@
 //! rehearsal path. A pty has no modem lines, so the default (`lines = "managed"`) fails the open
 //! loudly and `lines = "unmanaged"` serves the radio.
 #![allow(clippy::expect_used, clippy::panic)]
+#![cfg(unix)]
 
 mod common;
 

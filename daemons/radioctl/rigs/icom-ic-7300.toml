@@ -31,6 +31,15 @@ preamp_steps = 2
 [power_meter]
 raw_to_milliwatts = [[0, 0], [143, 50000], [213, 100000]]
 
+# HF and 50 MHz are rated 100 W; the 70 MHz band of some versions 50 W.
+[[power_meter.band]]
+max_hz = 60000000
+raw_to_milliwatts = [[0, 0], [143, 50000], [213, 100000]]
+
+[[power_meter.band]]
+max_hz = 80000000
+raw_to_milliwatts = [[0, 0], [143, 25000], [213, 50000]]
+
 [timing]
 timeout_ms = 1000
 retries = 3
@@ -168,5 +177,5 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "power_meter.raw_to_milliwatts"
-provenance = { kind = "manual", reference = "Icom IC-7300 Full Manual (IC-7300_ENG_FM_12b.pdf), PDF page 161, CI-V command 15 11 (read the PO meter level, 00 00 to 02 55), page numbers as the PDF viewer counts them", note = "The command table prints the scale as percent of full output: 00 00 is 0%, 01 43 is 50% and 02 13 is 100% of the 100 W rated output. The percent is turned into watts with the rated output, and radioctl interpolates linearly and holds the last value beyond. Not measured at the load." }
+provenance = { kind = "manual", reference = "Icom IC-7300 Full Manual (IC-7300_ENG_FM_12b.pdf), PDF page 161, CI-V command 15 11 (read the PO meter level, 00 00 to 02 55), page numbers as the PDF viewer counts them; rated output from the IC-7300 Basic Manual (IC-7300_ENG_BM_12.pdf), PDF page 68, Specifications, transmit output power", note = "The command table prints the scale as percent of full output: 00 00 is 0%, 01 43 is 50% and 02 13 is 100%. The rating is 100 W on HF and 50 MHz and 50 W on the 70 MHz band of the versions that have it (2 to 100 W, 2 to 50 W), so the [[power_meter.band]] entries scale the same points to each, chosen by the transmit frequency. The percent is turned into watts with the rated output, and radioctl interpolates linearly and holds the last value beyond. Not measured at the load." }
 verified = { state = "manual-checked", reference = "Icom IC-7300 Full Manual (IC-7300_ENG_FM_12b.pdf), PDF page 161, CI-V command 15 11" }

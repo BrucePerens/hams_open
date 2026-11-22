@@ -690,6 +690,21 @@ pub struct ScopeParams {
 /// A rig that reports only a relative bar has none, and radioctl then reports a relative value.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PowerMeterParams {
+    /// Ascending `(raw reading, milliwatts)` points; used when no band below matches, or the
+    /// frequency is unknown. For a multi-band rig it is the highest rating, which over-states
+    /// the watts elsewhere (errs toward tripping), never under-states.
+    pub points: Vec<(u16, u32)>,
+    /// Per-band points for a rig whose rated output differs by band: ascending `max_hz`, the first
+    /// band whose `max_hz` is at or above the transmit frequency applies.
+    pub bands: Vec<PowerBand>,
+}
+
+// [@ANCHOR: radioctl_core_description_power_band]
+/// The power meter points of one band, up to and including `max_hz`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PowerBand {
+    /// Highest frequency in hertz this band covers.
+    pub max_hz: u64,
     /// Ascending `(raw reading, milliwatts)` points.
     pub points: Vec<(u16, u32)>,
 }
@@ -698,13 +713,27 @@ impl PowerMeterParams {
     // [@ANCHOR: radioctl_core_powermeter_cal]
     /// The calibration, `None` when the points do not form one.
     pub fn cal(&self) -> Option<crate::power::PowerCal> {
-        crate::power::PowerCal::new(
-            self.points
-                .iter()
-                .map(|(raw, mw)| (f64::from(*raw), f64::from(*mw) / 1000.0))
-                .collect(),
-        )
+        points_cal(&self.points)
     }
+
+    // [@ANCHOR: radioctl_core_powermeter_cal_at]
+    /// The calibration for a transmit frequency: the matching band's, else [`Self::cal`] (also
+    /// when the frequency is unknown).
+    pub fn cal_at(&self, hz: Option<u64>) -> Option<crate::power::PowerCal> {
+        hz.and_then(|hz| self.bands.iter().find(|b| hz <= b.max_hz))
+            .map_or_else(|| self.cal(), |b| points_cal(&b.points))
+    }
+}
+
+// [@ANCHOR: radioctl_core_description_points_cal]
+/// A calibration from `(raw, milliwatts)` points; `None` when they do not form one.
+pub fn points_cal(points: &[(u16, u32)]) -> Option<crate::power::PowerCal> {
+    crate::power::PowerCal::new(
+        points
+            .iter()
+            .map(|(raw, mw)| (f64::from(*raw), f64::from(*mw) / 1000.0))
+            .collect(),
+    )
 }
 
 // [@ANCHOR: radioctl_core_description_level_params]

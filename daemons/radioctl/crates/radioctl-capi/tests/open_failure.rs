@@ -2,6 +2,7 @@
 //! A failed `rctl_rotator_open_virtual` must not leave its loopback rotator server running.
 //! Alone in its own test binary because it lowers the process file-descriptor limit.
 #![allow(clippy::expect_used, clippy::panic, unsafe_code)]
+#![cfg(unix)]
 
 use std::ffi::CString;
 use std::ptr;

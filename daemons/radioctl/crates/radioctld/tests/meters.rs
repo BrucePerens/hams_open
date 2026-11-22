@@ -65,6 +65,7 @@ async fn radioctld_serves_the_meters_the_way_hamlib_reads_them() {
 
 // Tests [@ANCHOR: radioctld_service_get_level]
 // Tests [@ANCHOR: radioctld_service_power_reading]
+// Tests [@ANCHOR: radioctld_service_power_cal]
 // Tests [@ANCHOR: radioctld_service_power_raw]
 // Tests [@ANCHOR: radioctld_names_served_levels]
 // Tests [@ANCHOR: radioctld_meter_cal_power_fraction]
@@ -73,19 +74,59 @@ async fn radioctld_serves_the_meters_the_way_hamlib_reads_them() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn the_power_meter_is_a_fraction_and_watts_only_with_a_calibration() {
     // The IC-7300 manual (IC-7300_ENG_FM_12b.pdf, PDF page 161) prints the scale points
-    // (0 = 0%, 143 = 50%, 213 = 100% of the 100 W rating): the virtual rig keyed at raw 128
-    // reads 128/143 of 50 W, and the fraction is 128/143 of one half. Setting the level stays refused.
-    let daemon = start(&config_text("", "ic7300", "icom-ic-7300.toml", true, false)).await;
-    let mut client = Client::connect(&daemon).await;
-    assert_eq!(client.ask("l RFPOWER_METER").await, "0\n");
-    assert_eq!(client.ask("T 1").await, "RPRT 0\n");
-    let rig = daemon.rigs[0].virtual_control.clone().expect("virtual rig");
-    eventually("the virtual rig keyed", || rig.state().ptt).await;
-    wait_for(&mut client, "l RFPOWER_METER_WATTS", 128.0 / 143.0 * 50.0).await;
-    wait_for(&mut client, "l RFPOWER_METER", 128.0 / 143.0 * 0.5).await;
-    assert_eq!(client.ask("L RFPOWER_METER 1").await, "RPRT -11\n");
-    assert_eq!(client.ask("T 0").await, "RPRT 0\n");
-    daemon.stop().await;
+    // (0 = 0%, 143 = 50%, 213 = 100% of the rated output); its specifications (IC-7300_ENG_BM_12.pdf,
+    // PDF page 68) rate HF and 50 MHz at 100 W and the 70 MHz band of some versions at 50 W. The
+    // virtual rig keyed at raw 128 reads 128/143 of half the rating, and the fraction is 128/143
+    // of one half. Setting the level stays refused.
+    for (hz, rated) in [
+        (14_200_000u64, 100.0),
+        (50_150_000, 100.0),
+        (70_200_000, 50.0),
+    ] {
+        let daemon = start(&config_text("", "ic7300", "icom-ic-7300.toml", true, false)).await;
+        let mut client = Client::connect(&daemon).await;
+        assert_eq!(client.ask("l RFPOWER_METER").await, "0\n");
+        assert_eq!(client.ask(&format!("F {hz}")).await, "RPRT 0\n");
+        assert_eq!(client.ask("T 1").await, "RPRT 0\n");
+        let rig = daemon.rigs[0].virtual_control.clone().expect("virtual rig");
+        eventually("the virtual rig keyed", || rig.state().ptt).await;
+        wait_for(
+            &mut client,
+            "l RFPOWER_METER_WATTS",
+            128.0 / 143.0 * rated / 2.0,
+        )
+        .await;
+        wait_for(&mut client, "l RFPOWER_METER", 128.0 / 143.0 * 0.5).await;
+        assert_eq!(client.ask("L RFPOWER_METER 1").await, "RPRT -11\n");
+        assert_eq!(client.ask("T 0").await, "RPRT 0\n");
+        daemon.stop().await;
+    }
+
+    // The IC-9700 CI-V guide (IC-9700_ENG_CI-V_4.pdf, PDF page 5) prints 0 = 0%, 143 = 50%, 213 = 100%
+    // of the rated output, which Icom's specifications give per band: 100 W on 144 MHz, 75 W on
+    // 430/440 MHz and 10 W on 1200 MHz. The watts follow the band the rig transmits on; the fraction
+    // is of that band's rating. Keyed raw 128 is 128/143 of half the rating.
+    for (hz, rated) in [
+        (145_000_000u64, 100.0),
+        (435_000_000, 75.0),
+        (1_296_000_000, 10.0),
+    ] {
+        let daemon = start(&config_text("", "ic9700", "icom-ic-9700.toml", true, false)).await;
+        let mut client = Client::connect(&daemon).await;
+        assert_eq!(client.ask(&format!("F {hz}")).await, "RPRT 0\n");
+        assert_eq!(client.ask("T 1").await, "RPRT 0\n");
+        let rig = daemon.rigs[0].virtual_control.clone().expect("virtual rig");
+        eventually("the virtual rig keyed", || rig.state().ptt).await;
+        wait_for(
+            &mut client,
+            "l RFPOWER_METER_WATTS",
+            128.0 / 143.0 * rated / 2.0,
+        )
+        .await;
+        wait_for(&mut client, "l RFPOWER_METER", 128.0 / 143.0 * 0.5).await;
+        assert_eq!(client.ask("T 0").await, "RPRT 0\n");
+        daemon.stop().await;
+    }
 
     // The IC-7850/7851 manual prints scale points (0 = 0 W, 143 = 100 W, 213 = 200 W): the
     // keyed raw 128 is 128/143 of 100 W, and the fraction is of the 200 W full scale.

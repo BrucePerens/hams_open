@@ -2,6 +2,7 @@
 //! A pty attach that fails after making its symlink must not leave the symlink behind. The
 //! failure is forced by lowering the process limit, so this test lives alone in its binary.
 #![allow(clippy::expect_used, clippy::panic)]
+#![cfg(unix)]
 
 use std::path::Path;
 use std::time::Duration;

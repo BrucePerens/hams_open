@@ -3,6 +3,7 @@
 //! models: discovery of several rigs in one run, the ambiguous and not-a-radio cases, one upload
 //! per rig to a loopback server, and the first-run prompt. Nothing leaves this machine.
 #![allow(clippy::expect_used, clippy::panic)]
+#![cfg(unix)]
 
 mod common;
 #[path = "../../../testdir.rs"]

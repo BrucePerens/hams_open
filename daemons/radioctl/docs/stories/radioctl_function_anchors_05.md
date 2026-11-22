@@ -137,6 +137,14 @@ Finds the raw meter with a file-format name. `name` is borrowed and compared exa
 
 Builds the power calibration of a rig's raw power meter from the description's points. The points are `(raw reading, milliwatts)`, ascending in both; each is converted to `(raw as f64, watts)`. It returns `Some` only when `PowerCal::new` accepts them: at least two points, strictly ascending raw values, watts not decreasing and not negative, all finite. Otherwise `None`, and radioctl then reports a relative value (a bar of 0 to 100) rather than watts. `&self`; the points are copied, not consumed. Pure, no errors. A rig that reports only a relative bar has no points.
 
+### `pub fn cal_at(&self, hz: Option<u64>) -> Option<crate::power::PowerCal>` [@ANCHOR: radioctl:radioctl_core_powermeter_cal_at]
+
+The power calibration for a transmit frequency. A rig rated differently per band (the IC-9700: 100 W, 75 W, 10 W) lists `[[power_meter.band]]` entries, ascending in `max_hz`; the first whose `max_hz` is at or above `hz` supplies the points. With no matching band, or `hz` of `None` (the frequency could not be read), the base points of `cal` apply, which for such a rig are the highest rating and so over-state the watts rather than under-state them. Pure, no errors; `None` only when the chosen points do not form a calibration.
+
+### `pub fn points_cal(points: &[(u16, u32)]) -> Option<crate::power::PowerCal>` [@ANCHOR: radioctl:radioctl_core_description_points_cal]
+
+Turns `(raw reading, milliwatts)` points into a `PowerCal` (watts), the same conversion `cal` uses; `None` when `PowerCal::new` rejects them (fewer than two points, raw not ascending, watts falling, negative or not finite). The rig file loader uses it to validate each band. Pure.
+
 ### `pub fn level_range(&self, level: Level) -> Option<(u16, u16)>` [@ANCHOR: radioctl:radioctl_core_elecraft_level_range]
 
 Looks up the per-model wire range of an Elecraft level in the description's `[elecraft] levels`. `level` is the level to look up (by value). Returns `Some((min, max))`, the smallest and largest value on the wire for the first entry that names the level, or `None` when the description gives none, in which case the K3 range of the engine applies. For example the KX3's AF gain is 0 to 60. `&self`; pure; no errors. How the engine applies the range to a level value is in the Elecraft engine (unknown here; check its level wire code).

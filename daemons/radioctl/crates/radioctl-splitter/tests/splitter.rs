@@ -3,6 +3,7 @@
 //! with simulated external programs: CI-V and TS-2000 clients over in-memory streams, TCP and
 //! pseudo-terminals. Nothing is keyed that is not a virtual rig.
 #![allow(clippy::expect_used, clippy::panic)]
+#![cfg(unix)]
 
 use std::io::{Read, Write};
 use std::path::Path;

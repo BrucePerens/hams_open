@@ -3,6 +3,7 @@
 //! virtual rotator, and the same virtual rotator driven by Hamlib's own `rotctl` as an independent
 //! client (skipped where `rotctl` is not installed). No hardware, nothing transmits.
 #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
+#![cfg(unix)]
 
 use std::io::{Read, Write};
 use std::path::PathBuf;

@@ -24,8 +24,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 | Verification level | Models |
 |---|---:|
-| unverified | 251 |
-| manual-checked | 61 |
+| unverified | 250 |
+| manual-checked | 62 |
 | transcript-checked | 0 |
 | hardware-verified | 1 |
 
@@ -228,7 +228,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 3068 | Icom | IC-9100 | A | icom_civ | civ | `icom-ic-9100` | shift, offset, tones | manual-checked | - | described |
 | 3065 | Icom | IC-92D | A | icom_civ | civ | `icom-ic-92d` | - | unverified | - | described |
 | 3035 | Icom | IC-970 | A | icom_civ | civ | `icom-ic-970` | - | unverified | - | described |
-| 3081 | Icom | IC-9700 | A | icom_civ | civ | `icom-ic-9700` | shift, offset, tones | unverified | - | described |
+| 3081 | Icom | IC-9700 | A | icom_civ | civ | `icom-ic-9700` | shift, offset, tones | manual-checked | - | described |
 | 3086 | Icom | IC-F8101 | A | icom_civ | civ | `icom-ic-f8101` | - | unverified | - | described |
 | 30001 | Icom | IC-M700PRO | C | icom_marine | icom_marine | `icom-ic-m700pro` | - | unverified | - | described |
 | 30003 | Icom | IC-M710 | C | icom_marine | icom_marine | `icom-ic-m710` | - | unverified | - | described |
