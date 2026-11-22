@@ -76,7 +76,8 @@ fn copy_all(from: &Path, to: &Path) {
         let (src, dst) = (e.path(), to.join(decode(&e.file_name())));
         let ft = e.file_type().unwrap();
         if ft.is_symlink() {
-            std::os::unix::fs::symlink(decode(std::fs::read_link(&src).unwrap().as_os_str()), &dst).unwrap();
+            std::os::unix::fs::symlink(decode(std::fs::read_link(&src).unwrap().as_os_str()), &dst)
+                .unwrap();
         } else if ft.is_dir() {
             copy_all(&src, &dst);
         } else {

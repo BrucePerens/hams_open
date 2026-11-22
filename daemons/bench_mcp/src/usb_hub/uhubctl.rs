@@ -394,10 +394,7 @@ pub mod tests {
     use std::path::Path;
 
     pub fn fx(name: &str) -> String {
-        std::fs::read_to_string(
-            crate::usb_hub::testkit::recorded().join(name),
-        )
-        .unwrap()
+        std::fs::read_to_string(crate::usb_hub::testkit::recorded().join(name)).unwrap()
     }
 
     // Tests [@ANCHOR: usb_hub_uhubctl_parse]
