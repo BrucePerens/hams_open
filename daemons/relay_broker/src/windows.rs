@@ -217,6 +217,7 @@ pub fn set_system_time(unix_secs: u64) -> io::Result<()> {
     Ok(())
 }
 
+// [@ANCHOR: relay_broker_windows_enable_privilege]
 /// Enables one named privilege in the current process token.
 fn enable_privilege(name: &str) -> io::Result<()> {
     let mut token: HANDLE = null_mut();
@@ -267,6 +268,7 @@ fn enable_privilege(name: &str) -> io::Result<()> {
     result
 }
 
+// [@ANCHOR: relay_broker_windows_token_user_sid]
 /// The user SID, as `S-1-5-21-...`, of the token in `token`.
 fn token_user_sid(token: HANDLE) -> io::Result<String> {
     let mut needed = 0u32;
@@ -307,6 +309,20 @@ fn token_user_sid(token: HANDLE) -> io::Result<String> {
         s
     };
     Ok(sid)
+}
+
+// [@ANCHOR: relay_broker_windows_current_user_sid]
+/// The user SID of the account this process runs as (what a client of the pipe will be identified as).
+pub fn current_user_sid() -> io::Result<String> {
+    let mut token: HANDLE = null_mut();
+    // SAFETY: GetCurrentProcess is a pseudo handle; `token` receives a handle closed below.
+    if unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let sid = token_user_sid(token);
+    // SAFETY: `token` came from OpenProcessToken and is closed once.
+    unsafe { CloseHandle(token) };
+    sid
 }
 
 // [@ANCHOR: relay_broker_windows_pipe_client_sid]
@@ -428,6 +444,7 @@ pub fn handle_request(
 struct Instance(HANDLE);
 
 impl Instance {
+    // [@ANCHOR: relay_broker_windows_instance_create]
     /// Creates an instance of `name` with the DACL in `sddl`.
     fn create(name: &str, sddl: &str, first: bool) -> io::Result<Instance> {
         let sddl = wide(sddl);
@@ -478,6 +495,7 @@ impl Instance {
         Ok(Instance(handle))
     }
 
+    // [@ANCHOR: relay_broker_windows_instance_connect]
     /// Waits for one client.
     fn connect(&self) -> io::Result<()> {
         // SAFETY: a valid pipe handle, no overlapped I/O.
@@ -545,6 +563,7 @@ pub fn serve_one(
     Ok(sid)
 }
 
+// [@ANCHOR: relay_broker_windows_call]
 /// Opens `name`, sends one framed request and returns the decoded response (the client side, used by the tests and by `--probe`).
 pub fn call(name: &str, request: &Request) -> io::Result<Response> {
     let mut pipe = std::fs::OpenOptions::new()
@@ -564,6 +583,7 @@ struct Args {
     config: PathBuf,
 }
 
+// [@ANCHOR: relay_broker_windows_parse_args]
 fn parse_args(argv: &[String]) -> Result<Args, String> {
     let mut args = Args {
         config: PathBuf::from(DEFAULT_CONFIG),
@@ -578,6 +598,7 @@ fn parse_args(argv: &[String]) -> Result<Args, String> {
     Ok(args)
 }
 
+// [@ANCHOR: relay_broker_windows_serve_forever]
 /// Serves connections one after another until the process is stopped. `idle_exit_secs` is read for config compatibility but a
 /// blocking pipe accept cannot time out, so the process stays up until the service control manager stops it.
 fn serve_forever(path: &Path) -> io::Result<()> {
@@ -609,6 +630,7 @@ static CONFIG: OnceLock<PathBuf> = OnceLock::new();
 /// The handle `SetServiceStatus` needs, set once by `service_main`.
 static STATUS_HANDLE: OnceLock<usize> = OnceLock::new();
 
+// [@ANCHOR: relay_broker_windows_report]
 /// Reports `state` to the service control manager.
 fn report(state: u32, accept: u32) {
     let Some(handle) = STATUS_HANDLE.get() else {
@@ -627,6 +649,7 @@ fn report(state: u32, accept: u32) {
     unsafe { SetServiceStatus(*handle as SERVICE_STATUS_HANDLE, &status) };
 }
 
+// [@ANCHOR: relay_broker_windows_control_handler]
 /// The control handler: a stop request ends the process (the pipe accept cannot be interrupted, and the broker keeps no state to save).
 unsafe extern "system" fn control_handler(control: u32) {
     if control == SERVICE_CONTROL_STOP {
@@ -639,6 +662,7 @@ unsafe extern "system" fn control_handler(control: u32) {
     }
 }
 
+// [@ANCHOR: relay_broker_windows_service_main]
 /// The service entry the control manager calls on its own thread.
 unsafe extern "system" fn service_main(_argc: u32, _argv: *mut *mut u16) {
     let name = wide(SERVICE_NAME);
@@ -659,6 +683,7 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut *mut u16) {
     report(SERVICE_STOPPED, 0);
 }
 
+// [@ANCHOR: relay_broker_windows_run_as_service]
 /// Hands this process to the service control manager. Returns the Win32 error when it was not started as a service.
 fn run_as_service() -> u32 {
     let mut name = wide(SERVICE_NAME);
@@ -680,6 +705,7 @@ fn run_as_service() -> u32 {
     0
 }
 
+// [@ANCHOR: relay_broker_windows_run_main]
 /// The program: parse the command line, then run as the `HamsRelayBroker` service, or in the console when it was started by hand.
 pub fn run_main() -> ExitCode {
     let argv: Vec<String> = std::env::args().collect();
@@ -752,6 +778,22 @@ mod tests {
         ] {
             assert!(parse_settings(bad).is_err(), "{bad}");
         }
+    }
+
+    // Tests [@ANCHOR: relay_broker_windows_parse_args]
+    #[test]
+    fn the_command_line_takes_only_a_config_path() {
+        let argv = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            parse_args(&argv(&["x"])).map(|a| a.config),
+            Ok(PathBuf::from(DEFAULT_CONFIG))
+        );
+        assert_eq!(
+            parse_args(&argv(&["x", "--config", "c.conf"])).map(|a| a.config),
+            Ok(PathBuf::from("c.conf"))
+        );
+        assert!(parse_args(&argv(&["x", "--config"])).is_err());
+        assert!(parse_args(&argv(&["x", "--console"])).is_err());
     }
 
     // Tests [@ANCHOR: relay_broker_windows_pipe_sddl]
@@ -904,16 +946,7 @@ mod tests {
     }
 
     fn own_sid() -> String {
-        let mut token: HANDLE = null_mut();
-        // SAFETY: the pseudo handle of this process; `token` is closed below.
-        assert_ne!(
-            unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) },
-            0
-        );
-        let sid = token_user_sid(token).expect("own sid");
-        // SAFETY: opened above, closed once.
-        unsafe { CloseHandle(token) };
-        sid
+        current_user_sid().expect("own sid")
     }
 
     fn unique_pipe(tag: &str) -> String {
@@ -965,6 +998,11 @@ mod tests {
     }
 
     // Tests [@ANCHOR: relay_broker_windows_serve_one]
+    // Tests [@ANCHOR: relay_broker_windows_instance_create]
+    // Tests [@ANCHOR: relay_broker_windows_instance_connect]
+    // Tests [@ANCHOR: relay_broker_windows_call]
+    // Tests [@ANCHOR: relay_broker_windows_current_user_sid]
+    // Tests [@ANCHOR: relay_broker_windows_token_user_sid]
     // Tests [@ANCHOR: relay_broker_windows_pipe_client_sid]
     // Tests [@ANCHOR: relay_broker_windows_system_time_unix_secs]
     #[test]
@@ -1019,6 +1057,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: relay_broker_windows_set_system_time]
+    // Tests [@ANCHOR: relay_broker_windows_enable_privilege]
     #[test]
     fn the_real_clock_can_be_set_to_the_time_it_already_has() {
         // Needs an elevated account (SeSystemtimePrivilege); stepping to "now" changes nothing.
