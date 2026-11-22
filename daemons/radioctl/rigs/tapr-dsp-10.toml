@@ -65,7 +65,7 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "mode.*"
-provenance = { kind = "manual", reference = "pc_dsp2.txt version 2.00, Command 77 ('M'): mode 0 single sideband, 1 CW, 2 FM; sb 0 LSB, 1 USB, 2 I-Q binaural", note = "The one-character codes are ours; the wire carries the mode and sideband bytes. I-Q binaural is experimental in the document and is not offered." }
+provenance = { kind = "manual", reference = "pc_dsp2.txt version 2.00, Command 77 ('M'): mode 0 single sideband, 1 CW, 2 FM; sb 0 LSB, 1 USB, 2 I-Q binaural", note = "The one-character codes are ours; the wire carries the mode and sideband bytes. On 2 m the DSP sideband byte is the opposite of the on-air sideband (LSB sends sb 1, USB, CW and FM send 0), from the GPL PC program source UHFA.C v3.96, set_mode, the arms where tvtr[band].sb is -1 (UHF396.ZIP from http://janbob.com/electron/dsp10/UHF396.ZIP, sha256 482bf48728d980ae9633036871abf733d6ae57120264b615a1bb9a25025ef967). I-Q binaural is experimental in the document and is not offered." }
 verified = { state = "unverified" }
 
 [[facts]]
