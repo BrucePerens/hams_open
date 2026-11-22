@@ -428,6 +428,11 @@ pub enum KenwoodDialect {
     /// The TRC-80 set (Hamlib's `kenwood_get_freq_if`): the classic set, but the frequency is read
     /// from `IF` and not from `FA`.
     Trc80,
+    /// The TS-870S set (its instruction manual, appendix D, PDF pp. 90-100): the classic `IF`, `FA`,
+    /// `MD`, `FR`, `FT`, but `AG`, `RG`, `MG` take `nnn` with no leading `0`, the level ranges are
+    /// the manual's (`KS` 001-100, `PC` 010-100, `ML` 000-255), `SM` is read as `SM;` and answered
+    /// `SMnnnn`, and `RU` and `RD` take no parameter.
+    Ts870,
 }
 
 impl KenwoodDialect {
@@ -442,6 +447,7 @@ impl KenwoodDialect {
             KenwoodDialect::Ts990 => "ts990",
             KenwoodDialect::R5000 => "r5000",
             KenwoodDialect::Trc80 => "trc80",
+            KenwoodDialect::Ts870 => "ts870",
         }
     }
 
@@ -456,6 +462,7 @@ impl KenwoodDialect {
             "ts990" => Some(KenwoodDialect::Ts990),
             "r5000" => Some(KenwoodDialect::R5000),
             "trc80" => Some(KenwoodDialect::Trc80),
+            "ts870" => Some(KenwoodDialect::Ts870),
             _ => None,
         }
     }

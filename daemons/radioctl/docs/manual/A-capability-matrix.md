@@ -57,14 +57,14 @@ The descriptions are the files `rigs/*.toml` (<!--count:description_files-->292<
 | `set-mode` | the mode and passband can be set | <!--count:cap_set_mode-->265<!--/count--> |
 | `read-ptt` | the keyed state can be read | <!--count:cap_read_ptt-->127<!--/count--> |
 | `set-ptt` | the radio can be keyed and unkeyed (a transmitting capability: the transmit gate applies) | <!--count:cap_set_ptt-->166<!--/count--> |
-| `read-signal` | the S-meter reading | <!--count:cap_read_signal-->97<!--/count--> |
+| `read-signal` | the S-meter reading | <!--count:cap_read_signal-->98<!--/count--> |
 | `read-power` | the transmit power reading | <!--count:cap_read_power-->38<!--/count--> |
 | `send-cw` | text can be sent as CW by the radio's own keyer (a transmitting capability) | <!--count:cap_send_cw-->34<!--/count--> |
 | `transceive` | unsolicited status frames are decoded if the radio is set to send them; the CI-V engine cannot switch transceive on, and for the FlexRadio files it means the engine subscribes to the radio's status | <!--count:cap_transceive-->61<!--/count--> |
 | `split` | split operation: the transmit VFO and the receive VFO differ | <!--count:cap_split-->87<!--/count--> |
 | `rit-xit` | RIT and XIT on and their offset | <!--count:cap_rit_xit-->47<!--/count--> |
 | `filter` | filter width or selection | <!--count:cap_filter-->32<!--/count--> |
-| `levels` | AF gain, RF gain, mic gain, keyer speed, power setting, attenuator, preamplifier and the like | <!--count:cap_levels-->84<!--/count--> |
+| `levels` | AF gain, RF gain, mic gain, keyer speed, power setting, attenuator, preamplifier and the like | <!--count:cap_levels-->85<!--/count--> |
 | `read-swr` | a calibrated standing-wave ratio, which the CI-V engine can derive only from a per-model table | <!--count:cap_read_swr-->6<!--/count--> |
 | `read-meters` | the raw Icom meter family (SWR, ALC, COMP, Vd, Id as a 0 to 255 deflection, read with command `15`) | <!--count:cap_read_meters-->10<!--/count--> |
 | `identify` | the model identifier can be read back | <!--count:cap_identify-->134<!--/count--> |

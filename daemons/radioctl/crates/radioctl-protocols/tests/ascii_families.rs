@@ -71,10 +71,9 @@ fn ascii_files() -> Vec<RigDescription> {
         if path.extension().is_some_and(|e| e == "toml") {
             let text = std::fs::read_to_string(&path).expect("read");
             let desc = rigfile::parse(&text).expect("loads").description;
-            let classic = desc
-                .kenwood
-                .as_ref()
-                .is_none_or(|k| k.dialect == KenwoodDialect::Classic);
+            let classic = desc.kenwood.as_ref().is_none_or(|k| {
+                matches!(k.dialect, KenwoodDialect::Classic | KenwoodDialect::Ts870)
+            });
             if matches!(
                 desc.family,
                 Family::KenwoodAscii | Family::ElecraftAscii | Family::YaesuNewcat
@@ -389,19 +388,67 @@ fn the_kenwood_manual_checks_are_pinned_where_the_guides_and_the_engine_differ()
         b"RG255;"
     );
 
-    // TS-870S (instruction manual appendix D): RU and RD take no parameter, AG and RG have no
-    // leading zero, SM has no leading zero: the engine's forms would be refused, so the
-    // description claims neither RIT/XIT offsets, levels nor the signal.
+    // TS-870S (instruction manual appendix D, PDF pp. 90-91, 95-100): RU and RD take no
+    // parameter, so the RIT offset stays refused; AG, RG, MG are `nnn` (000-255, no leading 0),
+    // ML 000-255, KS 001-100, PC 010-100, SM is `SM;` answered `SMnnnn` (0000-0030).
     let desc = described("kenwood-ts-870s");
+    assert!(desc.capabilities.has(Capability::Levels));
+    assert!(desc.capabilities.has(Capability::ReadSignal));
     let mut engine = engine_for(&desc).expect("engine");
+    let err = engine.encode(&Op::SetRitOffset(150)).expect_err("refused");
+    assert_eq!(err.kind, ErrorKind::Unsupported);
+    let wire = |e: &mut dyn ProtocolEngine, op: Op| e.encode(&op).expect("encode").bytes;
+    assert_eq!(wire(engine.as_mut(), Op::GetSignal), b"SM;");
+    assert_eq!(wire(engine.as_mut(), Op::GetLevel(Level::AfGain)), b"AG;");
+    assert_eq!(
+        wire(engine.as_mut(), Op::SetLevel(Level::AfGain, 100)),
+        b"AG100;"
+    );
+    assert_eq!(
+        wire(engine.as_mut(), Op::SetLevel(Level::MicGain, 255)),
+        b"MG255;"
+    );
+    assert_eq!(
+        wire(engine.as_mut(), Op::SetLevel(Level::KeyerSpeed, 100)),
+        b"KS100;"
+    );
+    assert_eq!(
+        wire(engine.as_mut(), Op::SetLevel(Level::RfPower, 10)),
+        b"PC010;"
+    );
     for op in [
-        Op::SetRitOffset(150),
-        Op::SetLevel(Level::AfGain, 100),
-        Op::GetSignal,
+        Op::SetLevel(Level::RfGain, 256),
+        Op::SetLevel(Level::KeyerSpeed, 0),
+        Op::SetLevel(Level::KeyerSpeed, 101),
+        Op::SetLevel(Level::RfPower, 9),
     ] {
-        let err = engine.encode(&op).expect_err("refused");
-        assert_eq!(err.kind, ErrorKind::Unsupported, "{op:?}");
+        assert!(engine.encode(&op).is_err(), "{op:?}");
     }
+    // The virtual twin answers in the same forms.
+    let mut rig = VirtualRig::from_description(&desc).expect("virtual rig");
+    for (op, level, value) in [
+        (Op::SetLevel(Level::AfGain, 100), Level::AfGain, 100),
+        (Op::SetLevel(Level::RfGain, 250), Level::RfGain, 250),
+        (Op::SetLevel(Level::KeyerSpeed, 100), Level::KeyerSpeed, 100),
+    ] {
+        let request = engine.encode(&op).expect("set");
+        assert!(rig.feed(&request.bytes, NOW).is_empty());
+        let request = engine.encode(&Op::GetLevel(level)).expect("get");
+        let answer = rig.feed(&request.bytes, NOW);
+        assert_eq!(
+            engine.feed(&answer, NOW),
+            vec![Inbound::Observation(Observation::Level(level, value))]
+        );
+    }
+    let request = engine.encode(&Op::GetSignal).expect("get");
+    let answer = rig.feed(&request.bytes, NOW);
+    assert!(
+        matches!(
+            engine.feed(&answer, NOW).as_slice(),
+            [Inbound::Observation(Observation::Signal(_))]
+        ),
+        "{answer:?}"
+    );
 }
 
 // Tests [@ANCHOR: radioctl_yaesu_engine_encode]

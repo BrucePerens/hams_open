@@ -155,11 +155,11 @@ The `RA` and `PA` commands of a virtual Yaesu newcat rig. `RA0;` answers `RA0n;`
 
 ### `pub fn name(self) -> &'static str` [@ANCHOR: radioctl:radioctl_core_kenwood_dialect_name]
 
-Method of `KenwoodDialect`: the name used in rig description files: `classic`, `ts890`, `ts440`, `ts450`, `ts990`, `r5000`, `trc80`. Returns a borrowed static string, so there is no allocation and no error case. The exact inverse is `from_name`: `from_name(d.name()) == Some(d)` for every variant. The names are part of the rig description file format, so changing one breaks every shipped description that uses it. Called when a description is written back or shown to a person; the loader uses `from_name`. Pure, no side effects.
+Method of `KenwoodDialect`: the name used in rig description files: `classic`, `ts890`, `ts440`, `ts450`, `ts990`, `r5000`, `trc80`, `ts870`. Returns a borrowed static string, so there is no allocation and no error case. The exact inverse is `from_name`: `from_name(d.name()) == Some(d)` for every variant. The names are part of the rig description file format, so changing one breaks every shipped description that uses it. Called when a description is written back or shown to a person; the loader uses `from_name`. Pure, no side effects.
 
 ### `pub fn from_name(name: &str) -> Option<KenwoodDialect>` [@ANCHOR: radioctl:radioctl_core_kenwood_dialect_from_name]
 
-Method of `KenwoodDialect`: the dialect for a rig file name (`classic`, `ts890`, `ts440`, `ts450`, `ts990`, `r5000`, `trc80`), matched exactly and case sensitively. Returns `None` for anything else, including an empty string or different case; the rig file loader turns that into a load error that names the bad value, so a typo is caught when the description loads. The default dialect for a description that names none is `Classic`, chosen by the caller, not here. Pure, no allocation, no side effects.
+Method of `KenwoodDialect`: the dialect for a rig file name (`classic`, `ts890`, `ts440`, `ts450`, `ts990`, `r5000`, `trc80`, `ts870`), matched exactly and case sensitively. Returns `None` for anything else, including an empty string or different case; the rig file loader turns that into a load error that names the bad value, so a typo is caught when the description loads. The default dialect for a description that names none is `Classic`, chosen by the caller, not here. Pure, no allocation, no side effects.
 
 ### `pub fn name(self) -> &'static str` [@ANCHOR: radioctl:radioctl_core_hh_dialect_name]
 

@@ -20,8 +20,8 @@ use std::time::Duration;
 use std::collections::BTreeMap;
 
 use radioctl_core::description::{
-    CivCommandSet, CivMainSub, CivParams, ElecraftParams, Family, KenwoodParams, RigDescription,
-    YaesuClarifier, YaesuParams,
+    CivCommandSet, CivMainSub, CivParams, ElecraftParams, Family, KenwoodDialect, KenwoodParams,
+    RigDescription, YaesuClarifier, YaesuParams,
 };
 use radioctl_core::engine::PARTIAL_FRAME_TIMEOUT;
 use radioctl_core::error::{ErrorKind, RigError};
@@ -1021,6 +1021,8 @@ impl VirtualRig {
                 self.state.transceive = flag != "0";
                 None
             }
+            // TS-870S (manual PDF p. 100): `SM;` answers `SMnnnn`, no P1.
+            ("SM", "") if self.kenwood_ts870() => Some(format!("SM{:04};", self.state.signal)),
             ("SM", "" | "0") => Some(format!("SM0{:04};", self.state.signal)),
             ("PS", "") => Some("PS1;".to_string()),
             ("PS" | "VX", _) => None,
@@ -1745,7 +1747,14 @@ impl VirtualRig {
     // [@ANCHOR: radioctl_virtual_kenwood_level]
     /// A Kenwood level command: read when `arg` is empty (the lone `0` for `AG`), else set.
     fn kenwood_level(&mut self, name: &str, arg: &str) -> Option<String> {
+        // TS-870S (manual PDF pp. 95-100): no leading 0 on AG, the manual's ranges.
+        let ts870 = self.kenwood_ts870();
         let (level, main_digit, min, max) = match name {
+            "AG" if ts870 => (Level::AfGain, false, 0, 255),
+            "MG" if ts870 => (Level::MicGain, false, 0, 255),
+            "ML" if ts870 => (Level::MonitorLevel, false, 0, 255),
+            "KS" if ts870 => (Level::KeyerSpeed, false, 1, 100),
+            "PC" if ts870 => (Level::RfPower, false, 10, 100),
             "AG" => (Level::AfGain, true, 0, 255),
             "RG" => (Level::RfGain, false, 0, 255),
             "MG" => (Level::MicGain, false, 0, 100),
@@ -1783,6 +1792,14 @@ impl VirtualRig {
             }
             None => Some("?;".to_string()),
         }
+    }
+
+    /// Whether this twin is a TS-870S (`kenwood.dialect = "ts870"`).
+    fn kenwood_ts870(&self) -> bool {
+        self.desc
+            .kenwood
+            .as_ref()
+            .is_some_and(|k| k.dialect == KenwoodDialect::Ts870)
     }
 
     // [@ANCHOR: radioctl_virtual_kenwood_id]
