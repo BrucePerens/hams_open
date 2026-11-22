@@ -27,5 +27,24 @@
             <field name="alias_contact">everyone</field>
             <field name="alias_defaults">{'priority': '1'}</field>
         </record>
+
+        <!-- Role addresses we publish outside the site, each routed to a ticket the same way as support@:
+             psl@hams.com is the "Submitted by" contact of our Public Suffix List entry (the list's maintainers
+             may write to it), hostmaster@hams.com is the zone contact in the SOA record of hams.com and of every
+             member zone. SES's single receipt rule (recipient: the whole domain hams.com) already delivers any
+             local part; only the alias was missing, so mail to them would have been reported unroutable. -->
+        <record id="mail_alias_psl_helpdesk" model="mail.alias">
+            <field name="alias_name">psl</field>
+            <field name="alias_model_id" ref="hams_helpdesk.model_hams_helpdesk_ticket"/>
+            <field name="alias_contact">everyone</field>
+            <field name="alias_defaults">{'priority': '1'}</field>
+        </record>
+
+        <record id="mail_alias_hostmaster_helpdesk" model="mail.alias">
+            <field name="alias_name">hostmaster</field>
+            <field name="alias_model_id" ref="hams_helpdesk.model_hams_helpdesk_ticket"/>
+            <field name="alias_contact">everyone</field>
+            <field name="alias_defaults">{'priority': '1'}</field>
+        </record>
     </data>
 </odoo>
