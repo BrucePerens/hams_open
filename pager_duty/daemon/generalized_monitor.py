@@ -263,6 +263,60 @@ def ensure_executable(cmd_name):
     return None, f"Missing dependency: '{cmd_name}'. Startup verification failed."
 
 
+CERTBOT_MAX_REPORTED_DOMAINS = 10
+
+
+def _dig_addresses(dig, domain, rtype):
+    """Ask the resolver for one record type. Returns (status, addresses): status is the DNS response code
+    (NOERROR, NXDOMAIN, SERVFAIL, ...) or "TIMEOUT" when no server answered."""
+    res = subprocess.run(
+        [dig, "+noall", "+comment", "+answer", "+time=3", "+tries=2", domain, rtype],
+        capture_output=True, text=True, timeout=20,
+    )
+    status = re.search(r"status:\s*([A-Z]+)", res.stdout)
+    if not status:
+        return "TIMEOUT", []
+    wanted = rtype
+    addresses = [
+        line.split()[-1]
+        for line in res.stdout.splitlines()
+        if not line.startswith(";") and len(line.split()) >= 5 and line.split()[3] == wanted
+    ]
+    return status.group(1), addresses
+
+
+def certbot_domain_problem(domain, my_ip):
+    """One plain-language line saying why Let's Encrypt cannot validate this domain, or None when it can.
+    Tells apart: the name does not exist, the name exists without an A/AAAA record, an address that is not
+    ours, and a resolver that failed. Uses dig, the same tool the dns check uses."""
+    dig, _ = ensure_executable("dig")
+    if not dig:
+        return f"Could not check DNS for {domain}: the dig tool is not installed on this server."
+    try:
+        a_status, a_records = _dig_addresses(dig, domain, "A")
+        aaaa_status, aaaa_records = _dig_addresses(dig, domain, "AAAA")
+    except (subprocess.TimeoutExpired, OSError) as e:
+        return f"Could not look up {domain}: the DNS lookup failed ({e})."
+    if a_status == "NXDOMAIN":
+        return (
+            f"{domain} does not exist in DNS (NXDOMAIN), so Let's Encrypt cannot validate it; "
+            f"create the name with an A record pointing to {my_ip or 'this server'}, "
+            "or remove the domain from certificate requests."
+        )
+    for status in (a_status, aaaa_status):
+        if status != "NOERROR":
+            reason = "the DNS lookup timed out" if status == "TIMEOUT" else f"the resolver answered {status}"
+            return f"Could not look up {domain}: {reason}; this is a DNS server problem, not a missing record."
+    if not a_records and not aaaa_records:
+        return (
+            f"{domain} exists but has no address (A or AAAA) record, so Let's Encrypt cannot validate it; "
+            f"add an A/AAAA record pointing to {my_ip or 'this server'} (or remove the domain from certificate requests)."
+        )
+    if a_records and my_ip and my_ip not in a_records:
+        return f"Domain {domain} resolves to {', '.join(a_records)}, expected our IP {my_ip}."
+    return None
+
+
 def verify_and_install_dependencies(client, checks):
     # [@ANCHOR: daemon_verify_dependencies]
     type_to_cmd = {
@@ -1639,16 +1693,16 @@ def execute_check(check, client=None):
                     my_ip = ip_resp.read(256).decode("utf-8").strip()
 
                 domain_list = [d.strip() for d in domains.split(",") if d.strip()]
+                problems = []
                 for d in domain_list:
-                    try:
-                        resolved = socket.gethostbyname(d)
-                        if resolved != my_ip:
-                            return (
-                                False,
-                                f"Domain {d} resolves to {resolved}, expected our IP {my_ip}.",
-                            )
-                    except socket.gaierror:
-                        return False, f"Domain {d} failed DNS resolution."
+                    problem = certbot_domain_problem(d, my_ip)
+                    if problem:
+                        problems.append(problem)
+                if problems:
+                    shown = problems[:CERTBOT_MAX_REPORTED_DOMAINS]
+                    more = len(problems) - len(shown)
+                    suffix = f" (and {more} more)" if more else ""
+                    return False, "\n".join(shown) + suffix
             except (
                 ConnectionError,
                 socket.timeout,
