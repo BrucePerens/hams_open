@@ -226,6 +226,7 @@ fn shift_frames(word: u32, dph: u32, lo_first: bool) -> Vec<u8> {
     shift_bytes(word, SHIFT_RECEIVE, RF_GAIN_BYTE, dph, lo_first)
 }
 
+// [@ANCHOR: radioctl_dsp10_shift_bytes]
 fn shift_bytes(word: u32, control: u8, gain: u8, dph: u32, lo_first: bool) -> Vec<u8> {
     let first = (word >> 16) & 7;
     let mid = word & 0xFFFF;

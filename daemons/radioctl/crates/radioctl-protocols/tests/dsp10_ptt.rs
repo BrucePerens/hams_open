@@ -56,6 +56,7 @@ impl AsyncWrite for TwinWire {
 
 // Tests [@ANCHOR: radioctl_dsp10_ptt_stages]
 // Tests [@ANCHOR: radioctl_dsp10_shift_stages]
+// Tests [@ANCHOR: radioctl_dsp10_shift_bytes]
 // Tests [@ANCHOR: radioctl_dsp10_engine_encode_stages]
 #[tokio::test(start_paused = true)]
 async fn ptt_is_gated_staged_and_keys_the_virtual_dsp() {
