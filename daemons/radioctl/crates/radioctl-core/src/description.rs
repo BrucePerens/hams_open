@@ -436,6 +436,10 @@ pub enum KenwoodDialect {
     /// the manual's (`KS` 001-100, `PC` 010-100, `ML` 000-255), `SM` is read as `SM;` and answered
     /// `SMnnnn`, and `RU` and `RD` take no parameter.
     Ts870,
+    /// The TS-570D and TS-570S set (their instruction manual's appendix, PDF pp. 79-86): the
+    /// TS-870S forms (`nnn` levels, `SM;`, parameterless `RU` and `RD`) with the TS-570's own
+    /// ranges (`MG` 000-100, `KS` 010-060, `PC` 005-100) and no `ML`.
+    Ts570,
 }
 
 impl KenwoodDialect {
@@ -451,6 +455,7 @@ impl KenwoodDialect {
             KenwoodDialect::R5000 => "r5000",
             KenwoodDialect::Trc80 => "trc80",
             KenwoodDialect::Ts870 => "ts870",
+            KenwoodDialect::Ts570 => "ts570",
         }
     }
 
@@ -466,6 +471,7 @@ impl KenwoodDialect {
             "r5000" => Some(KenwoodDialect::R5000),
             "trc80" => Some(KenwoodDialect::Trc80),
             "ts870" => Some(KenwoodDialect::Ts870),
+            "ts570" => Some(KenwoodDialect::Ts570),
             _ => None,
         }
     }

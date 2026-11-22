@@ -1,6 +1,6 @@
 # Rig description: Kenwood TS-570S (schema 1). See crates/radioctl-core/src/rigfile.rs for the format.
 # Nothing here is hardware-verified: no radio has been connected (docs/VOLUNTEER_TESTING.md). The facts marked manual-checked were compared with the TS-570 manual's command appendix (pages named in each fact, sha256 in the fact); the rest is Hamlib 4.6.2 (rigs/kenwood/ts570.c, `rigctl --dump-caps`, facts only).
-# Manual comparison: model number 018 for the TS-570S; FA/FB/FR/FT/ID/IF/RC/RD/RU/RT/RX/TX tables read; RU and RD take NO parameter, so rit-xit was removed (the engine sets an offset with RUnnnnn;), as for the TS-870S. AG is AGnnn with no leading 0 (the engine writes AG0nnn;), KS is 010 to 060 and PC 005 to 100, so levels stay undeclared; SM is SMnnnn (no receiver digit) so read-signal stays undeclared. Modes 7 (CW-R) and 9 (FSK-R) were added.
+# Manual comparison: model number 018 for the TS-570S; FA/FB/FR/FT/ID/IF/RC/RD/RU/RT/RX/TX tables read; RU and RD take NO parameter, so rit-xit was removed (the engine sets an offset with RUnnnnn;), as for the TS-870S. AG is AGnnn with no leading 0, MG 000-100, KS 010 to 060, PC 005 to 100, no ML, SM is SM; answered SMnnnn: the engine's `ts570` dialect (kenwood.dialect) sends these forms, so levels and read-signal are declared. Modes 7 (CW-R) and 9 (FSK-R) were added.
 # Kenwood publishes no PC command reference for this model that could be downloaded (kenwood.com refused the download of its
 # guides in this session and hosts none for the older sets), so the facts come from Hamlib 4.6.2 (rigs/kenwood/ts570.c, kenwood.c, read for
 # facts only, and `rigctl -m 2016 --dump-caps` output), named in each fact below. Kenwood's guides for other models were not used for this one.
@@ -8,9 +8,9 @@
 # Hamlib's get-level list for this model: PREAMP ATT AF RF SQL RFPOWER MICGAIN KEYSPD AGC SLOPE_LOW SLOPE_HIGH STRENGTH. The description format has no field for frequency ranges, filter tables or function lists,
 # so they are not repeated here.
 # Engine: the classic Kenwood engine (IF; answer of 38 characters, MD; mode letters, FA/FB 11 digits). Hamlib's backend assumes the same IF length for this model.
-# Known gap: no levels or signal meter are declared (see above); no exact RIT offset can be set.
+# Known gap: no exact RIT offset can be set (RU/RD take no parameter).
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "transceive", "split", "identify"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "transceive", "split", "identify", "read-signal", "levels"]
 
 [rig]
 id = "kenwood-ts-570s"
@@ -19,6 +19,7 @@ family = "kenwood-ascii"
 
 [kenwood]
 model_id = 18
+dialect = "ts570"
 [kenwood.ky]
 form = "padded"
 width = 24
@@ -83,6 +84,11 @@ verified = { state = "unverified" }
 [[facts]]
 key = "defaults.*"
 provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py: --freq 14074000, --mode USB", note = "Only the starting state of a virtual rig; the frequency is moved inside this model's receive range where needed." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "kenwood.dialect"
+provenance = { kind = "manual", reference = "Kenwood TS-570D/TS-570S Instruction Manual, appendix (file 2281-Kenwood_TS-570_Instruction_Manual.pdf from /storage/manuals/kenwood/TS-570), sha256 de3f5ba3a55c6ffe5f7b1db3edc1fec78c48cd0fafd78b3e4063eb9762da03b8: parameter table PDF p. 79 (formats 22, 31, 42, 47); AG p. 81, KS p. 83, MG p. 84, PC and RG p. 85, SM p. 86", note = "Our name for the command set (radioctl-protocols kenwood.rs, dialect ts570): AG and RG as nnn 000-255 with no leading 0, MG 000-100, KS 010-060, PC 005-100, SM read as SM; and answered SMnnnn (0000-0015), no ML command, RU and RD take no parameter. Unverified on a radio." }
 verified = { state = "unverified" }
 
 [[facts]]

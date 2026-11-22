@@ -1024,7 +1024,7 @@ impl VirtualRig {
                 None
             }
             // TS-870S (manual PDF p. 100): `SM;` answers `SMnnnn`, no P1.
-            ("SM", "") if self.kenwood_ts870() => Some(format!("SM{:04};", self.state.signal)),
+            ("SM", "") if self.kenwood_nnn_forms() => Some(format!("SM{:04};", self.state.signal)),
             ("SM", "" | "0") => Some(format!("SM0{:04};", self.state.signal)),
             ("PS", "") => Some("PS1;".to_string()),
             ("PS" | "VX", _) => None,
@@ -1749,19 +1749,25 @@ impl VirtualRig {
     // [@ANCHOR: radioctl_virtual_kenwood_level]
     /// A Kenwood level command: read when `arg` is empty (the lone `0` for `AG`), else set.
     fn kenwood_level(&mut self, name: &str, arg: &str) -> Option<String> {
-        // TS-870S (manual PDF pp. 95-100): no leading 0 on AG, the manual's ranges.
-        let ts870 = self.kenwood_ts870();
-        let (level, main_digit, min, max) = match name {
-            "AG" if ts870 => (Level::AfGain, false, 0, 255),
-            "MG" if ts870 => (Level::MicGain, false, 0, 255),
-            "ML" if ts870 => (Level::MonitorLevel, false, 0, 255),
-            "KS" if ts870 => (Level::KeyerSpeed, false, 1, 100),
-            "PC" if ts870 => (Level::RfPower, false, 10, 100),
-            "AG" => (Level::AfGain, true, 0, 255),
-            "RG" => (Level::RfGain, false, 0, 255),
-            "MG" => (Level::MicGain, false, 0, 100),
-            "ML" => (Level::MonitorLevel, false, 0, 9),
-            "KS" => (Level::KeyerSpeed, false, 10, 60),
+        // TS-870S (manual PDF pp. 95-100) and TS-570 (manual PDF pp. 79-86): no leading 0 on AG,
+        // each manual's ranges; the TS-570 has no ML.
+        let dialect = self.kenwood_dialect();
+        if dialect == KenwoodDialect::Ts570 && name == "ML" {
+            return Some("?;".to_string());
+        }
+        let (level, main_digit, min, max) = match (name, dialect) {
+            ("AG", KenwoodDialect::Ts870 | KenwoodDialect::Ts570) => (Level::AfGain, false, 0, 255),
+            ("MG", KenwoodDialect::Ts870) => (Level::MicGain, false, 0, 255),
+            ("ML", KenwoodDialect::Ts870) => (Level::MonitorLevel, false, 0, 255),
+            ("KS", KenwoodDialect::Ts870) => (Level::KeyerSpeed, false, 1, 100),
+            ("PC", KenwoodDialect::Ts870) => (Level::RfPower, false, 10, 100),
+            ("KS", KenwoodDialect::Ts570) => (Level::KeyerSpeed, false, 10, 60),
+            ("PC", KenwoodDialect::Ts570) => (Level::RfPower, false, 5, 100),
+            ("AG", _) => (Level::AfGain, true, 0, 255),
+            ("RG", _) => (Level::RfGain, false, 0, 255),
+            ("MG", _) => (Level::MicGain, false, 0, 100),
+            ("ML", _) => (Level::MonitorLevel, false, 0, 9),
+            ("KS", _) => (Level::KeyerSpeed, false, 10, 60),
             _ => (Level::RfPower, false, 5, 100),
         };
         // `AG` needs its P1 (the lone `0` reads it, `0nnn` sets it); the others read when bare.
@@ -1796,12 +1802,20 @@ impl VirtualRig {
         }
     }
 
-    /// Whether this twin is a TS-870S (`kenwood.dialect = "ts870"`).
-    fn kenwood_ts870(&self) -> bool {
+    /// The Kenwood dialect of this twin (`kenwood.dialect`; classic with no `[kenwood]` block).
+    fn kenwood_dialect(&self) -> KenwoodDialect {
         self.desc
             .kenwood
             .as_ref()
-            .is_some_and(|k| k.dialect == KenwoodDialect::Ts870)
+            .map_or(KenwoodDialect::Classic, |k| k.dialect)
+    }
+
+    /// Whether this twin is a TS-870S or TS-570 (`nnn` levels, `SM;`).
+    fn kenwood_nnn_forms(&self) -> bool {
+        matches!(
+            self.kenwood_dialect(),
+            KenwoodDialect::Ts870 | KenwoodDialect::Ts570
+        )
     }
 
     // [@ANCHOR: radioctl_virtual_kenwood_id]
