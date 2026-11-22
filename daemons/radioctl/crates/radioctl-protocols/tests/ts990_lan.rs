@@ -43,6 +43,7 @@ fn the_login_frame_is_the_references_example() {
 // Tests [@ANCHOR: radioctl_ts990lan_needs_handshake]
 // Tests [@ANCHOR: radioctl_ts990lan_reset]
 // Tests [@ANCHOR: radioctl_ts990lan_new]
+// Tests [@ANCHOR: radioctl_kenwood_ts990_lan_framing]
 // Tests [@ANCHOR: radioctl_ts990lan_handle_frame]
 #[test]
 fn the_session_connects_logs_in_then_passes_cat_through() {
