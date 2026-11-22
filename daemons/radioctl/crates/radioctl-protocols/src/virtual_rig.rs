@@ -109,6 +109,8 @@ pub struct RigState {
     pub k2_mode: u8,
     /// K3 command mode 0-1 as set by the controller (Elecraft `K3`); stored, not emulated.
     pub k3_mode: u8,
+    /// K4 meta mode 0-1 (`K4n`): the K4's RA and PA forms exist in mode 1 only.
+    pub k4_mode: u8,
 }
 
 impl RigState {
@@ -288,6 +290,7 @@ impl VirtualRig {
             auto_info: 0,
             k2_mode: 0,
             k3_mode: 0,
+            k4_mode: 0,
         };
         let mut state = state;
         if desc.kenwood.is_some() {
@@ -2006,6 +2009,40 @@ impl VirtualRig {
             ("OM", "") => Some("OM ----------02;".to_string()),
             ("K2", "") => Some(format!("K2{};", self.state.k2_mode)),
             ("K2", mode) => self.set_meta(mode, 3, true),
+            ("K4", "") if self.elecraft_k4() => Some(format!("K4{};", self.state.k4_mode)),
+            ("K4", mode @ ("0" | "1")) if self.elecraft_k4() => {
+                self.state.k4_mode = u8::from(mode == "1");
+                None
+            }
+            // K41 only (PDF pp. 25, 27): `RAnnm` dB and on flag, `PAnm` step and on flag.
+            ("RA" | "PA", data) if self.elecraft_k4() => {
+                let level = if name == "RA" {
+                    Level::Attenuator
+                } else {
+                    Level::Preamp
+                };
+                let width = if name == "RA" { 2 } else { 1 };
+                if self.state.k4_mode != 1 {
+                    refuse()
+                } else if data.is_empty() {
+                    let v = self.state.levels.get(&level).copied().unwrap_or(0);
+                    Some(format!("{name}{v:0width$}{};", u8::from(v > 0)))
+                } else {
+                    match (
+                        kenwood::parse_digits(data.get(..width).unwrap_or("x")),
+                        data.get(width..),
+                    ) {
+                        (Some(v), Some(on @ ("0" | "1"))) if data.len() == width + 1 => {
+                            let v = if on == "1" { v } else { 0 };
+                            self.state
+                                .levels
+                                .insert(level, u16::try_from(v).unwrap_or(0));
+                            None
+                        }
+                        _ => refuse(),
+                    }
+                }
+            }
             ("K3", "") => Some(format!("K3{};", self.state.k3_mode)),
             ("K3", mode) => self.set_meta(mode, 1, false),
             ("KY", "") => Some("KY0;".to_string()),

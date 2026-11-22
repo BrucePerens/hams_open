@@ -209,12 +209,61 @@ pub struct ElecraftEngine {
     /// The auto-information the controller turned on (`AI2;`), which the rig loses with the
     /// link; sent again by [`ProtocolEngine::link_restored`].
     transceive: bool,
+    /// K4: the K4 meta mode (0 basic, 1 advanced) the rig is believed to be in, put back after
+    /// a command that needs K41. Starts at 0 (the mode the engine otherwise relies on) and is
+    /// updated from every `K4n;` answer.
+    meta: u8,
 }
 
 impl ElecraftEngine {
     /// True for a K4 description (`elecraft.k4`).
     fn k4(&self) -> bool {
         self.desc.elecraft.as_ref().is_some_and(|e| e.k4)
+    }
+
+    // [@ANCHOR: radioctl_elecraft_k4_front_end]
+    /// The K4 attenuator and preamp: `RA$nnm;` and `PA$nm;` exist in K41 (K4 meta) mode only
+    /// (PDF pp. 25 and 27), so the command is wrapped in `K41;` ... `K4<previous>;`. `None` for
+    /// other operations.
+    fn k4_front_end(&self, op: &Op) -> Option<Result<Request, RigError>> {
+        let wrap = |body: String| -> Request {
+            let text = format!("K41;{body};K4{};", self.meta);
+            if body.contains(|c: char| c.is_ascii_digit()) {
+                Self::set(text)
+            } else {
+                Self::get(
+                    &text,
+                    Field::Level(if body == "RA" {
+                        Level::Attenuator
+                    } else {
+                        Level::Preamp
+                    }),
+                )
+            }
+        };
+        Some(match op {
+            Op::GetLevel(level @ (Level::Attenuator | Level::Preamp)) => {
+                crate::attenuation::step_of(&self.desc, *level, 0).map(|_| {
+                    wrap(
+                        if *level == Level::Attenuator {
+                            "RA"
+                        } else {
+                            "PA"
+                        }
+                        .into(),
+                    )
+                })
+            }
+            Op::SetLevel(Level::Attenuator, db) => {
+                crate::attenuation::step_of(&self.desc, Level::Attenuator, *db)
+                    .map(|_| wrap(format!("RA{db:02}{}", u8::from(*db > 0))))
+            }
+            Op::SetLevel(Level::Preamp, n) => {
+                crate::attenuation::step_of(&self.desc, Level::Preamp, *n)
+                    .map(|_| wrap(format!("PA{n}{}", u8::from(*n > 0))))
+            }
+            _ => return None,
+        })
     }
 
     // [@ANCHOR: radioctl_elecraft_engine_new]
@@ -230,6 +279,7 @@ impl ElecraftEngine {
             desc,
             tokenizer: Tokenizer::default(),
             transceive: false,
+            meta: 0,
         })
     }
 
@@ -402,6 +452,22 @@ impl ElecraftEngine {
             "1" => Some(true),
             _ => None,
         };
+        if self.k4() && matches!(name, "RA" | "PA") {
+            // K41 forms: `RAnnm` (dB, on) and `PAnm` (step, on); off reads as 0.
+            let (level, width) = if name == "RA" {
+                (Level::Attenuator, 2)
+            } else {
+                (Level::Preamp, 1)
+            };
+            let on = match data.get(width..)? {
+                "0" => false,
+                "1" => true,
+                _ => return None,
+            };
+            let amount = parse_digits(data.get(..width)?).and_then(|v| u16::try_from(v).ok())?;
+            crate::attenuation::step_of(&self.desc, level, amount).ok()?;
+            return Some(Observation::Level(level, if on { amount } else { 0 }));
+        }
         if matches!(name, "RA" | "PA") {
             let (level, width) = if name == "RA" {
                 (Level::Attenuator, 2)
@@ -491,6 +557,11 @@ impl ProtocolEngine for ElecraftEngine {
             let command = format!("{};", level_wire(level).prefix);
             Ok::<Request, RigError>(Self::get(&command, Field::Level(level)))
         };
+        if self.k4() {
+            if let Some(result) = self.k4_front_end(op) {
+                return result;
+            }
+        }
         Ok(match op {
             Op::GetFrequency(Vfo::A) => Self::get("FA;", Field::Frequency(Vfo::A)),
             Op::GetFrequency(Vfo::B) => Self::get("FB;", Field::Frequency(Vfo::B)),
@@ -521,6 +592,10 @@ impl ProtocolEngine for ElecraftEngine {
         let mut out = Vec::new();
         for token in tokens {
             match token {
+                // `K4n;`: the K4 meta mode, remembered so it can be put back; no observation.
+                Token::Command(text) if self.k4() && matches!(text.as_str(), "K40" | "K41") => {
+                    self.meta = u8::from(text == "K41");
+                }
                 Token::Command(text) => out.extend(self.decode(&text)),
                 Token::Junk(junk) => out.push(Inbound::Unrecognised(junk)),
             }
@@ -532,14 +607,20 @@ impl ProtocolEngine for ElecraftEngine {
     fn link_restored(&mut self) -> Vec<Request> {
         // A half frame from the old link must not be joined to the new link's first bytes.
         self.tokenizer = Tokenizer::default();
+        // The K4's meta mode is read so a K41-only command can put it back.
+        let mut requests = if self.k4() {
+            vec![Self::set("K4;".to_string())]
+        } else {
+            Vec::new()
+        };
         if !self.transceive {
-            return Vec::new();
+            return requests;
         }
         // The rig forgot its auto-information with the link: turn it on again.
-        match self.encode(&Op::SetTransceive(true)) {
-            Ok(request) => vec![request],
-            Err(_) => Vec::new(),
+        if let Ok(request) = self.encode(&Op::SetTransceive(true)) {
+            requests.push(request);
         }
+        requests
     }
 }
 

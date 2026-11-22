@@ -99,3 +99,83 @@ fn the_k4_s_meter_is_the_k3_compatible_sm_in_k40_mode() {
         [Inbound::Observation(Observation::Signal(_))]
     ));
 }
+
+// Tests [@ANCHOR: radioctl_elecraft_engine_encode]
+// Tests [@ANCHOR: radioctl_elecraft_engine_feed]
+// Tests [@ANCHOR: radioctl_elecraft_engine_link_restored]
+// Tests [@ANCHOR: radioctl_elecraft_k4_front_end]
+// Tests [@ANCHOR: radioctl_virtual_elecraft_command]
+#[test]
+fn the_k4_attenuator_and_preamp_use_k41_and_put_the_meta_mode_back() {
+    use radioctl_core::units::Level;
+    // RA$nnm and PA$nm exist in K41 (K4 meta) mode only (PDF pp. 25 and 27; K41 list p. 18), so
+    // each request switches to K41, does the command and restores the mode the rig was in.
+    let desc = description();
+    let mut engine = ElecraftEngine::new(desc.clone()).expect("engine");
+    let mut rig = VirtualRig::from_description(&desc).expect("rig");
+    let wire = |e: &mut ElecraftEngine, op: Op| e.encode(&op).expect("encodes").bytes;
+    assert_eq!(
+        wire(&mut engine, Op::SetLevel(Level::Attenuator, 12)),
+        b"K41;RA121;K40;"
+    );
+    assert_eq!(
+        wire(&mut engine, Op::SetLevel(Level::Attenuator, 0)),
+        b"K41;RA000;K40;"
+    );
+    assert_eq!(
+        wire(&mut engine, Op::SetLevel(Level::Preamp, 2)),
+        b"K41;PA21;K40;"
+    );
+    assert_eq!(
+        wire(&mut engine, Op::GetLevel(Level::Preamp)),
+        b"K41;PA;K40;"
+    );
+    assert!(engine.encode(&Op::SetLevel(Level::Attenuator, 5)).is_err());
+    assert!(engine.encode(&Op::SetLevel(Level::Preamp, 4)).is_err());
+
+    // Round trip against the virtual K4, in K40: the mode is K40 again afterwards.
+    exchange(&mut engine, &mut rig, Op::SetLevel(Level::Attenuator, 12));
+    assert_eq!(rig.feed(b"K4;", NOW), b"K40;");
+    seen(
+        exchange(&mut engine, &mut rig, Op::GetLevel(Level::Attenuator)),
+        Observation::Level(Level::Attenuator, 12),
+    );
+    exchange(&mut engine, &mut rig, Op::SetLevel(Level::Preamp, 3));
+    seen(
+        exchange(&mut engine, &mut rig, Op::GetLevel(Level::Preamp)),
+        Observation::Level(Level::Preamp, 3),
+    );
+    exchange(&mut engine, &mut rig, Op::SetLevel(Level::Attenuator, 0));
+    seen(
+        exchange(&mut engine, &mut rig, Op::GetLevel(Level::Attenuator)),
+        Observation::Level(Level::Attenuator, 0),
+    );
+    // Outside K41 the rig has no such forms.
+    assert_eq!(rig.feed(b"RA;", NOW), b"?;");
+
+    // A rig that was in K41 is put back in K41: the engine learns the mode from `K4;`.
+    rig.feed(b"K41;", NOW);
+    let probe = engine.link_restored();
+    assert_eq!(probe.last().map(|r| r.bytes.clone()), Some(b"K4;".to_vec()));
+    let answer = rig.feed(b"K4;", NOW);
+    assert_eq!(answer, b"K41;");
+    engine.feed(&answer, NOW);
+    assert_eq!(
+        wire(&mut engine, Op::GetLevel(Level::Preamp)),
+        b"K41;PA;K41;"
+    );
+    exchange(&mut engine, &mut rig, Op::SetLevel(Level::Preamp, 1));
+    assert_eq!(rig.feed(b"K4;", NOW), b"K41;");
+}
+
+#[test]
+fn a_k41_id_text_is_not_a_model_number() {
+    // In K41 the ID answer is text (PDF p. 16), not `ID017;`: it must not decode as a model id.
+    let mut engine = ElecraftEngine::new(description()).expect("engine");
+    for bad in [&b"IDWA1ABC;"[..], b"ID0;"] {
+        assert!(
+            matches!(engine.feed(bad, NOW).as_slice(), [Inbound::Unrecognised(_)]),
+            "{bad:?}"
+        );
+    }
+}
