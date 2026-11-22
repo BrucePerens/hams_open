@@ -1873,6 +1873,11 @@ impl VirtualRig {
 }
 
 impl VirtualRig {
+    /// True for a virtual K4 (`elecraft.k4`).
+    fn elecraft_k4(&self) -> bool {
+        matches!(&self.wire, Wire::Elecraft { params, .. } if params.k4)
+    }
+
     // [@ANCHOR: radioctl_virtual_elecraft_command]
     /// The virtual Elecraft command table (Programmer's Reference, see `elecraft.rs`).
     fn elecraft_command(&mut self, text: &str) -> Vec<u8> {
@@ -1928,6 +1933,21 @@ impl VirtualRig {
                 self.state.xit = on;
                 None
             }),
+            // The K4 has no `RO`; its offset moves by `RU`/`RD` (five digits of Hz, 1 to 9999).
+            ("RO", _) if self.elecraft_k4() => refuse(),
+            ("RU" | "RD", hz) if self.elecraft_k4() => {
+                match kenwood::parse_digits(hz)
+                    .filter(|v| hz.len() == 5 && (1..=9999).contains(v))
+                    .and_then(|v| i16::try_from(v).ok())
+                {
+                    Some(v) => {
+                        let step = if name == "RU" { v } else { -v };
+                        self.state.rit_offset = (self.state.rit_offset + step).clamp(-9999, 9999);
+                        None
+                    }
+                    None => refuse(),
+                }
+            }
             ("RO", "") => Some(format!(
                 "RO{};",
                 elecraft::signed_offset(self.state.rit_offset)
