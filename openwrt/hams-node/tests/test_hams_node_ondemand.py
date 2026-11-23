@@ -88,6 +88,31 @@ class OnDemandTests(unittest.TestCase):
         h.run("packet", "2001:db8:1:30::1")
         self.assertEqual(len(h.lookups()), 2)
 
+    def test_cached_directory_entry_is_used_when_hams_com_is_unreachable(self):
+        h = Harness(self)
+        h.set_lookup({"2001:db8:1:20::5": record("2001:db8:1:20::/60")})
+        h.run("packet", "2001:db8:1:20::5")
+        h.set_active([])
+        h.run("expire")  # idle: the peer is removed
+        h.stub("uclient-fetch", "exit 1")  # internet gone
+        h.now += 120
+        self.assertEqual(h.run("packet", "2001:db8:1:20::5").returncode, 0)
+        self.assertEqual(h.wg_calls()[-1], "set wg-hams peer %s endpoint [2001:db8::9]:51820 allowed-ips 2001:db8:1:20::/60" % KEY_A)
+
+    def test_an_explicit_not_found_answer_drops_the_cached_entry(self):
+        h = Harness(self)
+        h.set_lookup({"2001:db8:1:20::5": record("2001:db8:1:20::/60")})
+        h.run("packet", "2001:db8:1:20::5")
+        h.set_active([])
+        h.run("expire")
+        h.set_lookup({})  # hams.com answers: no such member
+        h.now += 120
+        h.run("packet", "2001:db8:1:20::5")
+        h.stub("uclient-fetch", "exit 1")
+        h.now += 120
+        h.run("packet", "2001:db8:1:20::5")
+        self.assertEqual(len(h.wg_calls()), 2)  # set, remove, and nothing more
+
     def test_record_for_a_different_prefix_is_refused(self):
         h = Harness(self)
         h.set_lookup({"2001:db8:1:20::5": record("2001:db8:9:90::/60")})

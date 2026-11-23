@@ -71,14 +71,24 @@ do_packet() {
 	[ -n "$cert" ] && set -- "$@" --certificate "$cert" --private-key "$key"
 	reply=$(uclient-fetch "$@" --header 'Content-Type: application/json' --post-data "{\"jsonrpc\":\"2.0\",\"params\":{\"query\":\"$addr\"}}" "$url" 2>/dev/null)
 	echo "$reply" > "$state/reply.json"
+	# hams.com unreachable (no answer with a status): use the last good entry for this /60, so a re-connect never needs the internet.
+	# An explicit answer (not found, suspended) drops the cached entry.
+	cache=$state/directory.cache
+	touch "$cache"
+	if [ -z "$(jsonfilter -i "$state/reply.json" -e '@.result.status' 2>/dev/null)" ]; then
+		line=$(grep "^$k " "$cache" | tail -n 1)
+		[ -n "$line" ] && echo "{\"result\":{\"status\":\"success\",\"public_key\":\"$(echo "$line" | cut -d' ' -f2)\",\"endpoint\":\"$(echo "$line" | cut -d' ' -f3)\",\"prefix60\":\"$(echo "$line" | cut -d' ' -f4)\"}}" > "$state/reply.json"
+	fi
 	pk=$(jsonfilter -i "$state/reply.json" -e '@.result.public_key') && ep=$(jsonfilter -i "$state/reply.json" -e '@.result.endpoint') \
 		&& pfx=$(jsonfilter -i "$state/reply.json" -e '@.result.prefix60') && st=$(jsonfilter -i "$state/reply.json" -e '@.result.status')
 	case "${pk:-}${ep:-}${pfx:-}" in *[!A-Za-z0-9+/=.:_[]/-]*) pk='' ;; esac
 	# unknown, suspended, stale or mismatching records: nothing is created, and the address is not asked about again for a minute
 	if [ "${st:-}" != success ] || [ -z "${pk:-}" ] || [ "$(key60 "${pfx:-}")" != "$k" ] || [ "${pfx#*/}" != 60 ]; then
 		grep -v "^$k " "$refused" > "$refused.new"; echo "$k $now" >> "$refused.new"; mv "$refused.new" "$refused"
+		[ -z "$(jsonfilter -i "$state/reply.json" -e '@.result.status' 2>/dev/null)" ] || { grep -v "^$k " "$cache" > "$cache.new"; mv "$cache.new" "$cache"; }
 		return 0
 	fi
+	grep -v "^$k " "$cache" > "$cache.new"; echo "$k $pk $ep $pfx" >> "$cache.new"; mv "$cache.new" "$cache"
 	if [ "$(wc -l < "$peers")" -ge "$max" ]; then # full: the oldest idle peer goes first, else the oldest peer
 		act=$(active) victim=''
 		while read -r vpk vk rest; do
