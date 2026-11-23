@@ -13,7 +13,7 @@ mod unix_impl {
     use std::path::Path;
 
     use relay_broker::client::{connect_and_call_as, DEFAULT_SERVER_UIDS};
-    use relay_broker::os::{LinuxOs, Os};
+    use relay_broker::os::{NativeOs, Os};
     use relay_broker::wire::{DeviceClass, Group, Request, Response};
 
     fn class(s: &str) -> Option<DeviceClass> {
@@ -72,7 +72,7 @@ mod unix_impl {
             }
             Response::Opened => {
                 let fd = fd.expect("descriptor");
-                println!("opened: {:?}", LinuxOs::default().fd_kind(fd.as_fd()));
+                println!("opened: {:?}", NativeOs::default().fd_kind(fd.as_fd()));
             }
             Response::GroupReport {
                 applied,

@@ -24,10 +24,12 @@ pub mod client;
 #[cfg(unix)]
 pub mod config;
 pub mod hub;
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 pub mod hub_runner;
 #[cfg(unix)]
 pub mod os;
+#[cfg(target_os = "macos")]
+pub mod os_macos;
 #[cfg(unix)]
 pub mod policy;
 #[cfg(unix)]

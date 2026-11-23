@@ -1,20 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! The OS layer behind a trait, so the policy and the server are tested with an in-process fake
 //! and so a macOS (XPC, Mach ports) or Windows (named pipes, `DuplicateHandle`) implementation
-//! can follow without touching the policy. `LinuxOs` is the only real implementation. Its sysfs
+//! can follow without touching the policy. `LinuxOs` (here) and `MacOs` (`os_macos.rs`) are the real Unix implementations; `NativeOs` names the one for the build target. Linux's sysfs
 //! and group-file roots are parameters, so device enumeration is tested against a temporary
 //! directory shaped like `/sys` and never needs root.
 
+#[cfg(target_os = "linux")]
 use std::fs;
 use std::io;
 use std::os::fd::{BorrowedFd, OwnedFd};
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(target_os = "linux")]
+use std::path::PathBuf;
 
+#[cfg(target_os = "linux")]
 use nix::fcntl::{fcntl, open, FcntlArg, OFlag};
 use nix::sys::socket::{getsockopt, sockopt};
-use nix::sys::stat::{fstat, lstat, major, minor, Mode, SFlag};
+#[cfg(target_os = "linux")]
+use nix::sys::stat::{fstat, lstat, Mode};
+use nix::sys::stat::{FileStat, SFlag};
 
-use crate::wire::{DeviceClass, DeviceDescriptor};
+#[cfg(target_os = "linux")]
+use crate::wire::DeviceClass;
+use crate::wire::DeviceDescriptor;
 
 /// What the OS layer could find out about the USB identity behind a device node.
 // [@ANCHOR: os_usb_identity_enum]
@@ -120,6 +128,7 @@ pub trait Os {
 
 /// The Linux implementation: sysfs for enumeration, `/etc/group` for membership.
 // [@ANCHOR: os_linux_os_struct]
+#[cfg(target_os = "linux")]
 #[derive(Debug, Clone)]
 pub struct LinuxOs {
     /// Normally `/sys`.
@@ -136,6 +145,7 @@ pub struct LinuxOs {
     pub poweroff_request: PathBuf,
 }
 
+#[cfg(target_os = "linux")]
 impl Default for LinuxOs {
     fn default() -> LinuxOs {
         LinuxOs {
@@ -151,10 +161,11 @@ impl Default for LinuxOs {
 // [@ANCHOR: relay_broker_kind_of_mode]
 /// Maps `st_mode`/`st_rdev` to a `NodeKind`.
 fn kind_of_mode(mode: u32, rdev: u64) -> NodeKind {
+    let mode = nix::libc::mode_t::try_from(mode).unwrap_or(0);
     match SFlag::from_bits_truncate(mode) & SFlag::S_IFMT {
         SFlag::S_IFCHR => NodeKind::Char {
-            major: major(rdev) as u32,
-            minor: minor(rdev) as u32,
+            major: dev_major(rdev),
+            minor: dev_minor(rdev),
         },
         SFlag::S_IFBLK => NodeKind::Block,
         SFlag::S_IFDIR => NodeKind::Dir,
@@ -163,8 +174,79 @@ fn kind_of_mode(mode: u32, rdev: u64) -> NodeKind {
     }
 }
 
+// [@ANCHOR: relay_broker_kind_of_stat]
+/// `kind_of_mode` of a `stat` result (the field types differ between Linux and macOS).
+pub(crate) fn kind_of_stat(st: &FileStat) -> NodeKind {
+    // `st_mode` is `u32` on Linux and `u16` on macOS.
+    #[allow(clippy::useless_conversion)]
+    let mode = u32::from(st.st_mode);
+    // macOS `dev_t` is a signed 32-bit number whose top bit can be set by a high major.
+    #[cfg(target_os = "macos")]
+    let rdev = u64::from(st.st_rdev as u32);
+    #[cfg(not(target_os = "macos"))]
+    let rdev = st.st_rdev;
+    kind_of_mode(mode, rdev)
+}
+
+/// Device major of an `st_rdev`.
+#[cfg(target_os = "linux")]
+fn dev_major(rdev: u64) -> u32 {
+    nix::sys::stat::major(rdev) as u32
+}
+
+/// Device minor of an `st_rdev`.
+#[cfg(target_os = "linux")]
+fn dev_minor(rdev: u64) -> u32 {
+    nix::sys::stat::minor(rdev) as u32
+}
+
+/// Device major of an `st_rdev` (macOS: the top byte).
+#[cfg(target_os = "macos")]
+fn dev_major(rdev: u64) -> u32 {
+    ((rdev >> 24) & 0xff) as u32
+}
+
+/// Device minor of an `st_rdev` (macOS: the low 24 bits).
+#[cfg(target_os = "macos")]
+fn dev_minor(rdev: u64) -> u32 {
+    (rdev & 0x00ff_ffff) as u32
+}
+
+// [@ANCHOR: relay_broker_socket_peer]
+/// The credentials of the process that created the other end of a connected Unix socket: `SO_PEERCRED` on Linux,
+/// `LOCAL_PEERCRED` (uid, first group) and `LOCAL_PEERPID` on macOS.
+pub fn socket_peer(socket: BorrowedFd<'_>) -> io::Result<Peer> {
+    #[cfg(target_os = "linux")]
+    {
+        let cred = getsockopt(&socket, sockopt::PeerCredentials).map_err(io::Error::from)?;
+        Ok(Peer {
+            uid: cred.uid(),
+            gid: cred.gid(),
+            pid: cred.pid(),
+        })
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let cred = getsockopt(&socket, sockopt::LocalPeerCred).map_err(io::Error::from)?;
+        let pid = getsockopt(&socket, sockopt::LocalPeerPid).map_err(io::Error::from)?;
+        Ok(Peer {
+            uid: cred.uid(),
+            gid: cred.groups().first().copied().unwrap_or(u32::MAX),
+            pid,
+        })
+    }
+}
+
+/// The OS layer of the build target.
+#[cfg(target_os = "linux")]
+pub type NativeOs = LinuxOs;
+/// The OS layer of the build target.
+#[cfg(target_os = "macos")]
+pub type NativeOs = crate::os_macos::MacOs;
+
 // [@ANCHOR: relay_broker_read_hex_u16]
 /// Reads a sysfs attribute holding a hexadecimal id (`idVendor`, `idProduct`).
+#[cfg(target_os = "linux")]
 fn read_hex_u16(path: &Path) -> Option<u16> {
     let text = fs::read_to_string(path).ok()?;
     u16::from_str_radix(text.trim(), 16).ok()
@@ -173,6 +255,7 @@ fn read_hex_u16(path: &Path) -> Option<u16> {
 // [@ANCHOR: relay_broker_usb_identity_from_sysfs]
 /// Walks up from a sysfs device directory (at most eight levels) to the USB device that holds
 /// `idVendor`/`idProduct`, and returns them with the product and manufacturer strings.
+#[cfg(target_os = "linux")]
 fn usb_identity_from_sysfs(device_dir: &Path) -> Option<(u16, u16, String, String)> {
     let mut dir = fs::canonicalize(device_dir).ok()?;
     for _ in 0..8 {
@@ -192,6 +275,7 @@ fn usb_identity_from_sysfs(device_dir: &Path) -> Option<(u16, u16, String, Strin
     None
 }
 
+#[cfg(target_os = "linux")]
 impl LinuxOs {
     // [@ANCHOR: relay_broker_linux_sysfs_dir_for]
     /// The sysfs class directory of a device node: `/dev/ttyUSB0` is `class/tty/ttyUSB0`,
@@ -250,21 +334,17 @@ impl LinuxOs {
     }
 }
 
+#[cfg(target_os = "linux")]
 impl Os for LinuxOs {
     // [@ANCHOR: relay_broker_linux_peer_credentials]
     fn peer_credentials(&self, socket: BorrowedFd<'_>) -> io::Result<Peer> {
-        let cred = getsockopt(&socket, sockopt::PeerCredentials).map_err(io::Error::from)?;
-        Ok(Peer {
-            uid: cred.uid(),
-            gid: cred.gid(),
-            pid: cred.pid(),
-        })
+        socket_peer(socket)
     }
 
     // [@ANCHOR: relay_broker_linux_node_kind]
     fn node_kind(&self, path: &Path) -> NodeKind {
         match lstat(path) {
-            Ok(st) => kind_of_mode(st.st_mode, st.st_rdev),
+            Ok(st) => kind_of_stat(&st),
             Err(_) => NodeKind::Missing,
         }
     }
@@ -288,7 +368,7 @@ impl Os for LinuxOs {
     // [@ANCHOR: relay_broker_linux_fd_kind]
     fn fd_kind(&self, fd: BorrowedFd<'_>) -> NodeKind {
         match fstat(fd) {
-            Ok(st) => kind_of_mode(st.st_mode, st.st_rdev),
+            Ok(st) => kind_of_stat(&st),
             Err(_) => NodeKind::Missing,
         }
     }
@@ -493,6 +573,7 @@ impl Os for LinuxOs {
     }
 }
 
+#[cfg(target_os = "linux")]
 impl LinuxOs {
     // [@ANCHOR: relay_broker_os_system_time]
     /// The wall clock now, Unix seconds (0 if the clock is before 1970).
@@ -504,6 +585,7 @@ impl LinuxOs {
 }
 
 #[cfg(test)]
+#[cfg(target_os = "linux")]
 mod tests {
     // Tests [@ANCHOR: os_usb_identity_enum]
     // Tests [@ANCHOR: os_peer_struct]
