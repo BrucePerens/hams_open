@@ -1,0 +1,9 @@
+# hams-node: the .ham zone as a local secondary (unbound auth-zone, AXFR from the anycast servers). Off by default.
+config dns 'main'
+	option enabled '0'
+	option port '5354'
+	option zonefile '/etc/hams-node/ham.zone'
+	# DS record of the signed .ham zone, for validation
+	# option trust_anchor 'ham. IN DS 12345 13 2 ...'
+	# the anycast .ham servers to transfer the zone from
+	# list primary '2001:db8::53'
