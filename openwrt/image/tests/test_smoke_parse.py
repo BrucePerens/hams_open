@@ -5,7 +5,7 @@ import pathlib
 import importlib.util
 import unittest
 
-_spec = importlib.util.spec_from_file_location("smoke_test", pathlib.Path(__file__).resolve().parents[1] / "smoke_test.py")
+_spec = importlib.util.spec_from_file_location("smoke_test", pathlib.Path(__file__).resolve().parents[1] / "tools" / "smoke_test.py")
 smoke_test = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(smoke_test)
 

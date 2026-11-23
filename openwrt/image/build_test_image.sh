@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Reproducible x86-64 test image: official OpenWrt Image Builder + our signed feed (../feed) with a throwaway key.
 # Usage: build_test_image.sh -a APK_DIR -w WORKDIR     (APK_DIR holds the hams-node and luci-app-hams-node .apk files)
-# Result: WORKDIR/hams-test.img (raw, boots with QEMU; see smoke_test.py). No root needed. Nothing is published.
+# Result: WORKDIR/hams-test.img (raw, boots with QEMU; see tools/smoke_test.py). No root needed. Nothing is published.
 # The official feeds have no jool-tools-siit / kmod-jool-siit, which hams-node depends on; empty stand-ins are
 # built into the same test feed so the apk dependency check passes (the SIIT step itself is not exercised).
 set -eu
