@@ -144,6 +144,13 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(subprocess.run(["sh", "-n", str(init)]).returncode, 0)
         self.assertIn("update @seen { ip6 daddr & ffff:ffff:ffff:fff0:: }", init.read_text())
 
+    def test_ruleset_avoids_nft_keyword_chain_name_and_ends_statement_before_brace(self):
+        # nft 1.1 on AREDN 4.26.10.0 rejected `chain fwd` (a keyword) and a statement closed by `} }` on one line
+        text = (HERE.parent / "files/etc/init.d/hams-node-ondemand").read_text()
+        self.assertNotIn("chain fwd ", text)
+        self.assertIn("chain forward_seen {", text)
+        self.assertIn("ffff:fff0:: }\n\t}\n}\nNFT", text)
+
 
 if __name__ == "__main__":
     unittest.main()
