@@ -1,0 +1,14 @@
+# hams-node clock sources, tried in this order (run `hams-node-time sync` from cron). Off by default.
+# Each source is an executable printing "EPOCH [ERROR_SECONDS]" and failing when unavailable.
+config time 'main'
+	option enabled '0'
+	option status '/tmp/hams-node-time.status'
+	# seconds two sources may differ and still count as agreeing; largest backward step / forward jump one source may make alone
+	option tolerance '5'
+	option back_max '5'
+	option jump_max '3600'
+	# list source 'ntp=/usr/libexec/hams-time/ntp'
+	# list source 'hamntp=/usr/libexec/hams-time/hamnet-ntp'
+	# list source 'gps=/usr/libexec/hams-time/gps'
+	# list source 'wwv=/usr/libexec/hams-time/wwv'
+	# list source 'rtc=/usr/libexec/hams-time/rtc'
