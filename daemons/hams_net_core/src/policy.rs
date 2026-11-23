@@ -2,7 +2,7 @@
 //! every engine: which sites may be reached, and the Part 97 station-identification log line (UTC time, callsign,
 //! destination, suite).
 
-// [@ANCHOR: ham_proxy_whitelist]
+// [@ANCHOR: hams_net_core_policy_whitelist]
 /// Permitted destinations: every `.ham` name plus the listed domains (`example.org` exact, `*.example.org`
 /// subdomains). File format: one entry per line; blank lines and `#` comments ignored.
 #[derive(Debug, Default)]
@@ -14,7 +14,7 @@ pub struct Whitelist {
 }
 
 impl Whitelist {
-    // [@ANCHOR: ham_proxy_whitelist_parse]
+    // [@ANCHOR: hams_net_core_policy_whitelist_parse]
     /// Parse the whitelist file text.
     pub fn parse(text: &str) -> Self {
         let mut w = Whitelist::default();
@@ -29,13 +29,13 @@ impl Whitelist {
         w
     }
 
-    // [@ANCHOR: ham_proxy_whitelist_add_site]
+    // [@ANCHOR: hams_net_core_policy_whitelist_add_site]
     /// Add an exact `host` with its allowed path prefixes (none: every path), as a signed list names it.
     pub fn add_site(&mut self, host: &str, paths: Vec<String>) {
         self.sites.push((host.to_lowercase(), paths));
     }
 
-    // [@ANCHOR: ham_proxy_whitelist_permits_path]
+    // [@ANCHOR: hams_net_core_policy_whitelist_permits_path]
     /// Whether the request for `path` on `host` may be passed: the host must be permitted, and a signed-list entry that names
     /// paths limits the request to those prefixes (on a `/` boundary, query ignored). Entries without paths allow every path.
     pub fn permits_path(&self, host: &str, path: &str) -> bool {
@@ -56,7 +56,7 @@ impl Whitelist {
         !listed && self.permits(host)
     }
 
-    // [@ANCHOR: ham_proxy_whitelist_permits]
+    // [@ANCHOR: hams_net_core_policy_whitelist_permits]
     /// Whether `host` may be reached from a ham link.
     pub fn permits(&self, host: &str) -> bool {
         let h = host.to_lowercase();
@@ -68,7 +68,7 @@ impl Whitelist {
     }
 }
 
-// [@ANCHOR: ham_proxy_format_utc]
+// [@ANCHOR: hams_net_core_policy_format_utc]
 /// `YYYY-MM-DDTHH:MM:SSZ` for a unix time.
 pub fn format_utc(secs: u64) -> String {
     let (days, rem) = (secs / 86400, secs % 86400);
@@ -90,7 +90,7 @@ pub fn format_utc(secs: u64) -> String {
     )
 }
 
-// [@ANCHOR: ham_proxy_log_line]
+// [@ANCHOR: hams_net_core_policy_log_line]
 /// One station-identification line; a callsign is required.
 pub fn log_line(secs: u64, callsign: &str, host: &str, suite: &str) -> Option<String> {
     let cs = callsign.trim();

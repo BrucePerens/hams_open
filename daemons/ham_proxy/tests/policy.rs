@@ -12,9 +12,9 @@ use std::thread;
 
 #[test]
 fn whitelist_permits_ham_listed_and_subdomains_only() {
-    // Tests [@ANCHOR: ham_proxy_whitelist]
-    // Tests [@ANCHOR: ham_proxy_whitelist_parse]
-    // Tests [@ANCHOR: ham_proxy_whitelist_permits]
+    // Tests [@ANCHOR: hams_net_core_policy_whitelist]
+    // Tests [@ANCHOR: hams_net_core_policy_whitelist_parse]
+    // Tests [@ANCHOR: hams_net_core_policy_whitelist_permits]
     let w = Whitelist::parse("# sites\nExample.org\n\n*.news.example # all\n");
     assert!(w.permits("anything.ham"));
     assert!(w.permits("EXAMPLE.org."));
@@ -26,8 +26,8 @@ fn whitelist_permits_ham_listed_and_subdomains_only() {
 
 #[test]
 fn log_line_has_time_callsign_host_suite() {
-    // Tests [@ANCHOR: ham_proxy_log_line]
-    // Tests [@ANCHOR: ham_proxy_format_utc]
+    // Tests [@ANCHOR: hams_net_core_policy_log_line]
+    // Tests [@ANCHOR: hams_net_core_policy_format_utc]
     assert_eq!(format_utc(1_700_000_000), "2023-11-14T22:13:20Z");
     assert_eq!(
         log_line(1_700_000_000, "w1aw", "example.org", "TLS_SHA256_SHA256").unwrap(),

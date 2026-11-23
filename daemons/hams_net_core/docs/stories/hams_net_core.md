@@ -24,4 +24,11 @@ Platform-free Rust crate shared by the local relay, hams-node and the phone apps
 Run `tools/cross_build.sh` (optional target list) to build a small probe binary for the OpenWrt/Linux musl targets (x86_64, aarch64, armv7, mipsel), Android and iOS, and record sizes in `target/cross_sizes.txt`. Pure Rust, so the musl targets link with rust-lld and no C toolchain; mipsel (tier 3) compiles the library only unless `MIPSEL_LINKER` names an OpenWrt mipsel gcc; Android uses `ANDROID_NDK_HOME` (default: the NDK installed with sdkmanager under /home/bruce/agent_work/tools/android/ndk); iOS needs a macOS host. Skipped targets are reported as SKIP, never silently.
 
 ## Policy (moved from ham_proxy)
-`hams_net_core::policy` holds the whitelist (`Whitelist::parse`, `add_site`, `permits`, `permits_path`) and the Part 97 station-ID line (`format_utc`, `log_line`); `ham_proxy` re-exports them and keeps only its log sink. The behaviour and the [@ANCHOR: ham_proxy_whitelist] story in `ham_proxy/docs/stories/ham_proxy.md` are unchanged.
+`hams_net_core::policy` holds the whitelist (`Whitelist::parse`, `add_site`, `permits`, `permits_path`) and the Part 97 station-ID line (`format_utc`, `log_line`); `ham_proxy` re-exports them and keeps only its log sink. Behaviour is unchanged.
+
+- [@ANCHOR: hams_net_core_policy_whitelist] `Whitelist`: the permitted destinations.
+- [@ANCHOR: hams_net_core_policy_whitelist_parse] `Whitelist::parse(text)`: one entry per line (`example.org` exact, `*.example.org` subdomains), blank lines and `#` comments ignored; same file idea as `ham_tls/ham_policy.py`.
+- [@ANCHOR: hams_net_core_policy_whitelist_permits] `permits(host)`: true for any `.ham` name, an exact entry, or a subdomain of a wildcard entry; case and trailing dot ignored.
+- [@ANCHOR: hams_net_core_policy_format_utc] `format_utc(secs)`: unix time as `YYYY-MM-DDTHH:MM:SSZ`.
+- [@ANCHOR: hams_net_core_policy_log_line] `log_line(secs, callsign, host, suite)`: one Part 97 station-ID line `time CALLSIGN -> host suite`; `None` without a callsign.
+- [@ANCHOR: hams_net_core_policy_whitelist_add_site] adds a signed-list host with its paths; [@ANCHOR: hams_net_core_policy_whitelist_permits_path] allows a request only when the host is listed and, if the entry names paths, the path is under one of them.

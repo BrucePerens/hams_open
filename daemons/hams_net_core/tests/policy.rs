@@ -2,8 +2,8 @@
 //! The whitelist and station-ID line that ham_proxy used to own.
 use hams_net_core::policy::{format_utc, log_line, Whitelist};
 
-// Tests [@ANCHOR: ham_proxy_whitelist_permits]
-// Tests [@ANCHOR: ham_proxy_whitelist_permits_path]
+// Tests [@ANCHOR: hams_net_core_policy_whitelist_permits]
+// Tests [@ANCHOR: hams_net_core_policy_whitelist_permits_path]
 #[test]
 fn whitelist_permits_ham_names_exact_wildcard_and_signed_paths() {
     let mut w = Whitelist::parse("example.org # c\n*.wild.net\n");
@@ -14,7 +14,7 @@ fn whitelist_permits_ham_names_exact_wildcard_and_signed_paths() {
     assert!(!w.permits_path("news.com", "/ab"));
 }
 
-// Tests [@ANCHOR: ham_proxy_log_line]
+// Tests [@ANCHOR: hams_net_core_policy_log_line]
 #[test]
 fn log_line_needs_a_callsign() {
     assert_eq!(format_utc(0), "1970-01-01T00:00:00Z");
