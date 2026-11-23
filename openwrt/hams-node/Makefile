@@ -128,6 +128,8 @@ endef
 define Package/hams-node-bird/install
 	$(INSTALL_DIR) $(1)/usr/sbin $(1)/etc/config
 	$(INSTALL_BIN) ./files/usr/sbin/hams-node-bird $(1)/usr/sbin/
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/etc/init.d/hams-node-bird $(1)/etc/init.d/
 	$(INSTALL_CONF) ./files/etc/config/hams_node_bird $(1)/etc/config/
 endef
 
