@@ -2,7 +2,8 @@
 # Cross-builds the core's size probe for the OpenWrt/Linux musl, Android and iOS targets and records sizes.
 # Usage: tools/cross_build.sh [target...]   (default: all). Output: target/cross_sizes.txt
 # Targets that cannot be built here are listed as SKIP with the reason; nothing else is hidden.
-# MIPSEL_LINKER: OpenWrt mipsel musl gcc (from the OpenWrt SDK for that target) to link the probe.
+# MIPSEL_LINKER: OpenWrt mipsel musl gcc (from the OpenWrt SDK for that target) to link the probe; defaults to the OpenWrt 25.12.6
+# ramips/mt7621 SDK's mipsel-openwrt-linux-musl-gcc under /home/bruce/agent_work/tools/openwrt-sdk (official tarball, sha256 checked).
 # ANDROID_NDK_HOME defaults to the newest NDK under /home/bruce/agent_work/tools/android/ndk (sdkmanager "ndk;28.2.13676358").
 # Needs: rustup targets (see TARGETS), nightly + rust-src for the tier-3 mipsel target, the Android NDK
 # (ANDROID_NDK_HOME) for aarch64-linux-android, a macOS host for aarch64-apple-ios.
@@ -44,10 +45,15 @@ for t in $TARGETS; do
   fi
   what="--example probe"
   if [ "$t" = mipsel-unknown-linux-musl ] && [ -z "${MIPSEL_LINKER:-}" ]; then
+    MIPSEL_LINKER=$(ls /home/bruce/agent_work/tools/openwrt-sdk/*/staging_dir/toolchain-*/bin/mipsel-openwrt-linux-musl-gcc 2>/dev/null | tail -1)
+  fi
+  if [ "$t" = mipsel-unknown-linux-musl ] && [ -z "${MIPSEL_LINKER:-}" ]; then
     # no OpenWrt mipsel SDK on this box: prove the crate compiles, skip linking
     what=--lib
   elif [ "$t" = mipsel-unknown-linux-musl ]; then
     export CARGO_TARGET_MIPSEL_UNKNOWN_LINUX_MUSL_LINKER="$MIPSEL_LINKER"
+    # the OpenWrt gcc wrapper wants STAGING_DIR (the SDK's staging_dir)
+    STAGING_DIR="${STAGING_DIR:-$(dirname "$(dirname "$(dirname "$MIPSEL_LINKER")")")}"; export STAGING_DIR
     unset RUSTFLAGS
   fi
   if $cmd --release $what --target "$t" ${CARGO_BUILD_JOBS:+-j "$CARGO_BUILD_JOBS"} >"target/cross_$t.log" 2>&1; then
