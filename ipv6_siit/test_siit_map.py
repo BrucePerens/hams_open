@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Tests [@ANCHOR: siit_map:embed] [@ANCHOR: siit_map:extract] [@ANCHOR: siit_map:domain_prefix] [@ANCHOR: siit_map:next_free_domain] [@ANCHOR: siit_map:jool_siit_config] [@ANCHOR: siit_map:block] [@ANCHOR: siit_map:domain]"""
+"""Tests for siit_map."""
 
 import json
 import unittest
@@ -15,7 +15,8 @@ class MappingTests(unittest.TestCase):
         self.assertEqual(str(siit_map.embed(BLOCK, 7, "10.1.2.3")), "2001:db8:ab01:7::a01:203")
 
     def test_extreme_domain_ids(self):
-        # Tests [@ANCHOR: siit_map:embed] [@ANCHOR: siit_map:extract]
+        # Tests [@ANCHOR: siit_map:embed]
+        # Tests [@ANCHOR: siit_map:extract]
         for domain in (0, 65535):
             address = siit_map.embed(BLOCK, domain, "10.255.0.1")
             self.assertEqual(siit_map.extract(BLOCK, address), (domain, "10.255.0.1"))
@@ -32,14 +33,17 @@ class MappingTests(unittest.TestCase):
             siit_map.extract(BLOCK, "2001:db8:ab01:7:0:1:a01:203")
 
     def test_well_known_nat64_prefix_is_refused(self):
-        # Tests [@ANCHOR: siit_map:embed] [@ANCHOR: siit_map:domain_prefix]
+        # Tests [@ANCHOR: siit_map:embed]
+        # Tests [@ANCHOR: siit_map:domain_prefix]
         with self.assertRaises(ValueError):
             siit_map.embed("64:ff9b::/48", 1, "10.0.0.1")
         with self.assertRaises(ValueError):
             siit_map.domain_prefix("64:ff9b::/48", 1)
 
     def test_bad_input(self):
-        # Tests [@ANCHOR: siit_map:embed] [@ANCHOR: siit_map:block] [@ANCHOR: siit_map:domain]
+        # Tests [@ANCHOR: siit_map:embed]
+        # Tests [@ANCHOR: siit_map:block]
+        # Tests [@ANCHOR: siit_map:domain]
         with self.assertRaises(ValueError):
             siit_map.embed(BLOCK, 65536, "10.0.0.1")
         with self.assertRaises(ValueError):
