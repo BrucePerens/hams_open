@@ -137,9 +137,10 @@ class EnrollTests(unittest.TestCase):
         self.assertTrue((self.state / "device_token").exists())
 
     def test_no_password_anywhere_in_the_package(self):
-        # hams-node-bird legitimately has BGP "password" (BIRD's keyword): scan the enrolment files, not every file in the package
-        for path in [SCRIPT, PACKAGE / "files/etc/config/hams_node_enroll", PACKAGE / "Makefile"]:
-            self.assertIsNone(re.search(r"pass(word|wd)|read -s", path.read_text(), re.I), path)
+        # every package file is scanned except hams-node-bird (it legitimately has BGP "password", BIRD keyword)
+        for path in sorted((PACKAGE / "files").rglob("*")) + [PACKAGE / "Makefile"]:
+            if path.is_file() and "bird" not in path.name:
+                self.assertIsNone(re.search(r"pass(word|wd)|read -s", path.read_text(), re.I), path)
         self.assertIsNone(re.search(r"pass(word|wd)", (PACKAGE / "files/etc/config/hams_node_enroll").read_text(), re.I))
 
     def test_portal_url_comes_from_uci_when_no_u_option(self):
