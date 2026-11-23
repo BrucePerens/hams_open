@@ -29,3 +29,5 @@ Internals:
 - [@ANCHOR: ham_proxy_sign_header] Builds the signed integrity header for a body, host and time with an Ed25519 key.
 - [@ANCHOR: ham_proxy_verify_header] Checks a signed integrity header against the body, host, time window and public key, saying why it failed.
 - [@ANCHOR: ham_proxy_header] Case-insensitive header lookup in a response head.
+- [@ANCHOR: ham_proxy_serve_one_signed] One ham connection with the indicator on: buffers the site response, adds the banner and signed integrity header to HTML, blocks an unhandled password page, and passes anything else through unchanged.
+- [@ANCHOR: ham_proxy_http_response] Builds a complete HTTP/1.1 response (status, extra headers, length, body) for the block page and refusals.

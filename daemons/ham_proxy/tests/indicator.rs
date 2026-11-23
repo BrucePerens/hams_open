@@ -219,6 +219,8 @@ fn via_proxy(tag: &str, resp: Vec<u8>, key: Option<PKey<Private>>) -> Vec<u8> {
 
 #[test]
 fn end_to_end_html_gets_indicator_and_verifiable_header() {
+    // Tests [@ANCHOR: ham_proxy_serve_one_signed]
+    // Tests [@ANCHOR: ham_proxy_http_response]
     let (k, p) = keypair();
     let out = via_proxy(
         "html",
@@ -241,6 +243,7 @@ fn end_to_end_html_gets_indicator_and_verifiable_header() {
 
 #[test]
 fn end_to_end_password_page_blocked() {
+    // Tests [@ANCHOR: ham_proxy_http_response]
     let out = via_proxy(
         "pw",
         b"HTTP/1.0 200 OK\r\nContent-Type: text/html\r\n\r\n<body><input type=password></body>"
