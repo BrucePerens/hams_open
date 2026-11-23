@@ -161,6 +161,7 @@ fn request_identity(head: &[u8]) -> Vec<u8> {
     out
 }
 
+// [@ANCHOR: ham_proxy_http_response]
 fn http_response(status: &str, extra: &[(&str, String)], body: &[u8]) -> Vec<u8> {
     let mut h = format!("HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\n");
     for (k, v) in extra {
@@ -229,6 +230,7 @@ fn is_html(head: &str) -> bool {
     })
 }
 
+// [@ANCHOR: ham_proxy_serve_one_signed]
 /// Serve one ham connection: handshake (integrity-only), read the request head, relay it to `site_addr` over
 /// verified TLS for `site_name`, and send the response back. HTML gets the indicator (and a signed header when
 /// `key` is set) or a block page; every other response is streamed byte for byte.
