@@ -1,0 +1,27 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-wg apply INTERFACE LINK_TYPE PEERS_FILE
+# Adds the WireGuard peers listed in PEERS_FILE ("public_key endpoint allowed_ips" per line; '#' comments).
+# WireGuard encrypts, so it is never set up on a radio link (47 CFR 97.113(a)(4)): LINK_TYPE must be
+# "internet", and "rf" (or anything else) is refused before any peer is touched.
+set -u
+
+if [ $# -ne 4 ] || [ "$1" != apply ]; then
+	echo "usage: hams-node-wg apply INTERFACE LINK_TYPE PEERS_FILE" >&2; exit 2
+fi
+shift
+iface=$1 type=$2 file=$3
+[ "$type" = internet ] || { echo "hams-node-wg: refusing WireGuard on a '$type' link" >&2; exit 1; }
+case $iface in '' | *[!A-Za-z0-9_-]*) echo "hams-node-wg: bad interface name" >&2; exit 1 ;; esac
+[ -r "$file" ] || { echo "hams-node-wg: cannot read $file" >&2; exit 1; }
+
+status=0
+while read -r key endpoint allowed extra; do
+	case $key in '' | '#'*) continue ;; esac
+	if [ -n "$extra" ] || [ -z "$allowed" ]; then
+		echo "hams-node-wg: bad line, skipped" >&2; status=1; continue
+	fi
+	case $key$endpoint$allowed in *[!A-Za-z0-9+/=.:,_[]-]*) echo "hams-node-wg: bad characters, skipped" >&2; status=1; continue ;; esac
+	wg set "$iface" peer "$key" endpoint "$endpoint" allowed-ips "$allowed" || status=1
+done < "$file"
+exit $status
