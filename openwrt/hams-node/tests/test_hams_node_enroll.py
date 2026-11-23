@@ -53,7 +53,7 @@ class EnrollTests(unittest.TestCase):
         for name, body in {
             "uclient-fetch": FETCH,
             "wg": '#!/bin/sh\ncase $1 in genkey) echo "%s";; pubkey) echo "%s";; esac\n' % (KEY, KEY),
-            "uci": '#!/bin/sh\necho "$*" >> "$FAKE/uci"\n',
+            "uci": '#!/bin/sh\ncase $* in *"get hams_node_enroll.main.url"*) cat "$FAKE/uci_url" 2>/dev/null; exit 0 ;; esac\necho "$*" >> "$FAKE/uci"\n',
         }.items():
             (bindir / name).write_text(body)
             (bindir / name).chmod(0o755)
@@ -64,6 +64,13 @@ class EnrollTests(unittest.TestCase):
 
     def run_script(self, *args):
         return subprocess.run(["sh", str(SCRIPT), "-u", "https://portal.example", "-s", str(self.state), "-c", str(self.cron), "-i", "0", *args],
+                              env=self.env, capture_output=True, text=True, timeout=60)
+
+    def run_uci_url(self, url, *args):
+        """Run without -u, so the portal URL comes from uci (or the built-in default when url is None)."""
+        if url is not None:
+            (self.fake / "uci_url").write_text(url)
+        return subprocess.run(["sh", str(SCRIPT), "-s", str(self.state), "-c", str(self.cron), "-i", "0", *args],
                               env=self.env, capture_output=True, text=True, timeout=60)
 
     def calls(self):
@@ -134,6 +141,32 @@ class EnrollTests(unittest.TestCase):
             if path.is_file():
                 self.assertIsNone(re.search(r"pass(word|wd)|read -s", path.read_text(), re.I), path)
         self.assertIsNone(re.search(r"pass(word|wd)", (PACKAGE / "files/etc/config/hams_node_enroll").read_text(), re.I))
+
+    def test_portal_url_comes_from_uci_when_no_u_option(self):
+        self.queue("start", reply(status="success", device_code="d1", user_code="ABCD-EFGH", expires_in=600, interval=5))
+        self.queue("poll", reply(status="success", token="tok_uci", **CONFIG))
+        result = self.run_uci_url("https://uci.example.test", "enroll")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(all(c.startswith("https://uci.example.test/api/ipv6/enroll/") for c in self.calls()), self.calls())
+        self.assertIn("lookup_url=https://uci.example.test/api/ipv6/directory/lookup", (self.fake / "uci").read_text())
+
+    def test_built_in_default_is_used_only_when_uci_url_is_unset(self):
+        self.queue("start", reply(status="success", device_code="d1", user_code="ABCD-EFGH", expires_in=600, interval=5))
+        self.queue("poll", reply(status="pending", message="authorization_pending"))
+        result = self.run_uci_url(None, "enroll")
+        self.assertEqual(result.returncode, 4, "no queued poll: the built-in portal is unreachable here")
+        self.assertTrue(self.calls()[0].startswith("https://hams.com/api/ipv6/enroll/start"), self.calls())
+
+    def test_plain_http_is_refused_except_for_localhost_and_loopback(self):
+        for url in ("http://portal.example.test", "http://10.0.2.2:8097", "http://127.0.0.1.evil.example", "ftp://127.0.0.1"):
+            result = self.run_uci_url(url, "enroll", "tok")
+            self.assertEqual(result.returncode, 1, url)
+            self.assertIn("https://", result.stderr, url)
+        self.assertEqual(self.calls(), [], "a refused URL never reaches uclient-fetch")
+        for url in ("http://127.0.0.1:8097", "http://localhost", "http://localhost:8097/"):
+            self.queue("poll", reply(status="success", token="tok_local", **CONFIG))
+            result = self.run_uci_url(url, "enroll", "tok")
+            self.assertEqual(result.returncode, 0, (url, result.stderr))
 
     def test_bad_token_characters_never_reach_a_request(self):
         result = self.run_script("enroll", 'x","evil":"1')
