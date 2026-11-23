@@ -179,8 +179,11 @@ class TestPooledChromeIsolation(HamsHttpCase):
         return reply["result"]["value"]
 
     def _visit(self, browser):
+        # A bare page of the server's origin: /web/login loads the website assets, and with `caching` installed (a combined run)
+        # its script registers /sw.js after allow_requests has ended; the 400 is logged as a console error, marks the test
+        # unclean and the pool drops its Chrome. This page runs no script, and the tests only need an origin for storage and cookies.
         with self.allow_requests(browser=browser):
-            browser.navigate_to(self.base_url() + "/web/login", wait_stop=True)
+            browser.navigate_to(self.base_url() + "/robots.txt", wait_stop=True)
 
     # Tests [@ANCHOR: zero_sudo:pooled_chrome_start]
     # Tests [@ANCHOR: zero_sudo:start_pooled_chrome]
@@ -271,8 +274,7 @@ class TestPooledChromeIsolation(HamsHttpCase):
 
     # Tests [@ANCHOR: zero_sudo:hams_http_case_teardown_class]
     def test_04_the_chrome_is_stopped_when_the_class_ends(self):
-        # Self-contained: test_03's fresh Chrome is replaced when a late console error (the 400 on /sw.js under load)
-        # marks that test unclean, so this test leases its own Chrome and hands it back without visiting anything.
+        # Self-contained: test_03's fresh Chrome is not relied on: this test leases its own Chrome and hands it back without visiting anything.
         browser = ChromeBrowser(self, headless=True)
         browser.stop()
         self.assertIsNotNone(common._chrome_pool.chrome, "still there for the rest of the class")
