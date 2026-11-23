@@ -62,6 +62,10 @@ if [ -n "$newer" ]; then
 	cp "$work/feed/hams-feed-public.pem" "$work/files/etc/hams-node/hams-feed-public.pem"
 fi
 
+# stub of the hams.com enrolment API (CGI under uhttpd) for the enrol/unenrol checks
+mkdir -p "$work/files/root"
+cp -r "$here/tools/enroll-stub" "$work/files/root/enroll-stub"
+
 PACKAGES="hams-node hams-node-update hams-node-enroll hams-node-report hams-node-bird hams-node-dns hams-node-fw bird2 luci-app-hams-node luci wireguard-tools kmod-wireguard jsonfilter uclient-fetch"
 make -C "$work/ib" image PROFILE=generic PACKAGES="$PACKAGES" FILES="$work/files" ROOTFS_PARTSIZE=256 EXTRA_IMAGE_NAME=hams
 gz=$(ls "$work"/ib/bin/targets/x86/64/*-ext4-combined.img.gz 2>/dev/null || ls "$work"/ib/bin/targets/x86/64/*combined*.img.gz | head -1)

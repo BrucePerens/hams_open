@@ -96,6 +96,21 @@ UPDATE_PASS = [
     "hams-node-update run 2>&1; echo rc=$?", "apk list -I hams-node; cat /var/lib/hams-node-update/status",
 ]
 
+# hams-node-enroll against a stub of the hams.com enrolment API (tools/enroll-stub, CGI under uhttpd on 127.0.0.1:8098): enrol with a token, make a
+# WireGuard interface with a peer, then `unenroll` must revoke the token at the stub and remove the peer, interface, key, token and settings.
+ENROLL_SETUP = [
+    "(uhttpd -f -p 127.0.0.1:8098 -h /root/enroll-stub -x /api >/dev/null 2>&1 &); sleep 1",
+    "hams-node-enroll -u http://127.0.0.1:8098 enroll TESTTOKEN123 2>&1; echo rc=$?",
+    "ls /etc/hams-node/device_token /etc/hams-node/wg.key; uci get hams_node.main.prefix60",
+    "ip link add wg-hams type wireguard; wg set wg-hams private-key /etc/hams-node/wg.key; "
+    "wg set wg-hams peer $(wg genkey | wg pubkey) allowed-ips 2001:db8:ab01::/48; wg show wg-hams peers | wc -l",
+]
+UNENROLL = [
+    "hams-node-enroll -u http://127.0.0.1:8098 unenroll 2>&1; echo rc=$?",
+    "cat /tmp/stub-unenroll.log; ls /etc/hams-node/device_token /etc/hams-node/wg.key 2>&1",
+    "ip link show wg-hams >/dev/null 2>&1; echo link=$?; echo prefix=[$(uci -q get hams_node.main.prefix60)]",
+]
+
 
 def run_all(con, cmds, timeout=60):
     """Run each command line; the joined output, or None if one of them never completed."""
@@ -217,6 +232,14 @@ def main():
         out = run_all(con, UPDATE_PASS, 120)
         check("update: from a local signed feed installs the newer version", out is not None and "rc=0" in out
               and "hams-node-0.1.0-r2" in out and "updated" in out, (out or "").strip().replace("\r\n", " | ")[-250:])
+        out = run_all(con, ENROLL_SETUP, 60)
+        check("enrol: a token against the stub stores the device token, key and /60", out is not None and "rc=0" in out
+              and "/etc/hams-node/device_token" in out and "2001:db8:ab00:10::/60" in out and out.split()[-1] == "1",
+              (out or "").strip().replace("\r\n", " | ")[-250:])
+        out = run_all(con, UNENROLL, 60)
+        check("unenroll: revokes at the stub, removes peers, interface, key, token and settings", out is not None and "rc=0" in out
+              and "TESTTOKEN123" in out and out.count("No such file") == 2 and "link=1" in out and "prefix=[]" in out,
+              (out or "").strip().replace("\r\n", " | ")[-300:])
         out = run_all(con, RF_WG, 30)
         check("rf interface refuses WireGuard", out is not None and "rc=1" in out and "refusing WireGuard" in out, (out or "").strip()[:200])
     finally:

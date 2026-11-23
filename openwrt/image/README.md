@@ -16,6 +16,8 @@ Node-network checks (uci-driven, throwaway test values): `hams-node-bird` render
 `x.ham` to a stub dnsmasq on 127.0.0.2:5353 and public names stay off it; `hams-node-fw` loads the ham zone, a connection from the host through QEMU's
 forward is dropped until `tcp:80` is opened in uci; `hams-node-wg` refuses an interface set to rf. With `-n NEWER_APK_DIR` (the same packages built with a higher PKG_RELEASE) the image carries a local signed feed in /root/update-feed; the
 smoke test serves it on 127.0.0.1 and checks that `hams-node-update` rolls back on a failing health check and installs the newer version on a pass.
+Enrolment: `tools/enroll-stub` (CGI answering `poll` and `unenroll`, served by uhttpd on 127.0.0.1:8098) lets the test enrol with a token, make a WireGuard
+interface with a peer, and check that `hams-node-enroll unenroll` revokes at the stub and removes the peer, interface, key, token and settings.
 Not exercised: a live route-server session (no /40 yet),
 Jool SIIT itself (stand-ins), real enrolment, WireGuard peers. Tests: `python3 -m unittest discover -s openwrt/image/tests`.
 
