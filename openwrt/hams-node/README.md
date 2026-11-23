@@ -15,7 +15,7 @@ The package is architecture independent (shell scripts); use the SDK of the node
 metadata.
 
 Contents: `hams-node-siit` renders one Jool SIIT instance file per mesh domain from the registry export (the same
-files as `ipv6_siit/siit_map.py gateway_configs`) and loads them; `hams-node-wg` (separate change) adds WireGuard
+files as `ipv6_siit/siit_map.py gateway_configs`) and loads them; `hams-node-wg` adds WireGuard
 peers on Internet links only.
 
 Tests: `python3 -m unittest discover -s openwrt/hams-node/tests` (a stand-in `jsonfilter` is used on the dev box).
