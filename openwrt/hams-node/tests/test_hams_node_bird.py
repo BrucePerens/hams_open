@@ -73,6 +73,7 @@ class BirdTests(unittest.TestCase):
         _, conf, _ = self.render(neighbor="4200000007,fe80::7,rf0 4200000008,2001:db8:ab00:20::1,rf1,2001:db8:ab00:20::/60")
         self.assertIn("protocol bgp hams_rf1 {", conf)
         self.assertIn("neighbor fe80::7%rf0 as 4200000007;", conf)
+        self.assertIn("local as 4200000001;", conf.split("protocol bgp hams_rf1 {")[1])
         self.assertIn("neighbor 2001:db8:ab00:20::1%rf1 as 4200000008;", conf)
         self.assertIn("bgp_local_pref = 300;", conf)
         # the RF filter only accepts the neighbour's own /60 when it is configured
