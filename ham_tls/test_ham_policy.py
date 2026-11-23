@@ -40,6 +40,11 @@ class StationIdLogTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ham_policy.log_connection(io.StringIO(), "", "node.ham", "NULL-SHA256")
 
+    def test_a_log_time_out_of_range_is_a_value_error(self):
+        for bad in (1e30, -1e30, 2**80, float("nan")):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                ham_policy.log_connection(io.StringIO(), "w1aw", "node.ham", "NULL-SHA256", now=bad)
+
 
 if __name__ == "__main__":
     unittest.main()
