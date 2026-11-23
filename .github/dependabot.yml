@@ -204,3 +204,16 @@ updates:
         update-types:
           - "minor"
           - "patch"
+  - package-ecosystem: "cargo"
+    directory: "/daemons/hams_net_core"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "rust"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
