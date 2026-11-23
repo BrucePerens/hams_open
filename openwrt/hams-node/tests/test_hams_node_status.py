@@ -12,7 +12,7 @@ import tempfile
 import unittest
 
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 HERE = pathlib.Path(__file__).resolve().parent
 SCRIPT = HERE.parent / "files" / "usr" / "sbin" / "hams-node-status"
