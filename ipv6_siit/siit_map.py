@@ -14,6 +14,7 @@ import json
 WELL_KNOWN_NAT64 = ipaddress.ip_network("64:ff9b::/96")
 
 
+# [@ANCHOR: siit_map:block]
 def _block(block):
     network = ipaddress.ip_network(block)
     if network.version != 6 or network.prefixlen != 48:
@@ -23,6 +24,7 @@ def _block(block):
     return network
 
 
+# [@ANCHOR: siit_map:domain]
 def _domain(domain):
     if not isinstance(domain, int) or not 0 <= domain <= 0xFFFF:
         raise ValueError("domain ID must be 0..65535: %r" % (domain,))

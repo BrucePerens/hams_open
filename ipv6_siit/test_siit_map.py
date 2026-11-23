@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Tests [@ANCHOR: siit_map:embed] [@ANCHOR: siit_map:extract] [@ANCHOR: siit_map:domain_prefix] [@ANCHOR: siit_map:next_free_domain] [@ANCHOR: siit_map:jool_siit_config]"""
+"""Tests [@ANCHOR: siit_map:embed] [@ANCHOR: siit_map:extract] [@ANCHOR: siit_map:domain_prefix] [@ANCHOR: siit_map:next_free_domain] [@ANCHOR: siit_map:jool_siit_config] [@ANCHOR: siit_map:block] [@ANCHOR: siit_map:domain]"""
 
 import json
 import unittest
@@ -39,7 +39,7 @@ class MappingTests(unittest.TestCase):
             siit_map.domain_prefix("64:ff9b::/48", 1)
 
     def test_bad_input(self):
-        # Tests [@ANCHOR: siit_map:embed]
+        # Tests [@ANCHOR: siit_map:embed] [@ANCHOR: siit_map:block] [@ANCHOR: siit_map:domain]
         with self.assertRaises(ValueError):
             siit_map.embed(BLOCK, 65536, "10.0.0.1")
         with self.assertRaises(ValueError):
