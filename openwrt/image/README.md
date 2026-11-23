@@ -32,3 +32,12 @@ and the overlay; `tools/mtls_test.py run IMAGE FIXTURES` boots it and checks the
 `tools/endpoint_test.py IMAGE` (stock image, QEMU with a second NIC for `apk add openssl-util`): copies `hams-node-endpoint` in, runs it with a
 stand-in `uclient-fetch` that keeps the request body, and checks on the host that the body's MAC equals the portal's formula and that the
 private key is not in it. Verified on OpenWrt 25.12.5 x86-64 (busybox ash, `openssl base64`, `hexdump`; the image has no `base64` or `od`).
+
+`tools/internet_gone_test.py IMAGE` (QEMU, no root, needs the host's internet for about a minute): the "internet gone" scenarios of the
+disaster-mode to-do. Two guests are joined by a QEMU socket link (eth1, the simulated RF link, nothing encrypted); bird2 and unbound are
+installed over the user-mode NIC, which is then cut. With the internet cut it checks that the nodes form a BGP session over RF with no route
+server (`hams-node-bird` neighbours) and ping each other, that a cached `.ham` zone resolves (`hams-node-zone`, anycast unreachable), that a
+deprecation-list entry still keeps a key out of WireGuard (`hams-node-wg`), and the clock scenarios of `hams-node-time` (no GPS, no internet and
+no GPS, spoofed GPS alone, spoofed GPS against a good source). About 6 minutes:
+
+    agent_procs.py run owrt-gone --timeout 1800 --mem-max 6G -- python3 -I -u openwrt/image/tools/internet_gone_test.py WORKDIR/hams-test.img
