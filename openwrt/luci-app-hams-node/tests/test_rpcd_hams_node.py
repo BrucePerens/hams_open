@@ -93,7 +93,7 @@ class StatusTests(unittest.TestCase):
         (h.state / "deprecation_list").write_text("KEYA 2001:db8::/60\ncert:aa:1f \n")
         s = h.status()
         self.assertTrue(s["disabled"])
-        self.assertEqual(s["disabled_reason"], "botnet traffic bxb/b", "only characters that cannot break the JSON survive")
+        self.assertEqual(s["disabled_reason"], "botnet traffic bx/b", "only characters that cannot break the JSON survive")
         self.assertEqual(s["deprecated"], 2)
 
     def test_revoked_is_not_enrolled(self):
