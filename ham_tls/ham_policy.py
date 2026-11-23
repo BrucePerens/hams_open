@@ -5,14 +5,15 @@ station-identification log Part 97 requires. Any proxy engine calls these two fu
 import time
 
 
-# [@ANCHOR: ham_policy:whitelist]
 class Whitelist:
     """Permitted destinations: every `.ham` name plus the listed domains ('example.org' exact, '*.example.org' subdomains)."""
 
+    # [@ANCHOR: ham_policy:whitelist_init]
     def __init__(self, entries):
         self.exact = {e.lower() for e in entries if not e.startswith("*.")}
         self.suffixes = tuple("." + e[2:].lower() for e in entries if e.startswith("*."))
 
+    # [@ANCHOR: ham_policy:whitelist]
     def permits(self, host):
         host = host.lower().rstrip(".")
         return host.endswith(".ham") or host in self.exact or host.endswith(self.suffixes)

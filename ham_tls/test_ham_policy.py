@@ -13,6 +13,7 @@ class WhitelistTests(unittest.TestCase):
 
     def test_ham_names_are_always_permitted(self):
         # Tests [@ANCHOR: ham_policy:whitelist]
+        # Tests [@ANCHOR: ham_policy:whitelist_init]
         self.assertTrue(self.whitelist.permits("node.ham"))
         self.assertTrue(self.whitelist.permits("A.B.HAM."))
 
