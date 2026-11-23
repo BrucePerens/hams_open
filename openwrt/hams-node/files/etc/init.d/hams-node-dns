@@ -1,0 +1,27 @@
+#!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Renders the dnsmasq snippet for .ham and the member reverse zone (uci hams_node_dns) and reloads dnsmasq. Stop removes it.
+START=96
+USE_PROCD=1
+INITD=${HAMS_NODE_INITD:-/etc/init.d}
+OUT=${HAMS_NODE_DNS_OUT:-/tmp/dnsmasq.d/hams-ham.conf}
+
+reload_dnsmasq() {
+	[ -x "$INITD/dnsmasq" ] && "$INITD/dnsmasq" reload
+	return 0
+}
+
+start_service() {
+	rm -f "$OUT"
+	hams-node-dns render "$OUT" || return 1
+	reload_dnsmasq
+}
+
+stop_service() {
+	rm -f "$OUT"
+	reload_dnsmasq
+}
+
+service_triggers() {
+	procd_add_reload_trigger hams_node_dns
+}
