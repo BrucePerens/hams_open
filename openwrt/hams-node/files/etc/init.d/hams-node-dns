@@ -11,7 +11,21 @@ reload_dnsmasq() {
 	return 0
 }
 
+# OpenWrt's dnsmasq reads extra files only from the directory in dhcp.@dnsmasq[0].confdir (its instance directory otherwise); set it when
+# unset, and write the snippet into whatever directory is set.
+ensure_confdir() {
+	local dir
+	dir=$(uci -q get 'dhcp.@dnsmasq[0].confdir')
+	if [ -z "$dir" ]; then
+		dir=$(dirname "$OUT")
+		uci -q get 'dhcp.@dnsmasq[0]' >/dev/null || return 0
+		uci set "dhcp.@dnsmasq[0].confdir=$dir" && uci commit dhcp
+	fi
+	OUT=$dir/$(basename "$OUT")
+}
+
 start_service() {
+	ensure_confdir
 	rm -f "$OUT"
 	hams-node-dns render "$OUT" || return 1
 	reload_dnsmasq

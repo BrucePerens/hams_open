@@ -41,10 +41,15 @@ class InitTests(unittest.TestCase):
 
     def test_dns_renders_and_reloads_dnsmasq_and_stop_removes(self):
         self.tool("hams-node-dns", 'mkdir -p "$(dirname "$2")"; echo "server=/ham/2001:db8::53" > "$2"\n')
+        self.tool("uci", 'echo "uci $*" >> "$FAKE/uci.log"\n[ "$1" = -q ] && [ "$2" = get ] && [ "$3" = "dhcp.@dnsmasq[0]" ] && echo dnsmasq\nexit 0\n')
         self.tool("dnsmasq", 'echo "dnsmasq $*" >> "$FAKE/log"\n')
         result, log = self.run_fn("hams-node-dns", "start_service")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(log, ["dnsmasq reload"])
+        # dnsmasq only reads a directory named in dhcp.@dnsmasq[0].confdir: it is set to where the snippet goes
+        uci = (self.root / "uci.log").read_text()
+        self.assertIn("uci set dhcp.@dnsmasq[0].confdir=%s" % (self.root / "dns"), uci)
+        self.assertIn("uci commit dhcp", uci)
         out = self.root / "dns" / "hams.conf"
         self.assertTrue(out.exists())
         self.run_fn("hams-node-dns", "stop_service")
