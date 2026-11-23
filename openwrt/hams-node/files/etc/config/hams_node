@@ -1,0 +1,6 @@
+# hams-node gateway settings
+config gateway 'main'
+	# registry export (block and domains) served by the hams.com directory
+	option export_url ''
+	# where the rendered Jool SIIT instance files go
+	option siit_dir '/etc/hams-node/siit'

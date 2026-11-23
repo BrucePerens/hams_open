@@ -1,0 +1,42 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-siit render EXPORT_FILE OUTDIR   write one Jool SIIT instance file per mesh domain
+# hams-node-siit apply OUTDIR                load every instance file into Jool
+# Output of render is byte-identical to siit_map.gateway_configs (hams_open/ipv6_siit).
+# The registry validated each prefix96 against block and domain; rows without one are not yet
+# provisioned and are skipped.
+set -u
+
+render() {
+	export_file=$1 outdir=$2
+	[ -r "$export_file" ] || { echo "hams-node-siit: cannot read $export_file" >&2; return 1; }
+	mkdir -p "$outdir" || return 1
+	i=0
+	while mesh=$(jsonfilter -i "$export_file" -e "@.domains[$i].mesh"); do
+		prefix=$(jsonfilter -i "$export_file" -e "@.domains[$i].prefix96")
+		i=$((i + 1))
+		case $mesh in
+		'' | *[!A-Za-z0-9_-]*) echo "hams-node-siit: skipping unsafe mesh name" >&2; continue ;;
+		esac
+		[ -n "$prefix" ] || continue
+		case $prefix in
+		*[!0-9a-fA-F:/]*) echo "hams-node-siit: skipping $mesh: bad prefix" >&2; continue ;;
+		esac
+		printf '{\n  "instance": "%s",\n  "framework": "netfilter",\n  "global": {\n    "pool6": "%s"\n  }\n}\n' \
+			"$mesh" "$prefix" > "$outdir/$mesh.json.new" || return 1
+		mv "$outdir/$mesh.json.new" "$outdir/$mesh.json" || return 1
+	done
+}
+
+apply() {
+	for f in "$1"/*.json; do
+		[ -e "$f" ] || continue
+		jool_siit file handle "$f" || echo "hams-node-siit: $f failed" >&2
+	done
+}
+
+case ${1:-} in
+render) [ $# -eq 3 ] && render "$2" "$3" ;;
+apply) [ $# -eq 2 ] && apply "$2" ;;
+*) echo "usage: hams-node-siit render EXPORT_FILE OUTDIR | apply OUTDIR" >&2; exit 2 ;;
+esac

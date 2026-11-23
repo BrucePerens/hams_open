@@ -158,3 +158,8 @@ flagging or fixing rather than assuming.
 Add an `SPDX-License-Identifier` header. Match whichever license already governs the directory
 you're adding to (check a sibling file); if there isn't one, use AGPL-3.0-or-later, this
 repository's default, and say so explicitly rather than leaving the file unlabeled.
+
+## openwrt/
+
+`openwrt/hams-node/` (the AREDN/OpenWrt gateway package) is **GPL-2.0-or-later**, matching OpenWrt package
+feeds; its files carry `SPDX-License-Identifier: GPL-2.0-or-later`.
