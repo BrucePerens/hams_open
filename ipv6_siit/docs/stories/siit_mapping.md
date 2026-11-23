@@ -10,3 +10,4 @@ Each space is a domain with its own 16-bit ID, so two meshes that both use 10/8 
 - [@ANCHOR: siit_map:domain] Domain IDs are 0 to 65535, assigned only by the registry.
 - [@ANCHOR: siit_map:next_free_domain] Proposes the lowest unused ID to record in the registry.
 - [@ANCHOR: siit_map:jool_siit_config] Generates the Jool SIIT instance file for one domain, from the registry's block and ID.
+- [@ANCHOR: siit_map:gateway_configs] Turns the registry JSON export (block and active domains) into one validated Jool instance file per mesh; also runs as a CLI on stdin.
