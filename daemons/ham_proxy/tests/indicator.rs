@@ -211,6 +211,7 @@ fn via_proxy(tag: &str, resp: Vec<u8>, key: Option<PKey<Private>>) -> Vec<u8> {
 
 #[test]
 fn end_to_end_html_gets_indicator_and_verifiable_header() {
+    // Tests [@ANCHOR: ham_proxy_request_identity]
     let (k, p) = keypair();
     let out = via_proxy(
         "html",
