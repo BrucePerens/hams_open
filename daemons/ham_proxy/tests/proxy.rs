@@ -35,6 +35,7 @@ fn make_cert(dir: &std::path::Path) -> (PathBuf, PathBuf) {
 }
 
 fn tmpdir(n: &str) -> PathBuf {
+    // temp-dir-ignore: one small per-process directory of test certificates; /tmp is cleared on reboot
     let d = std::env::temp_dir().join(format!("ham_proxy_{n}_{}", std::process::id()));
     std::fs::create_dir_all(&d).unwrap();
     d

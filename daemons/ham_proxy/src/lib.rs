@@ -22,6 +22,7 @@ const TLS13_SUITES: &str = "TLS_SHA256_SHA256:TLS_SHA384_SHA384";
 const TLS12_CIPHERS: &str = "NULL-SHA256:@SECLEVEL=0";
 const MAX_HEAD: usize = 65536;
 
+// [@ANCHOR: ham_proxy_error]
 /// Error from setting up or running the proxy.
 #[derive(Debug)]
 pub enum ProxyError {

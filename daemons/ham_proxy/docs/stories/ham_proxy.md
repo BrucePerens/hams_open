@@ -28,3 +28,19 @@ Internals:
 - [@ANCHOR: ham_proxy_main] The `ham_proxy` binary entry point: runs the proxy and exits 1 with the error printed if setup fails.
 - [@ANCHOR: ham_proxy_run] Parses `--listen --cert --key --site [--ca]`, binds, and serves each connection on its own thread.
 - [@ANCHOR: ham_proxy_arg] Looks up the value following a command-line flag.
+
+## Page indicator (signed, not encrypted)
+
+- [@ANCHOR: ham_proxy_request_identity] Before the request goes to the site its `Accept-Encoding` is replaced by `identity`, so an HTML body can be inspected and given the banner.
+- [@ANCHOR: ham_proxy_transform_html] `transform_html(head, body, host, key, ts)`: turns a buffered HTML response into what the ham gets: the banner exactly once, an optional signed `X-Ham-Integrity` header, and a block page if a password field would be sent in clear; chunked bodies are decoded first and encoded bodies refused.
+- [@ANCHOR: ham_proxy_find_ci] Case-insensitive byte search used to find `<body`, `<input` and attributes in HTML.
+- [@ANCHOR: ham_proxy_inject] `inject(html)`: puts the banner after the opening `<body>` tag (or at the start) unless it is already there.
+- [@ANCHOR: ham_proxy_has_unhandled_password] True if some password input is not marked as handled by the signature login.
+- [@ANCHOR: ham_proxy_unhex] Decodes a hex string (the header's hash and signature fields); `None` if malformed.
+- [@ANCHOR: ham_proxy_sign_header] `sign_header(...)`: builds the `X-Ham-Integrity` value for a body, host and time, signed with Ed25519.
+- [@ANCHOR: ham_proxy_verify_header] `verify_header(...)`: checks a header value against the received body, host, proxy key and clock.
+- [@ANCHOR: ham_proxy_verify_error] `VerifyError`: `Malformed` not a v1 header; `BodyChanged` the page was modified; `WrongHost` issued for another host; `Stale` timestamp outside the window; `BadSignature` the signature fails under the proxy key.
+- [@ANCHOR: ham_proxy_dechunk] `dechunk(body)`: decodes a chunked body; `None` if malformed.
+- [@ANCHOR: ham_proxy_http_response] Builds a complete HTTP/1.1 response (status, extra headers, body) for block pages and rewritten HTML.
+- [@ANCHOR: ham_proxy_serve_one_signed] `serve_one_signed(...)`: one ham connection with the indicator and optional signed header; non-HTML is streamed unchanged.
+- [@ANCHOR: ham_proxy_error] `ProxyError`: `Tls(text)` OpenSSL refused something; `Io(error)` socket error; `EncryptedLink(suite)` the negotiated suite encrypts; `BadRequest` request head too long or cut off.
