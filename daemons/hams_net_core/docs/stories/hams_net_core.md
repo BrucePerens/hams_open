@@ -16,3 +16,6 @@ Platform-free Rust crate shared by the local relay, hams-node and the phone apps
 - [@ANCHOR: hams_net_core_directory_text] A required record field must be a non-empty string.
 - [@ANCHOR: hams_net_core_directory_record] One record from its JSON object.
 - [@ANCHOR: hams_net_core_directory_payload] The answer body, wrapped in JSON-RPC `result` or bare, with its `status` checked.
+- [@ANCHOR: hams_net_core_peers_new] A peer table is made for one internet interface; asking for one on an RF link is refused (WireGuard encrypts, 47 CFR 97.113(a)(4)).
+- [@ANCHOR: hams_net_core_peers_on_packet] The first packet toward a member /60 asks the directory (lookup supplied by the consumer) and adds a peer for exactly that /60; later packets refresh it. A destination the directory does not know, or answers with a /60 not containing it, is not asked about again for 60 seconds.
+- [@ANCHOR: hams_net_core_peers_expire] A peer with no traffic for more than ten minutes is removed; the keys removed are returned.
