@@ -85,6 +85,13 @@ class BoundaryTests(unittest.TestCase):
         text = ham_boundary.render_ruleset({"mesh_if": "wlan0-mesh"})
         self.assertIn('oifname "wlan0-mesh" counter name refused_other drop', text)
 
+    def test_syslog_backend_has_no_nflog_group(self):
+        text = ham_boundary.render_ruleset({"log_backend": "syslog"})
+        self.assertNotIn("log group", text)
+        self.assertIn('ct state new log prefix "hams-station-id " counter', text)
+        with self.assertRaises(ValueError):
+            ham_boundary.render_ruleset({"log_backend": "none"})
+
 
 if __name__ == "__main__":
     unittest.main()
