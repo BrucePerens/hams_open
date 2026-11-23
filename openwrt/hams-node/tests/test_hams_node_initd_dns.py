@@ -45,7 +45,7 @@ class InitTests(unittest.TestCase):
         self.tool("dnsmasq", 'echo "dnsmasq $*" >> "$FAKE/log"\n')
         result, log = self.run_fn("hams-node-dns", "start_service")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(log, ["dnsmasq reload"])
+        self.assertEqual(log, ["dnsmasq restart"])
         # dnsmasq only reads a directory named in dhcp.@dnsmasq[0].confdir: it is set to where the snippet goes
         uci = (self.root / "uci.log").read_text()
         self.assertIn("uci set dhcp.@dnsmasq[0].confdir=%s" % (self.root / "dns"), uci)
