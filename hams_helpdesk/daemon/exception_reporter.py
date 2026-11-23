@@ -5,7 +5,7 @@
 Two uses, both ending in ``hams_helpdesk.exception.fingerprint.report_daemon_failure`` over Odoo's
 JSON-2 API, authenticated with the daemon key the Daemon Key Manager issues to the exception
 reporter service account. The key file is ``EXCEPTION_REPORTER_KEY_FILE`` or, by default,
-``/opt/hams/etc/keys/exception_reporter.env`` (odoo-owned, 0600). ``ODOO_KEY_FILE`` is deliberately NOT
+``/opt/hams/etc/keys/exception_report/exception_reporter.env`` (odoo-owned, group hamsd_exception_report, 0640). ``ODOO_KEY_FILE`` is deliberately NOT
 used: a daemon's own unit sets it to the daemon's own key, and the endpoint refuses every account but
 the reporter's. No secret lives in code or on a command line:
 
@@ -78,7 +78,9 @@ def _opener_for(url):
 
 
 DEFAULT_URL = "http://odoo:8069"
-DEFAULT_KEY_FILE = "/opt/hams/etc/keys/exception_reporter.env"
+# The family key directory of hamsd_exception_report (odoo:hamsd_exception_report 0750, the file odoo:hamsd_exception_report 0640): the unit runs as
+# that account and the daemons that still run as odoo read it as the owner. A host without the account keeps the flat file (hooks.exception_reporter_key_target).
+DEFAULT_KEY_FILE = "/opt/hams/etc/keys/exception_report/exception_reporter.env"
 USER_AGENT = "hams.com-daemon-client/1.0"
 REPORT_INTERVAL_SECONDS = 60
 JOURNAL_LINES = 20
@@ -116,7 +118,7 @@ def load_key(key_file):
                 if line and not line.startswith("#") and "=" in line:
                     name, _, value = line.partition("=")
                     values[name.strip()] = value.strip()
-    except (OSError, UnicodeDecodeError):  # a file the daemon's account may not read (odoo-owned 0600) is a failed report, not a crash
+    except (OSError, UnicodeDecodeError):  # a file the daemon's account may not read (odoo-owned, readable by the reporter's group only) is a failed report, not a crash
         raise ReportError("the exception reporter key file does not exist or cannot be read") from None
     key = values.get("ODOO_RPC_KEY")
     if not key:

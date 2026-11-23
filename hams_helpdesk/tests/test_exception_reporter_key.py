@@ -10,6 +10,7 @@ the real key directory, so a developer box's own reporter key file is never over
 """
 import os
 import stat
+from types import SimpleNamespace
 
 from odoo.tests import tagged
 
@@ -23,7 +24,9 @@ SCRATCH_KEY_FILE = "/opt/hams/etc/keys/test_exception_reporter_key.env"
 class TestExceptionReporterKey(RealTransactionCase):
     def setUp(self):
         super().setUp()
-        self.safe_patch_object(hooks, "KEY_FILE", new=SCRATCH_KEY_FILE)
+        # No such account on this host: the flat (legacy) target, as on a host that was not provisioned.
+        self.safe_patch_object(hooks, "OS_GROUP", new="hamsd_no_such_group_for_test")
+        self.safe_patch_object(hooks, "LEGACY_KEY_FILE", new=SCRATCH_KEY_FILE)
         self.addCleanup(self._remove_scratch_key_file)
         self._remove_scratch_key_file()
 
@@ -62,3 +65,15 @@ class TestExceptionReporterKey(RealTransactionCase):
         hooks.post_init_hook(self.env)
         self.assertEqual(len(self._registries()), 1)
         self.assertTrue(os.path.exists(SCRATCH_KEY_FILE))
+
+
+@tagged("post_install", "-at_install")
+class TestExceptionReporterKeyTarget(RealTransactionCase):
+    def test_exception_reporter_key_target(self):
+        # [@ANCHOR: hams_helpdesk:test_exception_reporter_key_target]
+        # Tests [@ANCHOR: hams_helpdesk:exception_reporter_key_target]
+        self.assertEqual(hooks.KEY_FILE, "/opt/hams/etc/keys/exception_report/exception_reporter.env")
+        self.safe_patch_object(hooks.grp, "getgrall", return_value=[SimpleNamespace(gr_name="hamsd_exception_report")])
+        self.assertEqual(hooks.exception_reporter_key_target(), (hooks.KEY_FILE, "hamsd_exception_report"))
+        self.safe_patch_object(hooks.grp, "getgrall", return_value=[])
+        self.assertEqual(hooks.exception_reporter_key_target(), (hooks.LEGACY_KEY_FILE, None))

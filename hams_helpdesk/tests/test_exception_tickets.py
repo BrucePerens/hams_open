@@ -1196,7 +1196,7 @@ class TestDaemonReporterHelper(RealTransactionCase):
         os.environ["EXCEPTION_REPORTER_KEY_FILE"] = "/run/other/key.env"
         with self.assertRaises(self.helper.ReportError):
             self.helper.post_report({"unit": "a.service", "kind": "unit_failed"}, url="http://odoo.invalid:1")
-        self.assertEqual(seen, ["/opt/hams/etc/keys/exception_reporter.env", "/run/other/key.env"])
+        self.assertEqual(seen, ["/opt/hams/etc/keys/exception_report/exception_reporter.env", "/run/other/key.env"])
 
     def test_main_rejects_other_arguments(self):
         self.assertEqual(self.helper.main(["nonsense"]), 2)

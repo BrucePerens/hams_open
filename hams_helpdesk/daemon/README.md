@@ -58,7 +58,7 @@ recorded at once, repeats are counted and written at most once a minute.
 * **Unix socket**: `ODOO_URL=unix:///run/odoo/rpc.sock` sends the report over the RPC guard's Unix socket (`_opener_for` `[@ANCHOR: hams_helpdesk:daemon_unix_opener]`, Host header `unix-socket`); `http(s)://` URLs work as before
 * **Redirects are refused** (`post_report` `[@ANCHOR: hams_helpdesk:daemon_post_report]` sends through an opener whose handler `_NoRedirect.redirect_request` `[@ANCHOR: hams_helpdesk:daemon_no_redirect]` takes the urllib redirect arguments `(req, fp, code, msg, headers, newurl)` and returns `None`): urllib would copy the bearer key to the host a 3xx answer names; a 3xx raises `ReportError`.
 * **Authentication.** The key belongs to the `exception_reporter_service_internal` service account,
-  issued and rotated by the Daemon Key Manager into `/opt/hams/etc/keys/exception_reporter.env`
+  issued and rotated by the Daemon Key Manager into `/opt/hams/etc/keys/exception_report/exception_reporter.env` (group `hamsd_exception_report`; a host without that account keeps `/opt/hams/etc/keys/exception_reporter.env`)
   (`ODOO_RPC_LOGIN`, `ODOO_RPC_KEY`, mode 0600, owned by the Odoo user). The method refuses every other
   account. That account can touch only `server_exception` tickets and the fingerprint rows. No secret is
   in code, a unit file or an argument list. The key is registered by `post_init_hook` on a fresh
@@ -90,7 +90,7 @@ Test with `systemctl start hams-exception-report@<some-unit>.service`.
 
 ## In-process reporting needs the reporter key
 
-`reporting_failures` reads the same key file, `/opt/hams/etc/keys/exception_reporter.env` (override with
+`reporting_failures` reads the same key file, `/opt/hams/etc/keys/exception_report/exception_reporter.env` (group `hamsd_exception_report`; a host without that account keeps `/opt/hams/etc/keys/exception_reporter.env`) (override with
 `EXCEPTION_REPORTER_KEY_FILE`). It is readable by the `odoo` account only, so only a daemon that runs as
 `odoo` (adif.ingress, adif.processor, backup.worker, cache-manager) can deliver an in-process report. A
 daemon in its own `hamsd_*` account cannot read it and is covered by the OnFailure unit alone. The helper
