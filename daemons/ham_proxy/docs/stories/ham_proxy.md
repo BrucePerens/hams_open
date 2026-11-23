@@ -74,3 +74,4 @@ A `.ham` server is identified by a DANE-EE TLSA record in the signed `.ham` zone
 - [@ANCHOR: ham_proxy_log_line] `log_line(secs, callsign, host, suite)`: one Part 97 station-ID line `time CALLSIGN -> host suite`; `None` without a callsign.
 - [@ANCHOR: ham_proxy_policy_new] `Policy::new(whitelist, callsign, sink)`: whitelist plus the log sink for one proxy; refuses an empty callsign.
 - [@ANCHOR: ham_proxy_policy_record] `Policy::record(...)`: appends the station-ID line for one permitted flow.
+- [@ANCHOR: ham_proxy_serve_one_policed] `serve_one_policed(...)`: like `serve_one_login` plus an optional `Policy`: a site not on the whitelist is refused before any upstream connection (`NotWhitelisted`), and each permitted flow is logged with callsign, host and suite.
