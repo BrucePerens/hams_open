@@ -86,11 +86,30 @@ pub const VNWA_CODEC: (u16, u16) = (0x08bb, 0x29c0);
 
 impl Default for Policy {
     fn default() -> Policy {
+        if cfg!(target_os = "macos") {
+            Policy::macos()
+        } else {
+            Policy::linux()
+        }
+    }
+}
+
+impl Policy {
+    // [@ANCHOR: relay_broker_policy_macos]
+    /// macOS: one serial major (9: every `/dev/cu.*` and `/dev/tty.*` node) and no audio nodes (CoreAudio has none in `/dev`).
+    pub fn macos() -> Policy {
+        Policy {
+            serial_majors: vec![9],
+            audio_majors: Vec::new(),
+            ..Policy::linux()
+        }
+    }
+
+    /// Linux: 4 ttyS (legacy), 166 ttyACM, 188 ttyUSB, 204 and 207 vendor serial ranges; 116 is ALSA.
+    pub fn linux() -> Policy {
         Policy {
             device_root: PathBuf::from("/dev"),
-            // 4 ttyS (legacy), 166 ttyACM, 188 ttyUSB, 204 and 207 vendor serial ranges.
             serial_majors: vec![4, 166, 188, 204, 207],
-            // 116 is ALSA.
             audio_majors: vec![116],
             deny_usb: vec![VNWA_CODEC],
             allow_unreadable_usb: false,
@@ -223,7 +242,7 @@ mod tests {
     // Tests [@ANCHOR: relay_broker_denial_reason]
     #[test]
     fn lexical_check_refuses_traversal_relative_and_deny_listed_paths() {
-        let p = Policy::default();
+        let p = Policy::linux();
         assert_eq!(
             p.check_path("/dev/ttyUSB0"),
             Ok(PathBuf::from("/dev/ttyUSB0"))
@@ -267,7 +286,7 @@ mod tests {
     // Tests [@ANCHOR: relay_broker_policy_class_of_major]
     #[test]
     fn kinds_are_matched_to_the_requested_class_and_disks_refused() {
-        let p = Policy::default();
+        let p = Policy::linux();
         let tty = NodeKind::Char {
             major: 188,
             minor: 0,
@@ -308,7 +327,7 @@ mod tests {
     // Tests [@ANCHOR: relay_broker_policy_check_fd]
     #[test]
     fn virtual_consoles_share_the_serial_major_but_are_never_handed_out() {
-        let p = Policy::default();
+        let p = Policy::linux();
         let on_major_4 = |minor| NodeKind::Char { major: 4, minor };
         for minor in [0, 1, 7, 63] {
             assert_eq!(
@@ -330,14 +349,28 @@ mod tests {
         }
     }
 
+    // Tests [@ANCHOR: relay_broker_policy_macos]
+    #[test]
+    fn the_macos_policy_has_one_serial_major_and_no_audio_class() {
+        let p = Policy::macos();
+        assert_eq!(p.class_of_major(9), Some(DeviceClass::Serial));
+        assert_eq!(p.class_of_major(116), None);
+        assert_eq!(p.device_root, PathBuf::from("/dev"));
+        assert_eq!(
+            p.check_path("/dev/cu.usbserial-A1"),
+            Ok(PathBuf::from("/dev/cu.usbserial-A1"))
+        );
+    }
+
     // Tests [@ANCHOR: relay_broker_policy_check_node]
     #[test]
     fn node_walk_uses_the_real_dev_null_without_root() {
         let p = Policy {
-            serial_majors: vec![1],
+            // /dev/null is major 1 on Linux and major 3 on macOS.
+            serial_majors: vec![if cfg!(target_os = "macos") { 3 } else { 1 }],
             ..Policy::default()
         };
-        let os = crate::os::LinuxOs::default();
+        let os = crate::os::NativeOs::default();
         let clean = p.check_path("/dev/null").unwrap();
         assert_eq!(p.check_node(&os, &clean, DeviceClass::Serial), Ok(()));
         assert_eq!(
@@ -350,11 +383,14 @@ mod tests {
             p.check_node(&os, &link, DeviceClass::Serial),
             Err(Denial::Symlink)
         );
-        let via_link_dir = p.check_path("/dev/fd/0").unwrap();
-        assert_eq!(
-            p.check_node(&os, &via_link_dir, DeviceClass::Serial),
-            Err(Denial::Symlink)
-        );
+        // On Linux /dev/fd is a symlink to /proc/self/fd (on macOS it is a directory of descriptors, not a link).
+        if cfg!(target_os = "linux") {
+            let via_link_dir = p.check_path("/dev/fd/0").unwrap();
+            assert_eq!(
+                p.check_node(&os, &via_link_dir, DeviceClass::Serial),
+                Err(Denial::Symlink)
+            );
+        }
         assert_eq!(
             p.check_node(&os, Path::new("/etc/x"), DeviceClass::Serial),
             Err(Denial::OutsideRoot)

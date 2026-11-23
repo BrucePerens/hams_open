@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use relay_broker::audit::AuditLog;
 use relay_broker::broker::Broker;
 use relay_broker::config::Config;
-use relay_broker::os::{LinuxOs, NodeKind, Os, Peer, UsbIdentity};
+use relay_broker::os::{NativeOs, NodeKind, Os, Peer, UsbIdentity};
 use relay_broker::wire::{DeviceClass, DeviceDescriptor};
 
 pub const HAM_UID: u32 = 1000;
@@ -136,7 +136,7 @@ impl Os for FakeOs {
             return Err(io::Error::from(io::ErrorKind::NotFound));
         }
         self.last_opened.set(Some(kind));
-        LinuxOs::default().open_device(Path::new("/dev/null"), read_only)
+        NativeOs::default().open_device(Path::new("/dev/null"), read_only)
     }
     fn fd_kind(&self, _fd: BorrowedFd<'_>) -> NodeKind {
         self.last_opened.get().unwrap_or(NodeKind::Missing)
@@ -172,11 +172,11 @@ impl Os for FakeOs {
     }
     fn bind_udp(&self, port: u16) -> io::Result<OwnedFd> {
         self.binds.lock().unwrap().push(port);
-        LinuxOs::default().open_device(Path::new("/dev/null"), true)
+        NativeOs::default().open_device(Path::new("/dev/null"), true)
     }
     fn bind_dhcp_client(&self, interface: &str) -> io::Result<OwnedFd> {
         self.dhcp_binds.lock().unwrap().push(interface.to_string());
-        LinuxOs::default().open_device(Path::new("/dev/null"), true)
+        NativeOs::default().open_device(Path::new("/dev/null"), true)
     }
     fn hub_start(
         &self,
@@ -241,7 +241,11 @@ impl Os for FakeOs {
 
 /// A config that lets `HAM_UID` in, with no audit file.
 pub fn test_config() -> Config {
-    let mut cfg = Config::default();
+    // The fake OS below reports Linux device majors.
+    let mut cfg = Config {
+        policy: relay_broker::policy::Policy::linux(),
+        ..Config::default()
+    };
     cfg.allow.uids.push(HAM_UID);
     cfg.audit_log = None;
     cfg

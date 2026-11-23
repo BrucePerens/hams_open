@@ -274,7 +274,7 @@ mod tests {
         assert_eq!(cfg.policy.serial_majors, vec![136]);
         assert_eq!(
             cfg.policy.audio_majors,
-            vec![116],
+            Policy::default().audio_majors,
             "untouched list keeps its default"
         );
         assert_eq!(cfg.idle_exit_secs, 5);

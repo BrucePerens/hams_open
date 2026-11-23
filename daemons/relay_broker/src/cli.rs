@@ -12,7 +12,7 @@ use std::time::Duration;
 use crate::audit::AuditLog;
 use crate::broker::Broker;
 use crate::config::Config;
-use crate::os::LinuxOs;
+use crate::os::NativeOs;
 use crate::server::{activated_listener, run};
 
 /// Command-line options.
@@ -118,7 +118,7 @@ pub fn run_main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let mut broker = Broker::new(&config, audit, Box::new(LinuxOs::default()));
+    let mut broker = Broker::new(&config, audit, Box::new(NativeOs::default()));
     match run(
         &mut broker,
         &listener,

@@ -205,10 +205,11 @@ fn an_allowed_open_passes_a_working_descriptor_and_never_the_path() {
     assert_eq!(outcome, Outcome::Answered);
     assert_eq!(resp, Response::Opened);
     let fd = fd.expect("descriptor passed");
-    let kind = relay_broker::os::LinuxOs::default().fd_kind(fd.as_fd());
+    let os = relay_broker::os::NativeOs::default();
+    let kind = os.fd_kind(fd.as_fd());
     assert_eq!(
         kind,
-        NodeKind::Char { major: 1, minor: 3 },
+        os.node_kind(std::path::Path::new("/dev/null")),
         "the fake opened /dev/null"
     );
     let mut file = std::fs::File::from(fd);
@@ -458,8 +459,8 @@ fn impostor(sock: &std::path::Path) -> std::thread::JoinHandle<bool> {
     let listener = UnixListener::bind(sock).unwrap();
     std::thread::spawn(move || {
         let (mut conn, _) = listener.accept().unwrap();
-        conn.set_read_timeout(Some(Duration::from_millis(500)))
-            .unwrap();
+        // macOS refuses a socket option once the peer has hung up; the read below then returns end of file at once.
+        let _ = conn.set_read_timeout(Some(Duration::from_millis(500)));
         let mut byte = [0u8; 1];
         // The client verifies and hangs up without sending anything: EOF (0) or a timeout.
         matches!(conn.read(&mut byte), Ok(n) if n > 0)

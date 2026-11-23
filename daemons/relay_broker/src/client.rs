@@ -7,8 +7,6 @@ use std::os::fd::{AsFd, OwnedFd};
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 
-use nix::sys::socket::{getsockopt, sockopt};
-
 use crate::transport::{recv_frame, send_frame, set_timeouts};
 use crate::wire::{Request, Response};
 
@@ -46,15 +44,15 @@ pub const DEFAULT_SERVER_UIDS: &[u32] = &[0];
 /// socket's directory root-only. An empty `expected_uids` permits no one. The refusal is
 /// `PermissionDenied`; a failure to read the credentials is returned as it came.
 pub fn verify_server(stream: &UnixStream, expected_uids: &[u32]) -> io::Result<()> {
-    let cred = getsockopt(stream, sockopt::PeerCredentials).map_err(io::Error::from)?;
-    if expected_uids.contains(&cred.uid()) {
+    let cred = crate::os::socket_peer(stream.as_fd())?;
+    if expected_uids.contains(&cred.uid) {
         return Ok(());
     }
     Err(io::Error::new(
         io::ErrorKind::PermissionDenied,
         format!(
             "the broker socket is served by uid {}, which is not an expected broker account",
-            cred.uid()
+            cred.uid
         ),
     ))
 }

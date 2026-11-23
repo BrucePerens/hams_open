@@ -76,8 +76,7 @@ defend against root); `pid` in the audit log (reusable, informational); the gpas
 `/etc/group` on apply; a kernel driver bug reachable through a *legitimately* opened device;
 denial of service by a legitimate peer against itself (rate limit is per UID); TOCTOU (time-of-check to time-of-use race) on sysfs
 USB identity (the id is read before the open; a device re-enumerating between the two is a
-hardware event, not an attacker); macOS and Windows (the `Os` trait is the seam, nothing is
-implemented there yet).
+hardware event, not an attacker). The macOS `Os` (`src/os_macos.rs`) serves the same socket, `LOCAL_PEERCRED` check, descriptor passing and policy; the stand-alone hub, the DHCP-client socket, the package upgrade, power-off and the clock step answer `Unsupported` there. The Windows broker is `src/windows.rs`.
 
 ## Root-only paths and how they are tested
 
@@ -1604,6 +1603,70 @@ The Windows broker serves the clock requests over the named pipe `\\.\pipe\hams-
 **Returns.** Exit code 0 after a service run, 2 for a bad command line, 1 when serving fails. **Errors.** Printed to stderr. **Side effects.** Runs the broker. **Tests.** `started_by_hand_the_broker_serves_the_pipe_and_a_second_copy_cannot_take_it` (windows.rs, tests/windows_service.rs).
 
 
+## macOS functions (src/os_macos.rs, and the macOS branches in src/os.rs)
+
+The macOS `Os` is built and tested on a Mac (`cargo test` on macOS; its oracle tests call `stat`, `id`, `dseditgroup`, `lsof`, `date` and `system_profiler`). Serial nodes are `/dev/cu.*` and `/dev/tty.*` (character-device major 9); USB identity comes from the I/O Registry through the fixed program `/usr/sbin/ioreg` (no shell, empty environment); group membership comes from `dscl`; `dseditgroup` adds a member.
+
+### `parse_ioreg` (os_macos.rs) [@ANCHOR: relay_broker:os_macos_parse_ioreg]
+
+**Purpose.** Reads `ioreg -r -c IOUSBHostDevice -l -w0` text and returns every serial node (`IOSerialBSDClient`) found under a USB device, with the vendor id, product id, product name and vendor name of the nearest enclosing `IOUSBHostDevice` (not of an interface or a hub above it). A node listed twice is returned once.
+
+**Signature.** `pub fn parse_ioreg(text: &str) -> Vec<SerialNode>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `text` | `&str` | The `ioreg` output; anything else parses to an empty list. |
+
+**Returns.** The nodes in the order found. **Errors.** None. **Side effects.** None. **Tests.** `a_serial_node_takes_the_ids_of_its_nearest_usb_device_not_of_the_interface_or_the_hub`, `garbage_and_empty_text_parse_to_no_nodes` (os_macos.rs).
+
+### `parse_dscl_search` (os_macos.rs) [@ANCHOR: relay_broker:os_macos_parse_dscl_search]
+
+**Purpose.** The group names in `dscl . -search /Groups GroupMembership <user>` output (`name<TAB>GroupMembership = (user)`), which is how `groups_of` learns the explicit memberships of an account.
+
+**Signature.** `fn parse_dscl_search(text: &str) -> Vec<String>` (private)
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `text` | `&str` | The `dscl` output. |
+
+**Returns.** The group names. **Errors.** None. **Side effects.** None. **Tests.** `dscl_search_lines_give_group_names` (os_macos.rs).
+
+### `socket_peer` (os.rs) [@ANCHOR: relay_broker:relay_broker_socket_peer]
+
+**Purpose.** The uid, first group and pid of the process at the other end of a connected Unix socket: `SO_PEERCRED` on Linux, `LOCAL_PEERCRED` and `LOCAL_PEERPID` on macOS. `LinuxOs::peer_credentials`, `MacOs::peer_credentials` and the client's server check all use it.
+
+**Signature.** `pub fn socket_peer(socket: BorrowedFd<'_>) -> io::Result<Peer>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `socket` | `BorrowedFd` | A connected Unix stream socket. |
+
+**Returns.** The `Peer`. **Errors.** `io::Error` from `getsockopt`. **Side effects.** None. **Tests.** `peer_credentials_name_this_process_as_the_oracle_id_does` (os_macos.rs).
+
+### `kind_of_stat` (os.rs) [@ANCHOR: relay_broker:relay_broker_kind_of_stat]
+
+**Purpose.** `kind_of_mode` of a `stat` result: the field types of `st_mode` and `st_rdev` differ between Linux and macOS (`dev_t` is a signed 32-bit number on macOS, its major in the top byte and its minor in the low 24 bits).
+
+**Signature.** `pub(crate) fn kind_of_stat(st: &FileStat) -> NodeKind`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| `st` | `&FileStat` | From `lstat` or `fstat`. |
+
+**Returns.** The `NodeKind`. **Errors.** None. **Side effects.** None. **Tests.** `node_numbers_equal_what_stat_prints_for_dev_null` (os_macos.rs).
+
+### `Policy::macos` (policy.rs) [@ANCHOR: relay_broker:relay_broker_policy_macos]
+
+**Purpose.** The default policy on macOS: serial major 9 (every `/dev/cu.*` and `/dev/tty.*` node) and no audio class, since CoreAudio has no nodes in `/dev`. `Policy::default()` is this on macOS and `Policy::linux()` elsewhere.
+
+**Signature.** `pub fn macos() -> Policy`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | None. |
+
+**Returns.** The policy. **Errors.** None. **Side effects.** None. **Tests.** `the_macos_policy_has_one_serial_major_and_no_audio_class` (policy.rs).
+
 ## Data structures
 
 Every data structure of the broker, explained in full (ADR 0113): purpose, fields, who builds and reads it. Each sits under the anchor on its definition in `src/`.
@@ -1896,6 +1959,33 @@ Every data structure of the broker, explained in full (ADR 0113): purpose, field
 | `Missing` | - | Does not exist or cannot be examined. |
 
 **Used by.** `fd_kind`, `kind_of_mode`, `node_kind` (functions whose signature names it).
+
+### `MacOs` [@ANCHOR: relay_broker:os_macos_os_struct]
+
+**Purpose.** The macOS implementation of the `Os` trait (see "macOS functions").
+
+**Definition.** `pub struct MacOs` (struct) in `daemons/relay_broker/src/os_macos.rs`; derives `Debug`, `Clone`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `ioreg` | `PathBuf` | Normally `/usr/sbin/ioreg`. |
+| `dseditgroup` | `PathBuf` | Normally `/usr/sbin/dseditgroup`. |
+
+**Used by.** `NativeOs` on macOS, `Broker::new` through `run_main`.
+
+### `SerialNode` [@ANCHOR: relay_broker:os_macos_serial_node]
+
+**Purpose.** One serial node of the I/O Registry with the USB device it hangs under.
+
+**Definition.** `pub struct SerialNode` (struct) in `daemons/relay_broker/src/os_macos.rs`; derives `Debug`, `Clone`, `PartialEq`, `Eq`.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `callout` | `String` | `/dev/cu.*`. |
+| `dialin` | `String` | `/dev/tty.*`. |
+| `usb` | `Option<(u16, u16, String, String)>` | Vendor id, product id, product string and vendor string of the nearest enclosing USB device; `None` for a node with no USB parent. |
+
+**Used by.** `parse_ioreg`, `MacOs::list_devices` and `usb_identity`.
 
 ### `LinuxOs` [@ANCHOR: relay_broker:os_linux_os_struct]
 

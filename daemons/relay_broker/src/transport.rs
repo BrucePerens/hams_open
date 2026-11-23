@@ -13,9 +13,22 @@ use nix::sys::socket::{
     cmsg_space, recvmsg, sendmsg, setsockopt, sockopt, ControlMessage, ControlMessageOwned,
     MsgFlags,
 };
-use nix::sys::time::TimeVal;
+use nix::sys::time::{TimeVal, TimeValLike};
 
 use crate::wire::{frame_body_len, frame_encode, WireError, MAX_FRAME};
+
+/// `sendmsg` flags: Linux has `MSG_NOSIGNAL`; on macOS the standard library already makes the process ignore `SIGPIPE`.
+#[cfg(target_os = "linux")]
+const SEND_FLAGS: MsgFlags = MsgFlags::MSG_NOSIGNAL;
+/// `sendmsg` flags (macOS: none, see above).
+#[cfg(not(target_os = "linux"))]
+const SEND_FLAGS: MsgFlags = MsgFlags::empty();
+/// `recvmsg` flags: Linux closes received descriptors on exec atomically; elsewhere `recv_exact` sets the flag right after the receive.
+#[cfg(target_os = "linux")]
+const RECV_FLAGS: MsgFlags = MsgFlags::MSG_CMSG_CLOEXEC;
+/// `recvmsg` flags (macOS: none, see above).
+#[cfg(not(target_os = "linux"))]
+const RECV_FLAGS: MsgFlags = MsgFlags::empty();
 
 /// How long either side waits for the other before giving up.
 pub const IO_TIMEOUT: Duration = Duration::from_secs(5);
@@ -23,7 +36,7 @@ pub const IO_TIMEOUT: Duration = Duration::from_secs(5);
 // [@ANCHOR: relay_broker_set_timeouts]
 /// Applies `IO_TIMEOUT` as the receive and send timeout of a socket.
 pub fn set_timeouts(socket: BorrowedFd<'_>) -> io::Result<()> {
-    let tv = TimeVal::new(IO_TIMEOUT.as_secs() as i64, 0);
+    let tv = TimeVal::seconds(i64::try_from(IO_TIMEOUT.as_secs()).unwrap_or(5));
     setsockopt(&socket, sockopt::ReceiveTimeout, &tv).map_err(io::Error::from)?;
     setsockopt(&socket, sockopt::SendTimeout, &tv).map_err(io::Error::from)
 }
@@ -47,7 +60,7 @@ pub fn send_frame(
         let rest = frame.get(sent..).unwrap_or_default();
         let iov = [IoSlice::new(rest)];
         let cm: &[ControlMessage<'_>] = if sent == 0 { &cmsgs } else { &[] };
-        let n = sendmsg::<()>(socket.as_raw_fd(), &iov, cm, MsgFlags::MSG_NOSIGNAL, None)
+        let n = sendmsg::<()>(socket.as_raw_fd(), &iov, cm, SEND_FLAGS, None)
             .map_err(io::Error::from)?;
         if n == 0 {
             return Err(io::Error::from(io::ErrorKind::WriteZero));
@@ -78,27 +91,33 @@ fn recv_exact(
         // A zero timeval means "wait forever", so the value never goes below one microsecond.
         let secs = i64::try_from(remaining.as_secs()).unwrap_or(i64::MAX);
         let micros = i64::from(remaining.subsec_micros()).max(i64::from(secs == 0));
-        setsockopt(
+        match setsockopt(
             &socket,
             sockopt::ReceiveTimeout,
-            &TimeVal::new(secs, micros),
-        )
-        .map_err(io::Error::from)?;
+            &(TimeVal::seconds(secs) + TimeVal::microseconds(micros)),
+        ) {
+            Ok(()) => {}
+            // macOS refuses a socket option on a socket whose peer has already gone; the `recvmsg` below then reports the end of file at
+            // once (a disconnected socket never blocks), so there is no wait to bound.
+            Err(nix::errno::Errno::EINVAL) if cfg!(target_os = "macos") => {}
+            Err(e) => return Err(io::Error::from(e)),
+        }
         let mut space = vec![0u8; cmsg_space::<[RawFd; 4]>()];
         let mut iov = [IoSliceMut::new(buf.get_mut(filled..).unwrap_or_default())];
-        let msg = recvmsg::<()>(
-            socket.as_raw_fd(),
-            &mut iov,
-            Some(&mut space),
-            MsgFlags::MSG_CMSG_CLOEXEC,
-        )
-        .map_err(io::Error::from)?;
+        let msg = recvmsg::<()>(socket.as_raw_fd(), &mut iov, Some(&mut space), RECV_FLAGS)
+            .map_err(io::Error::from)?;
         for cmsg in msg.cmsgs().map_err(io::Error::from)? {
             if let ControlMessageOwned::ScmRights(received) = cmsg {
                 for raw in received {
                     // Wrapped in an OwnedFd at once, so every received descriptor is closed
                     // when dropped, kept or not.
                     let owned = adopt_received_fd(raw);
+                    #[cfg(not(target_os = "linux"))]
+                    nix::fcntl::fcntl(
+                        &owned,
+                        nix::fcntl::FcntlArg::F_SETFD(nix::fcntl::FdFlag::FD_CLOEXEC),
+                    )
+                    .map_err(io::Error::from)?;
                     if fds.len() < 4 {
                         fds.push(owned);
                     }
