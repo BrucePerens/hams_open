@@ -157,13 +157,9 @@ members can also opt out on `/my/ipv6`, after which hams.com drops their rows. E
   `jool_siit`); `hams-node` now depends on those (#3248). Build with the 25.12.5 SDK: add the `packages` feed to `feeds.conf`, install both,
   `make package/jool/compile`; the SDK feeds lack `libnl` and `argp-standalone` (copy `package/libs/libnl` and `package/libs/argp-standalone`
   from the openwrt tree at the SDK's commit).
-- Kernel match: AREDN builds its kernel without namespaces, cgroups, keys and seccomp (`config.buildinfo` next to the image). A kmod built in the
-  stock SDK loads only after those options are removed from the SDK's `autoconf.h` (otherwise `jool_common: Unknown symbol __put_net`), and
-  `apk add` refuses it because the kernel ABI hash differs; extracting the `.ko` by hand and `insmod` works. The module then loads but every
-  Jool netlink reply fails (`genlmsg_reply() failed. (errcode -111)`), also with a kmod built from a full OpenWrt tree configured with
-  AREDN's own `config.buildinfo`, so AREDN's firmware tree differs somewhere we cannot see. **Jool does not work on AREDN 4.26.10.0 with an
-  out-of-tree kmod.** Unblock: AREDN ships `kmod-jool-netfilter` in its own build (so kernel and module match), or a hams-node gateway runs
-  on a stock OpenWrt router on the LAN of the AREDN node (the second gateway form).
+- Kernel match (superseded 2026-11-23, see `openwrt/aredn-jool/README.md`): a kmod from the stock SDK fails every Jool netlink reply
+  (`genlmsg_reply() failed (errcode -111)`) because the SDK kernel has `CONFIG_NET_NS=y` and AREDN's has not, which shifts `struct genl_info`
+  under the inline `genlmsg_reply()`. Jool built from AREDN's own tree (`openwrt/aredn-jool/build_aredn_jool.sh`, per target) loads and works on the stock image.
 - Stock OpenWrt 25.12.5 x86-64 in QEMU: `apk add` pulls Jool from the feed, the real `jool_siit` accepts the files rendered by
   `hams-node-siit render` (`jool_siit -i mesh7 global display` shows `pool6: 2001:db8:ab01:7::/96`), `apply` replaces the instance and exits 1
   when an instance file is invalid.
@@ -189,8 +185,8 @@ and the six libnl packages (libnl200, -core200, -genl200, -cli200, -nf200, -rout
 `apk add --allow-untrusted ./*.apk` resolves all dependencies. The kmod depends on `kernel=6.12.94~5a659643ce3911a4604e3e1c36ff86d9-r1` (the node's
 `apk list -I kernel`); a rebuild gets a different hash (0fa03e...), so write the node's hash into `build_dir/.../linux-6.12.94/.vermagic` before building
 the kmods. Test: three QEMU VMs (v6 host, stock AREDN with Jool, v4 host; `-netdev socket`): `ping -6` and `wget` through pool6 `2001:db8:c::/96` worked, and
-`hams-node-siit render` + `apply` created the instance. The earlier SDK-built module (`genlmsg_reply -111`) stays unexplained; the tree-built one works.
-Each other target/release needs its own kmod build with the same recipe.
+`hams-node-siit render` + `apply` created the instance. The earlier SDK-built module (`genlmsg_reply -111`) is explained by the NET_NS mismatch (`openwrt/aredn-jool/README.md`); the tree-built one works.
+Each other target/release needs its own kmod build: `openwrt/aredn-jool/build_aredn_jool.sh -t TARGET` (it verifies kernel hash, config and module ABI against the release and refuses otherwise).
 
 ## /60 to the LANs (`hams-node-lan`, separate package)
 
