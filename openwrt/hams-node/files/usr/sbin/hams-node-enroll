@@ -6,10 +6,10 @@
 #   hams-node-enroll OPTIONS enroll [ONE_TIME_TOKEN]   show a code to approve at /my/ipv6 (or use the token), then store the device token
 #   hams-node-enroll OPTIONS fetch                      renew the configuration (run from cron); stops for good if the token is revoked
 #   hams-node-enroll OPTIONS unenroll                   forget the token and stop the schedule
-# OPTIONS: -u BASE_URL (https://hams.com) -s STATE_DIR (/etc/hams-node) [-c CRONTAB (/etc/crontabs/root)] [-i POLL_SECONDS]
+# OPTIONS: -u BASE_URL (uci hams_node_enroll.main.url, else https://hams.com) -s STATE_DIR (/etc/hams-node) [-c CRONTAB (/etc/crontabs/root)] [-i POLL_SECONDS]
 # Exit: 0 ok; 1 refused or not enrolled; 3 token revoked (stopped, no retries); 4 hams.com unreachable (cron tries again later).
 set -u
-base=https://hams.com state=/etc/hams-node cron=/etc/crontabs/root poll=''
+base='' state=/etc/hams-node cron=/etc/crontabs/root poll=''
 while getopts u:s:c:i: opt; do
 	case $opt in
 	u) base=$OPTARG ;; s) state=$OPTARG ;; c) cron=$OPTARG ;; i) poll=$OPTARG ;;
@@ -18,6 +18,13 @@ while getopts u:s:c:i: opt; do
 done
 shift $((OPTIND - 1))
 [ $# -ge 1 ] || { echo "usage: hams-node-enroll [-u URL] [-s DIR] enroll [TOKEN] | fetch | unenroll" >&2; exit 2; }
+[ -n "$base" ] || base=$(uci -q get hams_node_enroll.main.url 2>/dev/null)
+[ -n "$base" ] || base=https://hams.com
+case $base in
+https://?*) ;;
+http://127.0.0.1 | http://127.0.0.1/* | http://127.0.0.1:* | http://localhost | http://localhost/* | http://localhost:*) ;;
+*) echo "hams-node-enroll: portal URL must be https:// (http:// only for 127.0.0.1 or localhost): $base" >&2; exit 1 ;;
+esac
 cmd=$1
 shift
 umask 077
