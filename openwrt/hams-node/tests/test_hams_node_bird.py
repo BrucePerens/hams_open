@@ -69,10 +69,50 @@ class BirdTests(unittest.TestCase):
         result, conf, _ = self.render(secret=None)
         self.assertNotEqual(result.returncode, 0)
 
+    def test_rf_neighbours_are_direct_sessions_preferred_over_route_servers(self):
+        _, conf, _ = self.render(neighbor="4200000007,fe80::7,rf0 4200000008,2001:db8:ab00:20::1,rf1,2001:db8:ab00:20::/60")
+        self.assertIn("protocol bgp hams_rf1 {", conf)
+        self.assertIn("neighbor fe80::7%rf0 as 4200000007;", conf)
+        self.assertIn("neighbor 2001:db8:ab00:20::1%rf1 as 4200000008;", conf)
+        self.assertIn("bgp_local_pref = 300;", conf)
+        # the RF filter only accepts the neighbour's own /60 when it is configured
+        self.assertIn("net ~ [2001:db8:ab00:20::/60{60,64}]", conf)
+
+    def test_rf_sessions_are_not_authenticated_or_encrypted(self):
+        _, conf, _ = self.render(neighbor="4200000007,fe80::7,rf0")
+        block = conf.split("protocol bgp hams_rf1 {")[1].split("\n}\n")[0]
+        self.assertNotIn("password", block)
+        self.assertNotIn("authentication", block)
+
+    def test_rf_neighbours_work_without_route_servers(self):
+        result, conf, _ = self.render(server="", neighbor="4200000007,fe80::7,rf0")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("hams_rf1", conf)
+        self.assertNotIn("hams_rs1", conf)
+
+    def test_rf_neighbours_work_without_the_bgp_secret(self):
+        result, conf, _ = self.render(secret=None, server="", neighbor="4200000007,fe80::7,rf0")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("hams_rf1", conf)
+
+    def test_rf_neighbour_exports_own_prefix_and_rf_learned_routes_only(self):
+        _, conf, _ = self.render(neighbor="4200000007,fe80::7,rf0")
+        self.assertIn("filter hams_out_rf {", conf)
+        out = conf.split("filter hams_out_rf {")[1].split("\n}\n")[0]
+        self.assertIn("bgp_large_community.add((4200000000, 1, 1));", out)
+        self.assertIn("2001:db8:ab00:10::/60{60,64}", out)
+        self.assertIn("export filter hams_out_rf;", conf)
+
+    def test_bad_neighbour_refused(self):
+        for bad in ("x,fe80::7,rf0", "4200000007,fe80::7;,rf0", "4200000007,fe80::7,rf 0", "4200000007,fe80::7", "4200000007,fe80::7,rf0,2001:db8::/48;"):
+            result, conf, _ = self.render(neighbor=bad)
+            self.assertNotEqual(result.returncode, 0, bad)
+            self.assertIsNone(conf)
+
     @unittest.skipUnless(shutil.which("bird") or os.path.exists("/usr/sbin/bird"), "bird is not installed")
     def test_bird_parses_the_generated_file(self):
         bird = shutil.which("bird") or "/usr/sbin/bird"
-        for over in ({"rf_live": "0"}, {"rf_live": "1"}):
+        for over in ({"rf_live": "0"}, {"rf_live": "1"}, {"neighbor": "4200000007,fe80::7,rf0 4200000008,2001:db8:ab00:20::1,rf1,2001:db8:ab00:20::/60"}):
             result, conf, out = self.render(**over)
             self.assertEqual(result.returncode, 0, result.stderr)
             parsed = subprocess.run([bird, "-p", "-c", str(out)], capture_output=True, text=True)
