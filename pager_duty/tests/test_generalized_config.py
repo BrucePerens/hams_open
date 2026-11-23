@@ -2,6 +2,8 @@
 
 # -*- coding: utf-8 -*-
 import json
+import grp
+from types import SimpleNamespace
 import os
 import subprocess
 import tempfile
@@ -10,8 +12,13 @@ from psycopg2 import IntegrityError
 
 from odoo.tests.common import tagged
 from odoo.tools import mute_logger
+from odoo.addons.pager_duty.models.pager_check import PagerCheck
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from unittest.mock import mock_open, MagicMock
+
+
+# The real function, kept before setUp replaces it for every test.
+_REAL_MONITOR_GROUP_ID = PagerCheck.__dict__["_monitor_group_id"].__func__
 
 
 @tagged("post_install", "-at_install")
@@ -19,6 +26,9 @@ class TestGeneralizedConfig(HamsTransactionCase):
     def setUp(self):
         super().setUp()
         self.admin = self.env.ref("base.user_admin")
+        # A host (or this test's namespace) with the hamsd_pager_monitor account writes the file 0640 in its group: the tests below that check
+        # 0600 are about a host without it; test_06g pins the account case.
+        self.safe_patch_object(type(self.env["pager.check"]), "_monitor_group_id", return_value=None)
         self.json_payload = """
         {
           "checks": [
@@ -215,6 +225,29 @@ class TestGeneralizedConfig(HamsTransactionCase):
             "credentials for every monitored system; re-exporting over an existing file "
             "must tighten its mode to 0o600, not leave whatever mode it already had.",
         )
+
+    def test_06g_where_the_monitor_account_exists_the_file_is_0640_in_its_group(self):
+        """pager-os-monitor runs as hamsd_pager_monitor, which reads the file through the group odoo belongs to."""
+        # Tests [@ANCHOR: generalized_pager_config]
+        check_model = self.env["pager.check"].with_user(self.admin)
+        own_gid = os.getgid()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "pager_config.json")
+            self.safe_patch_object(type(check_model), "_get_config_path", return_value=path)
+            self.safe_patch_object(type(check_model), "_monitor_group_id", return_value=own_gid)
+            result = check_model.action_push_to_json()
+            status = os.stat(path)
+        self.assertEqual(result["params"]["type"], "success")
+        self.assertEqual((status.st_mode & 0o777, status.st_gid), (0o640, own_gid))
+
+    def test_06h_the_monitor_group_id_is_none_where_the_account_does_not_exist(self):
+        # [@ANCHOR: pager_duty:test_monitor_group_id]
+        # Tests [@ANCHOR: pager_duty:monitor_group_id]
+        self.safe_patch_object(grp, "getgrall", return_value=[])
+        self.assertIsNone(_REAL_MONITOR_GROUP_ID())
+        entry = SimpleNamespace(gr_name="hamsd_pager_monitor", gr_gid=4242)
+        self.safe_patch_object(grp, "getgrall", return_value=[entry])
+        self.assertEqual(_REAL_MONITOR_GROUP_ID(), 4242)
 
     def test_06f_a_write_that_fails_part_way_leaves_the_previous_config_in_place(self):
         """The export used to truncate pager_config.json first and then write, so a full disk or any failure after the open left
