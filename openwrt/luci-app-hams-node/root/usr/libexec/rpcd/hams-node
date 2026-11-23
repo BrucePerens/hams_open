@@ -1,0 +1,57 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# rpcd exec plugin for luci-app-hams-node (ubus object "hams-node").
+#   status        read-only: enrolment state, /60, .ham name, active WireGuard peers, Part 97 boundary counters
+#   enroll_start  start `hams-node-enroll enroll` in the background; its code line is shown by `status`
+# The device token and the WireGuard private key are never read into the output, only tested for existence.
+state=${HAMS_STATE_DIR:-/etc/hams-node}
+ondemand=${HAMS_ONDEMAND_DIR:-/tmp/hams-node-ondemand}
+enroll_out=${HAMS_ENROLL_OUT:-/tmp/hams-node-enroll.out}
+
+# Only characters that cannot break a JSON string; anything else is dropped.
+safe() { tr -cd 'A-Za-z0-9 :./,_=+[]-' | head -c 200; }
+
+counter() { # name -> packets
+	n=$(nft list counter inet hams_boundary "$1" 2>/dev/null | awk '/packets/ { for (i = 1; i < NF; i++) if ($i == "packets") print $(i + 1) }' | head -n 1)
+	echo "${n:-0}"
+}
+
+do_status() {
+	enrolled=false
+	st=$(head -n 1 "$state/status" 2>/dev/null | safe)
+	[ -s "$state/device_token" ] && [ "$st" != revoked ] && enrolled=true
+	prefix=$(uci -q get hams_node.main.prefix60 | safe)
+	name=$(uci -q get hams_node.main.ham_name | safe)
+	code=''
+	[ $enrolled = false ] && code=$(sed -n 's/.*enter the code: //p' "$enroll_out" 2>/dev/null | tail -n 1 | safe)
+	active=false
+	nft list table inet hams_boundary >/dev/null 2>&1 && active=true
+	peers=$(awk 'NF >= 4 {
+		gsub(/[^A-Za-z0-9+\/=]/, "", $1); gsub(/[^A-Za-z0-9:\/]/, "", $3); gsub(/[^A-Za-z0-9:.\[\]]/, "", $4)
+		printf "%s{\"prefix\":\"%s\",\"endpoint\":\"%s\",\"key\":\"%s\"}", sep, $3, $4, $1; sep = "," }' "$ondemand/peers" 2>/dev/null)
+	printf '{"enrolled":%s,"state":"%s","prefix60":"%s","ham_name":"%s","code":"%s","peers":[%s],' \
+		$enrolled "$st" "$prefix" "$name" "$code" "$peers"
+	printf '"boundary":{"active":%s,"refused_encrypted":%s,"refused_other":%s,"integrity_only":%s}}\n' \
+		$active "$(counter refused_encrypted)" "$(counter refused_other)" $active
+}
+
+do_enroll_start() {
+	: > "$enroll_out"
+	if [ -n "${HAMS_NO_BACKGROUND:-}" ]; then
+		hams-node-enroll enroll > "$enroll_out" 2>&1
+	else
+		hams-node-enroll enroll > "$enroll_out" 2>&1 < /dev/null &
+	fi
+	echo '{"started":true}'
+}
+
+case ${1:-} in
+list) echo '{"status":{},"enroll_start":{}}' ;;
+call)
+	case ${2:-} in
+	status) do_status ;;
+	enroll_start) do_enroll_start ;;
+	*) echo '{"error":"unknown method"}'; exit 1 ;;
+	esac ;;
+*) exit 2 ;;
+esac
