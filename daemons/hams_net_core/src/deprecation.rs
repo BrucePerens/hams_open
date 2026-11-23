@@ -48,6 +48,8 @@ pub struct DeprecationList {
     chain: Vec<Line>,
 }
 
+// [@ANCHOR: hams_net_core_deprecation_entries_of]
+/// The listed entries of a document's `entries` or `add` array (a revoked member certificate becomes `cert:ISSUER:SERIAL`).
 fn entries_of(v: Option<&Value>) -> Vec<Entry> {
     let mut out = Vec::new();
     for e in v.and_then(|x| x.as_array()).into_iter().flatten() {
@@ -110,6 +112,8 @@ impl DeprecationList {
         self.entries.values().cloned().collect()
     }
 
+    // [@ANCHOR: hams_net_core_deprecation_verified]
+    /// The payload JSON when the usign-layout signature (key number and Ed25519) verifies.
     fn verified(&self, crypto: &dyn Crypto, body: &str, sig: &str) -> Option<Value> {
         let payload = crypto.base64_decode(body)?;
         let sig = crypto.base64_decode(sig)?;

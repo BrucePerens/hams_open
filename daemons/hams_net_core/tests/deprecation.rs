@@ -103,6 +103,8 @@ fn fake_ok() -> Sig {
 // Tests [@ANCHOR: hams_net_core_deprecation_apply]
 // Tests [@ANCHOR: hams_net_core_deprecation_new]
 // Tests [@ANCHOR: hams_net_core_deprecation_seq]
+// Tests [@ANCHOR: hams_net_core_deprecation_verified]
+// Tests [@ANCHOR: hams_net_core_deprecation_entries_of]
 #[test]
 fn full_then_delta_apply_and_a_gap_a_replay_and_a_wrong_key_are_refused() {
     let c = fake_ok();
