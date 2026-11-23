@@ -109,6 +109,13 @@ fn start_tee(target: String, log: Arc<Mutex<Vec<u8>>>) -> String {
 
 #[test]
 fn integrity_only_request_reaches_site_and_wire_is_readable() {
+    // Tests [@ANCHOR: ham_proxy_ham_acceptor]
+    // Tests [@ANCHOR: ham_proxy_ham_connector]
+    // Tests [@ANCHOR: ham_proxy_null_only]
+    // Tests [@ANCHOR: ham_proxy_read_head]
+    // Tests [@ANCHOR: ham_proxy_serve_one]
+    // Tests [@ANCHOR: ham_proxy_site_connector]
+    // Tests [@ANCHOR: ham_proxy_require_integrity_only]
     let d = tmpdir("ok");
     let (c, k) = make_cert(&d);
     let proxy = start_proxy(&c, &k, start_site(&c, &k));
@@ -169,5 +176,51 @@ fn tls12_null_sha256_also_works() {
     s.write_all(b"GET / HTTP/1.0\r\n\r\n").unwrap();
     let mut out = String::new();
     s.read_to_string(&mut out).unwrap();
+    assert!(out.ends_with("site-body-xyz"));
+}
+
+#[test]
+fn binary_serves_a_request() {
+    // Tests [@ANCHOR: ham_proxy_main]
+    // Tests [@ANCHOR: ham_proxy_run]
+    // Tests [@ANCHOR: ham_proxy_arg]
+    let d = tmpdir("bin");
+    let (c, k) = make_cert(&d);
+    let site = start_site(&c, &k);
+    let port = TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ham_proxy"))
+        .args([
+            "--listen",
+            &format!("127.0.0.1:{port}"),
+            "--site",
+            &site.replace("127.0.0.1", "localhost"),
+        ])
+        .arg("--cert")
+        .arg(&c)
+        .arg("--key")
+        .arg(&k)
+        .arg("--ca")
+        .arg(&c)
+        .spawn()
+        .unwrap();
+    let cli = ham_connector(&c).unwrap();
+    let mut tcp = None;
+    for _ in 0..50 {
+        if let Ok(t) = TcpStream::connect(("127.0.0.1", port)) {
+            tcp = Some(t);
+            break;
+        }
+        thread::sleep(std::time::Duration::from_millis(100));
+    }
+    let mut s = cli.connect("localhost", tcp.unwrap()).unwrap();
+    s.write_all(b"GET / HTTP/1.0\r\n\r\n").unwrap();
+    let mut out = String::new();
+    s.read_to_string(&mut out).unwrap();
+    child.kill().unwrap();
+    child.wait().unwrap();
     assert!(out.ends_with("site-body-xyz"));
 }

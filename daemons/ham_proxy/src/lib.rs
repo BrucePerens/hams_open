@@ -56,13 +56,14 @@ impl<S: std::fmt::Debug> From<openssl::ssl::HandshakeError<S>> for ProxyError {
     }
 }
 
+// [@ANCHOR: ham_proxy_null_only]
 fn null_only(b: &mut SslContextBuilder) -> Result<(), ErrorStack> {
     b.set_min_proto_version(Some(SslVersion::TLS1_2))?;
     b.set_cipher_list(TLS12_CIPHERS)?;
     b.set_ciphersuites(TLS13_SUITES)
 }
 
-// [@ANCHOR: ham_proxy:ham_acceptor]
+// [@ANCHOR: ham_proxy_ham_acceptor]
 /// Ham-side acceptor: offers only integrity-only suites.
 pub fn ham_acceptor(cert: &Path, key: &Path) -> Result<SslAcceptor, ProxyError> {
     let mut b = SslAcceptor::mozilla_intermediate_v5(SslMethod::tls_server())?;
@@ -73,6 +74,7 @@ pub fn ham_acceptor(cert: &Path, key: &Path) -> Result<SslAcceptor, ProxyError> 
     Ok(b.build())
 }
 
+// [@ANCHOR: ham_proxy_ham_connector]
 /// Client-side connector that offers only integrity-only suites (used by tests and the ham client).
 pub fn ham_connector(ca: &Path) -> Result<SslConnector, ProxyError> {
     let mut b = SslConnector::builder(SslMethod::tls_client())?;
@@ -81,7 +83,7 @@ pub fn ham_connector(ca: &Path) -> Result<SslConnector, ProxyError> {
     Ok(b.build())
 }
 
-// [@ANCHOR: ham_proxy:site_connector]
+// [@ANCHOR: ham_proxy_site_connector]
 /// Site-side connector: ordinary verified TLS 1.2/1.3 with the default encrypting suites.
 pub fn site_connector(ca: Option<&Path>) -> Result<SslConnector, ProxyError> {
     let mut b = SslConnector::builder(SslMethod::tls_client())?;
@@ -92,7 +94,7 @@ pub fn site_connector(ca: Option<&Path>) -> Result<SslConnector, ProxyError> {
     Ok(b.build())
 }
 
-// [@ANCHOR: ham_proxy:require_integrity_only]
+// [@ANCHOR: ham_proxy_require_integrity_only]
 /// Refuse a link whose negotiated suite encrypts.
 pub fn require_integrity_only<S>(s: &SslStream<S>) -> Result<String, ProxyError> {
     let name = s
@@ -107,6 +109,7 @@ pub fn require_integrity_only<S>(s: &SslStream<S>) -> Result<String, ProxyError>
     }
 }
 
+// [@ANCHOR: ham_proxy_read_head]
 fn read_head<R: Read>(r: &mut R) -> Result<Vec<u8>, ProxyError> {
     let mut head = Vec::new();
     let mut buf = [0u8; 4096];
@@ -120,7 +123,7 @@ fn read_head<R: Read>(r: &mut R) -> Result<Vec<u8>, ProxyError> {
     Ok(head)
 }
 
-// [@ANCHOR: ham_proxy:serve_one]
+// [@ANCHOR: ham_proxy_serve_one]
 /// Serve one ham connection: handshake (integrity-only), read the request head, relay it to `site_addr` over
 /// verified TLS for `site_name`, and stream the response back.
 pub fn serve_one(

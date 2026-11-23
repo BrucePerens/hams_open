@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 
+// [@ANCHOR: ham_proxy_arg]
 fn arg(args: &[String], name: &str) -> Option<String> {
     args.iter()
         .position(|a| a == name)
@@ -12,6 +13,7 @@ fn arg(args: &[String], name: &str) -> Option<String> {
         .cloned()
 }
 
+// [@ANCHOR: ham_proxy_run]
 fn run() -> Result<(), ProxyError> {
     let args: Vec<String> = std::env::args().collect();
     let need = |n: &str| arg(&args, n).ok_or_else(|| ProxyError::Tls(format!("missing {n}")));
@@ -44,6 +46,7 @@ fn run() -> Result<(), ProxyError> {
     Ok(())
 }
 
+// [@ANCHOR: ham_proxy_main]
 fn main() {
     if let Err(e) = run() {
         eprintln!("ham_proxy: {e:?}");
