@@ -13,3 +13,6 @@ Platform-free Rust crate shared by the local relay, hams-node and the phone apps
 - [@ANCHOR: hams_net_core_directory_hubs_request] The volunteer-hubs request.
 - [@ANCHOR: hams_net_core_directory_parse_lookup] A lookup answer becomes a record (callsign, /60, WireGuard key, endpoint, interest set); an error status ("not found", "refused") is `None`; a record missing a field or with a bad /60 is an error, never a half record.
 - [@ANCHOR: hams_net_core_directory_parse_hubs] A hubs answer becomes the ordered record list; a refusal is an empty list.
+- [@ANCHOR: hams_net_core_directory_text] A required record field must be a non-empty string.
+- [@ANCHOR: hams_net_core_directory_record] One record from its JSON object.
+- [@ANCHOR: hams_net_core_directory_payload] The answer body, wrapped in JSON-RPC `result` or bare, with its `status` checked.

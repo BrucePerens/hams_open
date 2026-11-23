@@ -29,6 +29,9 @@ fn lookup_answers_parse() {
 }
 
 // Tests [@ANCHOR: hams_net_core_directory_parse_lookup]
+// Tests [@ANCHOR: hams_net_core_directory_text]
+// Tests [@ANCHOR: hams_net_core_directory_record]
+// Tests [@ANCHOR: hams_net_core_directory_payload]
 // Tests [@ANCHOR: hams_net_core_prefix60_parse]
 #[test]
 fn malformed_answers_are_errors_not_records() {

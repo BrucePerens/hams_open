@@ -63,6 +63,7 @@ pub fn hubs_request() -> (&'static str, String) {
     )
 }
 
+// [@ANCHOR: hams_net_core_directory_text]
 fn text(v: &Value, key: &str) -> Result<String, String> {
     match v.get(key).and_then(Value::as_str) {
         Some(s) if !s.is_empty() => Ok(s.to_string()),
@@ -70,6 +71,7 @@ fn text(v: &Value, key: &str) -> Result<String, String> {
     }
 }
 
+// [@ANCHOR: hams_net_core_directory_record]
 fn record(v: &Value) -> Result<Record, String> {
     let interest = match v.get("interest") {
         None => vec![],
@@ -89,6 +91,7 @@ fn record(v: &Value) -> Result<Record, String> {
     })
 }
 
+// [@ANCHOR: hams_net_core_directory_payload]
 /// The `result` of a JSON-RPC answer (or the object itself) with `status` checked; `Ok(None)` for an
 /// error status ("not found", "refused": the caller learns nothing about which).
 fn payload(body: &str) -> Result<Option<Value>, String> {
