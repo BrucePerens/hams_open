@@ -157,13 +157,13 @@ class EnrollTests(unittest.TestCase):
         self.assertEqual(result.returncode, 4, "no queued poll: the built-in portal is unreachable here")
         self.assertTrue(self.calls()[0].startswith("https://hams.com/api/ipv6/enroll/start"), self.calls())
 
-    def test_plain_http_is_refused_except_for_localhost_and_loopback(self):
-        for url in ("http://portal.example.test", "http://10.0.2.2:8097", "http://127.0.0.1.evil.example", "ftp://127.0.0.1"):
+    def test_plain_http_is_refused_unless_the_host_is_loopback(self):
+        for url in ("http://portal.example.test", "http://10.0.2.2:8097", "http://127.0.0.1.evil.example", "ftp://127.0.0.1"):  # burn-ignore-ssrf-test-value: URL-scheme fixtures only, nothing connects
             result = self.run_uci_url(url, "enroll", "tok")
             self.assertEqual(result.returncode, 1, url)
             self.assertIn("https://", result.stderr, url)
         self.assertEqual(self.calls(), [], "a refused URL never reaches uclient-fetch")
-        for url in ("http://127.0.0.1:8097", "http://localhost", "http://localhost:8097/"):
+        for url in ("http://127.0.0.1:8097", "http://localhost", "http://localhost:8097/"):  # burn-ignore-ssrf-test-value: URL-scheme fixtures only, nothing connects
             self.queue("poll", reply(status="success", token="tok_local", **CONFIG))
             result = self.run_uci_url(url, "enroll", "tok")
             self.assertEqual(result.returncode, 0, (url, result.stderr))
