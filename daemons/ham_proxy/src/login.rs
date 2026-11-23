@@ -20,6 +20,7 @@ pub struct Challenges {
 }
 
 impl Challenges {
+    // [@ANCHOR: ham_proxy_login_issue]
     /// A fresh 128-bit nonce, remembered until answered or [`TTL_SECS`] old.
     pub fn issue(&self, now: u64) -> Result<String, ProxyError> {
         self.core.issue(&OpensslCrypto, now).map_err(|e| match e {

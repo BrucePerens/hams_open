@@ -19,6 +19,7 @@ impl Crypto for OpensslCrypto {
         hash(MessageDigest::sha512(), data).ok().map(|d| d.to_vec())
     }
 
+    // [@ANCHOR: ham_proxy_openssl_ed25519_verify]
     fn ed25519_verify(&self, key: &[u8], sig: &[u8], msg: &[u8]) -> Result<bool, BadKey> {
         let pkey = PKey::public_key_from_raw_bytes(key, Id::ED25519).map_err(|_| BadKey)?;
         let mut v = Verifier::new_without_digest(&pkey).map_err(|_| BadKey)?;
@@ -33,6 +34,7 @@ impl Crypto for OpensslCrypto {
         decode_block(text).ok()
     }
 
+    // [@ANCHOR: ham_proxy_openssl_random16]
     fn random16(&self) -> Option<[u8; 16]> {
         let mut b = [0u8; 16];
         rand_bytes(&mut b).ok()?;
