@@ -1,0 +1,8 @@
+# hams-node dnsmasq forwarding for the private .ham root and the member /40 reverse zone. Off by default.
+config dns 'main'
+	option enabled '0'
+	# the member /40 (its ip6.arpa zone is forwarded too); empty = forward .ham only
+	option prefix ''
+	# where dnsmasq reads extra configuration
+	option out '/tmp/dnsmasq.d/hams-ham.conf'
+	# list resolver '2001:db8:ab00::53'
