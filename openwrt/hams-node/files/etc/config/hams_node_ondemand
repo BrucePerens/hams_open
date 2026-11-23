@@ -1,0 +1,14 @@
+# hams-node on-demand tunnels: a WireGuard peer is made on the first packet to a member /60 and removed after idle_minutes
+config ondemand 'main'
+	option enabled '0'
+	# directory lookup API (members only), e.g. https://hams.com/api/ipv6/directory/lookup, with the member certificate
+	option lookup_url ''
+	option cert ''
+	option key ''
+	# the Hams.com Net prefix whose destinations are watched (CIDR, set from the portal download)
+	option ham_prefix ''
+	option interface 'wg-hams'
+	# only "internet" is accepted; an RF link never gets WireGuard
+	option link_type 'internet'
+	option max_peers '256'
+	option idle_minutes '10'

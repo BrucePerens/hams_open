@@ -1,0 +1,42 @@
+#!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Starts hams-node-ondemand (see its header) when the hams_node_ondemand config is enabled and has a lookup URL.
+START=96
+USE_PROCD=1
+
+start_service() {
+	. /lib/functions.sh
+	config_load hams_node_ondemand
+	config_get enabled main enabled 0
+	config_get url main lookup_url
+	config_get iface main interface wg-hams
+	config_get type main link_type internet
+	config_get net main ham_prefix
+	config_get max main max_peers 256
+	config_get idle main idle_minutes 10
+	config_get cert main cert
+	config_get key main key
+	[ "$enabled" = 1 ] && [ -n "$url" ] && [ -n "$net" ] || return 0
+	nft delete table inet hams_ondemand 2>/dev/null
+	nft -f - <<NFT || return 1
+table inet hams_ondemand {
+	set seen { type ipv6_addr; flags dynamic,timeout; timeout ${idle}m; }
+	chain fwd { type filter hook forward priority -5; policy accept;
+		ip6 daddr $net update @seen { ip6 daddr & ffff:ffff:ffff:fff0:: } }
+}
+NFT
+	opts="-i $iface -t $type -u $url -s /tmp/hams-node-ondemand -m $max"
+	[ -n "$cert" ] && opts="$opts -c $cert -k $key"
+	procd_open_instance run
+	procd_set_param command /usr/sbin/hams-node-ondemand $opts run
+	procd_set_param respawn
+	procd_close_instance
+	procd_open_instance expire
+	procd_set_param command /bin/sh -c "while sleep 60; do /usr/sbin/hams-node-ondemand $opts expire; done"
+	procd_set_param respawn
+	procd_close_instance
+}
+
+stop_service() {
+	nft delete table inet hams_ondemand 2>/dev/null
+}
