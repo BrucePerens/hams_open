@@ -1,7 +1,8 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-or-later
 # rpcd exec plugin for luci-app-hams-node (ubus object "hams-node").
-#   status        read-only: enrolment state, /60, .ham name, active WireGuard peers, Part 97 boundary counters
+#   status        read-only: enrolment state, /60, .ham name, active WireGuard peers, Part 97 boundary counters, whether hams.com has switched
+#                 the node off (and why), how many rogue routers/certificates the deprecation list names
 #   enroll_start  start `hams-node-enroll enroll` in the background; its code line is shown by `status`
 # The device token and the WireGuard private key are never read into the output, only tested for existence.
 state=${HAMS_STATE_DIR:-/etc/hams-node}
@@ -24,13 +25,16 @@ do_status() {
 	name=$(uci -q get hams_node.main.ham_name | safe)
 	code=''
 	[ $enrolled = false ] && code=$(sed -n 's/.*enter the code: //p' "$enroll_out" 2>/dev/null | tail -n 1 | safe)
+	disabled=false reason=''
+	[ -f "$state/disabled" ] && { disabled=true; reason=$(head -n 1 "$state/disabled" | safe); }
+	rogues=$(grep -c . "$state/deprecation_list" 2>/dev/null)
 	active=false
 	nft list table inet hams_boundary >/dev/null 2>&1 && active=true
 	peers=$(awk 'NF >= 4 {
 		gsub(/[^A-Za-z0-9+\/=]/, "", $1); gsub(/[^A-Za-z0-9:\/]/, "", $3); gsub(/[^A-Za-z0-9:.\[\]]/, "", $4)
 		printf "%s{\"prefix\":\"%s\",\"endpoint\":\"%s\",\"key\":\"%s\"}", sep, $3, $4, $1; sep = "," }' "$ondemand/peers" 2>/dev/null)
-	printf '{"enrolled":%s,"state":"%s","prefix60":"%s","ham_name":"%s","code":"%s","peers":[%s],' \
-		$enrolled "$st" "$prefix" "$name" "$code" "$peers"
+	printf '{"enrolled":%s,"state":"%s","prefix60":"%s","ham_name":"%s","code":"%s","peers":[%s],"disabled":%s,"disabled_reason":"%s","deprecated":%s,' \
+		$enrolled "$st" "$prefix" "$name" "$code" "$peers" $disabled "$reason" "${rogues:-0}"
 	printf '"boundary":{"active":%s,"refused_encrypted":%s,"refused_other":%s,"integrity_only":%s}}\n' \
 		$active "$(counter refused_encrypted)" "$(counter refused_other)" $active
 }
