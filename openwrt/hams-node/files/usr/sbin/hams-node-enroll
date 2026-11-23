@@ -40,11 +40,12 @@ field() { jsonfilter -i "$tmp" -e "@.result.$1"; }
 clean() { case $1 in '' | *[!A-Za-z0-9_=/+-]*) return 1 ;; esac; }
 
 apply_config() { # the reply in $tmp -> the package's own settings
-	prefix60=$(field prefix60) ham=$(field ham_prefix) asn=$(field asn) serverkey=$(field server_key)
+	prefix60=$(field prefix60) ham=$(field ham_prefix) asn=$(field asn) serverkey=$(field server_key) hamname=$(field ham_name)
 	[ -n "$prefix60" ] || return 1
 	uci set hams_node.main=gateway
 	uci set hams_node.main.prefix60="$prefix60"
 	uci set hams_node.main.asn="$asn"
+	uci set hams_node.main.ham_name="$hamname"
 	uci set hams_node.main.server_key="$serverkey"
 	uci set hams_node_ondemand.main=ondemand
 	uci set hams_node_ondemand.main.ham_prefix="$ham"

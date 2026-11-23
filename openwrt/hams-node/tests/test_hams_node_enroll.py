@@ -36,7 +36,7 @@ def reply(**result):
     return json.dumps({"jsonrpc": "2.0", "id": None, "result": result})
 
 
-CONFIG = dict(prefix60="2001:db8:ab00:10::/60", asn=4200000007, ham_prefix="2001:db8:ab00::/40", server_key=KEY, callsign="N0CALL")
+CONFIG = dict(prefix60="2001:db8:ab00:10::/60", asn=4200000007, ham_prefix="2001:db8:ab00::/40", server_key=KEY, callsign="N0CALL", ham_name="n0call.ham")
 
 
 class EnrollTests(unittest.TestCase):
@@ -87,6 +87,7 @@ class EnrollTests(unittest.TestCase):
         self.assertIn("hams_node_ondemand.main.ham_prefix=2001:db8:ab00::/40", uci)
         self.assertIn("hams_node_ondemand.main.lookup_url=https://portal.example/api/ipv6/directory/lookup", uci)
         self.assertIn("hams_node.main.prefix60=2001:db8:ab00:10::/60", uci)
+        self.assertIn("hams_node.main.ham_name=n0call.ham", uci)
         self.assertIn("hams-node-enroll fetch", self.cron.read_text())
         polls = [c for c in self.calls() if c.endswith("/poll " + c.split(" ", 1)[1])]
         self.assertIn('"device_code":"devcode123","public_key":"%s"' % KEY, polls[0])
@@ -109,10 +110,11 @@ class EnrollTests(unittest.TestCase):
     def test_fetch_renews_and_a_revoked_token_stops_for_good(self):
         self.assertEqual(self.enroll().returncode, 0)
         (self.fake / "uci").unlink()
-        self.queue("config", reply(status="success", **dict(CONFIG, prefix60="2001:db8:ab00:20::/60")), reply(status="error", message="refused"), reply(status="success", **CONFIG))
+        self.queue("config", reply(status="success", **dict(CONFIG, prefix60="2001:db8:ab00:20::/60", ham_name="n0new.ham")), reply(status="error", message="refused"), reply(status="success", **CONFIG))
         renewed = self.run_script("fetch")
         self.assertEqual(renewed.returncode, 0, renewed.stderr)
         self.assertIn("hams_node.main.prefix60=2001:db8:ab00:20::/60", (self.fake / "uci").read_text())
+        self.assertIn("hams_node.main.ham_name=n0new.ham", (self.fake / "uci").read_text())
         self.assertIn('"token":"tok_en-1"', [c for c in self.calls() if "/config" in c][0])
         revoked = self.run_script("fetch")
         self.assertEqual(revoked.returncode, 3)
