@@ -105,6 +105,7 @@ fn keypair() -> EcKey<Private> {
 fn a_request_with_the_session_mac_is_accepted_and_names_the_member() {
     // Tests [@ANCHOR: ham_proxy_session_open]
     // Tests [@ANCHOR: ham_proxy_session_derive_key]
+    // Tests [@ANCHOR: ham_proxy_session_unhex]
     // Tests [@ANCHOR: ham_proxy_session_mac]
     // Tests [@ANCHOR: ham_proxy_session_check]
     let l = login(&keypair(), &keypair());
@@ -297,4 +298,12 @@ fn a_bad_session_proof_is_refused_over_the_link_before_the_site_is_contacted() {
         "{out}"
     );
     std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn a_malformed_peer_key_is_refused() {
+    // Tests [@ANCHOR: ham_proxy_session_unhex]
+    for bad in ["zz", "abc", "04"] {
+        assert!(derive_key(&keypair(), bad, "n").is_err(), "{bad}");
+    }
 }
