@@ -29,3 +29,23 @@ A kmod built with the stock OpenWrt 25.12 SDK loads on AREDN 4.26.10.0 (the verm
 and `genl_info_net()` reads `info->_net`, a `possible_net_t` that exists only with NET_NS. In the module built with NET_NS the field is read at an offset that
 holds something else in AREDN's `struct genl_info`, so the unicast goes to a bogus netns and fails with ECONNREFUSED. Without modversions nothing checks
 struct layout at load time. Any module built against a kernel whose layout-affecting options differ has this class of bug: hence checks 2 and 3.
+
+## Helper functions
+
+### `[@ANCHOR: aredn_jool:check_kconfig_parse]` `parse`
+Reads a kernel or OpenWrt config file into `{CONFIG_X: value}`; `# CONFIG_X is not set` becomes `n`.
+
+### `[@ANCHOR: aredn_jool:check_kconfig_main]` `main`
+Compares the published `config.buildinfo` with the tree's config and the NET_NS state; exit 1 on any mismatch.
+
+### `[@ANCHOR: aredn_jool:compare_modabi_sections]` `sections`
+Splits an ELF kernel module into its named sections (32 or 64 bit, either endianness).
+
+### `[@ANCHOR: aredn_jool:compare_modabi_abi]` `abi`
+Returns a module's vermagic string, modversion CRCs and code/data sections.
+
+### `[@ANCHOR: aredn_jool:compare_modabi_find]` `find`
+Maps module file names to paths under a directory.
+
+### `[@ANCHOR: aredn_jool:compare_modabi_main]` `main`
+Compares every same-named module of the release and the build; exit 0 only if enough were compared and all are identical.
