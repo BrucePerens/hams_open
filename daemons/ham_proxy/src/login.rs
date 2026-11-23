@@ -154,6 +154,7 @@ pub struct HttpVerifier {
 }
 
 impl Verifier for HttpVerifier {
+    // [@ANCHOR: ham_proxy_login_http_verify]
     fn verify(&self, serial: &str, nonce: &str, audience: &str, sig_b64: &str) -> Option<String> {
         let body = serde_json::json!({"jsonrpc": "2.0", "params": {
             "serial": serial, "nonce": nonce, "audience": audience, "signature_b64": sig_b64}})

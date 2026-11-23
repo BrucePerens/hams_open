@@ -34,6 +34,7 @@ Internals:
 - [@ANCHOR: ham_proxy_login_audience] The member's key signs `ham-login:<site>` plus the nonce, so a signature made for one site is useless at another.
 - [@ANCHOR: ham_proxy_login_respond] `GET /.ham/login?serial&nonce&sig` is answered 200 with the callsign when hams.com confirms the signature, else 403; any other path goes to the site.
 - [@ANCHOR: ham_proxy_login_http_verifier] hams.com checks the signature against the key it recorded for the member certificate, over verified TLS.
+- [@ANCHOR: ham_proxy_login_http_verify] The verifier posts the serial, nonce, audience and signature to `/ham/login/verify` and accepts only a `success` answer that names a callsign.
 - [@ANCHOR: ham_proxy_serve_one_login] `serve_one_login` is `serve_one_signed` plus the `/.ham/login` answers.
 
 ## Page indicator (signed, not encrypted)

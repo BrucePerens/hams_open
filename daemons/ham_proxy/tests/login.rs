@@ -254,6 +254,7 @@ fn login_works_over_the_integrity_only_link() {
 #[test]
 fn the_http_verifier_asks_hams_com_and_trusts_only_a_success_result() {
     // Tests [@ANCHOR: ham_proxy_login_http_verifier]
+    // Tests [@ANCHOR: ham_proxy_login_http_verify]
     let (dir, c, k) = make_cert();
     let mut b =
         openssl::ssl::SslAcceptor::mozilla_intermediate_v5(openssl::ssl::SslMethod::tls_server())
