@@ -17,3 +17,5 @@ Internals:
 - [@ANCHOR: ham_proxy_main] The `ham_proxy` binary entry point: runs the proxy and exits 1 with the error printed if setup fails.
 - [@ANCHOR: ham_proxy_run] Parses `--listen --cert --key --site [--ca]`, binds, and serves each connection on its own thread.
 - [@ANCHOR: ham_proxy_arg] Looks up the value following a command-line flag.
+- [@ANCHOR: ham_proxy_request_identity] Rewrites the request head for the site: any `Accept-Encoding` header is dropped and `Accept-Encoding: identity` added, so the HTML body can be inspected.
+- [@ANCHOR: ham_proxy_transform_html] Turns a buffered HTML response into what the ham gets: the signed-not-encrypted banner exactly once, the signed integrity header, and a block page when a password field appears without a signature login.

@@ -278,3 +278,20 @@ pub fn serve_one_signed(
     ham.shutdown().ok();
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::request_identity;
+
+    #[test]
+    fn identity_replaces_any_accept_encoding_and_ends_the_head() {
+        // Tests [@ANCHOR: ham_proxy_request_identity]
+        let out =
+            request_identity(b"GET / HTTP/1.1\r\nHost: x\r\nAccept-Encoding: gzip, br\r\n\r\n");
+        let text = String::from_utf8(out).unwrap();
+        assert_eq!(
+            text,
+            "GET / HTTP/1.1\r\nHost: x\r\nAccept-Encoding: identity\r\n\r\n"
+        );
+    }
+}
