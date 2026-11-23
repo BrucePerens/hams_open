@@ -50,6 +50,7 @@ class InitTests(unittest.TestCase):
         uci = (self.root / "uci.log").read_text()
         self.assertIn("uci set dhcp.@dnsmasq[0].confdir=%s" % (self.root / "dns"), uci)
         self.assertIn("uci commit dhcp", uci)
+        self.assertIn("uci add_list dhcp.@dnsmasq[0].rebind_domain=ham", uci)  # private answers for .ham names pass rebind protection
         out = self.root / "dns" / "hams.conf"
         self.assertTrue(out.exists())
         self.run_fn("hams-node-dns", "stop_service")

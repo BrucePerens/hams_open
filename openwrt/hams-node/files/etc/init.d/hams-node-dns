@@ -22,6 +22,10 @@ ensure_confdir() {
 		uci set "dhcp.@dnsmasq[0].confdir=$dir" && uci commit dhcp
 	fi
 	OUT=$dir/$(basename "$OUT")
+	# dnsmasq's rebind protection drops private answers (AREDN's 10.x hosts); .ham names are exempt
+	uci -q get 'dhcp.@dnsmasq[0].rebind_domain' | grep -qw ham || {
+		uci add_list 'dhcp.@dnsmasq[0].rebind_domain=ham' && uci commit dhcp
+	}
 }
 
 start_service() {
