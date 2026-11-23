@@ -12,6 +12,7 @@ DEFAULTS = {
     "ham_tls_port": 8443,  # integrity-only TLS (ham_tls); suite enforced by the proxy, never offered encrypted
     "plain_tcp_ports": [80],  # readable protocols allowed toward the mesh
     "plain_udp_ports": [53],
+    "tunnel_mark": 0x97,  # fwmark put on end-to-end encrypted traffic: `ip rule fwmark` sends it to the tunnel-only table (hams-node-rf-route)
     "nflog_group": 97,  # station-identification consumer reads this group (ham_policy.log_connection)
     "log_backend": "nflog",  # "syslog" for images without nfnetlink_log (AREDN 4.26.10.0 x86-64 has only nf_log_syslog)
 }
@@ -51,6 +52,16 @@ def render_ruleset(config=None):
 		iifname "%(mesh)s" udp dport %(wg_port)d drop
 	}
 
+	chain steer {
+		# RF-first routing prefers RF routes, so traffic that is encrypted end to end is marked here and routed through the tunnel-only
+		# table instead; it is never steered onto RF. Traffic from the mesh side is not marked.
+		type filter hook prerouting priority -150; policy accept;
+		iifname "%(mesh)s" return
+		meta l4proto %(protos)s meta mark set %(mark)d
+		udp dport %(udp_bad)s meta mark set %(mark)d
+		tcp dport %(tcp_bad)s meta mark set %(mark)d
+	}
+
 	chain forward {
 		type filter hook forward priority -10; policy accept;
 		oifname != "%(mesh)s" accept
@@ -68,7 +79,7 @@ def render_ruleset(config=None):
 	}
 }
 """ % {
-        "mesh": mesh, "wg_port": int(cfg["wg_port"]), "log": log,
+        "mesh": mesh, "mark": int(cfg["tunnel_mark"]), "wg_port": int(cfg["wg_port"]), "log": log,
         "protos": "{ %s }" % ", ".join(ENCRYPTED_PROTOCOLS), "udp_bad": _ports(udp_bad), "tcp_bad": _ports(tcp_bad),
         "tcp_ok": _ports(tcp_ok), "udp_ok": _ports(cfg["plain_udp_ports"]),
     }

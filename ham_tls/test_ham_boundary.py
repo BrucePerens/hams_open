@@ -78,6 +78,16 @@ class BoundaryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ham_boundary.render_ruleset({"plain_udp_ports": [51820]})
 
+    def test_encrypted_traffic_is_marked_for_the_tunnel_only_table_and_mesh_traffic_is_not(self):
+        steer = chain(self.text, "steer")
+        self.assertIn('iifname "br-dtdlink" return', steer)
+        self.assertIn("meta l4proto { esp } meta mark set 151", steer)
+        self.assertRegex(steer, r"udp dport \{[^}]*51820[^}]*\} meta mark set 151")
+        self.assertRegex(steer, r"tcp dport \{[^}]*443[^}]*\} meta mark set 151")
+        self.assertNotRegex(steer, r"dport \{[^}]*\b(80|8443|53)\b[^}]*\} meta mark")
+        self.assertLess(steer.index("return"), steer.index("meta mark set"))
+        self.assertIn("meta mark set 7", ham_boundary.render_ruleset({"tunnel_mark": 7}))
+
     def test_other_interfaces_are_not_filtered(self):
         self.assertIn('oifname != "br-dtdlink" accept', chain(self.text, "forward"))
 
