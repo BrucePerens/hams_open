@@ -62,7 +62,7 @@ class RenderTests(unittest.TestCase):
         self.assertEqual(files, {})
 
     def test_missing_export_file_fails(self):
-        result = subprocess.run(["sh", str(SCRIPT), "render", "/nonexistent/x.json", "/tmp/unused-hams-node"], capture_output=True, text=True)
+        result = subprocess.run(["sh", str(SCRIPT), "render", "/nonexistent/x.json", "unused-out"], capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
 
 
