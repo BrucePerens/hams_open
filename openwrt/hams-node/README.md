@@ -25,6 +25,10 @@ the daemon asks the members-only directory lookup (member certificate), checks t
 nothing and are not asked again for 60 s. At most `max_peers` (256) peers; the oldest idle one goes first. An `rf` link is refused.
 Not exercised on a real device or in the AREDN VM; the nft ruleset and `nft monitor` parsing are untested here.
 
+Adding a subpackage: create `pkg/<name>.mk` with its `define Package/<name>`, `/description`, `/conffiles` and `/install` blocks
+(copy `pkg/hams-node-report.mk`; the file name is the package name). Do not edit `Makefile`: it includes `pkg/*.mk` in sorted order
+and calls `BuildPackage` for each, so parallel subpackage changes never touch the same file.
+
 Tests: `python3 -m unittest discover -s openwrt/hams-node/tests` (a stand-in `jsonfilter` is used on the dev box).
 
 ## Tested on a virtual AREDN node (2026-11-23)
@@ -73,6 +77,21 @@ Results:
 login secret is never typed into or stored on the router. `hams-node-enroll fetch` (a cron line, every 6 hours, added by
 enrol) renews the configuration into `/etc/config/hams_node` and `hams_node_ondemand`. A revoked token stops the node:
 exit 3, the cron line and token are removed, and no request is made again until the member enrols anew.
+
+`hams-node-enroll unenroll` revokes the device token on hams.com (`/api/ipv6/enroll/unenroll`, own device only), then removes the
+WireGuard peers and interface, the `hams_node` and `hams_node_ondemand` settings, the key, the token and the cron line. If hams.com
+cannot be reached it exits 4 and removes nothing; run it again. A token hams.com already refuses is dropped and the rest removed.
+
+## Automatic update (`hams-node-update`, separate package)
+
+Off until `/etc/config/hams_node_update` has a `feed_url` (https; the directory with `packages.adb`) and a `public_key` (path of the
+feed's public key PEM, from `openwrt/feed`). `hams-node-update schedule` adds a daily cron line; `hams-node-update run` is one pass:
+it installs the key in `/etc/apk/keys` and the feed in `/etc/apk/repositories.d/hams.list` (apk refuses an index not signed by that
+key), downloads newer versions of the listed packages into a staging directory (a failed download changes nothing), backs up
+`/etc/config/hams_node*`, installs the staged files, then checks each package is at the new version, the settings parse and the
+optional `health_cmd` succeeds. Any failure reinstalls the previous versions from the feed and restores the settings (exit 1; the
+state is in `/var/lib/hams-node-update/status`). The feed must therefore keep the previous version of each package: with no way back
+the update is not started. Tested with the real apk against a signed feed over loopback HTTP; not yet on the QEMU image.
 
 ## Reporting hosts and services (`hams-node-report`, separate package)
 
@@ -132,3 +151,11 @@ and the six libnl packages (libnl200, -core200, -genl200, -cli200, -nf200, -rout
 the kmods. Test: three QEMU VMs (v6 host, stock AREDN with Jool, v4 host; `-netdev socket`): `ping -6` and `wget` through pool6 `2001:db8:c::/96` worked, and
 `hams-node-siit render` + `apply` created the instance. The earlier SDK-built module (`genlmsg_reply -111`) stays unexplained; the tree-built one works.
 Each other target/release needs its own kmod build with the same recipe.
+
+## /60 to the LANs (`hams-node-lan`, separate package)
+
+`hams-node-lan apply` (run by `hams-node-enroll` after every enrol and renewal when installed) declares the member's /60
+(`hams_node.main.prefix60`) as the `ip6prefix` of a static interface `network.hamnet`, gives every interface listed in
+`hams_node_lan.main.interface` (default `lan`, at most 16) `ip6assign 64` and its own `ip6hint` (0, 1, 2 ...), and sets
+`dhcp.<if>.ra` and `dhcpv6` to `server`, so netifd cuts one /64 per LAN out of the /60 and odhcpd sends router advertisements
+and answers DHCPv6. `hams-node-lan remove` undoes it. Anything that is not a /60 changes nothing. Not exercised on a real router.

@@ -1,0 +1,89 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-update: update the hams-node packages from the signed hams.com apk feed. Off until /etc/config/hams_node_update has a
+# feed_url and a public_key (path of the feed's public key PEM); nothing is fetched before that.
+#   hams-node-update OPTIONS run        one update pass (what cron runs)
+#   hams-node-update OPTIONS schedule   add the daily cron line;  unschedule removes it
+# Pass: install the key into the apk key directory and the feed into the repository list (apk verifies the signed index against that
+# key and refuses anything else), look for newer versions of the listed packages, download them to a staging directory (nothing is
+# installed if that fails), back up the hams_node* settings, install the staged files, then check each package is at its new version,
+# the settings still parse and health_cmd (if set) succeeds. If any check fails, the previous versions are installed back from the feed
+# (which therefore must keep the previous version; with no way back the update is not started) and the settings are restored.
+# OPTIONS: -k KEYS_DIR (/etc/apk/keys) -r REPO_FILE (/etc/apk/repositories.d/hams.list) -w WORK_DIR (/var/lib/hams-node-update)
+#          -g CONFIG_DIR (/etc/config) -c CRONTAB (/etc/crontabs/root)
+# Exit: 0 updated, nothing to do, or disabled; 1 refused or rolled back; 4 feed unreachable or index not signed by the key.
+set -u
+keys=/etc/apk/keys repos=/etc/apk/repositories.d/hams.list work=/var/lib/hams-node-update cfg=/etc/config cron=/etc/crontabs/root
+while getopts k:r:w:g:c: opt; do
+	case $opt in
+	k) keys=$OPTARG ;; r) repos=$OPTARG ;; w) work=$OPTARG ;; g) cfg=$OPTARG ;; c) cron=$OPTARG ;;
+	*) exit 2 ;;
+	esac
+done
+shift $((OPTIND - 1))
+cmd=${1:-run}
+job="/usr/sbin/hams-node-update run"
+
+status() { mkdir -p "$work"; echo "$*" > "$work/status"; echo "hams-node-update: $*" >&2; }
+opt() { uci -q get "hams_node_update.main.$1" 2>/dev/null; }
+
+case $cmd in
+schedule) grep -qF "$job" "$cron" 2>/dev/null || echo "43 4 * * * $job" >> "$cron"; exit 0 ;;
+unschedule) [ -f "$cron" ] && { grep -vF "$job" "$cron" > "$cron.new"; mv "$cron.new" "$cron"; }; exit 0 ;;
+run) ;;
+*) echo "usage: hams-node-update [OPTIONS] run | schedule | unschedule" >&2; exit 2 ;;
+esac
+
+feed=$(opt feed_url) pub=$(opt public_key) pkgs=$(opt packages) health=$(opt health_cmd)
+[ -n "$feed" ] && [ -n "$pub" ] || exit 0
+: "${pkgs:=hams-node hams-node-enroll hams-node-report}"
+case $feed in
+https://?*) ;;
+http://127.0.0.1 | http://127.0.0.1/* | http://127.0.0.1:* | http://localhost | http://localhost/* | http://localhost:*) ;;
+*) status "feed_url must be https://: $feed"; exit 1 ;;
+esac
+[ -r "$pub" ] || { status "public key $pub not readable"; exit 1; }
+umask 077
+mkdir -p "$keys" "$(dirname "$repos")" "$work" || exit 1
+cmp -s "$pub" "$keys/hams-feed.pem" || cp "$pub" "$keys/hams-feed.pem" || exit 1
+echo "$feed/packages.adb" > "$repos"
+
+apk update > /dev/null 2>&1 || { status "feed unreachable or its index is not signed by the configured key"; exit 4; }
+upgradable=$(apk list -u 2>/dev/null)
+names='' old='' new=''
+for p in $pkgs; do
+	line=$(printf '%s\n' "$upgradable" | grep "^$p-[0-9]" | head -n 1)
+	[ -n "$line" ] || continue
+	installed=$(apk list -I "$p" 2>/dev/null | head -n 1)
+	cur=${installed%% *}
+	[ -n "$cur" ] || continue
+	apk list -a "$p" 2>/dev/null | grep -q "^$cur " || { status "no update: $cur is not in the feed, so it could not be rolled back to"; exit 1; }
+	names="$names $p" old="$old ${p}=${cur#"$p"-}" new="$new ${line%% *}"
+done
+[ -n "$names" ] || { status "up to date"; exit 0; }
+
+stage=$work/stage backup=$work/backup
+rm -rf "$stage" "$backup"
+mkdir -p "$stage" "$backup"
+# shellcheck disable=SC2086
+apk fetch -o "$stage" $names > /dev/null 2>&1 || { rm -rf "$stage"; status "download failed; nothing changed"; exit 4; }
+cp "$cfg"/hams_node* "$backup"/ 2> /dev/null
+
+rollback() {
+	# shellcheck disable=SC2086
+	apk add $old > /dev/null 2>&1
+	cp "$backup"/* "$cfg"/ 2> /dev/null
+	rm -rf "$stage"
+	status "update failed ($1); rolled back to$old"
+	exit 1
+}
+
+# shellcheck disable=SC2046
+apk add --allow-untrusted "$stage"/*.apk > /dev/null 2>&1 || rollback "install failed"
+for n in $new; do
+	apk list -I 2>/dev/null | grep -q "^$n " || rollback "$n is not installed"
+done
+uci -q show hams_node > /dev/null 2>&1 || rollback "settings do not parse"
+[ -z "$health" ] || sh -c "$health" > /dev/null 2>&1 || rollback "health check failed"
+rm -rf "$stage"
+status "updated$new"

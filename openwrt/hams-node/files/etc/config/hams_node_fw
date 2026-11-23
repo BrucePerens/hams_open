@@ -1,0 +1,9 @@
+# hams-node firewall zones for the hams.com Net. Inbound from the ham network is closed except what is opened here.
+config fw 'main'
+	option enabled '0'
+	# Internet-tunnel interfaces (WireGuard) of the ham network
+	# list iface 'wg-hams'
+	# Radio-link interfaces: never encrypted (47 CFR 97.113(a)(4)); hams-node-wg refuses to attach WireGuard to these
+	# list rf_iface 'rf0'
+	# Inbound ports opened from the ham network, "tcp:PORT" or "udp:PORT" (encrypted-service ports are refused on RF zones)
+	# list open 'tcp:8080'

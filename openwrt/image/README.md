@@ -13,3 +13,7 @@ answers, LuCI answers (login page, HTTP 403) and serves the hams-node view. Exit
 
 Build the .apk files first with the SDK (`../hams-node/README.md`; the luci app builds in an SDK that has only the `hams` feed).
 Not exercised: Jool SIIT itself (stand-ins), real enrolment, WireGuard peers. Tests: `python3 -m unittest discover -s openwrt/image/tests`.
+
+`tools/lan_test.py IMAGE` (stock or test image, QEMU, no root): copies `hams-node-lan` in over the console, applies `2001:db8:ab40:10::/60`
+and checks that netifd gives br-lan `2001:db8:ab40:10::1/64`, odhcpd runs, and `remove` takes the /64 out of netifd's interface status
+(the kernel address lingers a while). Verified on OpenWrt 25.12.5 x86-64. It does not check a client's address (one guest only).

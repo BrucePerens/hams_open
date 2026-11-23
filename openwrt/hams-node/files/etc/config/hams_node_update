@@ -1,0 +1,10 @@
+# hams-node automatic update from the signed hams.com apk feed. Off while feed_url or public_key is empty.
+config update 'main'
+	# feed directory URL (https), where packages.adb and the .apk files are
+	option feed_url ''
+	# path of the feed's public key (PEM), e.g. /etc/hams-node/hams-feed-public.pem
+	option public_key ''
+	# packages to keep current (default: hams-node hams-node-enroll hams-node-report)
+	option packages ''
+	# optional shell command; an update is rolled back when it fails
+	option health_cmd ''
