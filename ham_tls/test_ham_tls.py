@@ -96,6 +96,7 @@ class HamTlsTests(unittest.TestCase):
 
     def test_payload_is_readable_on_the_wire_with_an_integrity_only_suite(self):
         # Tests [@ANCHOR: ham_tls:connect]
+        # Tests [@ANCHOR: ham_tls:server_context]
         server = Echo(self.cert, self.key)
         relay = Relay(server.address)
         tls = self.client(relay.address)
