@@ -182,12 +182,15 @@ self-signed one (pin it or use `curl -k`); use the member certificate with `curl
   (`hams-node-mtls crl`, signature checked against the pinned CAs, last good copy kept). While a CRL is past its `nextUpdate` (the node
   was offline from hams.com) it is not applied, so an offline owner is not locked out; revocation is then enforced again on the next fetch.
 - Not enrolled, or after `unenroll`/`hams-node-mtls off`: uhttpd is put back as it was and the stock login is unchanged (first-boot setup).
-- LuCI still asks for the router's own login after the certificate (the certificate controls who can reach the login at all; the
-  password is no longer reachable by anyone else). SSH is a separate to-do (key-only).
+- Single sign-on, no router password: once nginx has verified the owner certificate, LuCI's login page (403) is redirected to `/hams-sso`, a
+  loopback-only CGI (uhttpd `hamssso` on 127.0.0.1:8081, reachable only through nginx) that opens an rpcd session for the internal login
+  `hams-owner` (random secret in `/etc/hams-node/mtls/sso.secret`) and sets the LuCI cookie. After the first owner sign-in the stock rpcd
+  logins (root) are removed (`hams-node-mtls lock`), so no password works for LuCI or ubus; `unenroll`/`off` restores them. SSH is a separate
+  to-do (key-only).
 - Recovery if the owner certificate is lost or the member's callsign changes hands: a physical reset (`firstboot`, or the reset button) restores
   the stock login, then enrol again. Nothing remote can remove the requirement.
 - Tested on the OpenWrt 25.12.5 x86-64 image in QEMU with a test CA (`image/tools/mtls_test.py`): owner 200, another member 403, none, revoked and
-  other-CA refused, uhttpd only on loopback, `off` restores port 80. The `.apk` is built by the SDK from `pkg/hams-node-mtls.mk` (see Build).
+  other-CA refused, uhttpd only on loopback, owner opens LuCI without a password, other/no certificate refused at `/hams-sso`, root password login refused after the first sign-in and back after `off`. The `.apk` is built by the SDK from `pkg/hams-node-mtls.mk` (see Build).
 
 ## Endpoint updates (`hams-node-endpoint`, separate package)
 

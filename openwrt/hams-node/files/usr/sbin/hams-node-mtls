@@ -5,7 +5,12 @@
 # nginx terminates TLS on :443 and demands the certificate; uhttpd is moved to 127.0.0.1:8080 behind it.
 #   hams-node-mtls [-s STATE_DIR] [-u BASE_URL] apply   (re)render the nginx config from the owner file; does nothing when not enrolled
 #   hams-node-mtls [-s STATE_DIR] [-u BASE_URL] crl     fetch the identity CRL, verify it against the pinned CAs, keep the last good one
-#   hams-node-mtls [-s STATE_DIR] off                   stop and put uhttpd back as it was (unenrol or recovery)
+#   hams-node-mtls [-s STATE_DIR] lock                  turn the router password login off (run by the sso handler after the first verified owner)
+#   hams-node-mtls [-s STATE_DIR] off                   stop and put uhttpd and rpcd back as they were (unenrol or recovery)
+# Single sign-on: nginx has verified the owner certificate, so /hams-sso (a loopback-only CGI on uhttpd :8081, reachable only through
+# nginx) opens a LuCI/rpcd session for the internal rpcd login "hams-owner" (random secret in mtls/sso.secret) and sets the LuCI cookie.
+# LuCI's own 403 login page is redirected there, so the owner never types a password. After the first successful sign-in the stock
+# rpcd logins (root and others) are removed, so no password works any more; `off` restores them.
 # STATE_DIR (default /etc/hams-node) holds: owner (callsign, written by hams-node-enroll), member-ca.pem (the pinned CAs: Root A,
 # Root B, Identity Root, Identity Issuing CA), member-crls.pem (the shipped CA-level CRLs), mtls/ (everything this script makes).
 # Recovery if the owner certificate is lost: physical reset (firstboot), then enrol again.
@@ -18,7 +23,7 @@ while getopts s:u: opt; do
 	esac
 done
 shift $((OPTIND - 1))
-[ $# -eq 1 ] || { echo "usage: hams-node-mtls [-s DIR] [-u URL] apply | crl | off" >&2; exit 2; }
+[ $# -eq 1 ] || { echo "usage: hams-node-mtls [-s DIR] [-u URL] apply | crl | lock | off" >&2; exit 2; }
 [ -n "$base" ] || base=$(uci -q get hams_node_enroll.main.url 2>/dev/null)
 [ -n "$base" ] || base=https://hams.com
 umask 077
@@ -26,6 +31,7 @@ dir=$state/mtls
 conf=$dir/nginx.conf
 ca=$state/member-ca.pem
 inner=127.0.0.1:8080
+sso=127.0.0.1:8081
 cron=${HAMS_NODE_CRON:-/etc/crontabs/root}
 job="/usr/sbin/hams-node-mtls crl"
 # revoked member certificates named by the signed deprecation list (hams-node-status keeps it): "cert:ISSUER_SHA256:SERIAL" lines
@@ -128,7 +134,14 @@ $revoked
 		$crlline
 		if (\$hams_revoked) { return 403; }
 		if (\$hams_owner = 0) { return 403; }
+		location = /hams-sso {
+			proxy_pass http://$sso/cgi-bin/sso;
+		}
+		location @sso { return 302 /hams-sso; }
 		location / {
+			# no or an expired LuCI session shows LuCI's 403 login page: sign the verified owner in instead
+			proxy_intercept_errors on;
+			error_page 403 = @sso;
 			proxy_pass http://$inner;
 			proxy_set_header Host \$host;
 			proxy_set_header X-Forwarded-Proto https;
@@ -136,6 +149,22 @@ $revoked
 	}
 }
 N
+	# single sign-on login for rpcd (the stock logins are kept until the first owner sign-in, see do_lock)
+	[ -f "$dir/rpcd.orig" ] || uci -q export rpcd > "$dir/rpcd.orig"
+	[ -s "$dir/sso.secret" ] || openssl rand -hex 24 > "$dir/sso.secret"
+	uci -q delete rpcd.hamsowner
+	uci set rpcd.hamsowner=login
+	uci set rpcd.hamsowner.username=hams-owner
+	uci set rpcd.hamsowner.password="$(openssl passwd -1 "$(cat "$dir/sso.secret")")"
+	uci add_list rpcd.hamsowner.read='*'
+	uci add_list rpcd.hamsowner.write='*'
+	uci commit rpcd
+	uci -q delete uhttpd.hamssso
+	uci set uhttpd.hamssso=uhttpd
+	uci add_list uhttpd.hamssso.listen_http="$sso"
+	uci set uhttpd.hamssso.home=/usr/lib/hams-node/sso
+	uci set uhttpd.hamssso.cgi_prefix=/cgi-bin
+	[ ! -f "$dir/seen" ] || do_lock
 	# uhttpd (LuCI, /ubus) only on loopback behind nginx; remember what it was
 	if [ ! -f "$dir/uhttpd.orig" ]; then
 		{ uci -q get uhttpd.main.listen_http; echo "--"; uci -q get uhttpd.main.listen_https; } > "$dir/uhttpd.orig"
@@ -150,9 +179,20 @@ N
 	echo "hams-node-mtls: management now needs the certificate of $owner" >&2
 }
 
+do_lock() {
+	for s in $(uci -q show rpcd | sed -n 's/^rpcd\.\([^.=]*\)=login$/\1/p'); do
+		[ "$s" = hamsowner ] || uci delete "rpcd.$s"
+	done
+	uci commit rpcd
+	: > "$dir/seen"
+}
+
 do_off() {
 	[ -f "$dir/uhttpd.orig" ] || { rm -rf "$dir"; return 0; }
 	[ -x /etc/init.d/hams-node-mtls ] && { /etc/init.d/hams-node-mtls stop; /etc/init.d/hams-node-mtls disable; }
+	uci -q delete uhttpd.hamssso
+	if [ -f "$dir/rpcd.orig" ]; then uci import rpcd < "$dir/rpcd.orig"; else uci -q delete rpcd.hamsowner; fi
+	uci commit rpcd
 	uci -q delete uhttpd.main.listen_http
 	uci -q delete uhttpd.main.listen_https
 	sed -n '1,/^--$/p' "$dir/uhttpd.orig" | grep -v '^--$' | while read -r a; do uci add_list uhttpd.main.listen_http="$a"; done
@@ -166,6 +206,7 @@ do_off() {
 case $1 in
 apply) do_apply ;;
 crl) do_crl ;;
+lock) do_lock ;;
 off) do_off ;;
 *) exit 2 ;;
 esac
