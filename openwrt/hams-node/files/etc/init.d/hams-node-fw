@@ -11,6 +11,12 @@ start_service() {
 	return 0
 }
 
+stop_service() {
+	hams-node-fw remove || return 1
+	[ -x "$INITD/firewall" ] && "$INITD/firewall" reload
+	return 0
+}
+
 service_triggers() {
 	procd_add_reload_trigger hams_node_fw
 }
