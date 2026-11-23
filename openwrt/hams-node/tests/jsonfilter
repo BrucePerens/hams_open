@@ -1,0 +1,21 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-or-later
+"""Test stand-in for OpenWrt's jsonfilter: only `-i FILE -e @.a.b[N].c` paths, one value per line,
+nothing and exit 1 when the path is missing or null."""
+import json
+import re
+import sys
+
+args = sys.argv[1:]
+data = json.load(open(args[args.index("-i") + 1]))
+node = data
+for key, index in re.findall(r"\.(\w+)(?:\[(\d+)\])?", args[args.index("-e") + 1]):
+    try:
+        node = node[key]
+        if index:
+            node = node[int(index)]
+    except (KeyError, IndexError, TypeError):
+        sys.exit(1)
+if node is None:
+    sys.exit(1)
+print(node)

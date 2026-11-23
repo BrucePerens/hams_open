@@ -1,0 +1,15 @@
+#!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Only adds the hams-node gateway; leaves AREDN's own services (babel, dnsmasq, firewall zones) alone.
+START=95
+USE_PROCD=1
+
+start_service() {
+	. /lib/functions.sh
+	config_load hams_node
+	config_get url main export_url
+	config_get dir main siit_dir /etc/hams-node/siit
+	[ -n "$url" ] || return 0
+	uclient-fetch -q -O /tmp/hams-node-export.json "$url" || return 0
+	hams-node-siit render /tmp/hams-node-export.json "$dir" && hams-node-siit apply "$dir"
+}
