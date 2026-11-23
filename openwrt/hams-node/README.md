@@ -16,7 +16,7 @@ metadata.
 
 Contents: `hams-node-siit` renders one Jool SIIT instance file per mesh domain from the registry export (the same
 files as `ipv6_siit/siit_map.py gateway_configs`) and loads them; `hams-node-wg` adds WireGuard
-peers on Internet links only.
+peers on Internet links only; `hams-node-rf-route apply|down IFACE rf|internet PREFIXES` gives RF routes metric 100 and tunnel routes metric 200 (RF first, tunnel as backup) and keeps end-to-end encrypted traffic off RF: `ham_boundary` marks it (fwmark 151) and a rule sends it to table 197, which holds tunnel routes only. It does nothing for an empty prefix list.
 
 `hams-node-ondemand` (off by default, `/etc/config/hams_node_ondemand`): an nft set `inet hams_ondemand seen` (keyed on the /60,
 timeout = idle minutes, refreshed by every forwarded packet to `ham_prefix`) is the traffic detector. A new element is the first packet:

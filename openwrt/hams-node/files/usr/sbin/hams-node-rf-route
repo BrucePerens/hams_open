@@ -1,0 +1,47 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-rf-route apply|down INTERFACE LINK_TYPE PREFIXES_FILE
+# RF-first routing on the node: routes to the prefixes in PREFIXES_FILE (one per line; '#' comments) over an "rf" link get metric 100,
+# over an "internet" (WireGuard) link metric 200, so the RF route wins while it exists and the tunnel is the automatic backup.
+# Part 97: traffic that is encrypted end to end must never be steered onto RF. ham_boundary marks it (fwmark 151, 0x97); a rule at priority 89
+# sends marked packets to table 197, which holds the tunnel routes only, so a marked packet never takes the RF route. Nothing is done
+# for an empty prefix list (inert while the /40 is unset: the registry then lists no prefixes).
+set -u
+
+RF_METRIC=100 TUNNEL_METRIC=200 TUNNEL_TABLE=197 MARK=151
+
+if [ $# -ne 4 ] || { [ "$1" != apply ] && [ "$1" != down ]; }; then
+	echo "usage: hams-node-rf-route apply|down INTERFACE LINK_TYPE PREFIXES_FILE" >&2; exit 2
+fi
+action=$1 iface=$2 type=$3 file=$4
+case $type in internet | rf) ;; *) echo "hams-node-rf-route: unknown link type '$type'" >&2; exit 1 ;; esac
+case $iface in '' | *[!A-Za-z0-9_-]*) echo "hams-node-rf-route: bad interface name" >&2; exit 1 ;; esac
+[ -r "$file" ] || { echo "hams-node-rf-route: cannot read $file" >&2; exit 1; }
+
+status=0
+seen=0
+while read -r prefix extra; do
+	case $prefix in '' | '#'*) continue ;; esac
+	case $prefix$extra in *[!A-Fa-f0-9:./]*) echo "hams-node-rf-route: bad prefix, skipped" >&2; status=1; continue ;; esac
+	seen=1
+	if [ "$action" = apply ]; then
+		if [ "$type" = rf ]; then
+			ip -6 route replace "$prefix" dev "$iface" metric $RF_METRIC || status=1
+		else
+			ip -6 route replace "$prefix" dev "$iface" metric $TUNNEL_METRIC || status=1
+			ip -6 route replace "$prefix" dev "$iface" table $TUNNEL_TABLE || status=1
+		fi
+	else
+		if [ "$type" = rf ]; then
+			ip -6 route del "$prefix" dev "$iface" metric $RF_METRIC 2>/dev/null
+		else
+			ip -6 route del "$prefix" dev "$iface" metric $TUNNEL_METRIC 2>/dev/null
+			ip -6 route del "$prefix" dev "$iface" table $TUNNEL_TABLE 2>/dev/null
+		fi
+	fi
+done < "$file"
+[ $seen = 1 ] && [ "$type" = internet ] && {
+	ip -6 rule del fwmark $MARK lookup $TUNNEL_TABLE priority 89 2>/dev/null
+	[ "$action" = apply ] && { ip -6 rule add fwmark $MARK lookup $TUNNEL_TABLE priority 89 || status=1; }
+}
+exit $status

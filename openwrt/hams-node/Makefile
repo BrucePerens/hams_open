@@ -37,6 +37,7 @@ define Package/hams-node/install
 	$(INSTALL_DIR) $(1)/usr/sbin $(1)/etc/init.d $(1)/etc/config
 	$(INSTALL_BIN) ./files/usr/sbin/hams-node-siit $(1)/usr/sbin/
 	$(INSTALL_BIN) ./files/usr/sbin/hams-node-wg $(1)/usr/sbin/
+	$(INSTALL_BIN) ./files/usr/sbin/hams-node-rf-route $(1)/usr/sbin/
 	$(INSTALL_BIN) ./files/usr/sbin/hams-node-ondemand $(1)/usr/sbin/
 	$(INSTALL_BIN) ./files/etc/init.d/hams-node-ondemand $(1)/etc/init.d/
 	$(INSTALL_CONF) ./files/etc/config/hams_node_ondemand $(1)/etc/config/
