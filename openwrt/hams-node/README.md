@@ -74,3 +74,11 @@ Results:
 login secret is never typed into or stored on the router. `hams-node-enroll fetch` (a cron line, every 6 hours, added by
 enrol) renews the configuration into `/etc/config/hams_node` and `hams_node_ondemand`. A revoked token stops the node:
 exit 3, the cron line and token are removed, and no request is made again until the member enrols anew.
+
+## Reporting hosts and services (`hams-node-report`, separate package)
+
+`hams-node-report start` adds a cron line (every 30 minutes) that runs `hams-node-report run`: it reads the AREDN host list
+(`/var/run/hosts_olsr`) and service ads (`/var/run/services_olsr`) and POSTs them to `/api/ipv6/gateway/report` with the
+enrolled device token (`/etc/hams-node/device_token`, mode 0600) over HTTPS. hams.com publishes them as
+`<host>.<mesh>.<callsign>.ham` and drops them 24 hours after the reports stop. Exit codes: 0 reported, 1 refused or not
+enrolled, 3 token revoked, 4 hams.com unreachable (cron retries).
