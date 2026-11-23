@@ -1,0 +1,115 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-enroll: enrol this node with hams.com and keep its configuration current. The member's login secret is never typed into
+# or stored on the router: the member approves a short code (or makes a one-time token) in the portal, and the router keeps only
+# a revocable device token in a root-only file.
+#   hams-node-enroll OPTIONS enroll [ONE_TIME_TOKEN]   show a code to approve at /my/ipv6 (or use the token), then store the device token
+#   hams-node-enroll OPTIONS fetch                      renew the configuration (run from cron); stops for good if the token is revoked
+#   hams-node-enroll OPTIONS unenroll                   forget the token and stop the schedule
+# OPTIONS: -u BASE_URL (https://hams.com) -s STATE_DIR (/etc/hams-node) [-c CRONTAB (/etc/crontabs/root)] [-i POLL_SECONDS]
+# Exit: 0 ok; 1 refused or not enrolled; 3 token revoked (stopped, no retries); 4 hams.com unreachable (cron tries again later).
+set -u
+base=https://hams.com state=/etc/hams-node cron=/etc/crontabs/root poll=''
+while getopts u:s:c:i: opt; do
+	case $opt in
+	u) base=$OPTARG ;; s) state=$OPTARG ;; c) cron=$OPTARG ;; i) poll=$OPTARG ;;
+	*) exit 2 ;;
+	esac
+done
+shift $((OPTIND - 1))
+[ $# -ge 1 ] || { echo "usage: hams-node-enroll [-u URL] [-s DIR] enroll [TOKEN] | fetch | unenroll" >&2; exit 2; }
+cmd=$1
+shift
+umask 077
+mkdir -p "$state" || exit 1
+tokenfile=$state/device_token keyfile=$state/wg.key statusfile=$state/status
+tmp=$state/reply.json
+job="/usr/sbin/hams-node-enroll fetch"
+
+status() { echo "$*" > "$statusfile"; echo "hams-node-enroll: $*" >&2; }
+
+# post ENDPOINT JSON: the reply in $tmp; 0 when hams.com answered with JSON.
+post() {
+	rm -f "$tmp"
+	uclient-fetch -q -O "$tmp" --header='Content-Type: application/json' \
+		--post-data="{\"jsonrpc\":\"2.0\",\"method\":\"call\",\"params\":$2}" "$base/api/ipv6/enroll/$1" || return 1
+	[ -s "$tmp" ] && [ "$(jsonfilter -i "$tmp" -e '@.result.status')" ]
+}
+field() { jsonfilter -i "$tmp" -e "@.result.$1"; }
+# Only the characters of a token or key may reach a request body.
+clean() { case $1 in '' | *[!A-Za-z0-9_=/+-]*) return 1 ;; esac; }
+
+apply_config() { # the reply in $tmp -> the package's own settings
+	prefix60=$(field prefix60) ham=$(field ham_prefix) asn=$(field asn) serverkey=$(field server_key)
+	[ -n "$prefix60" ] || return 1
+	uci set hams_node.main=gateway
+	uci set hams_node.main.prefix60="$prefix60"
+	uci set hams_node.main.asn="$asn"
+	uci set hams_node.main.server_key="$serverkey"
+	uci set hams_node_ondemand.main=ondemand
+	uci set hams_node_ondemand.main.ham_prefix="$ham"
+	uci set hams_node_ondemand.main.lookup_url="$base/api/ipv6/directory/lookup"
+	uci commit hams_node
+	uci commit hams_node_ondemand
+}
+
+add_cron() { grep -qF "$job" "$cron" 2>/dev/null || echo "17 */6 * * * $job" >> "$cron"; }
+drop_cron() { [ -f "$cron" ] || return 0; grep -vF "$job" "$cron" > "$cron.new"; mv "$cron.new" "$cron"; }
+
+do_enroll() {
+	[ ! -s "$keyfile" ] && { wg genkey > "$keyfile" || exit 1; }
+	pub=$(wg pubkey < "$keyfile") && clean "$pub" || { status "no WireGuard key"; exit 1; }
+	interval=${poll:-5}
+	if [ $# -ge 1 ]; then
+		code=$1
+		clean "$code" || { status "bad token"; exit 1; }
+		tries=2
+	else
+		post start '{}' && [ "$(field status)" = success ] || { status "could not ask hams.com for a code"; exit 4; }
+		code=$(field device_code) user=$(field user_code) expires=$(field expires_in) wait=$(field interval)
+		clean "$code" || { status "bad reply"; exit 1; }
+		[ -n "$poll" ] || interval=${wait:-5}
+		echo "On hams.com open $base/my/ipv6 and enter the code: $user"
+		step=$interval
+		[ "$step" -gt 0 ] || step=1
+		tries=$(( ${expires:-600} / step + 1 ))
+	fi
+	while [ "$tries" -gt 0 ]; do
+		tries=$((tries - 1))
+		post poll "{\"device_code\":\"$code\",\"public_key\":\"$pub\"}" || { status "hams.com unreachable"; exit 4; }
+		case $(field status) in
+		success)
+			token=$(field token)
+			clean "$token" || { status "bad reply"; exit 1; }
+			(umask 077; echo "$token" > "$tokenfile")
+			chmod 600 "$tokenfile" "$keyfile"
+			apply_config || { status "enrolled but the reply had no /60"; exit 1; }
+			add_cron
+			status "enrolled $(field prefix60)"
+			exit 0 ;;
+		pending) [ "$(field message)" = slow_down ] && interval=$((interval + 5)); sleep "$interval" ;;
+		*) status "enrolment refused or expired"; exit 1 ;;
+		esac
+	done
+	status "enrolment timed out"
+	exit 1
+}
+
+do_fetch() {
+	[ "$(cat "$statusfile" 2>/dev/null)" = revoked ] && { echo "hams-node-enroll: token revoked; enrol again" >&2; exit 3; }
+	[ -s "$tokenfile" ] || { echo "hams-node-enroll: not enrolled" >&2; exit 1; }
+	token=$(cat "$tokenfile")
+	clean "$token" || { status "bad token file"; exit 1; }
+	post config "{\"token\":\"$token\"}" || { status "hams.com unreachable"; exit 4; }
+	case $(field status) in
+	success) apply_config && status "configuration renewed $(field prefix60)" ;;
+	*) drop_cron; rm -f "$tokenfile"; status revoked; exit 3 ;;
+	esac
+}
+
+case $cmd in
+enroll) do_enroll "$@" ;;
+fetch) do_fetch ;;
+unenroll) drop_cron; rm -f "$tokenfile" "$statusfile" ;;
+*) exit 2 ;;
+esac
