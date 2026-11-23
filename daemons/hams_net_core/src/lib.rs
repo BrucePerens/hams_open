@@ -4,4 +4,5 @@
 //! WireGuard backend. Behaviour mirrors the Python implementations; `tests/vectors/*.json` are shared with
 //! their tests (parity).
 
+pub mod boundary;
 pub mod siit;
