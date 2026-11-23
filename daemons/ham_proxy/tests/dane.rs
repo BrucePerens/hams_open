@@ -110,6 +110,7 @@ fn tlsa_matches_pins_only_the_certificate() {
 fn query_and_response_round_trip() {
     // Tests [@ANCHOR: ham_proxy_tlsa_query]
     // Tests [@ANCHOR: ham_proxy_parse_tlsa]
+    // Tests [@ANCHOR: ham_proxy_skip_name]
     let q = tlsa_query("node.ham", 443, 7);
     assert_eq!(&q[..2], &[0, 7]);
     let want = b"\x04_443\x04_tcp\x04node\x03ham\x00";
@@ -137,6 +138,7 @@ fn try_connect(port: u16, resolver: &str) -> Result<String, ProxyError> {
 fn pinned_ham_server_is_accepted_and_others_refused() {
     // Tests [@ANCHOR: ham_proxy_resolve_tlsa]
     // Tests [@ANCHOR: ham_proxy_connect_ham_server]
+    // Tests [@ANCHOR: ham_proxy_client_builder]
     let d = tmpdir("c");
     let (c, k) = make_cert(&d, "good");
     let (other, _) = make_cert(&d, "other");

@@ -47,6 +47,7 @@ pub fn tlsa_query(host: &str, port: u16, id: u16) -> Vec<u8> {
     q
 }
 
+// [@ANCHOR: ham_proxy_skip_name]
 fn skip_name(p: &[u8], mut i: usize) -> Option<usize> {
     loop {
         let l = *p.get(i)? as usize;

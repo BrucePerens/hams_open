@@ -78,6 +78,7 @@ pub fn ham_acceptor(cert: &Path, key: &Path) -> Result<SslAcceptor, ProxyError> 
     Ok(b.build())
 }
 
+// [@ANCHOR: ham_proxy_client_builder]
 /// Client builder that offers only integrity-only suites.
 pub(crate) fn ham_client_builder() -> Result<openssl::ssl::SslConnectorBuilder, ProxyError> {
     let mut b = SslConnector::builder(SslMethod::tls_client())?;
