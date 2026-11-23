@@ -5,6 +5,7 @@
 
 pub mod dane;
 pub mod indicator;
+pub mod policy;
 
 use openssl::error::ErrorStack;
 use openssl::pkey::{PKey, Private};
@@ -37,6 +38,8 @@ pub enum ProxyError {
     NotPinned(String),
     /// The request head was too long or ended early.
     BadRequest,
+    /// The destination is not on the site-gateway whitelist.
+    NotWhitelisted(String),
 }
 
 impl std::fmt::Display for ProxyError {
@@ -253,8 +256,29 @@ pub fn serve_one_signed(
     site_name: &str,
     key: Option<&PKey<Private>>,
 ) -> Result<(), ProxyError> {
+    serve_one_policed(tcp, acceptor, site, site_addr, site_name, key, None)
+}
+
+// [@ANCHOR: ham_proxy_serve_one_policed]
+/// As [`serve_one_signed`], and with a `policy`: a `site_name` not on the whitelist is refused before any
+/// upstream connection, and each permitted flow is written to the station-ID log with the negotiated suite.
+pub fn serve_one_policed(
+    tcp: TcpStream,
+    acceptor: &SslAcceptor,
+    site: &SslConnector,
+    site_addr: &str,
+    site_name: &str,
+    key: Option<&PKey<Private>>,
+    policy: Option<&policy::Policy>,
+) -> Result<(), ProxyError> {
     let mut ham = acceptor.accept(tcp)?;
-    require_integrity_only(&ham)?;
+    let suite = require_integrity_only(&ham)?;
+    if let Some(p) = policy {
+        if !p.whitelist.permits(site_name) {
+            return Err(ProxyError::NotWhitelisted(site_name.to_string()));
+        }
+        p.record(now(), site_name, &suite)?;
+    }
     let head = read_head(&mut ham)?;
     let up_tcp = TcpStream::connect(site_addr)?;
     let mut up = site.connect(site_name, up_tcp)?;

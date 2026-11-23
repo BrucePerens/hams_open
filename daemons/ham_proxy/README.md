@@ -15,3 +15,10 @@ OpenWrt/static builds: `--features vendored` builds OpenSSL from source.
 ## Types
 
 - [@ANCHOR: ham_proxy_tlsa_type] `Tlsa`: tuple `(usage, selector, matching_type, data)`, one TLSA record: usage 3 is DANE-EE, selector 0 the full certificate, matching type 0/1/2 exact/SHA-256/SHA-512, data the bytes to compare.
+
+## Whitelist and station-ID log
+
+`--whitelist FILE --callsign CALL --log FILE` turns on the site-gateway policy (same whitelist file idea as
+`ham_tls/ham_policy.py`: one entry per line, `example.org` exact, `*.example.org` subdomains, `#` comments; every
+`.ham` name is always allowed). A site not listed is refused before any upstream connection. Each permitted flow
+appends `UTC-time CALLSIGN -> host suite` to the log (Part 97 station identification).
