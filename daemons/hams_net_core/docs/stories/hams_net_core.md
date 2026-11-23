@@ -32,3 +32,18 @@ Run `tools/cross_build.sh` (optional target list) to build a small probe binary 
 - [@ANCHOR: hams_net_core_policy_format_utc] `format_utc(secs)`: unix time as `YYYY-MM-DDTHH:MM:SSZ`.
 - [@ANCHOR: hams_net_core_policy_log_line] `log_line(secs, callsign, host, suite)`: one Part 97 station-ID line `time CALLSIGN -> host suite`; `None` without a callsign.
 - [@ANCHOR: hams_net_core_policy_whitelist_add_site] adds a signed-list host with its paths; [@ANCHOR: hams_net_core_policy_whitelist_permits_path] allows a request only when the host is listed and, if the entry names paths, the path is under one of them.
+
+## Login, signed list and DANE logic (moved from ham_proxy)
+`hams_net_core::login` (nonce challenges, the `/.ham/login` answers), `signed_list` (Ed25519-signed whitelist verification) and `dane` (TLSA matching, query packet, response parser) hold the I/O-free logic; the primitives they need (hashes, Ed25519 check, base64, random bytes) come from the consumer through `crypto::Crypto` (`ham_proxy::crypto::OpensslCrypto`). `ham_proxy` keeps the sockets, TLS handshake, the session key agreement and the HTTP verifier, and re-exports the same functions with unchanged signatures. Behaviour is unchanged; ham_proxy's own tests pass unchanged.
+
+- [@ANCHOR: hams_net_core_login_challenges] A member signs in over the ham link without a password: the proxy keeps the outstanding login challenges in memory.
+- [@ANCHOR: hams_net_core_login_issue] `GET /.ham/login` hands out a fresh random 128-bit nonce, remembered for 120 seconds.
+- [@ANCHOR: hams_net_core_login_take] A nonce can be answered once; a replayed or expired answer is refused.
+- [@ANCHOR: hams_net_core_login_audience] The member's key signs `ham-login:<site>` plus the nonce, so a signature made for one site is useless at another.
+- [@ANCHOR: hams_net_core_login_respond] `GET /.ham/login?serial&nonce&sig` is answered 200 with the callsign when hams.com confirms the signature, else 403; any other path goes to the site.
+- [@ANCHOR: hams_net_core_dane_tlsa_matches] `tlsa_matches(cert_der, records)`: true only if a usage 3, selector 0 record with matching type 0, 1 or 2 pins the certificate; no records means refuse.
+- [@ANCHOR: hams_net_core_dane_tlsa_query] `tlsa_query(host, port, id)`: the DNS packet asking for the TLSA records of `_port._tcp.host`.
+- [@ANCHOR: hams_net_core_dane_parse_tlsa] `parse_tlsa(packet)`: the TLSA records of a DNS response; empty for an error response or garbage.
+- [@ANCHOR: hams_net_core_dane_skip_name] Steps over a (possibly compressed) DNS name inside a response.
+- [@ANCHOR: hams_net_core_signed_list_verify_list] checks the published signed whitelist (Ed25519 over the payload, then expiry) and returns a whitelist; [@ANCHOR: hams_net_core_signed_list_list_error] says why it was refused (malformed, bad signature, expired); [@ANCHOR: hams_net_core_signed_list_parse_utc] reads its `expires` time and [@ANCHOR: hams_net_core_signed_list_list_unhex] reads the hex public key file.
+- [@ANCHOR: hams_net_core_dane_tlsa_type] `Tlsa`: tuple `(usage, selector, matching_type, data)`, one TLSA record: usage 3 is DANE-EE, selector 0 the full certificate, matching type 0/1/2 exact/SHA-256/SHA-512, data the bytes to compare.

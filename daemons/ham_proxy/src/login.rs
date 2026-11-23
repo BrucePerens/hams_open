@@ -1,106 +1,51 @@
-//! `/.ham/login`: sign in over the integrity-only ham link without sending a password or any reusable secret.
-//!
-//! Standard used: a signed challenge, the proof of possession of a client-held ECDSA P-256 key that WebAuthn
-//! and TLS client certificates also use. No custom primitive: signing is done by the member's browser or tool,
-//! verifying by hams.com (`ham_member_certs`, the member certificate's recorded key) over ordinary verified TLS.
-//! The proxy only mints and spends the challenges. Nothing here derives or uses an encryption key.
-//!
-//! Wire (all plain ASCII, so it fits the head-only relay):
-//! * `GET /.ham/login` answers `{"nonce":HEX,"audience":"ham-login:SITE","expires_in":120}`.
-//! * `GET /.ham/login?serial=HEX&nonce=HEX&sig=HEX` where `sig` is the raw r||s ECDSA signature over
-//!   `hams-member-cert-possession-v1\n<audience>\n<nonce>`. Answers 200 `{"callsign":...}` or 403.
-//!
-//! With an `epk=HEX` parameter (the browser's ephemeral P-256 public point) the audience becomes
-//! `ham-login:SITE:epk=HEX`, so the signature also covers `epk`, and the 200 answer adds `"session"` and the
-//! proxy's `"epk"`: see [`crate::session`] for what the agreed key authenticates afterwards.
-//!
-//! A nonce is single use and lives [`TTL_SECS`] seconds, so a captured exchange cannot be replayed, and the
-//! audience names the site, so it cannot be used for another one.
+//! `/.ham/login`: the challenge and answer logic lives in `hams_net_core::login`; this binds it to OpenSSL, the session
+//! table (see [`crate::session`]) and the HTTP verifier that asks hams.com over verified TLS.
 
+use crate::crypto::OpensslCrypto;
 use crate::session::Sessions;
 use crate::ProxyError;
-use openssl::base64::encode_block;
-use openssl::rand::rand_bytes;
+use hams_net_core::login::{IssueError, SessionOpener, SessionRefused};
 use openssl::ssl::SslConnector;
-use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::sync::Mutex;
 
-/// Seconds a challenge may be answered in.
-pub const TTL_SECS: u64 = 120;
-/// Path prefix the proxy answers itself.
-pub const PATH: &str = "/.ham/login";
-const MAX_PENDING: usize = 1024;
+pub use hams_net_core::login::{audience, Verifier, PATH, TTL_SECS};
 
-// [@ANCHOR: ham_proxy_login_challenges]
-/// Outstanding challenges: nonce -> issue time.
+/// Outstanding challenges (the core's) plus the sessions opened by a login that sent an `epk`.
 #[derive(Default)]
 pub struct Challenges {
-    pending: Mutex<HashMap<String, u64>>,
+    core: hams_net_core::login::Challenges,
     /// Sessions opened by a login that sent an `epk` (see [`crate::session`]).
     pub sessions: Sessions,
 }
 
 impl Challenges {
-    // [@ANCHOR: ham_proxy_login_issue]
     /// A fresh 128-bit nonce, remembered until answered or [`TTL_SECS`] old.
     pub fn issue(&self, now: u64) -> Result<String, ProxyError> {
-        let mut b = [0u8; 16];
-        rand_bytes(&mut b)?;
-        let nonce: String = b.iter().map(|x| format!("{x:02x}")).collect();
-        let mut m = self.pending.lock().map_err(|_| ProxyError::BadRequest)?;
-        m.retain(|_, t| now.saturating_sub(*t) <= TTL_SECS);
-        if m.len() >= MAX_PENDING {
-            return Err(ProxyError::BadRequest);
-        }
-        m.insert(nonce.clone(), now);
-        Ok(nonce)
+        self.core.issue(&OpensslCrypto, now).map_err(|e| match e {
+            IssueError::Random => ProxyError::Tls("random generator failed".into()),
+            IssueError::Full => ProxyError::BadRequest,
+        })
     }
 
-    // [@ANCHOR: ham_proxy_login_take]
     /// Spend `nonce`: true only the first time, and only while it is unexpired.
     pub fn take(&self, nonce: &str, now: u64) -> bool {
-        let Ok(mut m) = self.pending.lock() else {
-            return false;
-        };
-        m.remove(nonce)
-            .is_some_and(|t| now.saturating_sub(t) <= TTL_SECS)
+        self.core.take(nonce, now)
     }
 }
 
-/// Decides whether a signature over the login message is genuine; answers the member's callsign.
-pub trait Verifier {
-    /// `sig_b64` is the standard base64 of the raw signature.
-    fn verify(&self, serial: &str, nonce: &str, audience: &str, sig_b64: &str) -> Option<String>;
+impl SessionOpener for Sessions {
+    fn open(
+        &self,
+        callsign: &str,
+        peer_hex: &str,
+        nonce: &str,
+        now: u64,
+    ) -> Result<(String, String), SessionRefused> {
+        Sessions::open(self, callsign, peer_hex, nonce, now).map_err(|_| SessionRefused)
+    }
 }
 
-// [@ANCHOR: ham_proxy_login_audience]
-/// What the member's key signs for `site`.
-pub fn audience(site: &str) -> String {
-    format!("ham-login:{site}")
-}
-
-fn is_hex(s: &str) -> bool {
-    !s.is_empty() && s.len() <= 1024 && s.bytes().all(|c| c.is_ascii_hexdigit())
-}
-
-fn json(status: &str, body: &str) -> Vec<u8> {
-    format!(
-        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nCache-Control: no-store\r\n\
-Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
-        body.len()
-    )
-    .into_bytes()
-}
-
-fn param<'a>(query: &'a str, name: &str) -> Option<&'a str> {
-    query
-        .split('&')
-        .find_map(|kv| kv.split_once('=').filter(|(k, _)| *k == name).map(|x| x.1))
-}
-
-// [@ANCHOR: ham_proxy_login_respond]
 /// The answer to a request for `target` (the request-line path and query) if it is a login request, else `None`
 /// (relay it to the site as usual).
 pub fn respond(
@@ -110,61 +55,7 @@ pub fn respond(
     v: &dyn Verifier,
     now: u64,
 ) -> Option<Vec<u8>> {
-    let (path, query) = target.split_once('?').unwrap_or((target, ""));
-    if path != PATH {
-        return None;
-    }
-    let mut aud = audience(site);
-    if query.is_empty() {
-        return Some(match ch.issue(now) {
-            Ok(n) => json(
-                "200 OK",
-                &format!("{{\"nonce\":\"{n}\",\"audience\":\"{aud}\",\"expires_in\":{TTL_SECS}}}"),
-            ),
-            Err(_) => json("503 Service Unavailable", "{}"),
-        });
-    }
-    let refuse = || json("403 Forbidden", "{\"error\":\"login refused\"}");
-    let (Some(serial), Some(nonce), Some(sig)) = (
-        param(query, "serial"),
-        param(query, "nonce"),
-        param(query, "sig"),
-    ) else {
-        return Some(refuse());
-    };
-    if ![serial, nonce, sig].iter().all(|x| is_hex(x)) || sig.len() % 2 != 0 {
-        return Some(refuse());
-    }
-    // Spend the challenge first: a wrong signature also burns it, so a guess costs a new round trip.
-    if !ch.take(nonce, now) {
-        return Some(refuse());
-    }
-    let epk = param(query, "epk");
-    if let Some(e) = epk {
-        if !is_hex(e) {
-            return Some(refuse());
-        }
-        aud = format!("{aud}:epk={e}");
-    }
-    let raw: Vec<u8> = (0..sig.len())
-        .step_by(2)
-        .filter_map(|i| u8::from_str_radix(&sig[i..i + 2], 16).ok())
-        .collect();
-    Some(match v.verify(serial, nonce, &aud, &encode_block(&raw)) {
-        Some(call) if call.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'/') => match epk {
-            None => json("200 OK", &format!("{{\"callsign\":\"{call}\"}}")),
-            Some(e) => match ch.sessions.open(&call, e, nonce, now) {
-                Ok((sid, ours)) => json(
-                    "200 OK",
-                    &format!(
-                        "{{\"callsign\":\"{call}\",\"session\":\"{sid}\",\"epk\":\"{ours}\"}}"
-                    ),
-                ),
-                Err(_) => refuse(),
-            },
-        },
-        _ => refuse(),
-    })
+    hams_net_core::login::respond(target, site, &ch.core, v, &ch.sessions, &OpensslCrypto, now)
 }
 
 // [@ANCHOR: ham_proxy_login_http_verifier]

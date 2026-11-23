@@ -100,7 +100,6 @@ fn start_ham_server(c: &Path, k: &Path) -> u16 {
 
 #[test]
 fn tlsa_matches_pins_only_the_certificate() {
-    // Tests [@ANCHOR: ham_proxy_tlsa_matches]
     let d = tmpdir("m");
     let (c, _) = make_cert(&d.0, "a");
     let cert = der(&c);
@@ -118,10 +117,6 @@ fn tlsa_matches_pins_only_the_certificate() {
 
 #[test]
 fn query_and_response_round_trip() {
-    // Tests [@ANCHOR: ham_proxy_tlsa_query]
-    // Tests [@ANCHOR: ham_proxy_parse_tlsa]
-    // Tests [@ANCHOR: ham_proxy_skip_name]
-    // Tests [@ANCHOR: ham_proxy_tlsa_type]
     let q = tlsa_query("node.ham", 443, 7);
     assert_eq!(&q[..2], &[0, 7]);
     let want = b"\x04_443\x04_tcp\x04node\x03ham\x00";

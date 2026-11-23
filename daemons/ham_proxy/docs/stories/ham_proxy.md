@@ -28,11 +28,6 @@ Internals:
 - [@ANCHOR: ham_proxy_main] The `ham_proxy` binary entry point: runs the proxy and exits 1 with the error printed if setup fails.
 - [@ANCHOR: ham_proxy_run] Parses `--listen --cert --key --site [--ca]`, binds, and serves each connection on its own thread.
 - [@ANCHOR: ham_proxy_arg] Looks up the value following a command-line flag.
-- [@ANCHOR: ham_proxy_login_challenges] A member signs in over the ham link without a password: the proxy keeps the outstanding login challenges in memory.
-- [@ANCHOR: ham_proxy_login_issue] `GET /.ham/login` hands out a fresh random 128-bit nonce, remembered for 120 seconds.
-- [@ANCHOR: ham_proxy_login_take] A nonce can be answered once; a replayed or expired answer is refused.
-- [@ANCHOR: ham_proxy_login_audience] The member's key signs `ham-login:<site>` plus the nonce, so a signature made for one site is useless at another.
-- [@ANCHOR: ham_proxy_login_respond] `GET /.ham/login?serial&nonce&sig` is answered 200 with the callsign when hams.com confirms the signature, else 403; any other path goes to the site.
 - [@ANCHOR: ham_proxy_login_http_verifier] hams.com checks the signature against the key it recorded for the member certificate, over verified TLS.
 - [@ANCHOR: ham_proxy_login_http_verify] The verifier posts the serial, nonce, audience and signature to `/ham/login/verify` and accepts only a `success` answer that names a callsign.
 - [@ANCHOR: ham_proxy_session_derive_key] After login the browser's ephemeral P-256 key (`epk`, covered by its login signature) and the proxy's give an ECDH secret; `derive_key` hashes it with the login nonce into a 32-byte MAC key. The key is used for MAC only, never encryption.
@@ -47,12 +42,8 @@ Internals:
 
 A `.ham` server is identified by a DANE-EE TLSA record in the signed `.ham` zone, not by a CA. The resolver (the node's validating resolver) is given as `ip:port`.
 
-- [@ANCHOR: ham_proxy_tlsa_matches] `tlsa_matches(cert_der, records)`: true only if a usage 3, selector 0 record with matching type 0, 1 or 2 pins the certificate; no records means refuse.
-- [@ANCHOR: ham_proxy_tlsa_query] `tlsa_query(host, port, id)`: the DNS packet asking for the TLSA records of `_port._tcp.host`.
-- [@ANCHOR: ham_proxy_parse_tlsa] `parse_tlsa(packet)`: the TLSA records of a DNS response; empty for an error response or garbage.
 - [@ANCHOR: ham_proxy_resolve_tlsa] `resolve_tlsa(resolver, host, port)`: one UDP query to the resolver, 3 s timeout.
 - [@ANCHOR: ham_proxy_connect_ham_server] `connect_ham_server(tcp, host, port, resolver)`: integrity-only TLS client; refuses an encrypting suite, and refuses (`NotPinned`) a certificate that no TLSA record pins or a name with no records.
-- [@ANCHOR: ham_proxy_skip_name] Steps over a (possibly compressed) DNS name inside a response.
 - [@ANCHOR: ham_proxy_client_builder] The integrity-only client builder shared by `ham_connector` and `connect_ham_server`.
 
 ## Page indicator (signed, not encrypted)
@@ -79,6 +70,14 @@ A `.ham` server is identified by a DANE-EE TLSA record in the signed `.ham` zone
 
 Site gateway (`--gateway`, tests `tests/gateway.rs`):
 
-- [@ANCHOR: ham_proxy_verify_list] checks the published signed whitelist (Ed25519 over the payload, then expiry) and returns a whitelist; [@ANCHOR: ham_proxy_list_error] says why it was refused (malformed, bad signature, expired); [@ANCHOR: ham_proxy_parse_utc] reads its `expires` time and [@ANCHOR: ham_proxy_list_unhex] reads the hex public key file.
 - [@ANCHOR: ham_proxy_policy_permits] and [@ANCHOR: ham_proxy_policy_replace] are the policy's host-and-path check and the swap-in of a freshly verified list; [@ANCHOR: ham_proxy_request_target] reads host, port and path from the request head in gateway mode, where `serve_one_policed` takes the site from the request and refuses (before any upstream connection) a site or path that is not permitted.
 - [@ANCHOR: ham_proxy_load_key] and [@ANCHOR: ham_proxy_load_list] are the binary's key file and per-connection list loading (a bad list gives the empty whitelist).
+
+## Binding to hams_net_core
+
+The login challenges, the signed-whitelist check and the DANE matching and parsing now live in `hams_net_core` (`login`, `signed_list`, `dane`; their stories and anchors are in that crate's story). ham_proxy keeps everything that needs a socket or a TLS library and calls the core with OpenSSL as the primitives:
+
+- `crypto::OpensslCrypto` implements `hams_net_core::crypto::Crypto`: SHA-256 and SHA-512 for TLSA matching types 1 and 2, the raw-key Ed25519 check for the signed list, standard base64 for the list fields and the login signature, and `rand_bytes` for nonces.
+- `login::Challenges` wraps the core's nonce table and adds the `sessions` table; `login::respond(target, site, ch, verifier, now)` calls the core's `respond` with those sessions (as its `SessionOpener`) and OpenSSL. `Verifier`, `audience`, `PATH` and `TTL_SECS` are re-exported unchanged.
+- `signed_list::verify_list(text, key, now)`, `parse_utc`, `unhex` and `ListError`, and `dane::tlsa_matches(cert_der, records)`, `tlsa_query`, `parse_tlsa` and `Tlsa` keep their old signatures, so callers and ham_proxy's tests are unchanged.
+- Still here: `HttpVerifier` (asks hams.com over verified TLS), `dane::resolve_tlsa` (one UDP query, 3 s timeout), `dane::connect_ham_server` (integrity-only handshake, refuses an encrypting suite or an unpinned certificate) and `session` (the key agreement and request MACs).
