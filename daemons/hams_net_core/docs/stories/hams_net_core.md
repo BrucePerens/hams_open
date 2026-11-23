@@ -53,3 +53,5 @@ Run `tools/cross_build.sh` (optional target list) to build a small probe binary 
 - [@ANCHOR: hams_net_core_deprecation_gossip_request] `gossip_request()`: the line `HAMS-GOSSIP <seq>` a router sends a neighbour on tcp 5710.
 - [@ANCHOR: hams_net_core_deprecation_gossip_reply] `gossip_reply(request)`: the stored chain of signed documents (exactly as hams.com signed them) when the held list is newer than the neighbour's, else nothing; only signed documents are ever relayed.
 - [@ANCHOR: hams_net_core_deprecation_accept_gossip] `accept_gossip(crypto, reply)`: applies a neighbour's reply line by line with the same checks as a document from hams.com; bad or non-fitting lines are skipped.
+- [@ANCHOR: hams_net_core_deprecation_verified] The payload of a signed document only when its key number matches the enrolled key and the Ed25519 signature verifies.
+- [@ANCHOR: hams_net_core_deprecation_entries_of] Reads the listed entries of a document; a revoked member certificate is kept as `cert:ISSUER:SERIAL`, an entry with an odd serial or issuer is dropped.

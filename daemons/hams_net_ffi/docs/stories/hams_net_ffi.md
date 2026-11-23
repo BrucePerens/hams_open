@@ -8,6 +8,7 @@ UniFFI bindings over `hams_net_core` for the Android app (Kotlin) and iOS (Swift
 - [@ANCHOR: hams_net_ffi_peer_table_on_packet] `onPacket(destination, now)`: refresh or create the peer for a destination; its public key or null.
 - [@ANCHOR: hams_net_ffi_peer_table_expire] `expire(now)`: remove idle peers.
 - [@ANCHOR: hams_net_ffi_deprecation_new] `DeprecationList(crypto, publicKey)`: the signed deprecation list; the platform supplies Ed25519 and base64 (`PlatformCrypto`) and the usign public key line from enrolment.
+- [@ANCHOR: hams_net_ffi_foreign_crypto_ed25519_verify] The platform's Ed25519 check behind the core's `Crypto` (a key that is not 32 bytes is refused before the platform is asked).
 - [@ANCHOR: hams_net_ffi_deprecation_seq] `seq()`: the held sequence number.
 - [@ANCHOR: hams_net_ffi_deprecation_apply] `apply(payload, signature)`: a signed full list or delta from hams.com; the changes to enforce (evict and block added, lift removed), or null when refused.
 - [@ANCHOR: hams_net_ffi_deprecation_gossip_request] `gossipRequest()`: the line to send a neighbour on tcp 5710.

@@ -83,6 +83,7 @@ fn envelope(json: &str) -> (String, String) {
     (hex(json.as_bytes()), hex(&sig))
 }
 
+// Tests [@ANCHOR: hams_net_ffi_foreign_crypto_ed25519_verify]
 // Tests [@ANCHOR: hams_net_ffi_deprecation_new]
 // Tests [@ANCHOR: hams_net_ffi_deprecation_seq]
 // Tests [@ANCHOR: hams_net_ffi_deprecation_apply]

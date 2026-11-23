@@ -191,6 +191,7 @@ impl Crypto for ForeignCrypto {
     fn sha512(&self, _: &[u8]) -> Option<Vec<u8>> {
         None
     }
+    // [@ANCHOR: hams_net_ffi_foreign_crypto_ed25519_verify]
     fn ed25519_verify(&self, key: &[u8], sig: &[u8], msg: &[u8]) -> Result<bool, BadKey> {
         if key.len() != 32 {
             return Err(BadKey);
