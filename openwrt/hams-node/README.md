@@ -178,3 +178,11 @@ changes, so the owner cannot lock themselves out; add the key in LuCI (System > 
 to the owner's member certificate. `unenroll` (or `hams-node-ssh off`) restores the saved settings. Recovery after losing the key: physical
 reset, then enrol again. OpenSSH user certificates issued from the member identity are a separate decision for Bruce
 (`night_shift_todo/medium/router-ssh-openssh-certificates-option-4dafb623.md`).
+
+## Key rotation (`hams-node-key`, in the hams-node-enroll package)
+
+`hams-node-key rotate` makes a new WireGuard key on the device (`wg genkey` into `wg.key.new`, mode 0600), sends only the new public key with the device
+token to `/api/ipv6/enroll/rekey`, and only after hams.com accepts it replaces `/etc/hams-node/wg.key`, loads it into the running tunnel
+(`wg set <interface> private-key`, the interface from `hams_node_ondemand.main.interface`), and has `hams-node-endpoint` republish the endpoint
+signed with the new key. A refusal or an unreachable hams.com keeps the old key (exit 1 or 4). Peers that hold the old public key learn the new
+one from the directory on their next lookup.
