@@ -1,0 +1,3 @@
+# hams-node-lan: which LAN interfaces get a /64 of the member's /60 (at most 16, in this order)
+config lan 'main'
+	list interface 'lan'
