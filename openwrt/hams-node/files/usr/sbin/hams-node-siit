@@ -29,10 +29,12 @@ render() {
 }
 
 apply() {
+	status=0
 	for f in "$1"/*.json; do
 		[ -e "$f" ] || continue
-		jool_siit file handle "$f" || echo "hams-node-siit: $f failed" >&2
+		jool_siit file handle "$f" || { echo "hams-node-siit: $f failed" >&2; status=1; }
 	done
+	return $status
 }
 
 case ${1:-} in
