@@ -1,0 +1,171 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-status: the router's switch-off and warning channel (docs/proposals/IPV6_DEPRECATION_LIST.md in hams_com).
+# Every 2 minutes (cron) it asks hams.com for a tiny signed status. Only a correctly signed "disabled" for this device turns the node
+# off: WireGuard interface down, Hams.com Net routes removed, bird/on-demand/report/traffic stopped; the configuration is kept and the
+# reason is saved for LuCI. A later signed "ok" turns it back on. FAIL OPEN: no network, DNS or TLS failure, a bad or missing signature,
+# any other reply = "no information", and nothing changes.
+# The status also names the sequence number of the signed deprecation list (rogue routers' keys and prefixes). When it is ahead of the
+# list held here, the delta since the held number is fetched (the full list when the delta does not line up); documents are ordered by
+# sequence number only, never by clock. Each listed peer is evicted and each listed prefix gets an unreachable route.
+#   hams-node-status OPTIONS run | start | stop
+# OPTIONS: -u BASE_URL (https://hams.com) -s STATE_DIR (/etc/hams-node) [-c CRONTAB] [-i WG_INTERFACE (uci hams_node_ondemand.main.interface, else wg-hams)] [-d INIT_DIR (/etc/init.d)]
+# State files: device_token, deprecation.pub (usign public key line, written by hams-node-enroll), disabled (the reason; present while off),
+# deprecation_seq, deprecation_list ("KEY prefix,prefix" per line), status_seq.
+# Exit: 0 handled; 4 no information (nothing changed).
+set -u
+base=https://hams.com state=/etc/hams-node cron=/etc/crontabs/root iface='' initdir=/etc/init.d
+while getopts u:s:c:i:d: opt; do
+	case $opt in
+	u) base=$OPTARG ;; s) state=$OPTARG ;; c) cron=$OPTARG ;; i) iface=$OPTARG ;; d) initdir=$OPTARG ;;
+	*) exit 2 ;;
+	esac
+done
+shift $((OPTIND - 1))
+[ $# -ge 1 ] || { echo "usage: hams-node-status [-u URL] [-s DIR] [-c CRONTAB] [-i IFACE] [-d INITDIR] run | start | stop" >&2; exit 2; }
+[ -n "$iface" ] || iface=$(uci -q get hams_node_ondemand.main.interface 2>/dev/null)
+: "${iface:=wg-hams}"
+case $iface in '' | *[!A-Za-z0-9_-]*) echo "hams-node-status: bad interface name" >&2; exit 1 ;; esac
+umask 077
+mkdir -p "$state" || exit 1
+tokenfile=$state/device_token pubfile=$state/deprecation.pub disabledfile=$state/disabled
+seqfile=$state/deprecation_seq listfile=$state/deprecation_list statusseq=$state/status_seq
+reply=$state/status_reply.json payload=$state/status_payload.json
+job="/usr/sbin/hams-node-status run"
+services="hams-node-bird hams-node-ondemand"
+daemons="hams-node-report hams-node-traffic"
+
+number() { case $1 in '' | *[!0-9]*) echo 0 ;; *) echo "$1" ;; esac; }
+
+# fetch ENDPOINT JSON: 0 when the reply carried a correctly signed document, left in $payload; else 1 (no information).
+fetch() {
+	rm -f "$reply" "$payload" "$state/sig" "$state/pub" "$state/payload.bin"
+	[ -s "$pubfile" ] || return 1
+	uclient-fetch -q -O "$reply" --header='Content-Type: application/json' \
+		--post-data="{\"jsonrpc\":\"2.0\",\"method\":\"call\",\"params\":$2}" "$base/api/ipv6/$1" 2>/dev/null || return 1
+	[ -s "$reply" ] || return 1
+	body=$(jsonfilter -i "$reply" -e '@.result.payload') && sig=$(jsonfilter -i "$reply" -e '@.result.signature') || return 1
+	case $body$sig in *[!A-Za-z0-9+/=]*) return 1 ;; esac
+	printf '%s' "$body" | base64 -d > "$state/payload.bin" 2>/dev/null || return 1
+	printf 'untrusted comment: hams.com\n%s\n' "$sig" > "$state/sig"
+	printf 'untrusted comment: hams.com\n%s\n' "$(cat "$pubfile")" > "$state/pub"
+	usign -V -m "$state/payload.bin" -p "$state/pub" -x "$state/sig" > /dev/null 2>&1 || return 1
+	cp "$state/payload.bin" "$payload"
+	rm -f "$state/sig" "$state/pub" "$state/payload.bin"
+}
+field() { jsonfilter -i "$payload" -e "@.$1"; }
+
+do_disable() { # the reason
+	[ -e "$disabledfile" ] && return 0
+	printf '%s\n' "$1" > "$disabledfile"
+	ifdown "$iface" 2>/dev/null
+	ip -6 route flush dev "$iface" 2>/dev/null
+	for s in $services; do [ -x "$initdir/$s" ] && "$initdir/$s" stop; done
+	for d in $daemons; do command -v "$d" > /dev/null 2>&1 && "$d" stop; done
+	return 0
+}
+
+do_enable() {
+	rm -f "$disabledfile"
+	ifup "$iface" 2>/dev/null
+	for s in $services; do [ -x "$initdir/$s" ] && "$initdir/$s" start; done
+	for d in $daemons; do command -v "$d" > /dev/null 2>&1 && "$d" start; done
+	return 0
+}
+
+# apply_list NEWLIST: evict and block what it adds, lift what it drops.
+apply_list() {
+	touch "$listfile"
+	while read -r key prefixes; do
+		[ -n "$key" ] || continue
+		grep -q "^$key " "$listfile" && continue
+		case $key in cert:*) continue ;; esac
+		wg set "$iface" peer "$key" remove 2>/dev/null
+		for p in $(echo "${prefixes:-}" | tr , ' '); do ip -6 route replace unreachable "$p" 2>/dev/null; done
+	done < "$1"
+	while read -r key prefixes; do
+		[ -n "$key" ] || continue
+		grep -q "^$key " "$1" && continue
+		for p in $(echo "${prefixes:-}" | tr , ' '); do ip -6 route del unreachable "$p" 2>/dev/null; done
+	done < "$listfile"
+	cp "$1" "$listfile"
+	# revoked member certificates are enforced by the management front end (hams-node-mtls), which reads the list when it is applied
+	if [ -f "$state/mtls/nginx.conf" ] && command -v hams-node-mtls > /dev/null 2>&1; then hams-node-mtls -s "$state" apply; fi
+}
+
+# entries PATH-PREFIX (add or entries): "KEY prefixes" lines from the payload.
+entries() {
+	i=0
+	while key=$(field "$1[$i].key"); do
+		if [ "$(field "$1[$i].type")" = revoked_member_cert ]; then # a revoked member client certificate: "cert:ISSUER:SERIAL " (hams-node-mtls reads it)
+			issuer=$(field "$1[$i].issuer_sha256")
+			case $key$issuer in *[!A-Za-z0-9]*) ;; *) echo "cert:$issuer:$key " ;; esac
+			i=$((i + 1))
+			continue
+		fi
+		pfx=''
+		j=0
+		while p=$(field "$1[$i].prefixes[$j]"); do pfx="${pfx:+$pfx,}$p"; j=$((j + 1)); done
+		case $key$pfx in *[!A-Za-z0-9+/=.:,/]*) ;; *) echo "$key $pfx" ;; esac
+		i=$((i + 1))
+	done
+}
+
+do_list() { # the status named a newer list
+	have=$(number "$(cat "$seqfile" 2>/dev/null)")
+	for ask in "$have" 0; do
+		fetch deprecations "{\"token\":\"$token\",\"have_seq\":$ask,\"have_time\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" || return 4
+		kind=$(field kind) seq=$(number "$(field seq)") new=$state/deprecation_new
+		case $kind in
+		full) [ "$seq" -ge "$have" ] || return 4; entries entries > "$new" ;;
+		delta)
+			[ "$(field from)" = "$have" ] && [ "$ask" = "$have" ] && [ "$seq" -ge "$have" ] || continue # does not line up: ask for the full list
+			touch "$listfile"
+			entries add > "$new.add"
+			i=0
+			: > "$new.remove"
+			while r=$(field "remove[$i]"); do echo "$r" >> "$new.remove"; i=$((i + 1)); done
+			: > "$new"
+			while read -r k rest; do
+				[ -n "$k" ] || continue
+				grep -qxF "${k##*:}" "$new.remove" && continue # a certificate line is cert:ISSUER:SERIAL; the delta names the serial
+				grep -q "^$k " "$new.add" && continue
+				echo "$k $rest" >> "$new"
+			done < "$listfile"
+			cat "$new.add" >> "$new"
+			rm -f "$new.add" "$new.remove" ;;
+		*) return 4 ;;
+		esac
+		apply_list "$new"
+		echo "$seq" > "$seqfile"
+		rm -f "$new"
+		return 0
+	done
+	return 4
+}
+
+do_run() {
+	[ -s "$tokenfile" ] || exit 4
+	token=$(cat "$tokenfile")
+	case $token in '' | *[!A-Za-z0-9_=/+-]*) exit 4 ;; esac
+	fetch status "{\"token\":\"$token\"}" || exit 4
+	[ "$(field kind)" = status ] || exit 4
+	listseq=$(number "$(field list_seq)")
+	[ "$listseq" -ge "$(number "$(cat "$statusseq" 2>/dev/null)")" ] || exit 4 # an older status is a replay
+	echo "$listseq" > "$statusseq"
+	case $(field state) in
+	disabled) do_disable "$(field reason)" ;;
+	ok) [ -e "$disabledfile" ] && do_enable ;;
+	*) exit 4 ;;
+	esac
+	[ -e "$disabledfile" ] && exit 0
+	if [ "$listseq" != "$(number "$(cat "$seqfile" 2>/dev/null)")" ]; then do_list || exit 4; fi
+	exit 0
+}
+
+case $1 in
+run) do_run ;;
+start) grep -qF "$job" "$cron" 2>/dev/null || echo "*/2 * * * * $job" >> "$cron" ;;
+stop) [ -f "$cron" ] && { grep -vF "$job" "$cron" > "$cron.new"; mv "$cron.new" "$cron"; } ;;
+*) exit 2 ;;
+esac

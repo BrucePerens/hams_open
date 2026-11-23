@@ -84,6 +84,18 @@ class StatusTests(unittest.TestCase):
         self.assertEqual(s["ham_name"], "w1aw.ham")
         self.assertEqual(s["state"], "configuration renewed 2001:db8:1:20::/60")
 
+    def test_a_node_switched_off_by_hams_com_shows_the_reason_and_the_deprecated_count(self):
+        h = Harness(self)
+        s = h.status()
+        self.assertFalse(s["disabled"])
+        self.assertEqual((s["disabled_reason"], s["deprecated"]), ("", 0))
+        (h.state / "disabled").write_text('botnet "traffic"; <b>x</b>\n')
+        (h.state / "deprecation_list").write_text("KEYA 2001:db8::/60\ncert:aa:1f \n")
+        s = h.status()
+        self.assertTrue(s["disabled"])
+        self.assertEqual(s["disabled_reason"], "botnet traffic bx/b", "only characters that cannot break the JSON survive")
+        self.assertEqual(s["deprecated"], 2)
+
     def test_revoked_is_not_enrolled(self):
         h = Harness(self)
         (h.state / "status").write_text("revoked\n")

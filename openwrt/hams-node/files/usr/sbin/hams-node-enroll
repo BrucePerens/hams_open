@@ -58,7 +58,13 @@ apply_config() { # the reply in $tmp -> the package's own settings
 	uci set hams_node_ondemand.main.lookup_url="$base/api/ipv6/directory/lookup"
 	uci commit hams_node
 	uci commit hams_node_ondemand
+	owner=$(field callsign)
+	[ -n "$owner" ] && echo "$owner" > "$state/owner"  # the member whose certificate may manage this router
+	[ -x /usr/sbin/hams-node-mtls ] && /usr/sbin/hams-node-mtls -s "$state" -u "$base" apply  # hams-node-mtls package: management only with that member certificate
 	[ -x /usr/sbin/hams-node-ssh ] && /usr/sbin/hams-node-ssh -s "$state" apply  # hams-node-ssh package: key-only SSH once a key exists
+	depkey=$(field deprecation_key)  # the key that signs switch-off and deprecation documents (hams-node-status package)
+	case $depkey in '' | *[!A-Za-z0-9+/=]*) ;; *) printf '%s\n' "$depkey" > "$state/deprecation.pub" ;; esac
+	[ -x /usr/sbin/hams-node-status ] && /usr/sbin/hams-node-status -s "$state" start
 	[ -x /usr/sbin/hams-node-lan ] && /usr/sbin/hams-node-lan apply  # hams-node-lan package: the /60 to the LANs
 	return 0
 }
@@ -134,8 +140,11 @@ do_unenroll() {
 	uci commit hams_node
 	uci commit hams_node_ondemand
 	drop_cron
+	[ -x /usr/sbin/hams-node-mtls ] && /usr/sbin/hams-node-mtls -s "$state" off
 	[ -x /usr/sbin/hams-node-ssh ] && /usr/sbin/hams-node-ssh -s "$state" off
-	rm -f "$tokenfile" "$keyfile" "$statusfile" "$tmp"
+	[ -x /usr/sbin/hams-node-status ] && /usr/sbin/hams-node-status -s "$state" stop
+	rm -f "$state/deprecation.pub" "$state/disabled" "$state/deprecation_seq" "$state/deprecation_list" "$state/status_seq"
+	rm -f "$tokenfile" "$keyfile" "$statusfile" "$tmp" "$state/owner"
 	echo "hams-node-enroll: unenrolled" >&2
 }
 

@@ -6,10 +6,16 @@ to upload. Mesh-to-WAN is off by default on AREDN; this package does not change 
 
 Build (verified with the x86-64 SDK, `hams-node-0.1.0-r1.apk`; unpack the SDK in an empty directory):
 
-    echo "src-link hams <repo>/openwrt" > feeds.conf
-    ./scripts/feeds update hams && ./scripts/feeds install hams-node
+    printf 'src-git packages https://git.openwrt.org/feed/packages.git^<commit in the SDK feeds.conf.default>\nsrc-link hams <repo>/openwrt\n' > feeds.conf
+    ./scripts/feeds update packages hams && ./scripts/feeds install hams-node
     make defconfig && echo CONFIG_PACKAGE_hams-node=m >> .config && make defconfig
     make package/hams-node/compile        # bin/packages/<arch>/hams/hams-node-*.apk
+
+The `packages` feed line is needed by `hams-node-mtls`: nginx with TLS is `nginx-ssl` there (`nginx-full` also has SSL but is larger; the
+old one-line feeds.conf replaced the SDK's default feeds, which is why `nginx-ssl` did not resolve before). To build only `hams-node-mtls` and
+its siblings without compiling Jool, set `CONFIG_PACKAGE_hams-node-mtls=m` in `.config` and run
+`make -C package/feeds/hams/hams-node compile TOPDIR=$PWD` (bin/packages/<arch>/hams/hams-node-mtls-*.apk; its depends include `nginx-ssl`,
+checked with `apk adbdump`).
 
 The package is architecture independent (shell scripts); use the SDK of the node's target for the dependency
 metadata.
@@ -19,6 +25,7 @@ files as `ipv6_siit/siit_map.py gateway_configs`) and loads them; `hams-node-wg`
 peers on Internet links only; `hams-node-rf-route apply|down IFACE rf|internet PREFIXES` gives RF routes metric 100 and tunnel routes metric 200 (RF first, tunnel as backup) and keeps end-to-end encrypted traffic off RF: `ham_boundary` marks it (fwmark 151) and a rule sends it to table 197, which holds tunnel routes only. It does nothing for an empty prefix list.
 
 `hams-node-ondemand` (off by default, `/etc/config/hams_node_ondemand`): an nft set `inet hams_ondemand seen` (keyed on the /60,
+A successful lookup is cached in the state directory (`directory.cache`); with hams.com unreachable the cached entry is used, so a tunnel re-connects without the internet. An explicit not-found/suspended answer drops the entry.
 timeout = idle minutes, refreshed by every forwarded packet to `ham_prefix`) is the traffic detector. A new element is the first packet:
 the daemon asks the members-only directory lookup (member certificate), checks the record is for that /60, and adds a WireGuard peer
 (`AllowedIPs` = the /60). A peer whose /60 has left the set (10 idle minutes) is removed. Unknown, suspended or stale answers create
@@ -28,6 +35,39 @@ Not exercised on a real device or in the AREDN VM; the nft ruleset and `nft moni
 Adding a subpackage: create `pkg/<name>.mk` with its `define Package/<name>`, `/description`, `/conffiles` and `/install` blocks
 (copy `pkg/hams-node-report.mk`; the file name is the package name). Do not edit `Makefile`: it includes `pkg/*.mk` in sorted order
 and calls `BuildPackage` for each, so parallel subpackage changes never touch the same file.
+
+## Firewall: the home LAN is outbound-only (hams-node-fw)
+
+Safe by default: once the node is enrolled the zones are on (`option enabled '0'` in `/etc/config/hams_node_fw` switches them off). `hams-node-wg`
+and `hams-node-ondemand` put their WireGuard interface into zone `ham`, `hams-node-rf-route` puts an rf interface into zone `hamrf` (both through
+`hams-node-fw ensure`); both zones have input and forward DROP. `hams-node-fw check` fails for any WireGuard interface that is up but in no zone.
+
+- `lan` -> `ham`: forwarded (replies come back through connection tracking). No forwarding `ham` -> `lan` or `hamrf` -> `lan`, plus an explicit
+  DROP rule for new connections from both zones to `lan`. LAN hosts are outbound-only; nothing on the LAN is reachable from the ham network.
+- `list open 'tcp:PORT'` opens a port on the router itself only (zone input). There is no default way to expose a LAN host.
+- A member who wants to expose one host adds an explicit rule by hand (this is not offered in the UI):
+
+      uci add firewall rule
+      uci set firewall.@rule[-1].name='expose-nas-https'
+      uci set firewall.@rule[-1].src='ham'
+      uci set firewall.@rule[-1].dest='lan'
+      uci set firewall.@rule[-1].dest_ip='192.168.1.50'
+      uci set firewall.@rule[-1].proto='tcp'
+      uci set firewall.@rule[-1].dest_port='8443'
+      uci set firewall.@rule[-1].target='ACCEPT'
+      uci commit firewall; /etc/init.d/firewall reload
+
+  (a rule placed after the package's DROP rule needs `uci reorder`; never toward `hamrf` for an encrypted service, Part 97.)
+- Test: `openwrt/image/tools/fw_isolation_test.py IMAGE` boots four OpenWrt VMs (router, outsider on the ham side, LAN host, hamlan host).
+
+### Optional third zone: hamlan (a segment reachable from the ham network)
+
+Nothing exists unless the member designates it in `/etc/config/hams_node_fw`: `option hamlan_vlan '42'` (a VLAN on `br-lan`, or on
+`hamlan_parent`) or `list hamlan_port 'lan4'` (those ports leave `br-lan` and form `br-hamlan`); not both. `hams-node-fw apply` creates
+interface `hamlan`, adds it to `hams_node_lan` so it gets its own /64 of the /60, and zone `hamlan` (input and forward DROP; router advertisements
+and DHCPv6 are allowed in). Forwardings: `lan` -> `hamlan`, `hamlan` -> `ham`, `ham` -> `hamlan`, `hamrf` -> `hamlan` (encrypted-service ports are
+dropped toward RF, Part 97). `hamlan` -> `lan` is dropped: strict isolation from the home LAN, which stays outbound-only. To restrict inbound to
+listed hosts, `list hamlan_open '2001:db8:ab40:11::10/443'` (tcp) or `'ADDR/udp:5000'`; with any entry set, only those host/port pairs are reachable.
 
 Tests: `python3 -m unittest discover -s openwrt/hams-node/tests` (a stand-in `jsonfilter` is used on the dev box).
 
@@ -160,6 +200,31 @@ Each other target/release needs its own kmod build with the same recipe.
 `dhcp.<if>.ra` and `dhcpv6` to `server`, so netifd cuts one /64 per LAN out of the /60 and odhcpd sends router advertisements
 and answers DHCPv6. `hams-node-lan remove` undoes it. Anything that is not a /60 changes nothing. Not exercised on a real router.
 
+## Management only with a member client certificate (`hams-node-mtls`, separate package)
+
+Bruce 2026-11-23: once a node is enrolled, its web management (LuCI, ubus over HTTP so rpcd and the hams-node APIs) is reachable only
+with a hams.com member (client) certificate. `hams-node-mtls apply` (run by `hams-node-enroll` after enrol and every renewal) moves
+uhttpd to `127.0.0.1:8080` and starts nginx on port 443 with `ssl_verify_client on`: the certificate must chain to the pinned member
+CA (`/etc/hams-node/member-ca.pem`: Root A, Root B, Identity Root, Identity Issuing CA, copied from hams_com `daemons/relay_ca/public_certs`)
+and its Subject callsign (`1.3.6.1.4.1.66926.1.1`) must equal the enrolled owner's callsign (`/etc/hams-node/owner`, from the enrolment
+reply). No certificate, another member's, another CA's or a revoked one is refused. The router's TLS certificate is its own
+self-signed one (pin it or use `curl -k`); use the member certificate with `curl --cert member.pem --key member.key https://ROUTER/`
+(`docs/runbooks/MEMBER_CLIENT_CERTIFICATE.md` in hams_com).
+
+- Revocation: the shipped CA-level CRLs plus the identity CRL, fetched from `/identity-ca/crl` every 6 hours by cron
+  (`hams-node-mtls crl`, signature checked against the pinned CAs, last good copy kept). While a CRL is past its `nextUpdate` (the node
+  was offline from hams.com) it is not applied, so an offline owner is not locked out; revocation is then enforced again on the next fetch.
+- Not enrolled, or after `unenroll`/`hams-node-mtls off`: uhttpd is put back as it was and the stock login is unchanged (first-boot setup).
+- Single sign-on, no router password: once nginx has verified the owner certificate, LuCI's login page (403) is redirected to `/hams-sso`, a
+  loopback-only CGI (uhttpd `hamssso` on 127.0.0.1:8081, reachable only through nginx) that opens an rpcd session for the internal login
+  `hams-owner` (random secret in `/etc/hams-node/mtls/sso.secret`) and sets the LuCI cookie. After the first owner sign-in the stock rpcd
+  logins (root) are removed (`hams-node-mtls lock`), so no password works for LuCI or ubus; `unenroll`/`off` restores them. SSH is a separate
+  to-do (key-only).
+- Recovery if the owner certificate is lost or the member's callsign changes hands: a physical reset (`firstboot`, or the reset button) restores
+  the stock login, then enrol again. Nothing remote can remove the requirement.
+- Tested on the OpenWrt 25.12.5 x86-64 image in QEMU with a test CA (`image/tools/mtls_test.py`): owner 200, another member 403, none, revoked and
+  other-CA refused, uhttpd only on loopback, owner opens LuCI without a password, other/no certificate refused at `/hams-sso`, root password login refused after the first sign-in and back after `off`. The `.apk` is built by the SDK from `pkg/hams-node-mtls.mk` (see Build).
+
 ## Endpoint updates (`hams-node-endpoint`, separate package)
 
 `hams-node-endpoint update` publishes `<WAN address>:51820` (uci `hams_node_endpoint.main`: `interface`, `port`, `host`) to
@@ -178,3 +243,26 @@ changes, so the owner cannot lock themselves out; add the key in LuCI (System > 
 to the owner's member certificate. `unenroll` (or `hams-node-ssh off`) restores the saved settings. Recovery after losing the key: physical
 reset, then enrol again. OpenSSH user certificates issued from the member identity are a separate decision for Bruce
 (`night_shift_todo/medium/router-ssh-openssh-certificates-option-4dafb623.md`).
+
+## Key rotation (`hams-node-key`, in the hams-node-enroll package)
+
+`hams-node-key rotate` makes a new WireGuard key on the device (`wg genkey` into `wg.key.new`, mode 0600), sends only the new public key with the device
+token to `/api/ipv6/enroll/rekey`, and only after hams.com accepts it replaces `/etc/hams-node/wg.key`, loads it into the running tunnel
+(`wg set <interface> private-key`, the interface from `hams_node_ondemand.main.interface`), and has `hams-node-endpoint` republish the endpoint
+signed with the new key. A refusal or an unreachable hams.com keeps the old key (exit 1 or 4). Peers that hold the old public key learn the new
+one from the directory on their next lookup.
+
+## Remote switch-off and rogue-router warnings (`hams-node-status`, separate package)
+
+A compromised router cannot be trusted to switch itself off, so staff cut it on hams.com first (emergency disable); this package is the
+second layer. `hams-node-status start` (run by enrolment) adds a cron line every 2 minutes that runs `hams-node-status run`: it posts the
+device token to `/api/ipv6/status` and verifies the signed reply with `usign` against `/etc/hams-node/deprecation.pub` (the key hams.com
+sends at enrolment). Only a correctly signed `disabled` turns the node off: WireGuard interface down, its routes flushed, bird, on-demand,
+report and traffic stopped, configuration kept, the reason saved in `/etc/hams-node/disabled` (LuCI shows it). A later signed `ok` turns
+it back on. Fail open: no network, DNS or TLS failure, a missing or bad signature or any other reply changes nothing.
+
+The status also carries the sequence number of the signed deprecation list (keys and prefixes of rogue routers). When it is ahead of the
+held list (`deprecation_seq`, `deprecation_list`) the router asks for the delta since the held number, additions and removals, or for the
+full list when the delta does not line up; documents are ordered by sequence number only, never by clock, and replayed, out-of-order or
+wrongly signed ones are refused. Each listed peer is evicted and each listed prefix gets an `unreachable` route. Format and endpoints:
+`docs/proposals/IPV6_DEPRECATION_LIST.md` in hams_com.

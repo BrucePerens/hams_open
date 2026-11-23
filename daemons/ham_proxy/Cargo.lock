@@ -76,9 +76,17 @@ dependencies = [
 name = "ham_proxy"
 version = "0.1.0"
 dependencies = [
+ "hams_net_core",
  "openssl",
  "serde_json",
  "tempfile",
+]
+
+[[package]]
+name = "hams_net_core"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]

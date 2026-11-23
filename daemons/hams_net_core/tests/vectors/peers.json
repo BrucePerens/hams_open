@@ -1,0 +1,28 @@
+{
+ "directory": [
+  {"callsign": "K6BP", "prefix60": "2001:db8:ab40::/60", "public_key": "KEYA", "endpoint": "203.0.113.7:51820"},
+  {"callsign": "W1AW", "prefix60": "2001:db8:ab50::/60", "public_key": "KEYB", "endpoint": "198.51.100.1:51820"},
+  {"callsign": "LIAR", "prefix60": "2001:db8:ffff::/60", "public_key": "KEYL", "endpoint": "192.0.2.9:51820", "answers_for": "2001:db8:cccc::1"}
+ ],
+ "events": [
+  {"t": 1000, "packet": "2001:db8:ab40::5", "key": "KEYA", "asked": true},
+  {"t": 1001, "packet": "2001:db8:ab40:3::9", "key": "KEYA", "asked": false},
+  {"t": 1002, "packet": "2001:db8:aaaa::1", "key": null, "asked": true},
+  {"t": 1003, "packet": "2001:db8:aaaa::1", "key": null, "asked": false},
+  {"t": 1062, "packet": "2001:db8:aaaa::1", "key": null, "asked": true},
+  {"t": 1100, "packet": "2001:db8:cccc::1", "key": null, "asked": true},
+  {"t": 1200, "packet": "2001:db8:ab50::1", "key": "KEYB", "asked": true},
+  {"t": 1602, "expire": ["KEYA"]},
+  {"t": 1602, "packet": "2001:db8:ab50::2", "key": "KEYB", "asked": false},
+  {"t": 2201, "expire": []},
+  {"t": 2203, "expire": ["KEYB"]},
+  {"t": 2204, "packet": "2001:db8:ab40::5", "key": "KEYA", "asked": true}
+ ],
+ "wg_calls": [
+  ["add", "wg-ham", "KEYA", "203.0.113.7:51820", "2001:db8:ab40::/60"],
+  ["add", "wg-ham", "KEYB", "198.51.100.1:51820", "2001:db8:ab50::/60"],
+  ["remove", "wg-ham", "KEYA"],
+  ["remove", "wg-ham", "KEYB"],
+  ["add", "wg-ham", "KEYA", "203.0.113.7:51820", "2001:db8:ab40::/60"]
+ ]
+}

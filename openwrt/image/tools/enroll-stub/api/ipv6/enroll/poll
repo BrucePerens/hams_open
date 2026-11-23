@@ -1,0 +1,6 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Test stub of hams.com's /api/ipv6/enroll/poll (CGI under uhttpd): approves any device code with a fixed throwaway token and /60.
+cat > /dev/null
+printf 'Content-Type: application/json\r\n\r\n'
+printf '{"result":{"status":"success","token":"TESTTOKEN123","prefix60":"2001:db8:ab00:10::/60","ham_prefix":"fd00:1::/32","asn":"4200000001","server_key":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}}\n'

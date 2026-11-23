@@ -87,10 +87,6 @@ fn login_url(serial: &str, nonce: &str, sig: &str) -> String {
 
 #[test]
 fn a_signed_challenge_logs_in() {
-    // Tests [@ANCHOR: ham_proxy_login_respond]
-    // Tests [@ANCHOR: ham_proxy_login_issue]
-    // Tests [@ANCHOR: ham_proxy_login_challenges]
-    // Tests [@ANCHOR: ham_proxy_login_audience]
     let (key, ch) = (keypair(), Challenges::default());
     let v = recorded(&key);
     let nonce = challenge(&ch, &v, NOW);
@@ -104,7 +100,6 @@ fn a_signed_challenge_logs_in() {
 
 #[test]
 fn a_replayed_login_is_refused() {
-    // Tests [@ANCHOR: ham_proxy_login_take]
     let (key, ch) = (keypair(), Challenges::default());
     let v = recorded(&key);
     let nonce = challenge(&ch, &v, NOW);

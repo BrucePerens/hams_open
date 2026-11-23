@@ -1,0 +1,13 @@
+#!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: GPL-2.0-or-later
+USE_PROCD=1
+START=95
+conf=/etc/hams-node/mtls/nginx.conf
+
+start_service() {
+	[ -f "$conf" ] || return 0
+	procd_open_instance
+	procd_set_param command /usr/sbin/nginx -g 'daemon off;' -c "$conf"
+	procd_set_param respawn
+	procd_close_instance
+}

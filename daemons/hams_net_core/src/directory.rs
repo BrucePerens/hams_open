@@ -124,3 +124,9 @@ pub fn parse_hubs(body: &str) -> Result<Vec<Record>, String> {
             .collect(),
     }
 }
+
+impl std::fmt::Display for Prefix60 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/60", Ipv6Addr::from(self.0))
+    }
+}
