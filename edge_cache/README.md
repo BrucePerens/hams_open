@@ -42,7 +42,7 @@ A visitor's own `X-Forwarded-Host` header is removed by `cloudflare/wsgi_proxy_s
 tenant instance running `proxy_mode` without the `cloudflare` module still trusts that header; strip it in
 the tunnel before turning HTML caching on for a tenant.
 
-## The CSRF token refresh script (`static/src/js/edge_cache_csrf.js`, ADR 0113; an ADR is an architecture decision record in `hams_shared/docs/adrs/`)
+## The CSRF token refresh script (`static/src/js/edge_cache_csrf.js`, ADR 0113; an ADR is an architecture decision record in the hams.com ADRs)
 
 Runs in the public bundle of every page. Its behaviour is described under Forms above; its functions are below. State shared by all of them lives in module variables:
 `pending` (the one running token request, a `Promise`, or `null`), `settled` (`false` until the first token request has finished, successfully or not; then `true` for the rest
