@@ -1,0 +1,50 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-dns render [OUTFILE]
+# Writes a dnsmasq snippet from uci hams_node_dns that forwards only the private .ham root and the /40 reverse zone to the hams.com Net
+# resolvers (format of ham_ipv6net/client/router_config.py resolver_conf: server=/ham/ADDRESS). It never writes a default "server=" line, so
+# public names keep going to the node's normal upstream resolvers and are not sent to the ham resolvers. Reload dnsmasq afterwards.
+set -u
+[ "${1:-}" = render ] || { echo "usage: hams-node-dns render [OUTFILE]" >&2; exit 2; }
+get() { uci -q get "hams_node_dns.main.$1" 2>/dev/null; }
+[ "$(get enabled)" = 1 ] || exit 0
+out=${2:-$(get out)}
+[ -n "$out" ] || out=/tmp/dnsmasq.d/hams-ham.conf
+resolvers=$(get resolver) prefix=$(get prefix)
+[ -n "$resolvers" ] || exit 0
+for r in $resolvers; do case $r in *[!A-Fa-f0-9:.]*) echo "hams-node-dns: bad resolver address" >&2; exit 1 ;; esac; done
+
+rev=
+if [ -n "$prefix" ]; then
+	len=${prefix##*/} addr=${prefix%/*}
+	case $len in '' | *[!0-9]*) echo "hams-node-dns: bad prefix" >&2; exit 1 ;; esac
+	case $addr in '' | *[!A-Fa-f0-9:]*) echo "hams-node-dns: bad prefix" >&2; exit 1 ;; esac
+	[ $((len % 4)) -eq 0 ] && [ "$len" -gt 0 ] && [ "$len" -le 128 ] || { echo "hams-node-dns: prefix length must be a multiple of 4" >&2; exit 1; }
+	rev=$(echo "$addr" | awk -v n=$((len / 4)) '{
+		a = $0; k = split(a, g, "::")
+		if (k > 2) exit 1
+		nl = split(g[1], l, ":"); nr = (k == 2 && g[2] != "") ? split(g[2], r, ":") : 0
+		if (g[1] == "") nl = 0
+		if (k == 1 && nl != 8) exit 1
+		if (nl + nr > 8) exit 1
+		s = ""
+		for (i = 1; i <= nl; i++) s = s sprintf("%04s", l[i])
+		for (i = nl + nr; i < 8; i++) s = s "0000"
+		for (i = 1; i <= nr; i++) s = s sprintf("%04s", r[i])
+		gsub(/ /, "0", s)
+		if (length(s) != 32) exit 1
+		o = ""
+		for (i = n; i >= 1; i--) o = o substr(s, i, 1) "."
+		print tolower(o) "ip6.arpa"
+	}') || { echo "hams-node-dns: cannot parse prefix" >&2; exit 1; }
+fi
+
+mkdir -p "$(dirname "$out")"
+tmp="$out.new"
+{
+	echo "# hams-node: forward the private .ham root and the member reverse zone to the Hams.com Net resolvers only"
+	for r in $resolvers; do
+		echo "server=/ham/$r"
+		if [ -n "$rev" ]; then echo "server=/$rev/$r"; fi
+	done
+} > "$tmp" && mv "$tmp" "$out"
