@@ -1,6 +1,8 @@
-//! `ham_proxy --listen ADDR --cert PEM --key PEM --site HOST:PORT [--ca PEM]`: thread per connection.
+//! `ham_proxy --listen ADDR --cert PEM --key PEM --site HOST:PORT [--ca PEM] [--verify HOST:PORT]
+//! [--whitelist FILE --callsign CALL --log FILE]`: thread per connection.
 use ham_proxy::login::{Challenges, HttpVerifier};
-use ham_proxy::{ham_acceptor, serve_one_login, site_connector, ProxyError};
+use ham_proxy::policy::{Policy, Whitelist};
+use ham_proxy::{ham_acceptor, serve_one_policed, site_connector, ProxyError};
 use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -48,20 +50,35 @@ fn run() -> Result<(), ProxyError> {
         }
         None => None,
     };
+    let policy = match arg(&args, "--whitelist") {
+        Some(f) => {
+            let text = std::fs::read_to_string(f)?;
+            let log = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(need("--log")?)?;
+            let call = need("--callsign")?;
+            let p = Policy::new(Whitelist::parse(&text), &call, Box::new(log))
+                .ok_or_else(|| ProxyError::Tls("empty --callsign".to_string()))?;
+            Some(Arc::new(p))
+        }
+        None => None,
+    };
     for conn in TcpListener::bind(&listen)?.incoming() {
         let Ok(tcp) = conn else { continue };
-        let (a, c, s, n, l) = (
+        let (a, c, s, n, l, p) = (
             acceptor.clone(),
             connector.clone(),
             site.clone(),
             name.clone(),
             login.clone(),
+            policy.clone(),
         );
         thread::spawn(move || {
             let lg = l
                 .as_ref()
                 .map(|x| (&x.0, &x.1 as &dyn ham_proxy::login::Verifier));
-            if let Err(e) = serve_one_login(tcp, &a, &c, &s, &n, None, lg) {
+            if let Err(e) = serve_one_policed(tcp, &a, &c, &s, &n, None, lg, p.as_deref()) {
                 eprintln!("ham_proxy: {e:?}");
             }
         });

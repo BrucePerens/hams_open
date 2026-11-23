@@ -63,4 +63,15 @@ A `.ham` server is identified by a DANE-EE TLSA record in the signed `.ham` zone
 - [@ANCHOR: ham_proxy_dechunk] `dechunk(body)`: decodes a chunked body; `None` if malformed.
 - [@ANCHOR: ham_proxy_http_response] Builds a complete HTTP/1.1 response (status, extra headers, body) for block pages and rewritten HTML.
 - [@ANCHOR: ham_proxy_serve_one_signed] `serve_one_signed(...)`: one ham connection with the indicator and optional signed header; non-HTML is streamed unchanged.
-- [@ANCHOR: ham_proxy_error] `ProxyError`: `Tls(text)` OpenSSL refused something; `Io(error)` socket error; `EncryptedLink(suite)` the negotiated suite encrypts; `NotPinned(host)` no TLSA record pins the `.ham` server's certificate; `BadRequest` request head too long or cut off.
+- [@ANCHOR: ham_proxy_error] `ProxyError`: `Tls(text)` OpenSSL refused something; `Io(error)` socket error; `EncryptedLink(suite)` the negotiated suite encrypts; `NotPinned(host)` no TLSA record pins the `.ham` server's certificate; `BadRequest` request head too long or cut off; `NotWhitelisted(host)` the site is not on the whitelist.
+
+## Site whitelist and station-ID log
+
+- [@ANCHOR: ham_proxy_whitelist] `Whitelist`: the permitted destinations.
+- [@ANCHOR: ham_proxy_whitelist_parse] `Whitelist::parse(text)`: one entry per line (`example.org` exact, `*.example.org` subdomains), blank lines and `#` comments ignored; same file idea as `ham_tls/ham_policy.py`.
+- [@ANCHOR: ham_proxy_whitelist_permits] `permits(host)`: true for any `.ham` name, an exact entry, or a subdomain of a wildcard entry; case and trailing dot ignored.
+- [@ANCHOR: ham_proxy_format_utc] `format_utc(secs)`: unix time as `YYYY-MM-DDTHH:MM:SSZ`.
+- [@ANCHOR: ham_proxy_log_line] `log_line(secs, callsign, host, suite)`: one Part 97 station-ID line `time CALLSIGN -> host suite`; `None` without a callsign.
+- [@ANCHOR: ham_proxy_policy_new] `Policy::new(whitelist, callsign, sink)`: whitelist plus the log sink for one proxy; refuses an empty callsign.
+- [@ANCHOR: ham_proxy_policy_record] `Policy::record(...)`: appends the station-ID line for one permitted flow.
+- [@ANCHOR: ham_proxy_serve_one_policed] `serve_one_policed(...)`: like `serve_one_login` plus an optional `Policy`: a site not on the whitelist is refused before any upstream connection (`NotWhitelisted`), and each permitted flow is logged with callsign, host and suite.
