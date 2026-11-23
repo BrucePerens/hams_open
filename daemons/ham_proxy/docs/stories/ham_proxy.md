@@ -5,7 +5,8 @@ A ham client connects with integrity-only TLS; the proxy relays one request to a
 - [@ANCHOR: ham_proxy_ham_acceptor] `ham_acceptor(cert, key)` builds a server that offers only `TLS_SHA256_SHA256`, `TLS_SHA384_SHA384` and `NULL-SHA256` (security level 0, required by OpenSSL for NULL suites).
 - [@ANCHOR: ham_proxy_require_integrity_only] After the handshake the negotiated suite must be one of those three, otherwise `ProxyError::EncryptedLink`.
 - [@ANCHOR: ham_proxy_site_connector] The site side is a normal verified TLS client (default suites; optional extra CA file).
-- [@ANCHOR: ham_proxy_serve_one] One ham connection: handshake, read one request head (at most 64 KiB, ends at a blank line), send it to the site, stream the response back until the site closes.
+- [@ANCHOR: ham_proxy_serve_one] One ham connection: handshake, read one request head (at most 64 KiB, ends at a blank line), send it to the site, stream the response back until the site closes. HTML responses are buffered instead and passed through `transform_html` (below); all other responses stay byte for byte.
+- [@ANCHOR: ham_proxy_transform_html] HTML on a ham link gets the "signed, not encrypted" banner exactly once, a page with an `<input type=password>` not marked `data-ham-login` is replaced by a 403 block page pointing at the signature login, and with a signing key the response carries `X-Ham-Integrity: v1; ts; host; sha256; sig` (Ed25519), checked by `indicator::verify_header` (tamper, wrong host, stale, wrong key all fail).
 
 Tested: the request and response are readable on the ham-side wire; TLS 1.2 `NULL-SHA256` works; a client that offers encrypting suites is refused.
 
