@@ -1,0 +1,407 @@
+{
+ "configs": [
+  {
+   "config": {},
+   "flows": [
+    {
+     "to_rf": true,
+     "proto": "tcp",
+     "new": true,
+     "dport": 80,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": true,
+     "proto": "tcp",
+     "new": false,
+     "dport": 80,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": true,
+     "proto": "tcp",
+     "new": true,
+     "dport": 8443,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": true,
+     "proto": "tcp",
+     "new": true,
+     "dport": 9443,
+     "verdict": "refused_other"
+    },
+    {
+     "to_rf": true,
+     "proto": "tcp",
+     "new": true,
+     "dport": 8080,
+     "verdict": "refused_other"
+    },
+    {
+     "to_rf": true,
+     "proto": "tcp",
+     "new": true,
+     "dport": 22,
+     "verdict": "refused_encrypted"
+    },
+    {
+     "to_rf": true,
+     "proto": "tcp",
+     "new": false,
+     "dport": 443,
+     "verdict": "refused_encrypted"
+    },
+    {
+     "to_rf": true,
+     "proto": "tcp",
+     "new": true,
+     "dport": 25,
+     "verdict": "refused_other"
+    },
+    {
+     "to_rf": true,
+     "proto": "tcp",
+     "new": false,
+     "dport": 25,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": true,
+     "proto": "udp",
+     "new": true,
+     "dport": 53,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": true,
+     "proto": "udp",
+     "new": false,
+     "dport": 53,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": true,
+     "proto": "udp",
+     "new": true,
+     "dport": 123,
+     "verdict": "refused_other"
+    },
+    {
+     "to_rf": true,
+     "proto": "udp",
+     "new": true,
+     "dport": 51820,
+     "verdict": "refused_encrypted"
+    },
+    {
+     "to_rf": true,
+     "proto": "udp",
+     "new": true,
+     "dport": 51821,
+     "verdict": "refused_other"
+    },
+    {
+     "to_rf": true,
+     "proto": "udp",
+     "new": false,
+     "dport": 5525,
+     "verdict": "refused_encrypted"
+    },
+    {
+     "to_rf": true,
+     "proto": "udp",
+     "new": true,
+     "dport": 500,
+     "verdict": "refused_encrypted"
+    },
+    {
+     "to_rf": true,
+     "proto": "udp",
+     "new": true,
+     "dport": 9999,
+     "verdict": "refused_other"
+    },
+    {
+     "to_rf": true,
+     "proto": "icmp",
+     "new": true,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": true,
+     "proto": "icmpv6",
+     "new": true,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": true,
+     "proto": "esp",
+     "new": true,
+     "verdict": "refused_encrypted"
+    },
+    {
+     "to_rf": true,
+     "proto": "esp",
+     "new": false,
+     "verdict": "refused_encrypted"
+    },
+    {
+     "to_rf": true,
+     "proto": "other",
+     "new": true,
+     "verdict": "refused_other"
+    },
+    {
+     "to_rf": true,
+     "proto": "other",
+     "new": false,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": false,
+     "proto": "tcp",
+     "new": true,
+     "dport": 80,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": false,
+     "proto": "tcp",
+     "new": true,
+     "dport": 443,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": false,
+     "proto": "esp",
+     "new": true,
+     "verdict": "forward"
+    }
+   ]
+  },
+  {
+   "config": {
+    "plain_tcp_ports": [
+     80,
+     8080
+    ],
+    "plain_udp_ports": [
+     53,
+     123
+    ],
+    "ham_tls_port": 9443,
+    "wg_port": 51821
+   },
+   "flows": [
+    {
+     "to_rf": true,
+     "proto": "tcp",
+     "new": true,
+     "dport": 80,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": true,
+     "proto": "tcp",
+     "new": false,
+     "dport": 80,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": true,
+     "proto": "tcp",
+     "new": true,
+     "dport": 8443,
+     "verdict": "refused_other"
+    },
+    {
+     "to_rf": true,
+     "proto": "tcp",
+     "new": true,
+     "dport": 9443,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": true,
+     "proto": "tcp",
+     "new": true,
+     "dport": 8080,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": true,
+     "proto": "tcp",
+     "new": true,
+     "dport": 22,
+     "verdict": "refused_encrypted"
+    },
+    {
+     "to_rf": true,
+     "proto": "tcp",
+     "new": false,
+     "dport": 443,
+     "verdict": "refused_encrypted"
+    },
+    {
+     "to_rf": true,
+     "proto": "tcp",
+     "new": true,
+     "dport": 25,
+     "verdict": "refused_other"
+    },
+    {
+     "to_rf": true,
+     "proto": "tcp",
+     "new": false,
+     "dport": 25,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": true,
+     "proto": "udp",
+     "new": true,
+     "dport": 53,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": true,
+     "proto": "udp",
+     "new": false,
+     "dport": 53,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": true,
+     "proto": "udp",
+     "new": true,
+     "dport": 123,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": true,
+     "proto": "udp",
+     "new": true,
+     "dport": 51820,
+     "verdict": "refused_encrypted"
+    },
+    {
+     "to_rf": true,
+     "proto": "udp",
+     "new": true,
+     "dport": 51821,
+     "verdict": "refused_encrypted"
+    },
+    {
+     "to_rf": true,
+     "proto": "udp",
+     "new": false,
+     "dport": 5525,
+     "verdict": "refused_encrypted"
+    },
+    {
+     "to_rf": true,
+     "proto": "udp",
+     "new": true,
+     "dport": 500,
+     "verdict": "refused_encrypted"
+    },
+    {
+     "to_rf": true,
+     "proto": "udp",
+     "new": true,
+     "dport": 9999,
+     "verdict": "refused_other"
+    },
+    {
+     "to_rf": true,
+     "proto": "icmp",
+     "new": true,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": true,
+     "proto": "icmpv6",
+     "new": true,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": true,
+     "proto": "esp",
+     "new": true,
+     "verdict": "refused_encrypted"
+    },
+    {
+     "to_rf": true,
+     "proto": "esp",
+     "new": false,
+     "verdict": "refused_encrypted"
+    },
+    {
+     "to_rf": true,
+     "proto": "other",
+     "new": true,
+     "verdict": "refused_other"
+    },
+    {
+     "to_rf": true,
+     "proto": "other",
+     "new": false,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": false,
+     "proto": "tcp",
+     "new": true,
+     "dport": 80,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": false,
+     "proto": "tcp",
+     "new": true,
+     "dport": 443,
+     "verdict": "forward"
+    },
+    {
+     "to_rf": false,
+     "proto": "esp",
+     "new": true,
+     "verdict": "forward"
+    }
+   ]
+  }
+ ],
+ "bad_configs": [
+  {
+   "plain_tcp_ports": [
+    22
+   ]
+  },
+  {
+   "plain_tcp_ports": [
+    80,
+    443
+   ]
+  },
+  {
+   "ham_tls_port": 443
+  },
+  {
+   "plain_udp_ports": [
+    51820
+   ]
+  },
+  {
+   "plain_udp_ports": [
+    500
+   ]
+  },
+  {
+   "wg_port": 53,
+   "plain_udp_ports": [
+    53
+   ]
+  }
+ ]
+}

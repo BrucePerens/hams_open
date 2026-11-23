@@ -182,3 +182,30 @@ self-signed one (pin it or use `curl -k`); use the member certificate with `curl
 - Tested on the OpenWrt 25.12.5 x86-64 image in QEMU with a test CA (`image/tools/mtls_test.py`): owner 200, another member 403, none, revoked and
   other-CA refused, uhttpd only on loopback, `off` restores port 80. The SDK in this session could not resolve `nginx-ssl`, so the test
   `.apk` was packed by hand from the same files; the `Makefile` block is unbuilt by the SDK.
+
+## Endpoint updates (`hams-node-endpoint`, separate package)
+
+`hams-node-endpoint update` publishes `<WAN address>:51820` (uci `hams_node_endpoint.main`: `interface`, `port`, `host`) to
+`/api/ipv6/directory/endpoint` with the portal's signed-update format: HMAC-SHA256 over `public_key\nendpoint\ntimestamp` under the
+X25519 shared secret of the node's key (`/etc/hams-node/wg.key`, made on the device) and the portal's key (`hams_node.main.server_key`).
+openssl reads the private key from its root-only file; it is in no request, log or argument. It sends when the address changed
+or the last update is over 6 hours old (`/etc/hams-node/endpoint_sent`); a hotplug script (`ifup`/`ifupdate` of the WAN) runs it at once
+on a WAN address change, and a cron line (`start`, every 30 minutes, added when the package is installed) refreshes it. Exit 0 sent or
+nothing to do, 1 refused or not enrolled, 4 hams.com unreachable. Behind CGNAT the WAN address is not reachable; set `host`.
+
+## Key-only SSH (`hams-node-ssh`, separate package)
+
+Once the node is enrolled (`hams-node-enroll` runs `hams-node-ssh apply` after enrol and every renewal) and `/etc/dropbear/authorized_keys`
+holds at least one key, dropbear's `PasswordAuth` and `RootPasswordAuth` are set to off on every instance. With no key installed nothing
+changes, so the owner cannot lock themselves out; add the key in LuCI (System > Administration > SSH-Keys), which `hams-node-mtls` limits
+to the owner's member certificate. `unenroll` (or `hams-node-ssh off`) restores the saved settings. Recovery after losing the key: physical
+reset, then enrol again. OpenSSH user certificates issued from the member identity are a separate decision for Bruce
+(`night_shift_todo/medium/router-ssh-openssh-certificates-option-4dafb623.md`).
+
+## Key rotation (`hams-node-key`, in the hams-node-enroll package)
+
+`hams-node-key rotate` makes a new WireGuard key on the device (`wg genkey` into `wg.key.new`, mode 0600), sends only the new public key with the device
+token to `/api/ipv6/enroll/rekey`, and only after hams.com accepts it replaces `/etc/hams-node/wg.key`, loads it into the running tunnel
+(`wg set <interface> private-key`, the interface from `hams_node_ondemand.main.interface`), and has `hams-node-endpoint` republish the endpoint
+signed with the new key. A refusal or an unreachable hams.com keeps the old key (exit 1 or 4). Peers that hold the old public key learn the new
+one from the directory on their next lookup.

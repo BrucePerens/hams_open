@@ -1,0 +1,7 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Test stub of /api/ipv6/enroll/unenroll: records the request body in /tmp/stub-unenroll.log and answers success.
+cat >> /tmp/stub-unenroll.log
+echo >> /tmp/stub-unenroll.log
+printf 'Content-Type: application/json\r\n\r\n'
+printf '{"result":{"status":"success"}}\n'

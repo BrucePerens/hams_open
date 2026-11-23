@@ -2,6 +2,8 @@
 """Tests for the generated Part 97 boundary ruleset: encrypted flows toward the mesh are refused and counted,
 integrity-only TLS and plain flows pass and are station-ID logged."""
 
+import json
+import os
 import re
 import unittest
 
@@ -122,3 +124,51 @@ class BoundaryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def evaluate(text, flow):
+    """Run one flow through the rendered forward chain, in order; return forward, refused_encrypted or refused_other."""
+    if not flow["to_rf"]:
+        return "forward"
+    for line in chain(text, "forward").splitlines():
+        line = line.strip()
+        if not line.startswith('oifname "br-dtdlink" '):
+            continue
+        rest = line.split(None, 2)[2]
+        proto, port, new = flow["proto"], flow.get("dport"), flow["new"]
+        if rest.startswith("meta l4proto"):
+            hit = proto == "esp"
+        elif re.match(r"(tcp|udp) dport", rest):
+            m = re.match(r"(tcp|udp) dport \{ ([\d, ]+) \}", rest)
+            hit = proto == m.group(1) and port in [int(p) for p in m.group(2).split(",")]
+            hit = hit and ("ct state new" not in rest or new)
+        elif rest.startswith("ct state established"):
+            hit = not new
+        elif rest.startswith("icmp type"):
+            hit = proto == "icmp"
+        elif rest.startswith("icmpv6 type"):
+            hit = proto == "icmpv6"
+        else:
+            hit = True
+        if hit:
+            if rest.endswith("drop"):
+                return "refused_encrypted" if "refused_encrypted" in rest else "refused_other"
+            return "forward"
+    raise AssertionError("no rule matched")
+
+
+class ParityWithRustCoreTests(unittest.TestCase):
+    """Shared vectors with daemons/hams_net_core (tests/vectors/boundary.json): the Rust decision must equal the rendered chain."""
+
+    def test_vectors(self):
+        # Tests [@ANCHOR: ham_boundary:render_ruleset]
+        path = os.path.join(os.path.dirname(__file__), "..", "daemons", "hams_net_core", "tests", "vectors", "boundary.json")
+        with open(path, encoding="utf-8") as handle:
+            vectors = json.load(handle)
+        for case in vectors["configs"]:
+            text = ham_boundary.render_ruleset(case["config"])
+            for flow in case["flows"]:
+                self.assertEqual(evaluate(text, flow), flow["verdict"], (case["config"], flow))
+        for config in vectors["bad_configs"]:
+            with self.assertRaises(ValueError, msg=config):
+                ham_boundary.render_ruleset(config)

@@ -61,6 +61,7 @@ apply_config() { # the reply in $tmp -> the package's own settings
 	owner=$(field callsign)
 	[ -n "$owner" ] && echo "$owner" > "$state/owner"  # the member whose certificate may manage this router
 	[ -x /usr/sbin/hams-node-mtls ] && /usr/sbin/hams-node-mtls -s "$state" -u "$base" apply  # hams-node-mtls package: management only with that member certificate
+	[ -x /usr/sbin/hams-node-ssh ] && /usr/sbin/hams-node-ssh -s "$state" apply  # hams-node-ssh package: key-only SSH once a key exists
 	[ -x /usr/sbin/hams-node-lan ] && /usr/sbin/hams-node-lan apply  # hams-node-lan package: the /60 to the LANs
 	return 0
 }
@@ -137,6 +138,7 @@ do_unenroll() {
 	uci commit hams_node_ondemand
 	drop_cron
 	[ -x /usr/sbin/hams-node-mtls ] && /usr/sbin/hams-node-mtls -s "$state" off
+	[ -x /usr/sbin/hams-node-ssh ] && /usr/sbin/hams-node-ssh -s "$state" off
 	rm -f "$tokenfile" "$keyfile" "$statusfile" "$tmp" "$state/owner"
 	echo "hams-node-enroll: unenrolled" >&2
 }

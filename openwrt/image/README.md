@@ -2,7 +2,7 @@
 
 `build_test_image.sh -a APK_DIR -w WORKDIR` downloads the official OpenWrt 25.12.5 x86-64 Image Builder (sha256 checked), builds
 a throwaway-key feed from the `.apk` files in APK_DIR with `../feed/build_feed.sh` (plus empty stand-ins for `jool-tools-siit` and
-`kmod-jool-siit`, which the official feeds lack), and makes `WORKDIR/hams-test.img` with hams-node, luci-app-hams-node and LuCI.
+`kmod-jool-siit`, which the official feeds lack), and makes `WORKDIR/hams-test.img` with hams-node, hams-node-bird, hams-node-dns, hams-node-fw, bird2, luci-app-hams-node and LuCI.
 The image trusts the throwaway key through `/etc/apk/keys`. No root; about 10 minutes the first time. Nothing is published.
 
 `tools/smoke_test.py IMAGE` boots it in QEMU (KVM if available; the disk is a snapshot, nothing is written back), and over the
@@ -12,7 +12,14 @@ answers, LuCI answers (login page, HTTP 403) and serves the hams-node view. Exit
     agent_procs.py run owrt-smoke --timeout 600 --mem-max 4G -- python3 -I openwrt/image/tools/smoke_test.py WORKDIR/hams-test.img
 
 Build the .apk files first with the SDK (`../hams-node/README.md`; the luci app builds in an SDK that has only the `hams` feed).
-Not exercised: Jool SIIT itself (stand-ins), real enrolment, WireGuard peers. Tests: `python3 -m unittest discover -s openwrt/image/tests`.
+Node-network checks (uci-driven, throwaway test values): `hams-node-bird` renders, `bird -p` parses and its own instance runs; `hams-node-dns` forwards
+`x.ham` to a stub dnsmasq on 127.0.0.2:5353 and public names stay off it; `hams-node-fw` loads the ham zone, a connection from the host through QEMU's
+forward is dropped until `tcp:80` is opened in uci; `hams-node-wg` refuses an interface set to rf. With `-n NEWER_APK_DIR` (the same packages built with a higher PKG_RELEASE) the image carries a local signed feed in /root/update-feed; the
+smoke test serves it on 127.0.0.1 and checks that `hams-node-update` rolls back on a failing health check and installs the newer version on a pass.
+Enrolment: `tools/enroll-stub` (CGI answering `poll` and `unenroll`, served by uhttpd on 127.0.0.1:8098) lets the test enrol with a token, make a WireGuard
+interface with a peer, and check that `hams-node-enroll unenroll` revokes at the stub and removes the peer, interface, key, token and settings.
+Not exercised: a live route-server session (no /40 yet),
+Jool SIIT itself (stand-ins), real enrolment, WireGuard peers. Tests: `python3 -m unittest discover -s openwrt/image/tests`.
 
 `tools/lan_test.py IMAGE` (stock or test image, QEMU, no root): copies `hams-node-lan` in over the console, applies `2001:db8:ab40:10::/60`
 and checks that netifd gives br-lan `2001:db8:ab40:10::1/64`, odhcpd runs, and `remove` takes the /64 out of netifd's interface status
@@ -21,3 +28,7 @@ and checks that netifd gives br-lan `2001:db8:ab40:10::1/64`, odhcpd runs, and `
 mTLS management test: `build_test_image.sh -a APK_DIR -w WORKDIR -t FIXTURES/overlay` (an `hams-node-mtls-*.apk` in APK_DIR adds it, nginx-ssl and
 openssl-util to the image), where `tools/mtls_test.py fixtures FIXTURES` makes a TEST CA, the owner/other/revoked/rogue client certificates
 and the overlay; `tools/mtls_test.py run IMAGE FIXTURES` boots it and checks the HTTPS port with `openssl s_client` in the guest.
+
+`tools/endpoint_test.py IMAGE` (stock image, QEMU with a second NIC for `apk add openssl-util`): copies `hams-node-endpoint` in, runs it with a
+stand-in `uclient-fetch` that keeps the request body, and checks on the host that the body's MAC equals the portal's formula and that the
+private key is not in it. Verified on OpenWrt 25.12.5 x86-64 (busybox ash, `openssl base64`, `hexdump`; the image has no `base64` or `od`).

@@ -1,0 +1,47 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-key: rotate this node's WireGuard key. The new key pair is made on the device; only the public key goes to hams.com
+# (authenticated by the device token). The old key stays in use until hams.com accepts the new one.
+#   hams-node-key OPTIONS rotate
+# OPTIONS: -u BASE_URL (uci hams_node_enroll.main.url, else https://hams.com) -s STATE_DIR (/etc/hams-node)
+# Exit: 0 rotated; 1 refused or not enrolled (old key kept); 4 hams.com unreachable (old key kept; run again).
+set -u
+base='' state=/etc/hams-node
+while getopts u:s: opt; do
+	case $opt in u) base=$OPTARG ;; s) state=$OPTARG ;; *) exit 2 ;; esac
+done
+shift $((OPTIND - 1))
+[ $# -eq 1 ] && [ "$1" = rotate ] || { echo "usage: hams-node-key [-u URL] [-s DIR] rotate" >&2; exit 2; }
+[ -n "$base" ] || base=$(uci -q get hams_node_enroll.main.url 2>/dev/null)
+[ -n "$base" ] || base=https://hams.com
+case $base in
+https://?*) ;;
+http://127.0.0.1 | http://127.0.0.1/* | http://127.0.0.1:* | http://localhost | http://localhost/* | http://localhost:*) ;;
+*) echo "hams-node-key: portal URL must be https:// (http:// only for 127.0.0.1 or localhost): $base" >&2; exit 1 ;;
+esac
+
+umask 077
+keyfile=$state/wg.key newfile=$state/wg.key.new tokenfile=$state/device_token
+[ -s "$tokenfile" ] && [ -s "$keyfile" ] || { echo "hams-node-key: not enrolled" >&2; exit 1; }
+token=$(cat "$tokenfile")
+case $token in '' | *[!A-Za-z0-9_=/+-]*) echo "hams-node-key: bad token file" >&2; exit 1 ;; esac
+
+tmp=$(mktemp -d /tmp/hams-node-key.XXXXXX) || exit 1
+trap 'rm -rf "$tmp" "$newfile"' EXIT
+wg genkey > "$newfile" && [ -s "$newfile" ] || { echo "hams-node-key: wg genkey failed" >&2; exit 1; }
+pub=$(wg pubkey < "$newfile")
+case $pub in '' | *[!A-Za-z0-9+/=]*) echo "hams-node-key: bad public key" >&2; exit 1 ;; esac
+
+uclient-fetch -q -O "$tmp/reply.json" --header='Content-Type: application/json' \
+	--post-data="{\"jsonrpc\":\"2.0\",\"method\":\"call\",\"params\":{\"token\":\"$token\",\"public_key\":\"$pub\"}}" \
+	"$base/api/ipv6/enroll/rekey" || { echo "hams-node-key: hams.com unreachable" >&2; exit 4; }
+[ "$(jsonfilter -i "$tmp/reply.json" -e '@.result.status')" = success ] || { echo "hams-node-key: rotation refused; old key kept" >&2; exit 1; }
+
+mv "$newfile" "$keyfile" && chmod 600 "$keyfile" || exit 1
+iface=$(uci -q get hams_node_ondemand.main.interface 2>/dev/null)
+[ -n "$iface" ] || iface=wg-hams
+case $iface in *[!A-Za-z0-9_-]*) iface='' ;; esac
+[ -n "$iface" ] && wg show "$iface" >/dev/null 2>&1 && wg set "$iface" private-key "$keyfile"
+rm -f "$state/endpoint_sent"
+hams-node-endpoint update >/dev/null 2>&1
+exit 0

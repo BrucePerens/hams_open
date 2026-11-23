@@ -1,0 +1,16 @@
+{
+ "lookup_ok": {"jsonrpc": "2.0", "id": 1, "result": {"status": "success", "callsign": "K6BP", "prefix60": "2001:db8:ab40::/60", "public_key": "KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK=", "endpoint": "203.0.113.7:51820", "interest": ["W6", "7"]}},
+ "lookup_ok_unwrapped": {"status": "success", "callsign": "K6BP", "prefix60": "2001:db8:ab40::/60", "public_key": "KKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKKK=", "endpoint": "203.0.113.7:51820", "interest": []},
+ "not_found": {"jsonrpc": "2.0", "id": 1, "result": {"status": "error", "message": "not found"}},
+ "bad_records": [
+  {"status": "success", "callsign": "K6BP", "prefix60": "2001:db8:ab40::/64", "public_key": "k", "endpoint": "e"},
+  {"status": "success", "callsign": "K6BP", "prefix60": "2001:db8:ab40:1::/60", "public_key": "k", "endpoint": "e"},
+  {"status": "success", "callsign": "K6BP", "prefix60": "2001:db8:ab40::/60", "endpoint": "e"},
+  {"status": "success", "callsign": "", "prefix60": "2001:db8:ab40::/60", "public_key": "k", "endpoint": "e"},
+  {"callsign": "K6BP"}
+ ],
+ "hubs_ok": {"status": "success", "hubs": [
+  {"callsign": "W1AW", "prefix60": "2001:db8:ab50::/60", "public_key": "a", "endpoint": "198.51.100.1:51820", "interest": []},
+  {"callsign": "N0CALL", "prefix60": "2001:db8:ab60::/60", "public_key": "b", "endpoint": "198.51.100.2:51820", "interest": ["4"]}]},
+ "hubs_refused": {"status": "error", "message": "not found"}
+}

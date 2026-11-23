@@ -1,0 +1,75 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-endpoint: publish this node's WireGuard endpoint (WAN address and port) to the hams.com directory with a request signed by
+# the node's own WireGuard key. The signature is an HMAC-SHA256 under the X25519 shared secret of the node's private key and the portal's
+# public key (hams_node.main.server_key), so only the holder of the private key can make it; the private key is read from its root-only
+# file by openssl and is never in a request, a log or an argument.
+#   hams-node-endpoint OPTIONS update   send when the address changed or the last update is over 6 hours old
+#   hams-node-endpoint OPTIONS start    add the cron line (every 30 minutes; the hotplug script reacts to a WAN change at once)
+#   hams-node-endpoint OPTIONS stop     remove it
+# OPTIONS: -u BASE_URL (uci hams_node_enroll.main.url, else https://hams.com) -s STATE_DIR (/etc/hams-node) [-c CRONTAB (/etc/crontabs/root)]
+# uci hams_node_endpoint.main: interface (wan), port (51820), host (override: a name or address to publish instead of the WAN address).
+# Exit: 0 sent or nothing to do; 1 refused or no key, server key or address; 4 hams.com unreachable (the next run tries again).
+set -u
+base='' state=/etc/hams-node cron=/etc/crontabs/root
+while getopts u:s:c: opt; do
+	case $opt in u) base=$OPTARG ;; s) state=$OPTARG ;; c) cron=$OPTARG ;; *) exit 2 ;; esac
+done
+shift $((OPTIND - 1))
+[ $# -eq 1 ] || { echo "usage: hams-node-endpoint [-u URL] [-s DIR] update | start | stop" >&2; exit 2; }
+[ -n "$base" ] || base=$(uci -q get hams_node_enroll.main.url 2>/dev/null)
+[ -n "$base" ] || base=https://hams.com
+case $base in
+https://?*) ;;
+http://127.0.0.1 | http://127.0.0.1/* | http://127.0.0.1:* | http://localhost | http://localhost/* | http://localhost:*) ;;
+*) echo "hams-node-endpoint: portal URL must be https:// (http:// only for 127.0.0.1 or localhost): $base" >&2; exit 1 ;;
+esac
+job="/usr/sbin/hams-node-endpoint update"
+case $1 in
+start) grep -qF "$job" "$cron" 2>/dev/null || echo "*/30 * * * * $job" >> "$cron"; exit 0 ;;
+stop) [ -f "$cron" ] || exit 0; grep -vF "$job" "$cron" > "$cron.new"; mv "$cron.new" "$cron"; exit 0 ;;
+update) ;;
+*) exit 2 ;;
+esac
+
+umask 077
+keyfile=$state/wg.key sentfile=$state/endpoint_sent
+serverkey=$(uci -q get hams_node.main.server_key 2>/dev/null)
+[ -s "$keyfile" ] && [ -n "$serverkey" ] || { echo "hams-node-endpoint: no WireGuard key or portal key yet (enrol first)" >&2; exit 1; }
+case $serverkey in *[!A-Za-z0-9+/=]*) echo "hams-node-endpoint: bad portal key" >&2; exit 1 ;; esac
+
+tmp=$(mktemp -d /tmp/hams-node-endpoint.XXXXXX) || exit 1
+trap 'rm -rf "$tmp"' EXIT
+host=$(uci -q get hams_node_endpoint.main.host 2>/dev/null)
+port=$(uci -q get hams_node_endpoint.main.port 2>/dev/null)
+iface=$(uci -q get hams_node_endpoint.main.interface 2>/dev/null)
+[ -n "$port" ] || port=51820
+[ -n "$iface" ] || iface=wan
+case $port$iface in *[!A-Za-z0-9_]*) echo "hams-node-endpoint: bad port or interface" >&2; exit 1 ;; esac
+if [ -z "$host" ]; then
+	ubus call "network.interface.$iface" status > "$tmp/wan.json" 2>/dev/null
+	host=$(jsonfilter -i "$tmp/wan.json" -e '@["ipv4-address"][0].address')
+fi
+case $host in '' | *[!A-Za-z0-9.:-]*) echo "hams-node-endpoint: no address on $iface" >&2; exit 1 ;; esac
+case $host in *:*) endpoint="[$host]:$port" ;; *) endpoint="$host:$port" ;; esac
+
+now=$(date +%s)
+if [ -r "$sentfile" ] && read -r last_ep last_at < "$sentfile" && [ "$last_ep" = "$endpoint" ] && [ $((now - ${last_at:-0})) -lt 21600 ]; then
+	exit 0
+fi
+
+# raw 32-byte keys wrapped as DER (PKCS#8 and SubjectPublicKeyInfo for X25519) for openssl; the files are in a 0700 directory
+{ printf '\060\056\002\001\000\060\005\006\003\053\145\156\004\042\004\040'; openssl base64 -d -A < "$keyfile"; } > "$tmp/priv.der" 2>/dev/null
+{ printf '\060\052\060\005\006\003\053\145\156\003\041\000'; printf '%s' "$serverkey" | openssl base64 -d -A; } > "$tmp/peer.der" 2>/dev/null
+pub=$(openssl pkey -inform DER -in "$tmp/priv.der" -pubout -outform DER 2>/dev/null | tail -c 32 | openssl base64 -A)
+shared=$(openssl pkeyutl -derive -keyform DER -inkey "$tmp/priv.der" -peerform DER -peerkey "$tmp/peer.der" 2>/dev/null | hexdump -v -e '1/1 "%02x"')
+[ -n "$pub" ] && [ ${#shared} -eq 64 ] || { echo "hams-node-endpoint: could not sign (openssl failed)" >&2; exit 1; }
+mac=$(printf '%s\n%s\n%s' "$pub" "$endpoint" "$now" | openssl dgst -sha256 -mac HMAC -macopt hexkey:"$shared" -r | cut -d' ' -f1)
+[ -n "$mac" ] || { echo "hams-node-endpoint: could not sign" >&2; exit 1; }
+
+reply=$tmp/reply.json
+uclient-fetch -q -O "$reply" --header='Content-Type: application/json' \
+	--post-data="{\"jsonrpc\":\"2.0\",\"method\":\"call\",\"params\":{\"public_key\":\"$pub\",\"endpoint\":\"$endpoint\",\"timestamp\":$now,\"mac\":\"$mac\"}}" \
+	"$base/api/ipv6/directory/endpoint" || { echo "hams-node-endpoint: hams.com unreachable" >&2; exit 4; }
+[ "$(jsonfilter -i "$reply" -e '@.result.status')" = success ] || { echo "hams-node-endpoint: update refused" >&2; exit 1; }
+echo "$endpoint $now" > "$sentfile"
