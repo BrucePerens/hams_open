@@ -1,0 +1,5 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# An interface went up or down: re-detect RF interfaces and AREDN neighbours.
+case $ACTION in ifup | ifdown) hams-node-rf scan ;; esac
+exit 0
