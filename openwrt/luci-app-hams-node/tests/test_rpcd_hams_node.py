@@ -158,7 +158,7 @@ class AclTests(unittest.TestCase):
         self.assertEqual(entry["action"]["path"], "hams-node/status")
 
     def test_view_file_exists_for_the_menu_path(self):
-        self.assertTrue((PKG / "htdocs" / "luci-static" / "resources" / "view" / "hams-node" / "status.js").is_file())
+        self.assertTrue((PKG / "htdocs" / "luci-static" / "resources" / "view" / "hams-node" / "status.js.in").is_file())
 
 
 if __name__ == "__main__":

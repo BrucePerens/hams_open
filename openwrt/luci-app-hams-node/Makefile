@@ -25,7 +25,7 @@ endef
 
 define Package/luci-app-hams-node/install
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/hams-node $(1)/usr/libexec/rpcd $(1)/usr/share/luci/menu.d $(1)/usr/share/rpcd/acl.d
-	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/hams-node/status.js $(1)/www/luci-static/resources/view/hams-node/
+	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/hams-node/status.js.in $(1)/www/luci-static/resources/view/hams-node/status.js
 	$(INSTALL_BIN) ./root/usr/libexec/rpcd/hams-node $(1)/usr/libexec/rpcd/
 	$(INSTALL_DATA) ./root/usr/share/luci/menu.d/luci-app-hams-node.json $(1)/usr/share/luci/menu.d/
 	$(INSTALL_DATA) ./root/usr/share/rpcd/acl.d/luci-app-hams-node.json $(1)/usr/share/rpcd/acl.d/

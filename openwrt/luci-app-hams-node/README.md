@@ -11,3 +11,6 @@ LuCI page (Services > hams.com Net) for the `hams-node` package, OpenWrt 25.12, 
 - ACL `luci-app-hams-node`: read `ubus hams-node status` and the two uci configs; write `enroll_start` and the two uci configs.
 
 Tests: `python3 -m unittest discover -s tests` (backend with uci/nft stand-ins, and the ACL and menu files).
+
+The view is stored as `status.js.in` and installed as `status.js` (Makefile): a LuCI view file ends in a top-level `return`, which the
+repository's ES-module JS linters reject.
