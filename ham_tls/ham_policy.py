@@ -24,5 +24,9 @@ def log_connection(stream, callsign, host, suite, now=None):
     """Write one station-identification line (UTC time, callsign, destination, suite); a callsign is required."""
     if not callsign:
         raise ValueError("a ham link connection needs the station callsign")
-    stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now if now is not None else time.time()))
+    try:
+        moment = time.gmtime(now if now is not None else time.time())
+    except (OverflowError, ValueError, OSError) as e:
+        raise ValueError("log time out of range: %r" % (now,)) from e
+    stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", moment)
     stream.write("%s %s -> %s %s\n" % (stamp, callsign.upper(), host, suite))
