@@ -13,6 +13,7 @@ import contextlib
 import ctypes
 import glob
 import itertools
+import math
 import json
 import logging
 import os
@@ -78,6 +79,17 @@ _test_callsign_counter = itertools.count(1)
 
 
 # [@ANCHOR: zero_sudo:generate_test_callsign]
+# [@ANCHOR: zero_sudo:load_factor_scaling]
+def load_factor():
+    """Multiplier for every wait of a test (HTTP reads, Chrome CDP calls, page-ready and tour deadlines): the 1-minute load
+    average per CPU, rounded up, at least 1. The box runs many agents at load 50-100 on 32 CPUs and the fixed 10 s / 30 s / 60 s
+    waits were sized for an idle machine: a slow answer there is not a hang (a real hang still ends, only later)."""
+    try:
+        return max(1, math.ceil(os.getloadavg()[0] / (os.cpu_count() or 1)))
+    except OSError:  # audit-ignore-catch-all
+        return 1
+
+
 def generate_test_callsign(prefix="T"):
     """
     Generates a unique callsign for tests to prevent database UniqueViolation leaks.
@@ -914,6 +926,8 @@ def _patched_chrome_init(self, *args, **kwargs):
         # `_websocket_request` silently returns `None` for the rest of that
         # browser's life. Opt-in coverage bookkeeping must never be able to
         # reach that path.
+        # Core fixes throttling_factor at 1, which sizes browser_js, tour and ready deadlines for an idle box.
+        self.throttling_factor = max(self.throttling_factor, load_factor())
         _install_navigator_overrides(self)
         _js_coverage_start(self)
         return
@@ -1235,6 +1249,8 @@ def _patched_websocket_request(self, method, *args, **kwargs):
     """`Browser.close` is core's last step of a browser's shutdown; on a pooled browser it would end the class's Chrome."""
     if method == "Browser.close" and getattr(self, "_hams_chrome", None) is not None:  # burn-ignore-introspection
         return None
+    # Core's per-call CDP timeout is 10 s, sized for an idle box (setDeviceMetricsOverride, enable-page, ... time out under load).
+    kwargs["timeout"] = kwargs.get("timeout", 10.0) * load_factor()
     return original_websocket_request(self, method, *args, **kwargs)
 
 
@@ -1670,6 +1686,7 @@ class HamsHttpCase(HttpCase, SafePatchMixin, PersonaMixin):
         **kwargs,
     ):
         kwargs.pop("verify", None)
+        timeout = timeout * load_factor()
         if head:
             kwargs["method"] = "HEAD"
         return super().url_open(
