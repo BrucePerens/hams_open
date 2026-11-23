@@ -5,9 +5,9 @@
 # a revocable device token in a root-only file.
 #   hams-node-enroll OPTIONS enroll [ONE_TIME_TOKEN]   show a code to approve at /my/ipv6 (or use the token), then store the device token
 #   hams-node-enroll OPTIONS fetch                      renew the configuration (run from cron); stops for good if the token is revoked
-#   hams-node-enroll OPTIONS unenroll                   forget the token and stop the schedule
+#   hams-node-enroll OPTIONS unenroll                   revoke the token on hams.com, then remove the WireGuard peers, key and settings
 # OPTIONS: -u BASE_URL (uci hams_node_enroll.main.url, else https://hams.com) -s STATE_DIR (/etc/hams-node) [-c CRONTAB (/etc/crontabs/root)] [-i POLL_SECONDS]
-# Exit: 0 ok; 1 refused or not enrolled; 3 token revoked (stopped, no retries); 4 hams.com unreachable (cron tries again later).
+# Exit: 0 ok; 1 refused or not enrolled; 3 token revoked (stopped, no retries); 4 hams.com unreachable (cron tries again later; for unenroll nothing is removed, run it again).
 set -u
 base='' state=/etc/hams-node cron=/etc/crontabs/root poll=''
 while getopts u:s:c:i: opt; do
@@ -58,6 +58,8 @@ apply_config() { # the reply in $tmp -> the package's own settings
 	uci set hams_node_ondemand.main.lookup_url="$base/api/ipv6/directory/lookup"
 	uci commit hams_node
 	uci commit hams_node_ondemand
+	[ -x /usr/sbin/hams-node-lan ] && /usr/sbin/hams-node-lan apply  # hams-node-lan package: the /60 to the LANs
+	return 0
 }
 
 add_cron() { grep -qF "$job" "$cron" 2>/dev/null || echo "17 */6 * * * $job" >> "$cron"; }
@@ -114,9 +116,30 @@ do_fetch() {
 	esac
 }
 
+# Revoke the token on hams.com (own device only), then remove everything the package made: WireGuard peers and interface, the
+# hams_node uci sections, the key, the token and the cron line. An unreachable portal changes nothing (the token is the only way to
+# revoke, so cron or the member retries); a token hams.com already refuses is just dropped.
+do_unenroll() {
+	if [ -s "$tokenfile" ]; then
+		token=$(cat "$tokenfile")
+		clean "$token" || { status "bad token file"; exit 1; }
+		post unenroll "{\"token\":\"$token\"}" || { status "hams.com unreachable; nothing removed, try again"; exit 4; }
+	fi
+	iface=$(uci -q get hams_node_ondemand.main.interface 2>/dev/null)
+	iface=${iface:-wg-hams}
+	for peer in $(wg show "$iface" peers 2>/dev/null); do wg set "$iface" peer "$peer" remove; done
+	ip link del "$iface" 2>/dev/null
+	for section in hams_node.main hams_node_ondemand.main; do uci -q delete "$section"; done
+	uci commit hams_node
+	uci commit hams_node_ondemand
+	drop_cron
+	rm -f "$tokenfile" "$keyfile" "$statusfile" "$tmp"
+	echo "hams-node-enroll: unenrolled" >&2
+}
+
 case $cmd in
 enroll) do_enroll "$@" ;;
 fetch) do_fetch ;;
-unenroll) drop_cron; rm -f "$tokenfile" "$statusfile" ;;
+unenroll) do_unenroll ;;
 *) exit 2 ;;
 esac
