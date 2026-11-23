@@ -11,7 +11,7 @@ const WELL_KNOWN_NAT64: u128 = 0x0064_ff9b << 96;
 
 impl Block {
     /// Parse `"<addr>/48"`; refuses any other length and anything overlapping 64:ff9b::/96.
-    // [@ANCHOR: siit_block_parse]
+    // [@ANCHOR: hams_net_core_siit_block_parse]
     pub fn parse(text: &str) -> Result<Block, String> {
         let (addr, len) = text
             .split_once('/')
@@ -30,13 +30,13 @@ impl Block {
     }
 
     /// IPv6 address of IPv4 host `ipv4` in `domain`.
-    // [@ANCHOR: siit_embed]
+    // [@ANCHOR: hams_net_core_siit_embed]
     pub fn embed(&self, domain: u16, ipv4: Ipv4Addr) -> Ipv6Addr {
         Ipv6Addr::from(self.0 | (u128::from(domain) << 64) | u128::from(u32::from(ipv4)))
     }
 
     /// Inverse of `embed`; refuses addresses outside the block or with bits 64..95 set.
-    // [@ANCHOR: siit_extract]
+    // [@ANCHOR: hams_net_core_siit_extract]
     pub fn extract(&self, address: Ipv6Addr) -> Result<(u16, Ipv4Addr), String> {
         let value = u128::from(address);
         if value & (!0u128 << 80) != self.0 {

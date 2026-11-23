@@ -7,8 +7,8 @@ fn vectors() -> Value {
     serde_json::from_str(include_str!("vectors/siit.json")).unwrap()
 }
 
-// Tests [@ANCHOR: siit_embed]
-// Tests [@ANCHOR: siit_extract]
+// Tests [@ANCHOR: hams_net_core_siit_embed]
+// Tests [@ANCHOR: hams_net_core_siit_extract]
 #[test]
 fn embed_and_extract_match_the_python_vectors() {
     for case in vectors()["roundtrip"].as_array().unwrap() {
@@ -21,8 +21,8 @@ fn embed_and_extract_match_the_python_vectors() {
     }
 }
 
-// Tests [@ANCHOR: siit_block_parse]
-// Tests [@ANCHOR: siit_extract]
+// Tests [@ANCHOR: hams_net_core_siit_block_parse]
+// Tests [@ANCHOR: hams_net_core_siit_extract]
 #[test]
 fn refusals_match_the_python_vectors() {
     for bad in vectors()["bad_blocks"].as_array().unwrap() {
