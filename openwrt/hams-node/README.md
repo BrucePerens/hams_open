@@ -215,3 +215,18 @@ token to `/api/ipv6/enroll/rekey`, and only after hams.com accepts it replaces `
 (`wg set <interface> private-key`, the interface from `hams_node_ondemand.main.interface`), and has `hams-node-endpoint` republish the endpoint
 signed with the new key. A refusal or an unreachable hams.com keeps the old key (exit 1 or 4). Peers that hold the old public key learn the new
 one from the directory on their next lookup.
+
+## Remote switch-off and rogue-router warnings (`hams-node-status`, separate package)
+
+A compromised router cannot be trusted to switch itself off, so staff cut it on hams.com first (emergency disable); this package is the
+second layer. `hams-node-status start` (run by enrolment) adds a cron line every 2 minutes that runs `hams-node-status run`: it posts the
+device token to `/api/ipv6/status` and verifies the signed reply with `usign` against `/etc/hams-node/deprecation.pub` (the key hams.com
+sends at enrolment). Only a correctly signed `disabled` turns the node off: WireGuard interface down, its routes flushed, bird, on-demand,
+report and traffic stopped, configuration kept, the reason saved in `/etc/hams-node/disabled` (LuCI shows it). A later signed `ok` turns
+it back on. Fail open: no network, DNS or TLS failure, a missing or bad signature or any other reply changes nothing.
+
+The status also carries the sequence number of the signed deprecation list (keys and prefixes of rogue routers). When it is ahead of the
+held list (`deprecation_seq`, `deprecation_list`) the router asks for the delta since the held number, additions and removals, or for the
+full list when the delta does not line up; documents are ordered by sequence number only, never by clock, and replayed, out-of-order or
+wrongly signed ones are refused. Each listed peer is evicted and each listed prefix gets an `unreachable` route. Format and endpoints:
+`docs/proposals/IPV6_DEPRECATION_LIST.md` in hams_com.
