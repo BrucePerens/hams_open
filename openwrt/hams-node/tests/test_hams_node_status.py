@@ -120,7 +120,8 @@ class StatusTests(unittest.TestCase):
         for expected in ("ifdown wgtest", "ip -6 route flush dev wgtest", "init.d/hams-node-bird stop", "init.d/hams-node-ondemand stop", "hams-node-report stop", "hams-node-traffic stop"):
             self.assertIn(expected, actions)
         self.assertEqual((self.state / "disabled").read_text().strip(), "botnet traffic", "the reason is kept for LuCI")
-        self.assertTrue((self.state / "device_token").exists() and (self.state / "wg.key").exists(), "configuration kept")
+        self.assertTrue((self.state / "device_token").exists(), "configuration kept")
+        self.assertTrue((self.state / "wg.key").exists(), "configuration kept")
         self.assertEqual(self.calls()[0][0], "https://portal.example/api/ipv6/status")
         self.assertEqual(self.calls()[0][1], {"token": "tok_en-1"})
         self.queue(self.status("disabled", reason="botnet traffic"))
