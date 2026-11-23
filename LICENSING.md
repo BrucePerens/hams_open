@@ -161,5 +161,5 @@ repository's default, and say so explicitly rather than leaving the file unlabel
 
 ## openwrt/
 
-`openwrt/hams-node/` (the AREDN/OpenWrt gateway package) is **GPL-2.0-or-later**, matching OpenWrt package
-feeds; its files carry `SPDX-License-Identifier: GPL-2.0-or-later`.
+`openwrt/hams-node/`, `openwrt/luci-app-hams-node/` and `openwrt/feed/` (the AREDN/OpenWrt gateway package and its feed tooling) are **GPL-2.0-or-later**, matching OpenWrt package
+feeds; their files carry `SPDX-License-Identifier: GPL-2.0-or-later`.
