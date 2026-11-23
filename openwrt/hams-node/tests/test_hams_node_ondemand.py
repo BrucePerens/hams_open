@@ -57,7 +57,8 @@ class Harness:
         cmd = ["sh", str(SCRIPT), "-i", iface, "-t", link, "-u", "https://x/lookup", "-s", str(self.state)]
         if max_peers:
             cmd += ["-m", str(max_peers)]
-        env = dict(os.environ, PATH="%s:%s:%s" % (self.bin, HERE, os.environ["PATH"]), HAMS_NOW=str(self.now))
+        env = dict(os.environ, PATH="%s:%s:%s" % (self.bin, HERE, os.environ["PATH"]), HAMS_NOW=str(self.now),
+                   HAMS_NODE_DEPRECATION_LIST=str(self.root / "deprecation_list"))
         return subprocess.run(cmd + list(args), env=env, capture_output=True, text=True)
 
     def wg_calls(self):
@@ -87,6 +88,73 @@ class OnDemandTests(unittest.TestCase):
         h.now += 31
         h.run("packet", "2001:db8:1:30::1")
         self.assertEqual(len(h.lookups()), 2)
+
+    def test_cached_directory_entry_is_used_when_hams_com_is_unreachable(self):
+        h = Harness(self)
+        h.set_lookup({"2001:db8:1:20::5": record("2001:db8:1:20::/60")})
+        h.run("packet", "2001:db8:1:20::5")
+        h.set_active([])
+        h.run("expire")  # idle: the peer is removed
+        h.stub("uclient-fetch", "exit 1")  # internet gone
+        h.now += 120
+        self.assertEqual(h.run("packet", "2001:db8:1:20::5").returncode, 0)
+        self.assertEqual(h.wg_calls()[-1], "set wg-hams peer %s endpoint [2001:db8::9]:51820 allowed-ips 2001:db8:1:20::/60" % KEY_A)
+
+    def test_an_explicit_not_found_answer_drops_the_cached_entry(self):
+        h = Harness(self)
+        h.set_lookup({"2001:db8:1:20::5": record("2001:db8:1:20::/60")})
+        h.run("packet", "2001:db8:1:20::5")
+        h.set_active([])
+        h.run("expire")
+        h.set_lookup({})  # hams.com answers: no such member
+        h.now += 120
+        h.run("packet", "2001:db8:1:20::5")
+        h.stub("uclient-fetch", "exit 1")
+        h.now += 120
+        h.run("packet", "2001:db8:1:20::5")
+        self.assertEqual(len(h.wg_calls()), 2)  # set, remove, and nothing more
+
+    def test_a_peer_the_directory_no_longer_returns_is_evicted_even_while_busy(self):
+        h = Harness(self)
+        h.set_lookup({"2001:db8:1:20::5": record("2001:db8:1:20::/60", KEY_A)})
+        h.run("packet", "2001:db8:1:20::5")
+        h.set_active(["2001:db8:1:20::"])
+        h.now += 100
+        h.set_lookup({})  # suspended or disabled meanwhile: the lookup says not found
+        h.run("expire")
+        self.assertEqual(h.wg_calls()[1:], [], "checked only every five minutes")
+        h.now += 250
+        h.run("expire")
+        self.assertEqual(h.wg_calls()[1:], ["set wg-hams peer %s remove" % KEY_A], "busy, but no longer in the directory: evicted")
+
+    def test_a_busy_peer_still_in_the_directory_stays_and_a_changed_key_goes(self):
+        h = Harness(self)
+        h.set_lookup({"2001:db8:1:20::5": record("2001:db8:1:20::/60", KEY_A), "2001:db8:1:20::": record("2001:db8:1:20::/60", KEY_A)})
+        h.run("packet", "2001:db8:1:20::5")
+        h.set_active(["2001:db8:1:20::"])
+        h.now += 400
+        h.run("expire")
+        self.assertEqual(len(h.wg_calls()), 1, "still returned: stays")
+        h.set_lookup({"2001:db8:1:20::": record("2001:db8:1:20::/60", KEY_B)})
+        h.now += 400
+        h.run("expire")
+        self.assertEqual(h.wg_calls()[1:], ["set wg-hams peer %s remove" % KEY_A], "the member re-keyed: the old tunnel goes")
+
+    def test_a_deprecated_key_gets_no_new_tunnel_and_an_existing_one_is_dropped(self):
+        h = Harness(self)
+        h.set_lookup({"2001:db8:1:20::5": record("2001:db8:1:20::/60", KEY_A)})
+        (h.root / "deprecation_list").write_text("%s 2001:db8:1:20::/60\n" % KEY_A)
+        h.run("packet", "2001:db8:1:20::5")
+        self.assertEqual(h.wg_calls(), [], "refused although the directory returned it")
+        (h.root / "deprecation_list").unlink()
+        h.now += 61  # past the one-minute memory of the refusal
+        h.run("packet", "2001:db8:1:20::5")
+        h.now += 100
+        h.set_active(["2001:db8:1:20::"])
+        self.assertEqual(h.wg_calls(), ["set wg-hams peer %s endpoint [2001:db8::9]:51820 allowed-ips 2001:db8:1:20::/60" % KEY_A])
+        (h.root / "deprecation_list").write_text("%s 2001:db8:1:20::/60\n" % KEY_A)
+        h.run("expire")
+        self.assertEqual(h.wg_calls()[1:], ["set wg-hams peer %s remove" % KEY_A])
 
     def test_record_for_a_different_prefix_is_refused(self):
         h = Harness(self)

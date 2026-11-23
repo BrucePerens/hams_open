@@ -18,6 +18,8 @@ case $type in internet | rf) ;; *) echo "hams-node-rf-route: unknown link type '
 case $iface in '' | *[!A-Za-z0-9_-]*) echo "hams-node-rf-route: bad interface name" >&2; exit 1 ;; esac
 [ -r "$file" ] || { echo "hams-node-rf-route: cannot read $file" >&2; exit 1; }
 
+# Prefixes of rogue routers (hams-node-status keeps this list) get no route over any link, RF included.
+deplist=${HAMS_NODE_DEPRECATION_LIST:-/etc/hams-node/deprecation_list}
 status=0
 seen=0
 # a radio interface goes into firewall zone hamrf
@@ -25,6 +27,9 @@ if [ "$action" = apply ] && [ "$type" = rf ] && command -v hams-node-fw >/dev/nu
 while read -r prefix extra; do
 	case $prefix in '' | '#'*) continue ;; esac
 	case $prefix$extra in *[!A-Fa-f0-9:./]*) echo "hams-node-rf-route: bad prefix, skipped" >&2; status=1; continue ;; esac
+	if [ "$action" = apply ] && [ -r "$deplist" ] && awk -v p="$prefix" '{ n = split($2, a, ","); for (i = 1; i <= n; i++) if (a[i] == p) f = 1 } END { exit !f }' "$deplist"; then
+		echo "hams-node-rf-route: $prefix is on the deprecation list, skipped" >&2; continue
+	fi
 	seen=1
 	if [ "$action" = apply ]; then
 		if [ "$type" = rf ]; then

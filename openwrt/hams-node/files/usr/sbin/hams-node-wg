@@ -22,6 +22,8 @@ fi
 case $iface in '' | *[!A-Za-z0-9_-]*) echo "hams-node-wg: bad interface name" >&2; exit 1 ;; esac
 [ -r "$file" ] || { echo "hams-node-wg: cannot read $file" >&2; exit 1; }
 
+# Keys of rogue routers (hams-node-status keeps this list) are never added as peers.
+deplist=${HAMS_NODE_DEPRECATION_LIST:-/etc/hams-node/deprecation_list}
 status=0
 # the interface goes into firewall zone ham before any peer is added (a ham interface is never left in the global defaults)
 if [ "$action" = apply ] && command -v hams-node-fw >/dev/null 2>&1; then hams-node-fw ensure "$iface" || exit 1; fi
@@ -31,6 +33,9 @@ while read -r key endpoint allowed extra; do
 		echo "hams-node-wg: bad line, skipped" >&2; status=1; continue
 	fi
 	case $key$endpoint$allowed in *[!]A-Za-z0-9+/=.:,_[-]*) echo "hams-node-wg: bad characters, skipped" >&2; status=1; continue ;; esac
+	if [ "$action" = apply ] && [ -r "$deplist" ] && grep -q "^$key " "$deplist"; then
+		echo "hams-node-wg: $key is on the deprecation list, skipped" >&2; continue
+	fi
 	for prefix in $(echo "$allowed" | tr , ' '); do
 		case $prefix in *:*) family=-6 ;; *) family=-4 ;; esac
 		ip "$family" rule del to "$prefix" lookup main priority 90 2>/dev/null

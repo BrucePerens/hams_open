@@ -13,7 +13,7 @@ KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
 
 
 class WgTests(unittest.TestCase):
-    def run_script(self, link_type, peers, iface="wg-hams", action="apply"):
+    def run_script(self, link_type, peers, iface="wg-hams", action="apply", deplist=None):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         root = pathlib.Path(tmp.name)
@@ -27,7 +27,9 @@ class WgTests(unittest.TestCase):
         fake_ip.chmod(0o755)
         src = root / "peers"
         src.write_text(peers)
-        env = dict(os.environ, PATH="%s:%s" % (fake.parent, os.environ["PATH"]))
+        env = dict(os.environ, PATH="%s:%s" % (fake.parent, os.environ["PATH"]), HAMS_NODE_DEPRECATION_LIST=str(root / "deprecation_list"))
+        if deplist is not None:
+            (root / "deprecation_list").write_text(deplist)
         result = subprocess.run(["sh", str(SCRIPT), action, iface, link_type, str(src)], env=env, capture_output=True, text=True)
         calls = log.read_text().splitlines() if log.exists() else []
         return result, calls
@@ -41,6 +43,15 @@ class WgTests(unittest.TestCase):
             "set wg-hams peer %s endpoint [2001:db8::1]:51820 allowed-ips 2001:db8:ab00::/48" % KEY,
             "set wg-hams peer %s endpoint 192.0.2.7:51820 allowed-ips 2001:db8:ab01::/48,2001:db8:ab02::/48" % KEY,
         ])
+
+    def test_a_deprecated_key_is_never_added_as_a_peer(self):
+        other = "B" * 43 + "="
+        peers = "%s 192.0.2.7:51820 2001:db8:ab01::/48\n%s 192.0.2.8:51820 2001:db8:ab02::/48\n" % (KEY, other)
+        result, calls = self.run_script("internet", peers, deplist="%s 2001:db8:ab01::/48\n" % KEY)
+        self.assertEqual([c for c in calls if c.startswith("set ")], ["set wg-hams peer %s endpoint 192.0.2.8:51820 allowed-ips 2001:db8:ab02::/48" % other])
+        self.assertFalse([c for c in calls if "ab01" in c], "no rule for it either")
+        result, calls = self.run_script("internet", peers, action="down", deplist="%s 2001:db8:ab01::/48\n" % KEY)
+        self.assertIn("set wg-hams peer %s remove" % KEY, calls, "down still removes it")
 
     def test_policy_rules_below_priority_100_are_added_per_prefix(self):
         peers = "%s 192.0.2.7:51820 2001:db8:ab01::/48,10.1.0.0/16\n" % KEY

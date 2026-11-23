@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Build side (OpenWrt SDK / buildroot): add to feeds.conf, then
 #   ./scripts/feeds update hams && ./scripts/feeds install -a -p hams
+# hams-node-mtls needs nginx-ssl from the OpenWrt packages feed (src-git packages ..., commit from the SDK's feeds.conf.default)
 src-link hams /path/to/hams_open/openwrt
 
 # Device side (OpenWrt 25.12 apk): put the feed URL in /etc/apk/repositories.d/hams.list

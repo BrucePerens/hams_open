@@ -99,6 +99,22 @@ class EnrollTests(unittest.TestCase):
         polls = [c for c in self.calls() if c.endswith("/poll " + c.split(" ", 1)[1])]
         self.assertIn('"device_code":"devcode123","public_key":"%s"' % KEY, polls[0])
 
+    def test_enrol_records_the_owner_callsign_and_unenroll_removes_it(self):
+        self.assertEqual(self.enroll().returncode, 0)
+        self.assertEqual((self.state / "owner").read_text().strip(), "N0CALL")
+        self.queue("unenroll", reply(status="success"))
+        self.assertEqual(self.run_script("unenroll").returncode, 0)
+        self.assertFalse((self.state / "owner").exists())
+
+    def test_the_deprecation_key_from_the_config_is_kept_for_hams_node_status_and_removed_on_unenroll(self):
+        self.queue("start", reply(status="success", device_code="devcode123", user_code="ABCD-EFGH", expires_in=600, interval=5))
+        self.queue("poll", reply(status="success", token="tok_en-1", deprecation_key="RWSignKeyLine+/0=", **CONFIG))
+        self.assertEqual(self.run_script("enroll").returncode, 0)
+        self.assertEqual((self.state / "deprecation.pub").read_text().strip(), "RWSignKeyLine+/0=")
+        self.queue("unenroll", reply(status="success"))
+        self.assertEqual(self.run_script("unenroll").returncode, 0)
+        self.assertFalse((self.state / "deprecation.pub").exists())
+
     def test_one_time_token_is_sent_as_the_poll_secret_without_asking_for_a_code(self):
         self.queue("poll", reply(status="success", token="tok_en-2", **CONFIG))
         result = self.run_script("enroll", "oneTimeToken_abc")
@@ -173,9 +189,9 @@ class EnrollTests(unittest.TestCase):
         self.assertNotIn("/unenroll", " ".join(self.calls()), "no token left to send")
 
     def test_no_password_anywhere_in_the_package(self):
-        # every package file is scanned except hams-node-bird (BGP "password", a BIRD keyword) and hams-node-ssh (turns dropbear password login off)
+        # every package file is scanned except hams-node-bird (BGP "password", a BIRD keyword) hams-node-ssh (turns dropbear password login off) and hams-node-mtls with its sso handler (turns the router password login off)
         for path in sorted((PACKAGE / "files").rglob("*")) + [PACKAGE / "Makefile"] + sorted((PACKAGE / "pkg").glob("*.mk")):
-            if path.is_file() and "bird" not in path.name and "ssh" not in path.name:
+            if path.is_file() and "bird" not in path.name and "ssh" not in path.name and "mtls" not in path.name and "/sso/" not in str(path):
                 self.assertIsNone(re.search(r"pass(word|wd)|read -s", path.read_text(), re.I), path)
         self.assertIsNone(re.search(r"pass(word|wd)", (PACKAGE / "files/etc/config/hams_node_enroll").read_text(), re.I))
 

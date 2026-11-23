@@ -1,19 +1,20 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Reproducible x86-64 test image: official OpenWrt Image Builder + our signed feed (../feed) with a throwaway key.
-# Usage: build_test_image.sh -a APK_DIR -w WORKDIR [-n NEWER_APK_DIR]     (APK_DIR holds the hams-node, hams-node-bird, -dns, -fw and luci-app-hams-node .apk files)
+# Usage: build_test_image.sh -a APK_DIR -w WORKDIR [-n NEWER_APK_DIR] [-t TESTFILES_DIR]     (APK_DIR holds the hams-node, hams-node-bird, -dns, -fw and luci-app-hams-node .apk files)
 # Result: WORKDIR/hams-test.img (raw, boots with QEMU; see tools/smoke_test.py). No root needed. Nothing is published.
 # The official feeds have no jool-tools-siit / kmod-jool-siit, which hams-node depends on; empty stand-ins are
 # built into the same test feed so the apk dependency check passes (the SIIT step itself is not exercised).
 set -eu
 VERSION=${OPENWRT_VERSION:-25.12.5}
 here=$(cd "$(dirname "$0")" && pwd -P)
-apkdir= work= newer=
-while getopts a:w:n: opt; do
+apkdir= work= newer= testfiles=
+while getopts a:w:n:t: opt; do
 	case $opt in
 	a) apkdir=$OPTARG ;;
 	w) work=$OPTARG ;;
 	n) newer=$OPTARG ;;
+	t) testfiles=$OPTARG ;;
 	*) exit 2 ;;
 	esac
 done
@@ -53,6 +54,11 @@ echo "file://$work/feed/packages.adb" >> "$work/ib/repositories"
 mkdir -p "$work/files/etc/apk/keys"
 cp "$work/feed/hams-feed-public.pem" "$work/files/etc/apk/keys/"
 
+# the mutual-TLS management package (and its nginx and openssl) when it was built
+ls "$apkdir"/hams-node-mtls-*.apk >/dev/null 2>&1 && MTLS_PKGS="hams-node-mtls nginx-ssl openssl-util" || MTLS_PKGS=
+# -t DIR: extra files for the image root (the mTLS test puts its test CA and owner there)
+[ -z "$testfiles" ] || cp -r "$testfiles"/. "$work/files/"
+
 # With -n, the image also carries a local signed update feed (/root/update-feed: the APK_DIR packages plus the newer ones from NEWER_APK_DIR,
 # signed with the same throwaway key) and its public key, for the hams-node-update checks of tools/smoke_test.py. NEWER_APK_DIR holds the
 # same packages built again with a higher PKG_RELEASE.
@@ -66,7 +72,7 @@ fi
 mkdir -p "$work/files/root"
 cp -r "$here/tools/enroll-stub" "$work/files/root/enroll-stub"
 
-PACKAGES="hams-node hams-node-update hams-node-enroll hams-node-report hams-node-bird hams-node-dns hams-node-fw bird2 luci-app-hams-node luci wireguard-tools kmod-wireguard jsonfilter uclient-fetch"
+PACKAGES="hams-node hams-node-update hams-node-enroll hams-node-report hams-node-bird hams-node-dns hams-node-fw bird2 luci-app-hams-node luci wireguard-tools kmod-wireguard jsonfilter uclient-fetch${MTLS_PKGS:+ $MTLS_PKGS}"
 make -C "$work/ib" image PROFILE=generic PACKAGES="$PACKAGES" FILES="$work/files" ROOTFS_PARTSIZE=256 EXTRA_IMAGE_NAME=hams
 gz=$(ls "$work"/ib/bin/targets/x86/64/*-ext4-combined.img.gz 2>/dev/null || ls "$work"/ib/bin/targets/x86/64/*combined*.img.gz | head -1)
 gunzip -c "$gz" > "$work/hams-test.img" || true   # gzip warns about trailing garbage in combined images

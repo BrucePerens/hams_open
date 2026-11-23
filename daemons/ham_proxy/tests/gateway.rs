@@ -41,10 +41,6 @@ fn sign(k: &PKey<Private>, expires: &str, entries: &str) -> String {
 
 #[test]
 fn signed_list_verifies_and_modified_wrong_key_or_old_lists_are_refused() {
-    // Tests [@ANCHOR: ham_proxy_verify_list]
-    // Tests [@ANCHOR: ham_proxy_list_error]
-    // Tests [@ANCHOR: ham_proxy_whitelist_add_site]
-    // Tests [@ANCHOR: ham_proxy_whitelist_permits_path]
     let (k, raw) = key();
     let good = sign(
         &k,
@@ -93,8 +89,6 @@ fn signed_list_verifies_and_modified_wrong_key_or_old_lists_are_refused() {
 
 #[test]
 fn utc_times_parse_and_odd_ones_do_not() {
-    // Tests [@ANCHOR: ham_proxy_parse_utc]
-    // Tests [@ANCHOR: ham_proxy_list_unhex]
     assert_eq!(parse_utc("2023-11-14T22:13:20Z"), Some(1_700_000_000));
     assert_eq!(parse_utc("1970-01-01T00:00:00Z"), Some(0));
     assert_eq!(parse_utc("2024-02-29T00:00:00Z"), Some(1_709_164_800));

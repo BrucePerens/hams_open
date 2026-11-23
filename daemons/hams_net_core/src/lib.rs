@@ -5,6 +5,11 @@
 //! their tests (parity).
 
 pub mod boundary;
+pub mod crypto;
+pub mod dane;
 pub mod directory;
+pub mod login;
 pub mod peers;
+pub mod policy;
+pub mod signed_list;
 pub mod siit;

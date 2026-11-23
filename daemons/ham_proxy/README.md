@@ -32,7 +32,6 @@ relays request heads only, so the body hash is the client's declared value; body
 
 ## Types
 
-- [@ANCHOR: ham_proxy_tlsa_type] `Tlsa`: tuple `(usage, selector, matching_type, data)`, one TLSA record: usage 3 is DANE-EE, selector 0 the full certificate, matching type 0/1/2 exact/SHA-256/SHA-512, data the bytes to compare.
 
 ## Whitelist and station-ID log
 
