@@ -22,8 +22,13 @@ shift $((OPTIND - 1))
 [ "$type" = internet ] || { echo "hams-node-ondemand: refusing WireGuard on a '$type' link" >&2; exit 1; }
 case $iface in '' | *[!A-Za-z0-9_-]*) echo "hams-node-ondemand: bad interface name" >&2; exit 1 ;; esac
 mkdir -p "$state" || exit 1
-peers=$state/peers refused=$state/refused
-touch "$peers" "$refused"
+peers=$state/peers refused=$state/refused checked=$state/checked
+touch "$peers" "$refused" "$checked"
+# A peer is looked up again after this many seconds; one the directory no longer returns (suspended, disabled, released, key changed) is evicted.
+recheck=300
+# Keys and prefixes of rogue routers (hams-node-status keeps this list): never a new tunnel to one.
+deplist=${HAMS_NODE_DEPRECATION_LIST:-/etc/hams-node/deprecation_list}
+deprecated() { [ -r "$deplist" ] && grep -q "^$1 " "$deplist"; }
 
 # The first 60 bits of an IPv6 address (15 hex digits), so equal values mean "same /60".
 key60() {
@@ -50,6 +55,25 @@ active() {
 remove_peer() { # public key
 	wg set "$iface" peer "$1" remove
 	grep -v "^$1 " "$peers" > "$peers.new"; mv "$peers.new" "$peers"
+	grep -v "^$1 " "$checked" > "$checked.new"; mv "$checked.new" "$checked"
+}
+
+# lookup ADDRESS: asks the directory; sets rst, rpk, rep, rpfx (rpk empty unless the record is well formed).
+lookup() {
+	qaddr=$1
+	set -- -q -O -
+	[ -n "$cert" ] && set -- "$@" --certificate "$cert" --private-key "$key"
+	reply=$(uclient-fetch "$@" --header 'Content-Type: application/json' --post-data "{\"jsonrpc\":\"2.0\",\"params\":{\"query\":\"$qaddr\"}}" "$url" 2>/dev/null)
+	echo "$reply" > "$state/reply.json"
+	rst=$(jsonfilter -i "$state/reply.json" -e '@.result.status' 2>/dev/null)
+	rpk=$(jsonfilter -i "$state/reply.json" -e '@.result.public_key') && rep=$(jsonfilter -i "$state/reply.json" -e '@.result.endpoint') \
+		&& rpfx=$(jsonfilter -i "$state/reply.json" -e '@.result.prefix60')
+	case "${rpk:-}${rep:-}${rpfx:-}" in *[!A-Za-z0-9+/=.:_[]/-]*) rpk='' ;; esac
+}
+
+# valid_record K60: the looked-up record is a usable one for that /60.
+valid_record() {
+	[ "${rst:-}" = success ] && [ -n "${rpk:-}" ] && [ "$(key60 "${rpfx:-}")" = "$1" ] && [ "${rpfx#*/}" = 60 ]
 }
 
 do_expire() {
@@ -57,6 +81,22 @@ do_expire() {
 	while read -r pk k60 rest; do
 		[ -n "$pk" ] || continue
 		echo "$act" | grep -qx "$k60" || remove_peer "$pk"
+	done < "$peers"
+	# Peers that stay busy are still checked against the directory now and then: a member suspended or disabled after the tunnel came up
+	# (or whose key changed, or who is on the deprecation list) is no longer returned, and the tunnel goes.
+	now=$(date +%s)
+	while read -r pk k60 pfx rest; do
+		[ -n "$pk" ] || continue
+		if deprecated "$pk"; then remove_peer "$pk"; continue; fi
+		last=$(grep "^$pk " "$checked" | tail -n 1 | cut -d' ' -f2)
+		[ -n "$last" ] && [ $((now - last)) -lt "$recheck" ] && continue
+		lookup "${pfx%/*}"
+		[ -n "${rst:-}" ] || continue # hams.com unreachable: keep the peer, ask again next time
+		if valid_record "$k60" && [ "$rpk" = "$pk" ]; then
+			grep -v "^$pk " "$checked" > "$checked.new"; echo "$pk $now" >> "$checked.new"; mv "$checked.new" "$checked"
+		else
+			remove_peer "$pk"
+		fi
 	done < "$peers"
 }
 
@@ -67,27 +107,22 @@ do_packet() {
 	grep -q " $k " "$peers" && return 0
 	last=$(grep "^$k " "$refused" | tail -n 1 | cut -d' ' -f2)
 	[ -n "$last" ] && [ $((now - last)) -lt 60 ] && return 0
-	set -- -q -O -
-	[ -n "$cert" ] && set -- "$@" --certificate "$cert" --private-key "$key"
-	reply=$(uclient-fetch "$@" --header 'Content-Type: application/json' --post-data "{\"jsonrpc\":\"2.0\",\"params\":{\"query\":\"$addr\"}}" "$url" 2>/dev/null)
-	echo "$reply" > "$state/reply.json"
+	lookup "$addr"
 	# hams.com unreachable (no answer with a status): use the last good entry for this /60, so a re-connect never needs the internet.
 	# An explicit answer (not found, suspended) drops the cached entry.
 	cache=$state/directory.cache
 	touch "$cache"
-	if [ -z "$(jsonfilter -i "$state/reply.json" -e '@.result.status' 2>/dev/null)" ]; then
+	if [ -z "${rst:-}" ]; then
 		line=$(grep "^$k " "$cache" | tail -n 1)
-		[ -n "$line" ] && echo "{\"result\":{\"status\":\"success\",\"public_key\":\"$(echo "$line" | cut -d' ' -f2)\",\"endpoint\":\"$(echo "$line" | cut -d' ' -f3)\",\"prefix60\":\"$(echo "$line" | cut -d' ' -f4)\"}}" > "$state/reply.json"
+		[ -n "$line" ] && rst=success rpk=$(echo "$line" | cut -d' ' -f2) rep=$(echo "$line" | cut -d' ' -f3) rpfx=$(echo "$line" | cut -d' ' -f4)
 	fi
-	pk=$(jsonfilter -i "$state/reply.json" -e '@.result.public_key') && ep=$(jsonfilter -i "$state/reply.json" -e '@.result.endpoint') \
-		&& pfx=$(jsonfilter -i "$state/reply.json" -e '@.result.prefix60') && st=$(jsonfilter -i "$state/reply.json" -e '@.result.status')
-	case "${pk:-}${ep:-}${pfx:-}" in *[!A-Za-z0-9+/=.:_[]/-]*) pk='' ;; esac
-	# unknown, suspended, stale or mismatching records: nothing is created, and the address is not asked about again for a minute
-	if [ "${st:-}" != success ] || [ -z "${pk:-}" ] || [ "$(key60 "${pfx:-}")" != "$k" ] || [ "${pfx#*/}" != 60 ]; then
+	# unknown, suspended, stale, mismatching or deprecated records: nothing is created, and the address is not asked about again for a minute
+	if ! valid_record "$k" || deprecated "$rpk"; then
 		grep -v "^$k " "$refused" > "$refused.new"; echo "$k $now" >> "$refused.new"; mv "$refused.new" "$refused"
 		[ -z "$(jsonfilter -i "$state/reply.json" -e '@.result.status' 2>/dev/null)" ] || { grep -v "^$k " "$cache" > "$cache.new"; mv "$cache.new" "$cache"; }
 		return 0
 	fi
+	pk=$rpk ep=$rep pfx=$rpfx
 	grep -v "^$k " "$cache" > "$cache.new"; echo "$k $pk $ep $pfx" >> "$cache.new"; mv "$cache.new" "$cache"
 	if [ "$(wc -l < "$peers")" -ge "$max" ]; then # full: the oldest idle peer goes first, else the oldest peer
 		act=$(active) victim=''
@@ -99,6 +134,7 @@ do_packet() {
 	fi
 	wg set "$iface" peer "$pk" endpoint "$ep" allowed-ips "$pfx" || return 1
 	echo "$pk $k $pfx $ep" >> "$peers"
+	echo "$pk $now" >> "$checked"
 }
 
 case $1 in
