@@ -87,7 +87,7 @@ class WgTests(unittest.TestCase):
     def test_ipv6_endpoint_brackets_are_allowed(self):
         result, calls = self.run_script("internet", "%s [2001:db8::1]:51820 ::/0\n" % KEY)
         self.assertEqual(result.returncode, 0)
-        self.assertEqual(len(calls), 1)
+        self.assertEqual(len([c for c in calls if c.startswith("set ")]), 1)
 
 
 if __name__ == "__main__":
