@@ -43,8 +43,6 @@ fn sign(k: &PKey<Private>, expires: &str, entries: &str) -> String {
 fn signed_list_verifies_and_modified_wrong_key_or_old_lists_are_refused() {
     // Tests [@ANCHOR: ham_proxy_verify_list]
     // Tests [@ANCHOR: ham_proxy_list_error]
-    // Tests [@ANCHOR: ham_proxy_whitelist_add_site]
-    // Tests [@ANCHOR: ham_proxy_whitelist_permits_path]
     let (k, raw) = key();
     let good = sign(
         &k,

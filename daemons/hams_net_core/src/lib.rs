@@ -7,4 +7,5 @@
 pub mod boundary;
 pub mod directory;
 pub mod peers;
+pub mod policy;
 pub mod siit;
