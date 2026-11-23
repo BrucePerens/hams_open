@@ -1,0 +1,31 @@
+[package]
+name = "ham_proxy"
+version = "0.1.0"
+edition = "2021"
+description = "Prototype of the ham-side proxy: integrity-only TLS (RFC 9150 / NULL-SHA256) towards the ham, normal verified TLS towards the Internet site"
+license = "AGPL-3.0-or-later"
+publish = false
+rust-version = "1.98"
+
+[dependencies]
+openssl = "0.10"
+
+[features]
+# Build and statically link OpenSSL from source (for cross builds to OpenWrt targets).
+vendored = ["openssl/vendored"]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
