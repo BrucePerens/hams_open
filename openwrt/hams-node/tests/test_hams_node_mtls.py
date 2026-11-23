@@ -86,9 +86,9 @@ class MtlsTests(unittest.TestCase):
         self.assertIn("ssl_client_certificate %s;" % (self.state / "member-ca.pem"), conf)
         self.assertIn("66926\\.1\\.1=N0CALL(/|$)", conf)
         self.assertIn("if ($hams_owner = 0) { return 403; }", conf)
-        self.assertIn("proxy_pass http://127.0.0.1:8080;", conf)
+        self.assertIn("proxy_pass http://127.0.0.1:8080;", conf)  # burn-ignore-ssrf-test-value: expected config text on the router, nothing connects
         uci = self.uci()
-        self.assertIn("add_list uhttpd.main.listen_http=127.0.0.1:8080", uci)
+        self.assertIn("add_list uhttpd.main.listen_http=127.0.0.1:8080", uci)  # burn-ignore-ssrf-test-value: expected config text on the router, nothing connects
         self.assertNotIn("0.0.0.0", uci.split("add_list")[1])
         self.assertTrue((self.state / "mtls" / "server.key").stat().st_size > 0)
         self.assertIn("hams-node-mtls crl", self.cron.read_text())
