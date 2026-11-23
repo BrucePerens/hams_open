@@ -15,7 +15,8 @@ from odoo.tests.common import tagged
 
 
 class _Browser:
-    pass
+    # Core's ChromeBrowser fixes this at 1; the patched init raises it to the machine's load factor.
+    throttling_factor = 1
 
 
 @tagged("post_install", "-at_install")
