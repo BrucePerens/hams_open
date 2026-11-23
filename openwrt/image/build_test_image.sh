@@ -23,8 +23,8 @@ base=https://downloads.openwrt.org/releases/$VERSION/targets/x86/64
 tarball=openwrt-imagebuilder-$VERSION-x86-64.Linux-x86_64.tar.zst
 
 if [ ! -f "$work/$tarball" ]; then
-	curl -sSfo "$work/$tarball" "$base/$tarball"
-	curl -sSf "$base/sha256sums" | grep -F "$tarball" | sed "s|\*.*|$work/$tarball|" | sed 's|  | |' > "$work/sha.txt"
+	curl --max-time 900 -sSfo "$work/$tarball" "$base/$tarball"
+	curl --max-time 60 -sSf "$base/sha256sums" | grep -F "$tarball" | sed "s|\*.*|$work/$tarball|" | sed 's|  | |' > "$work/sha.txt"
 	echo "$(cut -d' ' -f1 "$work/sha.txt")  $work/$tarball" | sha256sum -c -
 fi
 rm -rf "$work/ib" "$work/feed"
