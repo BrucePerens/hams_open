@@ -149,7 +149,7 @@ class ConfigTests(unittest.TestCase):
         text = (HERE.parent / "files/etc/init.d/hams-node-ondemand").read_text()
         self.assertNotIn("chain fwd ", text)
         self.assertIn("chain forward_seen {", text)
-        self.assertIn("ffff:fff0:: }\n\t}\nNFT", text)
+        self.assertIn("ffff:fff0:: }\n\t}\n}\nNFT", text)
 
 
 if __name__ == "__main__":
