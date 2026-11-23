@@ -35,7 +35,10 @@ fn make_cert(dir: &std::path::Path) -> (PathBuf, PathBuf) {
 }
 
 fn tmpdir(n: &str) -> tempfile::TempDir {
-    tempfile::Builder::new().prefix(&format!("ham_proxy_{n}_")).tempdir().unwrap()
+    tempfile::Builder::new()
+        .prefix(&format!("ham_proxy_{n}_"))
+        .tempdir()
+        .unwrap()
 }
 
 /// Site: normal TLS server answering any request with a fixed body.

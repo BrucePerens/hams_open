@@ -179,7 +179,10 @@ fn make_cert(dir: &Path) -> (PathBuf, PathBuf) {
 
 /// Site returning `resp` verbatim; proxy in front; returns the ham-side response bytes.
 fn via_proxy(tag: &str, resp: Vec<u8>, key: Option<PKey<Private>>) -> Vec<u8> {
-    let d = tempfile::Builder::new().prefix(&format!("ham_ind_{tag}_")).tempdir().unwrap();
+    let d = tempfile::Builder::new()
+        .prefix(&format!("ham_ind_{tag}_"))
+        .tempdir()
+        .unwrap();
     let (c, k) = make_cert(d.path());
     let mut b = SslAcceptor::mozilla_intermediate_v5(SslMethod::tls_server()).unwrap();
     b.set_certificate_chain_file(&c).unwrap();
