@@ -38,7 +38,7 @@ class ZoneTests(unittest.TestCase):
         self.assertIn('zonefile: "%s"' % (root / "ham.zone"), unbound)
         self.assertIn("for-downstream: yes", unbound)
         self.assertIn("fallback-enabled: yes", unbound)
-        self.assertIn("interface: 127.0.0.1@5354", unbound)
+        self.assertIn("interface: 127.0.0.1@5354", unbound)  # burn-ignore-ssrf-test-value: text compared with a rendered unbound config, nothing connects
 
     def test_trust_anchor_when_configured(self):
         _, unbound, _, _ = self.render(trust_anchor="ham. IN DS 12345 13 2 ABCDEF0123")
