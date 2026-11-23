@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# cargo-deny policy for hams_net_ffi. Run `cargo deny check` here.
+[graph]
+targets = []
+
+[advisories]
+ignore = [
+    # basic-toml 0.1.10 is unmaintained (RUSTSEC-2026-0374, no fixed release; a maintenance notice, not a vulnerability). It comes
+    # in through uniffi -> uniffi_bindgen -> askama_derive, a build-time binding generator; every uniffi release up to 0.32.2 still
+    # uses it. REVIEW BY 2027-02-15: remove this entry if uniffi's askama no longer depends on basic-toml.
+    "RUSTSEC-2026-0374",
+]
+
+[licenses]
+allow = ["MIT", "Apache-2.0", "Unicode-3.0", "BSD-3-Clause", "Zlib", "MPL-2.0", "AGPL-3.0-or-later", "Unlicense", "LGPL-2.1-or-later"]
+private = { ignore = true }
+
+[bans]
+multiple-versions = "warn"
+wildcards = "warn"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
