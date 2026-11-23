@@ -155,3 +155,10 @@ Each other target/release needs its own kmod build with the same recipe.
 `hams_node_lan.main.interface` (default `lan`, at most 16) `ip6assign 64` and its own `ip6hint` (0, 1, 2 ...), and sets
 `dhcp.<if>.ra` and `dhcpv6` to `server`, so netifd cuts one /64 per LAN out of the /60 and odhcpd sends router advertisements
 and answers DHCPv6. `hams-node-lan remove` undoes it. Anything that is not a /60 changes nothing. Not exercised on a real router.
+
+## The .ham zone on the node (`hams-node-zone`)
+
+`hams-node-zone render` (uci `hams_node_zone`, off by default) writes an unbound `auth-zone` for `ham.` (AXFR from the anycast servers in
+`list primary`, copy kept in `/etc/hams-node/ham.zone`). Point `hams-node-dns` at it (`list resolver '127.0.0.1#5354'`) and `.ham` names
+resolve with the anycast servers and the internet gone. Before the first transfer unbound asks the anycast servers. `trust_anchor` (a DS
+record) enables validation.
