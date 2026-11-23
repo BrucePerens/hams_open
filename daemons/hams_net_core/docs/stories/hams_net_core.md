@@ -19,3 +19,6 @@ Platform-free Rust crate shared by the local relay, hams-node and the phone apps
 - [@ANCHOR: hams_net_core_peers_new] A peer table is made for one internet interface; asking for one on an RF link is refused (WireGuard encrypts, 47 CFR 97.113(a)(4)).
 - [@ANCHOR: hams_net_core_peers_on_packet] The first packet toward a member /60 asks the directory (lookup supplied by the consumer) and adds a peer for exactly that /60; later packets refresh it. A destination the directory does not know, or answers with a /60 not containing it, is not asked about again for 60 seconds.
 - [@ANCHOR: hams_net_core_peers_expire] A peer with no traffic for more than ten minutes is removed; the keys removed are returned.
+
+## Cross builds
+Run `tools/cross_build.sh` (optional target list) to build a small probe binary for the OpenWrt/Linux musl targets (x86_64, aarch64, armv7, mipsel), Android and iOS, and record sizes in `target/cross_sizes.txt`. Pure Rust, so the musl targets link with rust-lld and no C toolchain; mipsel (tier 3) compiles the library only unless `MIPSEL_LINKER` names an OpenWrt mipsel gcc; Android needs `ANDROID_NDK_HOME` (the NDK is not on this box); iOS needs a macOS host. Skipped targets are reported as SKIP, never silently.
