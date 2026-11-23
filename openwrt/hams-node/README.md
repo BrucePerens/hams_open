@@ -36,6 +36,39 @@ Adding a subpackage: create `pkg/<name>.mk` with its `define Package/<name>`, `/
 (copy `pkg/hams-node-report.mk`; the file name is the package name). Do not edit `Makefile`: it includes `pkg/*.mk` in sorted order
 and calls `BuildPackage` for each, so parallel subpackage changes never touch the same file.
 
+## Firewall: the home LAN is outbound-only (hams-node-fw)
+
+Safe by default: once the node is enrolled the zones are on (`option enabled '0'` in `/etc/config/hams_node_fw` switches them off). `hams-node-wg`
+and `hams-node-ondemand` put their WireGuard interface into zone `ham`, `hams-node-rf-route` puts an rf interface into zone `hamrf` (both through
+`hams-node-fw ensure`); both zones have input and forward DROP. `hams-node-fw check` fails for any WireGuard interface that is up but in no zone.
+
+- `lan` -> `ham`: forwarded (replies come back through connection tracking). No forwarding `ham` -> `lan` or `hamrf` -> `lan`, plus an explicit
+  DROP rule for new connections from both zones to `lan`. LAN hosts are outbound-only; nothing on the LAN is reachable from the ham network.
+- `list open 'tcp:PORT'` opens a port on the router itself only (zone input). There is no default way to expose a LAN host.
+- A member who wants to expose one host adds an explicit rule by hand (this is not offered in the UI):
+
+      uci add firewall rule
+      uci set firewall.@rule[-1].name='expose-nas-https'
+      uci set firewall.@rule[-1].src='ham'
+      uci set firewall.@rule[-1].dest='lan'
+      uci set firewall.@rule[-1].dest_ip='192.168.1.50'
+      uci set firewall.@rule[-1].proto='tcp'
+      uci set firewall.@rule[-1].dest_port='8443'
+      uci set firewall.@rule[-1].target='ACCEPT'
+      uci commit firewall; /etc/init.d/firewall reload
+
+  (a rule placed after the package's DROP rule needs `uci reorder`; never toward `hamrf` for an encrypted service, Part 97.)
+- Test: `openwrt/image/tools/fw_isolation_test.py IMAGE` boots four OpenWrt VMs (router, outsider on the ham side, LAN host, hamlan host).
+
+### Optional third zone: hamlan (a segment reachable from the ham network)
+
+Nothing exists unless the member designates it in `/etc/config/hams_node_fw`: `option hamlan_vlan '42'` (a VLAN on `br-lan`, or on
+`hamlan_parent`) or `list hamlan_port 'lan4'` (those ports leave `br-lan` and form `br-hamlan`); not both. `hams-node-fw apply` creates
+interface `hamlan`, adds it to `hams_node_lan` so it gets its own /64 of the /60, and zone `hamlan` (input and forward DROP; router advertisements
+and DHCPv6 are allowed in). Forwardings: `lan` -> `hamlan`, `hamlan` -> `ham`, `ham` -> `hamlan`, `hamrf` -> `hamlan` (encrypted-service ports are
+dropped toward RF, Part 97). `hamlan` -> `lan` is dropped: strict isolation from the home LAN, which stays outbound-only. To restrict inbound to
+listed hosts, `list hamlan_open '2001:db8:ab40:11::10/443'` (tcp) or `'ADDR/udp:5000'`; with any entry set, only those host/port pairs are reachable.
+
 Tests: `python3 -m unittest discover -s openwrt/hams-node/tests` (a stand-in `jsonfilter` is used on the dev box).
 
 ## Tested on a virtual AREDN node (2026-11-23)

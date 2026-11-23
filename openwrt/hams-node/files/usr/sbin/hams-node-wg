@@ -25,6 +25,8 @@ case $iface in '' | *[!A-Za-z0-9_-]*) echo "hams-node-wg: bad interface name" >&
 # Keys of rogue routers (hams-node-status keeps this list) are never added as peers.
 deplist=${HAMS_NODE_DEPRECATION_LIST:-/etc/hams-node/deprecation_list}
 status=0
+# the interface goes into firewall zone ham before any peer is added (a ham interface is never left in the global defaults)
+if [ "$action" = apply ] && command -v hams-node-fw >/dev/null 2>&1; then hams-node-fw ensure "$iface" || exit 1; fi
 while read -r key endpoint allowed extra; do
 	case $key in '' | '#'*) continue ;; esac
 	if [ -n "$extra" ] || [ -z "$allowed" ]; then

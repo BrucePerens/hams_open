@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-or-later
-# hams-node-fw render | apply | remove | is-rf INTERFACE
+# hams-node-fw render | apply | remove | is-rf INTERFACE | ensure [-r] INTERFACE | check
 # From uci hams_node_fw: firewall zone "ham" for the Internet-tunnel interfaces and zone "hamrf" for radio links; input and forward are
 # DROP (inbound closed by default), output ACCEPT, and only the ports in "list open" get a rule. Part 97: an encrypted-service port
 # (ssh, https, DoT, mail TLS, ...) is never opened toward RF; the interface is also the registry of rf links, so
@@ -8,34 +8,64 @@
 # apply feeds it to uci and commits the firewall config (reload the firewall afterwards). AREDN's own zones are not touched.
 # remove deletes every firewall section this package created (zones hams_zone/hams_rf_zone, rules hams_in_*/hams_rf_in_*), nothing else;
 # apply with enabled != 1 does the same. Both are idempotent.
+# Safe by default: the zones are on once the node is enrolled (hams_node.main.prefix60 set) unless `option enabled '0'`. `ensure IF` puts a ham
+# (WireGuard) interface into zone ham, `ensure -r IF` an rf interface into zone hamrf (uci list, apply, firewall reload); hams-node-wg and
+# hams-node-rf-route call it, so no ham interface is ever left in the global defaults. `check` exits 1 and names any WireGuard interface that
+# is in no zone. Optional third zone "hamlan" (nothing exists unless the member sets `option hamlan_vlan 'ID'` or `list hamlan_port 'lanN'`): its own
+# VLAN (on br-lan, or hamlan_parent) or bridge on those ports, a /64 of the /60 through hams-node-lan, reachable from ham (and hamrf, never an
+# encrypted port) with `list hamlan_open 'ADDR/PORT'` ('ADDR/udp:PORT') narrowing that to listed hosts; lan->hamlan and hamlan->ham are forwarded,
+# hamlan->lan is dropped (the home LAN stays outbound-only). The LAN is outbound only: forwarding lan->ham (replies by conntrack), no forwarding from ham or hamrf to lan, and an explicit
+# DROP rule for both; "list open" opens only the router's own input (a LAN host is exposed only by a rule the member adds by hand, see README).
 set -u
 get() { uci -q get "hams_node_fw.main.$1" 2>/dev/null; }
+on() { [ "$(get enabled)" = 1 ] || { [ -z "$(get enabled)" ] && [ -n "$(uci -q get hams_node.main.prefix60 2>/dev/null)" ]; }; }
+in_list() { for _x in $(get "$1"); do [ "$_x" = "$2" ] && return 0; done; return 1; }
+reload_fw() { [ -x "${HAMS_NODE_INITD:-/etc/init.d}/firewall" ] && "${HAMS_NODE_INITD:-/etc/init.d}/firewall" reload; return 0; }
 ENCRYPTED_PORTS=" tcp:22 tcp:443 tcp:853 tcp:993 tcp:995 tcp:465 tcp:8883 tcp:1194 udp:51820 udp:5525 udp:500 udp:4500 udp:1194 "
 
 # the firewall sections this package names itself: zones and rules, identified by their section-name prefix
 remove_batch() {
-	uci -q show firewall | sed -n 's/^firewall\.\(hams_zone\|hams_rf_zone\|hams_in_[^.=]*\|hams_rf_in_[^.=]*\)=.*/\1/p' |
+	uci -q show firewall | sed -n 's/^firewall\.\(hams_zone\|hams_rf_zone\|hams_fwd_lan_ham\|hams_drop_ham_lan\|hams_drop_hamrf_lan\|hams_in_[^.=]*\|hams_rf_in_[^.=]*\|hams_hl_[^.=]*\)=.*/\1/p' |
 		while read -r s; do echo "delete firewall.$s"; done
+	uci -q show network | sed -n 's/^network\.\(hamlan\|hamlan_dev\)=.*/\1/p' | while read -r s; do echo "delete network.$s"; done
 }
+
+commit_net() { case $batch in *network.*) uci commit network ;; esac; }
 
 remove() {
 	batch=$(remove_batch)
 	[ -n "$batch" ] || return 0
-	printf '%s\n' "$batch" | uci batch && uci commit firewall
+	printf '%s\n' "$batch" | uci batch && uci commit firewall && commit_net
 }
 
 case ${1:-} in
 remove) ;;
 is-rf)
 	[ $# -eq 2 ] || { echo "usage: hams-node-fw is-rf INTERFACE" >&2; exit 2; }
-	for i in $(get rf_iface); do [ "$i" = "$2" ] && exit 0; done
-	exit 1 ;;
+	in_list rf_iface "$2"; exit $? ;;
+ensure)
+	list=iface
+	[ "${2:-}" = -r ] && { list=rf_iface; shift; }
+	[ $# -eq 2 ] || { echo "usage: hams-node-fw ensure [-r] INTERFACE" >&2; exit 2; }
+	case $2 in '' | *[!A-Za-z0-9_-]*) echo "hams-node-fw: bad interface name" >&2; exit 1 ;; esac
+	other=rf_iface; [ $list = rf_iface ] && other=iface
+	in_list $other "$2" && { echo "hams-node-fw: $2 is already in the other zone" >&2; exit 1; }
+	in_list $list "$2" && exit 0
+	uci add_list "hams_node_fw.main.$list=$2" && uci commit hams_node_fw || exit 1
+	"$0" apply && reload_fw
+	exit $? ;;
+check)
+	st=0
+	for i in $(wg show interfaces 2>/dev/null); do
+		in_list iface "$i" || in_list rf_iface "$i" || { echo "hams-node-fw: $i is up but in no firewall zone" >&2; st=1; }
+	done
+	exit $st ;;
 render | apply) ;;
-*) echo "usage: hams-node-fw render | apply | remove | is-rf INTERFACE" >&2; exit 2 ;;
+*) echo "usage: hams-node-fw render | apply | remove | is-rf INTERFACE | ensure [-r] INTERFACE | check" >&2; exit 2 ;;
 esac
 
 render() {
-	[ "$(get enabled)" = 1 ] || return 0
+	on || return 0
 	ifaces=$(get iface) rfs=$(get rf_iface) opens=$(get open)
 	for v in $ifaces $rfs; do case $v in '' | *[!A-Za-z0-9_-]*) echo "hams-node-fw: bad interface name" >&2; return 1 ;; esac; done
 	for i in $ifaces; do for r in $rfs; do [ "$i" = "$r" ] && { echo "hams-node-fw: $i is both a tunnel and an rf interface" >&2; return 1; }; done; done
@@ -43,7 +73,21 @@ render() {
 		case $o in tcp:[0-9]* | udp:[0-9]*) ;; *) echo "hams-node-fw: bad open entry" >&2; return 1 ;; esac
 		case ${o#*:} in *[!0-9]*) echo "hams-node-fw: bad open entry" >&2; return 1 ;; esac
 	done
-	echo "delete firewall.hams_zone"; echo "delete firewall.hams_rf_zone"
+	vlan=$(get hamlan_vlan) hports=$(get hamlan_port) hopen=$(get hamlan_open)
+	if [ -n "$vlan$hports" ]; then
+		[ -z "$vlan" ] || [ -z "$hports" ] || { echo "hams-node-fw: set hamlan_vlan or hamlan_port, not both" >&2; return 1; }
+		case $vlan in *[!0-9]*) echo "hams-node-fw: bad hamlan_vlan" >&2; return 1 ;; esac
+		[ -z "$vlan" ] || { [ "$vlan" -ge 1 ] && [ "$vlan" -le 4094 ]; } || { echo "hams-node-fw: bad hamlan_vlan" >&2; return 1; }
+		for v in $hports $(get hamlan_parent); do case $v in '' | *[!A-Za-z0-9_.-]*) echo "hams-node-fw: bad hamlan port" >&2; return 1 ;; esac; done
+		for o in $hopen; do
+			case ${o%%/*} in '' | *[!0-9a-fA-F:.]*) echo "hams-node-fw: bad hamlan_open entry" >&2; return 1 ;; esac
+			case ${o#*/} in *[!0-9a-z:]* | '') echo "hams-node-fw: bad hamlan_open entry" >&2; return 1 ;; esac
+			case ${o#*/} in tcp:[0-9]* | udp:[0-9]* | [0-9]*) ;; *) echo "hams-node-fw: bad hamlan_open entry" >&2; return 1 ;; esac
+		done
+	fi
+	remove_batch | grep -E 'firewall\.hams_hl_|network\.hamlan'
+	echo "delete firewall.hams_zone"; echo "delete firewall.hams_rf_zone"; echo "delete firewall.hams_fwd_lan_ham"
+	echo "delete firewall.hams_drop_ham_lan"; echo "delete firewall.hams_drop_hamrf_lan"
 	for o in $opens; do p=${o%%:*}; n=${o#*:}; echo "delete firewall.hams_in_${p}_$n"; echo "delete firewall.hams_rf_in_${p}_$n"; done
 	for zone in ham hamrf; do
 		if [ $zone = ham ]; then list=$ifaces sec=hams_zone; else list=$rfs sec=hams_rf_zone; fi
@@ -52,6 +96,11 @@ render() {
 		echo "set firewall.$sec.name=$zone"
 		for i in $list; do echo "add_list firewall.$sec.network=$i"; done
 		echo "set firewall.$sec.input=DROP"; echo "set firewall.$sec.forward=DROP"; echo "set firewall.$sec.output=ACCEPT"
+		echo "set firewall.hams_drop_${zone}_lan=rule"; echo "set firewall.hams_drop_${zone}_lan.name=hams-no-$zone-to-lan"
+		echo "set firewall.hams_drop_${zone}_lan.src=$zone"; echo "set firewall.hams_drop_${zone}_lan.dest=lan"; echo "set firewall.hams_drop_${zone}_lan.target=DROP"
+		if [ $zone = ham ]; then
+			echo "set firewall.hams_fwd_lan_ham=forwarding"; echo "set firewall.hams_fwd_lan_ham.src=lan"; echo "set firewall.hams_fwd_lan_ham.dest=ham"
+		fi
 		for o in $opens; do
 			p=${o%%:*}; n=${o#*:}
 			if [ $zone = hamrf ]; then case $ENCRYPTED_PORTS in *" $o "*) echo "hams-node-fw: $o is not opened toward RF (encrypted service)" >&2; continue ;; esac; fi
@@ -60,11 +109,80 @@ render() {
 			echo "set firewall.$rs.proto=$p"; echo "set firewall.$rs.dest_port=$n"; echo "set firewall.$rs.target=ACCEPT"
 		done
 	done
+	render_hamlan
+}
+
+render_hamlan() {
+	[ -n "$vlan$hports" ] || return 0
+	parent=$(get hamlan_parent); : "${parent:=br-lan}"
+	echo "set network.hamlan_dev=device"
+	if [ -n "$vlan" ]; then
+		dev=$parent.$vlan
+		echo "set network.hamlan_dev.type=8021q"; echo "set network.hamlan_dev.ifname=$parent"; echo "set network.hamlan_dev.vid=$vlan"
+		echo "set network.hamlan_dev.name=$dev"
+	else
+		dev=br-hamlan
+		lanbr=$(uci -q show network | sed -n "s/^network\.\([^.]*\)\.name='br-lan'/\1/p" | head -n 1)
+		echo "set network.hamlan_dev.type=bridge"; echo "set network.hamlan_dev.name=$dev"
+		for i in $hports; do
+			echo "add_list network.hamlan_dev.ports=$i"
+			[ -z "$lanbr" ] || echo "del_list network.$lanbr.ports=$i"
+		done
+	fi
+	echo "set network.hamlan=interface"; echo "set network.hamlan.proto=static"; echo "set network.hamlan.device=$dev"
+	z=firewall.hams_hl_zone
+	echo "set $z=zone"; echo "set $z.name=hamlan"; echo "add_list $z.network=hamlan"
+	echo "set $z.input=DROP"; echo "set $z.forward=DROP"; echo "set $z.output=ACCEPT"
+	# router advertisements and DHCPv6 from the segment's hosts to the router (nothing else reaches the router)
+	echo "set firewall.hams_hl_icmp6=rule"; echo "set firewall.hams_hl_icmp6.name=hams-hamlan-icmp6"; echo "set firewall.hams_hl_icmp6.src=hamlan"
+	echo "set firewall.hams_hl_icmp6.proto=icmp"; echo "set firewall.hams_hl_icmp6.family=ipv6"; echo "set firewall.hams_hl_icmp6.target=ACCEPT"
+	echo "set firewall.hams_hl_dhcp6=rule"; echo "set firewall.hams_hl_dhcp6.name=hams-hamlan-dhcpv6"; echo "set firewall.hams_hl_dhcp6.src=hamlan"
+	echo "set firewall.hams_hl_dhcp6.proto=udp"; echo "set firewall.hams_hl_dhcp6.dest_port=547"; echo "set firewall.hams_hl_dhcp6.target=ACCEPT"
+	echo "set firewall.hams_hl_drop_lan=rule"; echo "set firewall.hams_hl_drop_lan.name=hams-no-hamlan-to-lan"; echo "set firewall.hams_hl_drop_lan.src=hamlan"
+	echo "set firewall.hams_hl_drop_lan.dest=lan"; echo "set firewall.hams_hl_drop_lan.target=DROP"
+	fwd() { echo "set firewall.hams_hl_fwd_$1=forwarding"; echo "set firewall.hams_hl_fwd_$1.src=$2"; echo "set firewall.hams_hl_fwd_$1.dest=$3"; }
+	fwd lan lan hamlan
+	[ -z "$ifaces" ] || fwd ham_out hamlan ham
+	if [ -z "$hopen" ]; then
+		[ -z "$ifaces" ] || fwd ham_in ham hamlan
+		if [ -n "$rfs" ]; then
+			fwd hamrf_in hamrf hamlan
+			for e in $ENCRYPTED_PORTS; do
+				p=${e%%:*}; n=${e#*:}; r=firewall.hams_hl_rfdrop_${p}_$n
+				echo "set $r=rule"; echo "set $r.name=hams-hamlan-no-rf-$p-$n"; echo "set $r.src=hamrf"; echo "set $r.dest=hamlan"
+				echo "set $r.proto=$p"; echo "set $r.dest_port=$n"; echo "set $r.target=DROP"
+			done
+		fi
+		return 0
+	fi
+	k=0
+	for o in $hopen; do
+		k=$((k + 1)); a=${o%%/*}; q=${o#*/}
+		case $q in tcp:* | udp:*) p=${q%%:*}; n=${q#*:} ;; *) p=tcp n=$q ;; esac
+		for zone in ham hamrf; do
+			if [ $zone = ham ]; then [ -n "$ifaces" ] || continue; else [ -n "$rfs" ] || continue; case $ENCRYPTED_PORTS in *" $p:$n "*) continue ;; esac; fi
+			r=firewall.hams_hl_in_${zone}_$k
+			echo "set $r=rule"; echo "set $r.name=hams-hamlan-open-$k"; echo "set $r.src=$zone"; echo "set $r.dest=hamlan"
+			echo "set $r.dest_ip=$a"; echo "set $r.proto=$p"; echo "set $r.dest_port=$n"; echo "set $r.target=ACCEPT"
+		done
+	done
+}
+
+# the segment gets a /64 of the /60: add it to the interfaces hams-node-lan serves, then let hams-node-lan assign
+hamlan_lan() {
+	[ -n "$(get hamlan_vlan)$(get hamlan_port)" ] || return 0
+	cur=$(uci -q get hams_node_lan.main.interface)
+	in_lan() { for _y in $cur; do [ "$_y" = "$1" ] && return 0; done; return 1; }
+	[ -n "$cur" ] || { uci add_list hams_node_lan.main.interface=lan; cur=lan; }
+	in_lan hamlan || uci add_list hams_node_lan.main.interface=hamlan
+	uci commit hams_node_lan
+	command -v hams-node-lan >/dev/null 2>&1 && hams-node-lan apply
+	return 0
 }
 
 if [ "$1" = render ]; then render; exit $?; fi
 if [ "$1" = remove ]; then remove; exit $?; fi
-[ "$(get enabled)" = 1 ] || { remove; exit $?; }
+on || { remove; exit $?; }
 batch=$(render) || exit 1
 [ -n "$batch" ] || exit 0
-printf '%s\n' "$batch" | uci batch && uci commit firewall
+printf '%s\n' "$batch" | uci batch && uci commit firewall && commit_net && hamlan_lan

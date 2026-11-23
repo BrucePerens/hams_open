@@ -22,6 +22,8 @@ shift $((OPTIND - 1))
 [ "$type" = internet ] || { echo "hams-node-ondemand: refusing WireGuard on a '$type' link" >&2; exit 1; }
 case $iface in '' | *[!A-Za-z0-9_-]*) echo "hams-node-ondemand: bad interface name" >&2; exit 1 ;; esac
 mkdir -p "$state" || exit 1
+# the on-demand peers' interface is a ham interface: zone ham
+if command -v hams-node-fw >/dev/null 2>&1; then hams-node-fw ensure "$iface" || exit 1; fi
 peers=$state/peers refused=$state/refused checked=$state/checked
 touch "$peers" "$refused" "$checked"
 # A peer is looked up again after this many seconds; one the directory no longer returns (suspended, disabled, released, key changed) is evicted.
