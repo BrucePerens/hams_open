@@ -157,7 +157,7 @@ class EndpointTests(unittest.TestCase):
         cron = self.root / "crontab"
         self.assertEqual(self.run_script("-c", str(cron), "start").returncode, 0)
         self.run_script("-c", str(cron), "start")
-        self.assertEqual(sum("hams-node-endpoint" in l for l in cron.read_text().splitlines()), 1)
+        self.assertEqual(sum("hams-node-endpoint" in line for line in cron.read_text().splitlines()), 1)
         self.run_script("-c", str(cron), "stop")
         self.assertNotIn("hams-node-endpoint", cron.read_text())
 
