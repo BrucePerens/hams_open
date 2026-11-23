@@ -1,0 +1,104 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-ondemand: WireGuard peers for member /60s, made on the first packet and removed when idle.
+#   hams-node-ondemand OPTIONS packet ADDRESS   first traffic to ADDRESS: look the /60 up and add the peer
+#   hams-node-ondemand OPTIONS expire           remove peers whose /60 has seen no traffic for the idle time
+#   hams-node-ondemand OPTIONS run              follow the nft "seen" set (events) and do both
+# Traffic is seen by the nft set "inet hams_ondemand seen" (keyed on the /60, timeout = idle time, refreshed by every
+# packet), so a peer is idle exactly when its /60 has left that set. WireGuard encrypts, so it is never put on a radio link
+# (47 CFR 97.113(a)(4)): the link type must be "internet".
+# OPTIONS: -i INTERFACE -t LINK_TYPE -u LOOKUP_URL -s STATE_DIR [-m MAX_PEERS (256)] [-c CERT -k KEY]
+set -u
+max=256 cert='' key=''
+while getopts i:t:u:s:m:c:k: opt; do
+	case $opt in
+	i) iface=$OPTARG ;; t) type=$OPTARG ;; u) url=$OPTARG ;; s) state=$OPTARG ;; m) max=$OPTARG ;; c) cert=$OPTARG ;; k) key=$OPTARG ;;
+	*) exit 2 ;;
+	esac
+done
+shift $((OPTIND - 1))
+: "${iface:=}" "${type:=}" "${url:=}" "${state:=}"
+[ -n "$iface" ] && [ -n "$state" ] && [ $# -ge 1 ] || { echo "usage: hams-node-ondemand -i IF -t TYPE -u URL -s DIR [-m N] packet ADDR|expire|run" >&2; exit 2; }
+[ "$type" = internet ] || { echo "hams-node-ondemand: refusing WireGuard on a '$type' link" >&2; exit 1; }
+case $iface in '' | *[!A-Za-z0-9_-]*) echo "hams-node-ondemand: bad interface name" >&2; exit 1 ;; esac
+mkdir -p "$state" || exit 1
+peers=$state/peers refused=$state/refused
+touch "$peers" "$refused"
+
+# The first 60 bits of an IPv6 address (15 hex digits), so equal values mean "same /60".
+key60() {
+	echo "$1" | awk '{
+		a = $1; sub(/\/.*/, "", a)
+		n = split(a, p, "::")
+		l = (p[1] == "") ? 0 : split(p[1], L, ":")
+		r = (n > 1 && p[2] != "") ? split(p[2], R, ":") : 0
+		s = ""
+		for (i = 1; i <= 8; i++) {
+			if (i <= l) v = L[i]; else if (i > 8 - r) v = R[i - (8 - r)]; else v = "0"
+			while (length(v) < 4) v = "0" v
+			s = s tolower(v)
+		}
+		print substr(s, 1, 15)
+	}'
+}
+
+# The /60s with traffic in the idle window, one key60 per line.
+active() {
+	nft list set inet hams_ondemand seen 2>/dev/null | grep -o '[0-9a-fA-F:]*:[0-9a-fA-F:]*' | while read -r a; do key60 "$a"; done
+}
+
+remove_peer() { # public key
+	wg set "$iface" peer "$1" remove
+	grep -v "^$1 " "$peers" > "$peers.new"; mv "$peers.new" "$peers"
+}
+
+do_expire() {
+	act=$(active)
+	while read -r pk k60 rest; do
+		[ -n "$pk" ] || continue
+		echo "$act" | grep -qx "$k60" || remove_peer "$pk"
+	done < "$peers"
+}
+
+do_packet() {
+	addr=$1
+	case $addr in '' | *[!0-9a-fA-F:]*) echo "hams-node-ondemand: bad address" >&2; return 1 ;; esac
+	k=$(key60 "$addr") now=$(date +%s)
+	grep -q " $k " "$peers" && return 0
+	last=$(grep "^$k " "$refused" | tail -n 1 | cut -d' ' -f2)
+	[ -n "$last" ] && [ $((now - last)) -lt 60 ] && return 0
+	set -- -q -O -
+	[ -n "$cert" ] && set -- "$@" --certificate "$cert" --private-key "$key"
+	reply=$(uclient-fetch "$@" --header 'Content-Type: application/json' --post-data "{\"jsonrpc\":\"2.0\",\"params\":{\"query\":\"$addr\"}}" "$url" 2>/dev/null)
+	echo "$reply" > "$state/reply.json"
+	pk=$(jsonfilter -i "$state/reply.json" -e '@.result.public_key') && ep=$(jsonfilter -i "$state/reply.json" -e '@.result.endpoint') \
+		&& pfx=$(jsonfilter -i "$state/reply.json" -e '@.result.prefix60') && st=$(jsonfilter -i "$state/reply.json" -e '@.result.status')
+	case "${pk:-}${ep:-}${pfx:-}" in *[!A-Za-z0-9+/=.:_[]/-]*) pk='' ;; esac
+	# unknown, suspended, stale or mismatching records: nothing is created, and the address is not asked about again for a minute
+	if [ "${st:-}" != success ] || [ -z "${pk:-}" ] || [ "$(key60 "${pfx:-}")" != "$k" ] || [ "${pfx#*/}" != 60 ]; then
+		grep -v "^$k " "$refused" > "$refused.new"; echo "$k $now" >> "$refused.new"; mv "$refused.new" "$refused"
+		return 0
+	fi
+	if [ "$(wc -l < "$peers")" -ge "$max" ]; then # full: the oldest idle peer goes first, else the oldest peer
+		act=$(active) victim=''
+		while read -r vpk vk rest; do
+			echo "$act" | grep -qx "$vk" || { victim=$vpk; break; }
+		done < "$peers"
+		[ -n "$victim" ] || victim=$(head -n 1 "$peers" | cut -d' ' -f1)
+		remove_peer "$victim"
+	fi
+	wg set "$iface" peer "$pk" endpoint "$ep" allowed-ips "$pfx" || return 1
+	echo "$pk $k $pfx $ep" >> "$peers"
+}
+
+case $1 in
+packet) [ $# -eq 2 ] || exit 2; do_packet "$2" ;;
+expire) do_expire ;;
+run)
+	nft monitor new elements 2>/dev/null | while read -r line; do
+		for a in $(echo "$line" | grep -o '[0-9a-fA-F:]*:[0-9a-fA-F:]*'); do do_packet "$a"; done
+		do_expire
+	done
+	;;
+*) exit 2 ;;
+esac

@@ -15,4 +15,3 @@ OpenWrt/static builds: `--features vendored` builds OpenSSL from source.
 ## Types
 
 - [@ANCHOR: ham_proxy_tlsa_type] `Tlsa`: tuple `(usage, selector, matching_type, data)`, one TLSA record: usage 3 is DANE-EE, selector 0 the full certificate, matching type 0/1/2 exact/SHA-256/SHA-512, data the bytes to compare.
-- [@ANCHOR: ham_proxy_error] `ProxyError`: `Tls(text)` OpenSSL refused something; `Io(error)` socket error; `EncryptedLink(suite)` the negotiated suite encrypts; `NotPinned(host)` no TLSA record pins the `.ham` server's certificate; `BadRequest` request head too long or cut off.

@@ -122,7 +122,6 @@ fn query_and_response_round_trip() {
     // Tests [@ANCHOR: ham_proxy_parse_tlsa]
     // Tests [@ANCHOR: ham_proxy_skip_name]
     // Tests [@ANCHOR: ham_proxy_tlsa_type]
-    // Tests [@ANCHOR: ham_proxy_error]
     let q = tlsa_query("node.ham", 443, 7);
     assert_eq!(&q[..2], &[0, 7]);
     let want = b"\x04_443\x04_tcp\x04node\x03ham\x00";
