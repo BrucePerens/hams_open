@@ -155,3 +155,11 @@ Each other target/release needs its own kmod build with the same recipe.
 `hams_node_lan.main.interface` (default `lan`, at most 16) `ip6assign 64` and its own `ip6hint` (0, 1, 2 ...), and sets
 `dhcp.<if>.ra` and `dhcpv6` to `server`, so netifd cuts one /64 per LAN out of the /60 and odhcpd sends router advertisements
 and answers DHCPv6. `hams-node-lan remove` undoes it. Anything that is not a /60 changes nothing. Not exercised on a real router.
+
+## Clock (`hams-node-time`)
+
+`hams-node-time sync` (cron; uci `hams_node_time`, off by default) sets the clock from an ordered list of source executables (internet NTP,
+NTP over the ham network, GPS, a WWV/WWVB decoder, RTC). A second live source must agree within `tolerance` s or the disagreement is
+flagged and the clock left alone (a spoofed GPS cannot move it); a backward step over `back_max` or a forward jump over `jump_max` needs a
+second agreeing source; a clock before the floor date takes the first source. The status file reports source, error and refusals.
+Signature and certificate checks elsewhere must not depend on this clock (sequence numbers, wide tolerances, grace periods).

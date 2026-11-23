@@ -1,0 +1,51 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-time sync
+# Sets the node's clock from an ordered list of sources (uci hams_node_time, list source 'NAME=EXECUTABLE'; suggested order: internet NTP,
+# NTP over the ham network, GPS, a WWV/WWVB decoder, the RTC; manual set is `date -s`). Each executable prints "EPOCH [ERROR_SECONDS]" or
+# fails when the source is not available. No single source is trusted alone:
+#  - the first live source is the candidate; a second live source must agree with it within `tolerance` seconds, else the disagreement is
+#    flagged and the clock is left alone (a spoofed GPS or a bad NTP server cannot move it);
+#  - a step backward of more than `back_max` seconds or forward of more than `jump_max` seconds needs a second agreeing source;
+#  - a clock before `floor` (an RTC that lost power) takes the first live source.
+# The result (source used, error, disagreements, refusals) is written to the status file for the console/LuCI. Security checks must not
+# depend on this clock being right (sequence numbers, wide tolerances, certificate grace periods elsewhere): a refusal here locks nobody out.
+set -u
+get() { uci -q get "hams_node_time.main.$1" 2>/dev/null; }
+[ "${1:-}" = sync ] || { echo "usage: hams-node-time sync" >&2; exit 2; }
+[ "$(get enabled)" = 1 ] || exit 0
+status=$(get status); : "${status:=/tmp/hams-node-time.status}"
+tol=$(get tolerance); back=$(get back_max); jump=$(get jump_max); floor=$(get floor)
+: "${tol:=5}" "${back:=5}" "${jump:=3600}" "${floor:=1767225600}"
+for v in "$tol" "$back" "$jump" "$floor"; do case $v in '' | *[!0-9]*) echo "hams-node-time: bad number in settings" >&2; exit 1 ;; esac; done
+now=$(date +%s)
+
+names= epochs= errs=
+for entry in $(get source); do
+	name=${entry%%=*} exe=${entry#*=}
+	case $name in '' | *[!A-Za-z0-9_-]*) continue ;; esac
+	[ -x "$exe" ] || continue
+	out=$("$exe" 2>/dev/null) || continue
+	set -- $out
+	case ${1:-} in '' | *[!0-9]*) continue ;; esac
+	e=${2:-0}; case $e in *[!0-9.]*) e=0 ;; esac
+	names="$names $name" epochs="$epochs $1" errs="$errs $e"
+done
+
+write() { printf 'source=%s\nerror=%s\nepoch=%s\nclock=%s\n%s\n' "$1" "$2" "$3" "$now" "$4" > "$status.new" && mv "$status.new" "$status"; }
+[ -n "$names" ] || { write none 0 0 ""; exit 0; }
+
+set -- $names; n1=$1; set -- $epochs; t1=$1; t2=${2:-}; set -- $errs; e1=$1
+n2=$(echo $names | cut -d' ' -f2)
+agree=0; extra=
+if [ -n "$t2" ]; then
+	d=$((t1 - t2)); [ $d -lt 0 ] && d=$((0 - d))
+	if [ $d -le "$tol" ]; then agree=1; else write "$n1" "$e1" "$t1" "disagree=$n1,$n2"; exit 0; fi
+fi
+delta=$((t1 - now))
+if [ "$now" -ge "$floor" ] && [ $agree = 0 ]; then
+	[ $delta -lt -"$back" ] && { write "$n1" "$e1" "$t1" "refused=backward"; exit 0; }
+	[ $delta -gt "$jump" ] && { write "$n1" "$e1" "$t1" "refused=jump"; exit 0; }
+fi
+date -s "@$t1" > /dev/null 2>&1 || { write "$n1" "$e1" "$t1" "refused=set-failed"; exit 1; }
+write "$n1" "$e1" "$t1" ""
