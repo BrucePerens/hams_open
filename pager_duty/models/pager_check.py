@@ -423,6 +423,7 @@ class PagerCheck(models.Model):
             return False
         return heartbeat_is_current(check.last_heartbeat, fields.Datetime.now(), interval_sec)
 
+    # [@ANCHOR: pager_duty:monitor_group_id]
     # Verified by [@ANCHOR: pager_duty:test_monitor_group_id]
     @staticmethod
     def _monitor_group_id():

@@ -242,6 +242,7 @@ class TestGeneralizedConfig(HamsTransactionCase):
 
     def test_06h_the_monitor_group_id_is_none_where_the_account_does_not_exist(self):
         # [@ANCHOR: pager_duty:test_monitor_group_id]
+        # Tests [@ANCHOR: pager_duty:monitor_group_id]
         self.safe_patch_object(grp, "getgrall", return_value=[])
         self.assertIsNone(_REAL_MONITOR_GROUP_ID())
         entry = SimpleNamespace(gr_name="hamsd_pager_monitor", gr_gid=4242)
