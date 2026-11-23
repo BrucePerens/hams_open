@@ -106,6 +106,15 @@ class EnrollTests(unittest.TestCase):
         self.assertEqual(self.run_script("unenroll").returncode, 0)
         self.assertFalse((self.state / "owner").exists())
 
+    def test_the_deprecation_key_from_the_config_is_kept_for_hams_node_status_and_removed_on_unenroll(self):
+        self.queue("start", reply(status="success", device_code="devcode123", user_code="ABCD-EFGH", expires_in=600, interval=5))
+        self.queue("poll", reply(status="success", token="tok_en-1", deprecation_key="RWSignKeyLine+/0=", **CONFIG))
+        self.assertEqual(self.run_script("enroll").returncode, 0)
+        self.assertEqual((self.state / "deprecation.pub").read_text().strip(), "RWSignKeyLine+/0=")
+        self.queue("unenroll", reply(status="success"))
+        self.assertEqual(self.run_script("unenroll").returncode, 0)
+        self.assertFalse((self.state / "deprecation.pub").exists())
+
     def test_one_time_token_is_sent_as_the_poll_secret_without_asking_for_a_code(self):
         self.queue("poll", reply(status="success", token="tok_en-2", **CONFIG))
         result = self.run_script("enroll", "oneTimeToken_abc")
