@@ -58,6 +58,8 @@ apply_config() { # the reply in $tmp -> the package's own settings
 	uci set hams_node_ondemand.main.lookup_url="$base/api/ipv6/directory/lookup"
 	uci commit hams_node
 	uci commit hams_node_ondemand
+	[ -x /usr/sbin/hams-node-lan ] && /usr/sbin/hams-node-lan apply  # hams-node-lan package: the /60 to the LANs
+	return 0
 }
 
 add_cron() { grep -qF "$job" "$cron" 2>/dev/null || echo "17 */6 * * * $job" >> "$cron"; }
