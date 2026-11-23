@@ -55,6 +55,17 @@ class WgTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(calls, [])
 
+    def test_bad_characters_are_skipped_and_reported(self):
+        result, calls = self.run_script("internet", "%s 192.0.2.7:1 10.0.0.0/8;id\n" % KEY)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(calls, [])
+        self.assertIn("bad characters", result.stderr)
+
+    def test_ipv6_endpoint_brackets_are_allowed(self):
+        result, calls = self.run_script("internet", "%s [2001:db8::1]:51820 ::/0\n" % KEY)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(len(calls), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
