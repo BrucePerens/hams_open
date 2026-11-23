@@ -4,6 +4,7 @@
 //! response is streamed back until the site closes. A prototype for measuring, not a finished proxy.
 
 pub mod indicator;
+pub mod login;
 
 use openssl::error::ErrorStack;
 use openssl::pkey::{PKey, Private};
@@ -242,9 +243,36 @@ pub fn serve_one_signed(
     site_name: &str,
     key: Option<&PKey<Private>>,
 ) -> Result<(), ProxyError> {
+    serve_one_login(tcp, acceptor, site, site_addr, site_name, key, None)
+}
+
+/// A login service for [`serve_one_login`]: the challenges the proxy minted and who verifies the answers.
+pub type Login<'a> = (&'a login::Challenges, &'a dyn login::Verifier);
+
+// [@ANCHOR: ham_proxy_serve_one_login]
+/// As [`serve_one_signed`], and when `login` is set a request for `/.ham/login` is answered here (see [`login`])
+/// instead of being relayed to the site.
+pub fn serve_one_login(
+    tcp: TcpStream,
+    acceptor: &SslAcceptor,
+    site: &SslConnector,
+    site_addr: &str,
+    site_name: &str,
+    key: Option<&PKey<Private>>,
+    login: Option<Login<'_>>,
+) -> Result<(), ProxyError> {
     let mut ham = acceptor.accept(tcp)?;
     require_integrity_only(&ham)?;
     let head = read_head(&mut ham)?;
+    if let Some((ch, v)) = login {
+        let line = String::from_utf8_lossy(&head);
+        let target = line.split(' ').nth(1).unwrap_or("");
+        if let Some(out) = login::respond(target, site_name, ch, v, now()) {
+            ham.write_all(&out)?;
+            ham.shutdown().ok();
+            return Ok(());
+        }
+    }
     let up_tcp = TcpStream::connect(site_addr)?;
     let mut up = site.connect(site_name, up_tcp)?;
     up.write_all(&request_identity(&head))?;

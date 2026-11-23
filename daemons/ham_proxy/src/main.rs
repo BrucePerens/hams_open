@@ -1,5 +1,6 @@
 //! `ham_proxy --listen ADDR --cert PEM --key PEM --site HOST:PORT [--ca PEM]`: thread per connection.
-use ham_proxy::{ham_acceptor, serve_one, site_connector, ProxyError};
+use ham_proxy::login::{Challenges, HttpVerifier};
+use ham_proxy::{ham_acceptor, serve_one_login, site_connector, ProxyError};
 use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -29,16 +30,38 @@ fn run() -> Result<(), ProxyError> {
         .rsplit_once(':')
         .map_or(site.as_str(), |(h, _)| h)
         .to_string();
+    // `--verify HOST:PORT` turns on `/.ham/login`; the host name is also the certificate name checked.
+    let login = match arg(&args, "--verify") {
+        Some(addr) => {
+            let host = addr
+                .rsplit_once(':')
+                .map_or(addr.as_str(), |(h, _)| h)
+                .to_string();
+            Some(Arc::new((
+                Challenges::default(),
+                HttpVerifier {
+                    connector: site_connector(ca.as_deref())?,
+                    addr,
+                    host,
+                },
+            )))
+        }
+        None => None,
+    };
     for conn in TcpListener::bind(&listen)?.incoming() {
         let Ok(tcp) = conn else { continue };
-        let (a, c, s, n) = (
+        let (a, c, s, n, l) = (
             acceptor.clone(),
             connector.clone(),
             site.clone(),
             name.clone(),
+            login.clone(),
         );
         thread::spawn(move || {
-            if let Err(e) = serve_one(tcp, &a, &c, &s, &n) {
+            let lg = l
+                .as_ref()
+                .map(|x| (&x.0, &x.1 as &dyn ham_proxy::login::Verifier));
+            if let Err(e) = serve_one_login(tcp, &a, &c, &s, &n, None, lg) {
                 eprintln!("ham_proxy: {e:?}");
             }
         });
