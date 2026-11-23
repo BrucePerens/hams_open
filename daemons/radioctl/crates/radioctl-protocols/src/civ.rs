@@ -292,6 +292,9 @@ pub struct CivEngine {
     tone_ack_first: bool,
     /// The acknowledgements of a multi-frame set still to be absorbed after the first.
     tone_ack_extra: u8,
+    /// Which read of command `0F` (split or repeater shift) was asked last: the rig answers both
+    /// with one byte, so the reply is only meaningful for the read that was asked.
+    asked_0f: Option<Field>,
 }
 
 impl CivEngine {
@@ -319,6 +322,7 @@ impl CivEngine {
             tone_flags: [None; 3],
             tone_ack_first: false,
             tone_ack_extra: 0,
+            asked_0f: None,
         })
     }
 
@@ -717,7 +721,7 @@ impl CivEngine {
     }
 
     // [@ANCHOR: radioctl_civ_engine_encode_vfo_b_split]
-    fn encode_vfo_b_or_split(&self, op: &Op) -> Option<Result<Request, RigError>> {
+    fn encode_vfo_b_or_split(&mut self, op: &Op) -> Option<Result<Request, RigError>> {
         Some(match op {
             Op::GetFrequency(Vfo::B) => Ok(self.get(0x25, &[0x01], Field::Frequency(Vfo::B))),
             Op::SetFrequency(Vfo::B, hz) => self.freq_bytes(*hz).map(|bcd| {
@@ -725,7 +729,10 @@ impl CivEngine {
                 data.extend(bcd);
                 self.set(0x25, &data)
             }),
-            Op::GetSplit => Ok(self.get(0x0F, &[], Field::Split)),
+            Op::GetSplit => {
+                self.asked_0f = Some(Field::Split);
+                Ok(self.get(0x0F, &[], Field::Split))
+            }
             Op::SetSplit(on) => Ok(self.set(0x0F, &[u8::from(*on)])),
             _ => return None,
         })
@@ -775,7 +782,10 @@ impl CivEngine {
     /// Unverified on a radio; Hamlib notes that the shift read does not work on an IC-706MkIIG.
     fn encode_repeater(&mut self, op: &Op) -> Option<Result<Request, RigError>> {
         Some(match op {
-            Op::GetRepeaterShift => Ok(self.get(0x0F, &[], Field::RepeaterShift)),
+            Op::GetRepeaterShift => {
+                self.asked_0f = Some(Field::RepeaterShift);
+                Ok(self.get(0x0F, &[], Field::RepeaterShift))
+            }
             Op::SetRepeaterShift(shift) => Ok(self.set(
                 0x0F,
                 &[match shift {
@@ -1109,10 +1119,22 @@ impl CivEngine {
                 rest.first().is_some_and(|d| *d != 0),
                 rest.get(1).copied(),
             ),
-            (0x0F, [0x10 | 0x13]) => Some(Observation::RepeaterShift(RepeaterShift::Simplex)),
-            (0x0F, [0x11]) => Some(Observation::RepeaterShift(RepeaterShift::Minus)),
-            (0x0F, [0x12]) => Some(Observation::RepeaterShift(RepeaterShift::Plus)),
-            (0x0F, [state]) => Some(Observation::Split(*state != 0)),
+            (0x0F, [byte]) => {
+                let asked = self.asked_0f.take();
+                let is_shift = matches!(*byte, 0x10..=0x13);
+                match (asked, is_shift) {
+                    // The byte answers the other read: this one is not readable now.
+                    (Some(Field::Split), true) | (Some(Field::RepeaterShift), false) => {
+                        return Some(Inbound::Nak);
+                    }
+                    (_, true) => Some(Observation::RepeaterShift(match *byte {
+                        0x11 => RepeaterShift::Minus,
+                        0x12 => RepeaterShift::Plus,
+                        _ => RepeaterShift::Simplex,
+                    })),
+                    (_, false) => Some(Observation::Split(*byte != 0)),
+                }
+            }
             (0x0C, offset) => decode_repeater_offset(offset).map(Observation::RepeaterOffset),
             (0x1B, [0x00, tone @ ..]) => decode_tone_digits(tone).map(Observation::CtcssTone),
             (0x1B, [0x02, _polarity, code @ ..]) => {
@@ -1472,6 +1494,29 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_civ_engine_encode]
+    // Tests [@ANCHOR: radioctl_civ_engine_decode]
+    #[test]
+    fn a_0f_reply_only_answers_the_read_that_was_asked() {
+        let mut e = CivEngine::new(shipped("icom-ic-9700")).expect("engine");
+        let seen = |e: &mut CivEngine, cmd: u8, data: &[u8]| e.feed(&reply(0xA2, cmd, data), T0);
+        e.encode(&Op::GetSplit).expect("encodes");
+        assert_eq!(seen(&mut e, 0x0F, &[0x11]), vec![Inbound::Nak]);
+        e.encode(&Op::GetRepeaterShift).expect("encodes");
+        assert_eq!(seen(&mut e, 0x0F, &[0x01]), vec![Inbound::Nak]);
+        e.encode(&Op::GetRepeaterShift).expect("encodes");
+        assert_eq!(
+            seen(&mut e, 0x0F, &[0x12]),
+            vec![Inbound::Observation(Observation::RepeaterShift(
+                RepeaterShift::Plus
+            ))]
+        );
+        e.encode(&Op::GetSplit).expect("encodes");
+        assert_eq!(
+            seen(&mut e, 0x0F, &[0x01]),
+            vec![Inbound::Observation(Observation::Split(true))]
+        );
+    }
+
     // Tests [@ANCHOR: radioctl_civ_engine_encode_levels_and_filter]
     // Tests [@ANCHOR: radioctl_civ_engine_encode_rit_xit]
     // Tests [@ANCHOR: radioctl_civ_engine_encode_vfo_b_split]
