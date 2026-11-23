@@ -1,0 +1,58 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-traffic: tell hams.com how many bytes each WireGuard peer carried since the last report, so the member network can move
+# busy pairs to radio links. Aggregate counters only: peer public key, received and sent bytes, and the interval; no packet content, no
+# flows, no addresses. Authenticated by the enrolled device token over HTTPS. Opt out with `hams-node-traffic optout` (optin undoes it).
+#   hams-node-traffic OPTIONS run | start | stop | optout | optin
+# OPTIONS: -u BASE_URL (https://hams.com) -s STATE_DIR (/etc/hams-node) [-c CRONTAB (/etc/crontabs/root)] [-i WG_INTERFACE (hams0)]
+# Exit: 0 reported (or opted out, or nothing to report); 1 refused or not enrolled; 3 token revoked; 4 hams.com unreachable.
+set -u
+base=https://hams.com state=/etc/hams-node cron=/etc/crontabs/root iface=hams0
+while getopts u:s:c:i: opt; do
+	case $opt in
+	u) base=$OPTARG ;; s) state=$OPTARG ;; c) cron=$OPTARG ;; i) iface=$OPTARG ;;
+	*) exit 2 ;;
+	esac
+done
+shift $((OPTIND - 1))
+[ $# -ge 1 ] || { echo "usage: hams-node-traffic [-u URL] [-s DIR] [-i IFACE] run | start | stop | optout | optin" >&2; exit 2; }
+umask 077
+tokenfile=$state/device_token statusfile=$state/status optfile=$state/no_traffic last=$state/traffic_last reply=$state/traffic_reply.json
+job="/usr/sbin/hams-node-traffic run"
+
+do_run() {
+	[ -e "$optfile" ] && exit 0
+	[ "$(cat "$statusfile" 2>/dev/null)" = revoked ] && exit 3
+	[ -s "$tokenfile" ] || { echo "hams-node-traffic: not enrolled" >&2; exit 1; }
+	token=$(cat "$tokenfile")
+	case $token in '' | *[!A-Za-z0-9_=/+-]*) echo "hams-node-traffic: bad token file" >&2; exit 1 ;; esac
+	now=$(date +%s)
+	then=$(sed -n 1p "$last" 2>/dev/null)
+	cur=$state/traffic_cur
+	wg show "$iface" transfer 2>/dev/null | awk '$1 ~ /^[A-Za-z0-9+\/]+=$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ { print $1, $2, $3 }' > "$cur"
+	# the first reading is only the baseline; later ones report the change. A counter that went down (interface restarted) counts from zero.
+	case $then in '' | *[!0-9]*) { printf '%s\n' "$now"; cat "$cur"; } > "$last"; rm -f "$cur"; exit 0 ;; esac
+	peers=$(awk -v last="$last" '
+		BEGIN { while ((getline line < last) > 0) { n = split(line, f, " "); if (n == 3) { prx[f[1]] = f[2]; ptx[f[1]] = f[3] } } }
+		{ rx = ($2 >= prx[$1] + 0) ? $2 - prx[$1] : $2; tx = ($3 >= ptx[$1] + 0) ? $3 - ptx[$1] : $3
+		  if (rx + tx > 0 && c < 2000) printf "%s{\"peer\":\"%s\",\"rx\":%.0f,\"tx\":%.0f}", (c++ ? "," : ""), $1, rx, tx }' "$cur")
+	if [ -n "$peers" ]; then
+		body="{\"jsonrpc\":\"2.0\",\"method\":\"call\",\"params\":{\"token\":\"$token\",\"interval\":$((now - then)),\"peers\":[$peers]}}"
+		rm -f "$reply"
+		uclient-fetch -q -O "$reply" --header='Content-Type: application/json' --post-data="$body" "$base/api/ipv6/traffic/report" \
+			|| { echo "hams-node-traffic: hams.com unreachable" >&2; exit 4; }
+		[ -s "$reply" ] || exit 4
+		[ "$(jsonfilter -i "$reply" -e '@.result.status')" = success ] || { echo "hams-node-traffic: refused" >&2; exit 1; }
+	fi
+	{ printf '%s\n' "$now"; cat "$cur"; } > "$last"
+	rm -f "$cur"
+}
+
+case $1 in
+run) do_run ;;
+start) grep -qF "$job" "$cron" 2>/dev/null || echo "7 * * * * $job" >> "$cron" ;;
+stop) [ -f "$cron" ] && { grep -vF "$job" "$cron" > "$cron.new"; mv "$cron.new" "$cron"; } ;;
+optout) : > "$optfile" ;;
+optin) rm -f "$optfile" ;;
+*) exit 2 ;;
+esac

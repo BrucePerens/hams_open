@@ -82,6 +82,15 @@ enrolled device token (`/etc/hams-node/device_token`, mode 0600) over HTTPS. ham
 `<host>.<mesh>.<callsign>.ham` and drops them 24 hours after the reports stop. Exit codes: 0 reported, 1 refused or not
 enrolled, 3 token revoked, 4 hams.com unreachable (cron retries).
 
+## Per-peer traffic totals (`hams-node-traffic`, separate package)
+
+`hams-node-traffic start` adds an hourly cron line that runs `hams-node-traffic run`: it reads `wg show IFACE transfer` (default
+interface `hams0`, `-i` changes it) and POSTs to `/api/ipv6/traffic/report`, with the device token, only each peer's WireGuard
+public key, bytes received, bytes sent since the last report and the interval in seconds. The first run only records a baseline. No
+content, flows, endpoints or addresses are read or sent; hams.com keeps daily totals per member pair, to see which pairs are busy
+enough to move to a radio link. `hams-node-traffic optout` (creates `/etc/hams-node/no_traffic`) stops reporting; `optin` resumes;
+members can also opt out on `/my/ipv6`, after which hams.com drops their rows. Exit codes as `hams-node-report`.
+
 ## Second round on the virtual AREDN node, and stock OpenWrt (2026-11-23)
 
 ### Jool on AREDN
