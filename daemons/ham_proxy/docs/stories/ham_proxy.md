@@ -59,6 +59,7 @@ A `.ham` server is identified by a DANE-EE TLSA record in the signed `.ham` zone
 
 ## Site whitelist and station-ID log
 
+- [@ANCHOR: ham_proxy_whitelist] `Whitelist`: the permitted destinations.
 - [@ANCHOR: ham_proxy_whitelist_parse] `Whitelist::parse(text)`: one entry per line (`example.org` exact, `*.example.org` subdomains), blank lines and `#` comments ignored; same file idea as `ham_tls/ham_policy.py`.
 - [@ANCHOR: ham_proxy_whitelist_permits] `permits(host)`: true for any `.ham` name, an exact entry, or a subdomain of a wildcard entry; case and trailing dot ignored.
 - [@ANCHOR: ham_proxy_format_utc] `format_utc(secs)`: unix time as `YYYY-MM-DDTHH:MM:SSZ`.
