@@ -1,8 +1,9 @@
 //! `ham_proxy --listen ADDR --cert PEM --key PEM --site HOST:PORT [--ca PEM] [--verify HOST:PORT]
-//! [--whitelist FILE --callsign CALL --log FILE]`: thread per connection.
+//! [--sign-key ED25519.pem] [--whitelist FILE --callsign CALL --log FILE]`: thread per connection.
 use ham_proxy::login::{Challenges, HttpVerifier};
 use ham_proxy::policy::{Policy, Whitelist};
 use ham_proxy::{ham_acceptor, serve_one_policed, site_connector, ProxyError};
+use openssl::pkey::{PKey, Private};
 use std::net::TcpListener;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -64,21 +65,27 @@ fn run() -> Result<(), ProxyError> {
         }
         None => None,
     };
+    // `--sign-key PEM` (Ed25519 private key) turns on the signed `X-Ham-Integrity` header on HTML responses.
+    let sign: Option<Arc<PKey<Private>>> = match arg(&args, "--sign-key") {
+        Some(f) => Some(Arc::new(PKey::private_key_from_pem(&std::fs::read(f)?)?)),
+        None => None,
+    };
     for conn in TcpListener::bind(&listen)?.incoming() {
         let Ok(tcp) = conn else { continue };
-        let (a, c, s, n, l, p) = (
+        let (a, c, s, n, l, p, k) = (
             acceptor.clone(),
             connector.clone(),
             site.clone(),
             name.clone(),
             login.clone(),
             policy.clone(),
+            sign.clone(),
         );
         thread::spawn(move || {
             let lg = l
                 .as_ref()
                 .map(|x| (&x.0, &x.1 as &dyn ham_proxy::login::Verifier));
-            if let Err(e) = serve_one_policed(tcp, &a, &c, &s, &n, None, lg, p.as_deref()) {
+            if let Err(e) = serve_one_policed(tcp, &a, &c, &s, &n, k.as_deref(), lg, p.as_deref()) {
                 eprintln!("ham_proxy: {e:?}");
             }
         });
