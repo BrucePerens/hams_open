@@ -15,6 +15,10 @@ action=$1
 shift
 iface=$1 type=$2 file=$3
 [ "$type" = internet ] || { echo "hams-node-wg: refusing WireGuard on a '$type' link" >&2; exit 1; }
+# An interface the member set to rf (uci hams_node_fw) is a radio link whatever LINK_TYPE says.
+if command -v hams-node-fw >/dev/null 2>&1 && hams-node-fw is-rf "$iface"; then
+	echo "hams-node-wg: refusing WireGuard on '$iface', which is set to rf" >&2; exit 1
+fi
 case $iface in '' | *[!A-Za-z0-9_-]*) echo "hams-node-wg: bad interface name" >&2; exit 1 ;; esac
 [ -r "$file" ] || { echo "hams-node-wg: cannot read $file" >&2; exit 1; }
 

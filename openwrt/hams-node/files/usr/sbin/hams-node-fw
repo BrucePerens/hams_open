@@ -1,0 +1,53 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-fw render | apply | is-rf INTERFACE
+# From uci hams_node_fw: firewall zone "ham" for the Internet-tunnel interfaces and zone "hamrf" for radio links; input and forward are
+# DROP (inbound closed by default), output ACCEPT, and only the ports in "list open" get a rule. Part 97: an encrypted-service port
+# (ssh, https, DoT, mail TLS, ...) is never opened toward RF; the interface is also the registry of rf links, so
+# `hams-node-fw is-rf IFACE` (exit 0 = IFACE is a radio link) lets hams-node-wg refuse WireGuard there. render prints `uci batch` text;
+# apply feeds it to uci and commits the firewall config (reload the firewall afterwards). AREDN's own zones are not touched.
+set -u
+get() { uci -q get "hams_node_fw.main.$1" 2>/dev/null; }
+ENCRYPTED_PORTS=" tcp:22 tcp:443 tcp:853 tcp:993 tcp:995 tcp:465 tcp:8883 tcp:1194 udp:51820 udp:5525 udp:500 udp:4500 udp:1194 "
+
+case ${1:-} in
+is-rf)
+	[ $# -eq 2 ] || { echo "usage: hams-node-fw is-rf INTERFACE" >&2; exit 2; }
+	for i in $(get rf_iface); do [ "$i" = "$2" ] && exit 0; done
+	exit 1 ;;
+render | apply) ;;
+*) echo "usage: hams-node-fw render | apply | is-rf INTERFACE" >&2; exit 2 ;;
+esac
+
+render() {
+	[ "$(get enabled)" = 1 ] || return 0
+	ifaces=$(get iface) rfs=$(get rf_iface) opens=$(get open)
+	for v in $ifaces $rfs; do case $v in '' | *[!A-Za-z0-9_-]*) echo "hams-node-fw: bad interface name" >&2; return 1 ;; esac; done
+	for i in $ifaces; do for r in $rfs; do [ "$i" = "$r" ] && { echo "hams-node-fw: $i is both a tunnel and an rf interface" >&2; return 1; }; done; done
+	for o in $opens; do
+		case $o in tcp:[0-9]* | udp:[0-9]*) ;; *) echo "hams-node-fw: bad open entry" >&2; return 1 ;; esac
+		case ${o#*:} in *[!0-9]*) echo "hams-node-fw: bad open entry" >&2; return 1 ;; esac
+	done
+	echo "delete firewall.hams_zone"; echo "delete firewall.hams_rf_zone"
+	for o in $opens; do p=${o%%:*}; n=${o#*:}; echo "delete firewall.hams_in_${p}_$n"; echo "delete firewall.hams_rf_in_${p}_$n"; done
+	for zone in ham hamrf; do
+		if [ $zone = ham ]; then list=$ifaces sec=hams_zone; else list=$rfs sec=hams_rf_zone; fi
+		[ -n "$list" ] || continue
+		echo "set firewall.$sec=zone"
+		echo "set firewall.$sec.name=$zone"
+		for i in $list; do echo "add_list firewall.$sec.network=$i"; done
+		echo "set firewall.$sec.input=DROP"; echo "set firewall.$sec.forward=DROP"; echo "set firewall.$sec.output=ACCEPT"
+		for o in $opens; do
+			p=${o%%:*}; n=${o#*:}
+			if [ $zone = hamrf ]; then case $ENCRYPTED_PORTS in *" $o "*) echo "hams-node-fw: $o is not opened toward RF (encrypted service)" >&2; continue ;; esac; fi
+			if [ $zone = ham ]; then rs=hams_in_${p}_$n; else rs=hams_rf_in_${p}_$n; fi
+			echo "set firewall.$rs=rule"; echo "set firewall.$rs.name=hams-open-$p-$n"; echo "set firewall.$rs.src=$zone"
+			echo "set firewall.$rs.proto=$p"; echo "set firewall.$rs.dest_port=$n"; echo "set firewall.$rs.target=ACCEPT"
+		done
+	done
+}
+
+if [ "$1" = render ]; then render; exit $?; fi
+batch=$(render) || exit 1
+[ -n "$batch" ] || exit 0
+printf '%s\n' "$batch" | uci batch && uci commit firewall
