@@ -21,6 +21,15 @@ hams.com member certificate (ECDSA P-256, the same proof `ham_member_certs` alre
 hams.com checks the signature against the key it recorded (`POST /ham/login/verify`, over verified TLS). Nothing secret or reusable crosses the air, no
 custom crypto is involved, and no key is derived or used for encryption. Enable with `--verify HAMS_COM_HOST:443`. Code: `src/login.rs`; tests:
 `tests/login.rs` (replay, eavesdropper, wrong key, expired challenge, wrong site).
+### Session integrity
+
+The ham link is not encrypted, so a captured session cookie could be replayed. A login that also sends `epk=HEX` (the browser's ephemeral P-256 public
+point; the signed audience then becomes `ham-login:<site>:epk=HEX`) gets `{"callsign","session","epk"}` back; both sides derive a MAC key from the ECDH
+secret (`src/session.rs`; MAC only, never encryption). Each later request carries `X-Ham-Session`, `X-Ham-Ts`, `X-Ham-Nonce`, optional
+`X-Ham-Body-Sha256` and `X-Ham-Mac` = HMAC-SHA256 over `ham-req-v1`, method, target, host, ts, nonce, body hash (RFC 9421 in spirit, fixed headers). The
+proxy refuses (403) a bad, stale or replayed proof, and forwards `X-Ham-Callsign` to the site (client `X-Ham-*` headers are always stripped). The proxy
+relays request heads only, so the body hash is the client's declared value; body integrity on the air is the link's own MAC. Tests: `tests/session.rs`.
+
 ## Types
 
 - [@ANCHOR: ham_proxy_tlsa_type] `Tlsa`: tuple `(usage, selector, matching_type, data)`, one TLSA record: usage 3 is DANE-EE, selector 0 the full certificate, matching type 0/1/2 exact/SHA-256/SHA-512, data the bytes to compare.
