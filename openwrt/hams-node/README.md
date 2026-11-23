@@ -19,6 +19,7 @@ files as `ipv6_siit/siit_map.py gateway_configs`) and loads them; `hams-node-wg`
 peers on Internet links only; `hams-node-rf-route apply|down IFACE rf|internet PREFIXES` gives RF routes metric 100 and tunnel routes metric 200 (RF first, tunnel as backup) and keeps end-to-end encrypted traffic off RF: `ham_boundary` marks it (fwmark 151) and a rule sends it to table 197, which holds tunnel routes only. It does nothing for an empty prefix list.
 
 `hams-node-ondemand` (off by default, `/etc/config/hams_node_ondemand`): an nft set `inet hams_ondemand seen` (keyed on the /60,
+A successful lookup is cached in the state directory (`directory.cache`); with hams.com unreachable the cached entry is used, so a tunnel re-connects without the internet. An explicit not-found/suspended answer drops the entry.
 timeout = idle minutes, refreshed by every forwarded packet to `ham_prefix`) is the traffic detector. A new element is the first packet:
 the daemon asks the members-only directory lookup (member certificate), checks the record is for that /60, and adds a WireGuard peer
 (`AllowedIPs` = the /60). A peer whose /60 has left the set (10 idle minutes) is removed. Unknown, suspended or stale answers create
