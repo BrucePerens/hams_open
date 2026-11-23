@@ -10,7 +10,8 @@ import ssl
 
 # Integrity-only suites: RFC 9150 (TLS 1.3) names and the TLS 1.2 OpenSSL name.
 INTEGRITY_ONLY_SUITES = frozenset({"NULL-SHA256", "TLS_SHA256_SHA256", "TLS_SHA384_SHA384"})
-# OpenSSL 3.5 implements only the TLS 1.2 suite, so that is what is offered; SECLEVEL=0 is required for NULL suites.
+# OpenSSL 3.5 does implement the RFC 9150 suites, but Python's ssl module cannot select TLS 1.3 suites (no SSL_CTX_set_ciphersuites),
+# so only the TLS 1.2 suite is offered here; SECLEVEL=0 is required for NULL suites. The Rust ham_proxy uses the 9150 suites.
 _OPENSSL_CIPHERS = "NULL-SHA256:@SECLEVEL=0"
 
 

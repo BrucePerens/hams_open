@@ -1,8 +1,8 @@
 # Integrity-only TLS for ham links
 
 Ham-side proxy traffic is TLS that authenticates and integrity-protects but does not encrypt (Part 97).
-Standard: TLS NULL-cipher suites (RFC 9150 for TLS 1.3, `NULL-SHA256` for TLS 1.2). OpenSSL 3.5 implements only
-the TLS 1.2 suite, so that is what runs today; the TLS 1.3 names are already accepted by the policy check for
+Standard: TLS NULL-cipher suites (RFC 9150 for TLS 1.3, `NULL-SHA256` for TLS 1.2). OpenSSL 3.5 implements the 9150
+suites, but Python's `ssl` module cannot select TLS 1.3 suites, so only the TLS 1.2 suite runs here; the TLS 1.3 names are already accepted by the policy check for
 when a library (survey to-do) supports them. Nothing here invents a protocol: record MACs give tamper detection
 and implicit sequence numbers give replay and reorder detection; the certificate gives server identity.
 
