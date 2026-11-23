@@ -105,7 +105,7 @@ fn flow(n: &str, white: &str, site_name: &str) -> (Result<(), ProxyError>, Strin
     let name = site_name.to_string();
     let t = thread::spawn(move || {
         let (s, _) = pl.accept().unwrap();
-        serve_one_policed(s, &acc, &conn, &site_addr, &name, None, Some(&policy))
+        serve_one_policed(s, &acc, &conn, &site_addr, &name, None, None, Some(&policy))
     });
     let cli = ham_connector(&c).unwrap();
     let mut s = cli

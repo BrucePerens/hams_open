@@ -5,6 +5,7 @@
 
 pub mod dane;
 pub mod indicator;
+pub mod login;
 pub mod policy;
 
 use openssl::error::ErrorStack;
@@ -256,12 +257,31 @@ pub fn serve_one_signed(
     site_name: &str,
     key: Option<&PKey<Private>>,
 ) -> Result<(), ProxyError> {
-    serve_one_policed(tcp, acceptor, site, site_addr, site_name, key, None)
+    serve_one_login(tcp, acceptor, site, site_addr, site_name, key, None)
+}
+
+/// A login service for [`serve_one_login`]: the challenges the proxy minted and who verifies the answers.
+pub type Login<'a> = (&'a login::Challenges, &'a dyn login::Verifier);
+
+// [@ANCHOR: ham_proxy_serve_one_login]
+/// As [`serve_one_signed`], and when `login` is set a request for `/.ham/login` is answered here (see [`login`])
+/// instead of being relayed to the site.
+pub fn serve_one_login(
+    tcp: TcpStream,
+    acceptor: &SslAcceptor,
+    site: &SslConnector,
+    site_addr: &str,
+    site_name: &str,
+    key: Option<&PKey<Private>>,
+    login: Option<Login<'_>>,
+) -> Result<(), ProxyError> {
+    serve_one_policed(tcp, acceptor, site, site_addr, site_name, key, login, None)
 }
 
 // [@ANCHOR: ham_proxy_serve_one_policed]
-/// As [`serve_one_signed`], and with a `policy`: a `site_name` not on the whitelist is refused before any
+/// As [`serve_one_login`], and with a `policy`: a `site_name` not on the whitelist is refused before any
 /// upstream connection, and each permitted flow is written to the station-ID log with the negotiated suite.
+#[allow(clippy::too_many_arguments)]
 pub fn serve_one_policed(
     tcp: TcpStream,
     acceptor: &SslAcceptor,
@@ -269,6 +289,7 @@ pub fn serve_one_policed(
     site_addr: &str,
     site_name: &str,
     key: Option<&PKey<Private>>,
+    login: Option<Login<'_>>,
     policy: Option<&policy::Policy>,
 ) -> Result<(), ProxyError> {
     let mut ham = acceptor.accept(tcp)?;
@@ -280,6 +301,15 @@ pub fn serve_one_policed(
         p.record(now(), site_name, &suite)?;
     }
     let head = read_head(&mut ham)?;
+    if let Some((ch, v)) = login {
+        let line = String::from_utf8_lossy(&head);
+        let target = line.split(' ').nth(1).unwrap_or("");
+        if let Some(out) = login::respond(target, site_name, ch, v, now()) {
+            ham.write_all(&out)?;
+            ham.shutdown().ok();
+            return Ok(());
+        }
+    }
     let up_tcp = TcpStream::connect(site_addr)?;
     let mut up = site.connect(site_name, up_tcp)?;
     up.write_all(&request_identity(&head))?;

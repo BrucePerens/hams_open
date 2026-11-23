@@ -1,14 +1,17 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-or-later
-# hams-node-wg apply INTERFACE LINK_TYPE PEERS_FILE
+# hams-node-wg apply|down INTERFACE LINK_TYPE PEERS_FILE
 # Adds the WireGuard peers listed in PEERS_FILE ("public_key endpoint allowed_ips" per line; '#' comments).
 # WireGuard encrypts, so it is never set up on a radio link (47 CFR 97.113(a)(4)): LINK_TYPE must be
 # "internet", and "rf" (or anything else) is refused before any peer is touched.
+# AREDN's policy routing sends traffic to its own tables at priority 100 and above, so each peer's allowed-ips prefix also gets
+# `ip rule add to PREFIX lookup main priority 90`; "down" removes the rules and the peers.
 set -u
 
-if [ $# -ne 4 ] || [ "$1" != apply ]; then
-	echo "usage: hams-node-wg apply INTERFACE LINK_TYPE PEERS_FILE" >&2; exit 2
+if [ $# -ne 4 ] || { [ "$1" != apply ] && [ "$1" != down ]; }; then
+	echo "usage: hams-node-wg apply|down INTERFACE LINK_TYPE PEERS_FILE" >&2; exit 2
 fi
+action=$1
 shift
 iface=$1 type=$2 file=$3
 [ "$type" = internet ] || { echo "hams-node-wg: refusing WireGuard on a '$type' link" >&2; exit 1; }
@@ -22,6 +25,15 @@ while read -r key endpoint allowed extra; do
 		echo "hams-node-wg: bad line, skipped" >&2; status=1; continue
 	fi
 	case $key$endpoint$allowed in *[!]A-Za-z0-9+/=.:,_[-]*) echo "hams-node-wg: bad characters, skipped" >&2; status=1; continue ;; esac
-	wg set "$iface" peer "$key" endpoint "$endpoint" allowed-ips "$allowed" || status=1
+	for prefix in $(echo "$allowed" | tr , ' '); do
+		case $prefix in *:*) family=-6 ;; *) family=-4 ;; esac
+		ip "$family" rule del to "$prefix" lookup main priority 90 2>/dev/null
+		if [ "$action" = apply ]; then ip "$family" rule add to "$prefix" lookup main priority 90 || status=1; fi
+	done
+	if [ "$action" = apply ]; then
+		wg set "$iface" peer "$key" endpoint "$endpoint" allowed-ips "$allowed" || status=1
+	else
+		wg set "$iface" peer "$key" remove || status=1
+	fi
 done < "$file"
 exit $status

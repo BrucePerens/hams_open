@@ -1,5 +1,6 @@
-//! `ham_proxy --listen ADDR --cert PEM --key PEM --site HOST:PORT [--ca PEM]
+//! `ham_proxy --listen ADDR --cert PEM --key PEM --site HOST:PORT [--ca PEM] [--verify HOST:PORT]
 //! [--whitelist FILE --callsign CALL --log FILE]`: thread per connection.
+use ham_proxy::login::{Challenges, HttpVerifier};
 use ham_proxy::policy::{Policy, Whitelist};
 use ham_proxy::{ham_acceptor, serve_one_policed, site_connector, ProxyError};
 use std::net::TcpListener;
@@ -31,6 +32,24 @@ fn run() -> Result<(), ProxyError> {
         .rsplit_once(':')
         .map_or(site.as_str(), |(h, _)| h)
         .to_string();
+    // `--verify HOST:PORT` turns on `/.ham/login`; the host name is also the certificate name checked.
+    let login = match arg(&args, "--verify") {
+        Some(addr) => {
+            let host = addr
+                .rsplit_once(':')
+                .map_or(addr.as_str(), |(h, _)| h)
+                .to_string();
+            Some(Arc::new((
+                Challenges::default(),
+                HttpVerifier {
+                    connector: site_connector(ca.as_deref())?,
+                    addr,
+                    host,
+                },
+            )))
+        }
+        None => None,
+    };
     let policy = match arg(&args, "--whitelist") {
         Some(f) => {
             let text = std::fs::read_to_string(f)?;
@@ -47,15 +66,19 @@ fn run() -> Result<(), ProxyError> {
     };
     for conn in TcpListener::bind(&listen)?.incoming() {
         let Ok(tcp) = conn else { continue };
-        let (a, c, s, n, p) = (
+        let (a, c, s, n, l, p) = (
             acceptor.clone(),
             connector.clone(),
             site.clone(),
             name.clone(),
+            login.clone(),
             policy.clone(),
         );
         thread::spawn(move || {
-            if let Err(e) = serve_one_policed(tcp, &a, &c, &s, &n, None, p.as_deref()) {
+            let lg = l
+                .as_ref()
+                .map(|x| (&x.0, &x.1 as &dyn ham_proxy::login::Verifier));
+            if let Err(e) = serve_one_policed(tcp, &a, &c, &s, &n, None, lg, p.as_deref()) {
                 eprintln!("ham_proxy: {e:?}");
             }
         });
