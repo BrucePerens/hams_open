@@ -235,12 +235,9 @@ fn interop_vector_for_the_browser_library() {
     );
 }
 
-fn make_cert() -> (std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
-    static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-    let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    let dir = std::env::temp_dir().join(format!("ham_proxy_login_{}_{n}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let (c, k) = (dir.join("c.pem"), dir.join("k.pem"));
+fn make_cert() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let (c, k) = (dir.path().join("c.pem"), dir.path().join("k.pem"));
     assert!(Command::new("openssl")
         .args([
             "req",
@@ -297,7 +294,7 @@ fn a_bad_session_proof_is_refused_over_the_link_before_the_site_is_contacted() {
         out.starts_with("HTTP/1.1 403") && out.contains("session proof refused"),
         "{out}"
     );
-    std::fs::remove_dir_all(&dir).ok();
+    drop(dir);
 }
 
 #[test]
