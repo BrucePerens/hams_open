@@ -36,6 +36,7 @@ fn find_ci(h: &[u8], needle: &str, from: usize) -> Option<usize> {
     (from..=h.len() - n.len()).find(|&i| h[i..i + n.len()].eq_ignore_ascii_case(n))
 }
 
+// [@ANCHOR: ham_proxy_inject]
 /// Insert the banner after the opening `<body ...>` tag (or at the start), unless it is already there.
 pub fn inject(html: &[u8]) -> Vec<u8> {
     if find_ci(html, BANNER_ID, 0).is_some() {
@@ -51,6 +52,7 @@ pub fn inject(html: &[u8]) -> Vec<u8> {
     out
 }
 
+// [@ANCHOR: ham_proxy_has_unhandled_password]
 /// True if some `<input type=password>` is not marked as handled by the signature login.
 pub fn has_unhandled_password(html: &[u8]) -> bool {
     let mut pos = 0;
@@ -69,10 +71,12 @@ pub fn has_unhandled_password(html: &[u8]) -> bool {
     false
 }
 
+// [@ANCHOR: ham_proxy_hex]
 fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
+// [@ANCHOR: ham_proxy_unhex]
 fn unhex(s: &str) -> Option<Vec<u8>> {
     if !s.len().is_multiple_of(2) || !s.is_ascii() {
         return None;
@@ -83,10 +87,12 @@ fn unhex(s: &str) -> Option<Vec<u8>> {
         .collect()
 }
 
+// [@ANCHOR: ham_proxy_message]
 fn message(ts: u64, host: &str, sha: &str) -> Vec<u8> {
     format!("ham-integrity-v1\n{ts}\n{host}\n{sha}\n").into_bytes()
 }
 
+// [@ANCHOR: ham_proxy_sign_header]
 /// Build the header value for `body` served for `host` at unix time `ts`, signed with an Ed25519 key.
 pub fn sign_header(
     key: &PKey<Private>,
@@ -117,6 +123,7 @@ pub enum VerifyError {
     BadSignature,
 }
 
+// [@ANCHOR: ham_proxy_verify_header]
 /// Verify a header value against the received body, the host asked for, the proxy key and the clock.
 pub fn verify_header(
     value: &str,
@@ -186,6 +193,7 @@ pub fn dechunk(mut b: &[u8]) -> Option<Vec<u8>> {
     }
 }
 
+// [@ANCHOR: ham_proxy_header]
 /// Header lookup (case-insensitive) in a response head.
 pub fn header<'a>(head: &'a str, name: &str) -> Option<&'a str> {
     head.split("\r\n").skip(1).find_map(|l| {

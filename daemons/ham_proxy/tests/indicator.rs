@@ -24,6 +24,7 @@ fn count(h: &[u8], n: &str) -> usize {
 
 #[test]
 fn banner_injected_exactly_once() {
+    // Tests [@ANCHOR: ham_proxy_inject]
     // Tests [@ANCHOR: ham_proxy_transform_html]
     let page = b"<html><body class=x><p>hi</p></body></html>";
     let once = indicator::inject(page);
@@ -62,6 +63,7 @@ fn banner_injected_exactly_once() {
 
 #[test]
 fn password_field_blocked_unless_signature_login() {
+    // Tests [@ANCHOR: ham_proxy_has_unhandled_password]
     let head = "HTTP/1.1 200 OK\r\nContent-Type: text/html";
     for tag in [
         "<input type=password name=p>",
@@ -87,6 +89,7 @@ fn password_field_blocked_unless_signature_login() {
 
 #[test]
 fn chunked_html_is_decoded_and_encoded_html_refused() {
+    // Tests [@ANCHOR: ham_proxy_header]
     let head = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nTransfer-Encoding: chunked";
     let out = transform_html(head, b"5\r\n<body\r\n3\r\n></\r\n0\r\n\r\n", "h", None, 1);
     let s = String::from_utf8_lossy(&out);
@@ -103,6 +106,11 @@ fn chunked_html_is_decoded_and_encoded_html_refused() {
 
 #[test]
 fn signed_header_verifies_and_rejects_tamper_wrong_host_replay_and_other_key() {
+    // Tests [@ANCHOR: ham_proxy_sign_header]
+    // Tests [@ANCHOR: ham_proxy_verify_header]
+    // Tests [@ANCHOR: ham_proxy_hex]
+    // Tests [@ANCHOR: ham_proxy_unhex]
+    // Tests [@ANCHOR: ham_proxy_message]
     // Tests [@ANCHOR: ham_proxy_transform_html]
     let (k, p) = keypair();
     let body = b"<body>x</body>";

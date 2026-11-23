@@ -21,3 +21,11 @@ Internals:
 - [@ANCHOR: ham_proxy_transform_html] Turns a buffered HTML response into what the ham gets: the signed-not-encrypted banner exactly once, the signed integrity header, and a block page when a password field appears without a signature login.
 - [@ANCHOR: ham_proxy_find_ci] Case-insensitive byte search for a tag or id in an HTML page, starting at an offset; an empty needle finds nothing.
 - [@ANCHOR: ham_proxy_dechunk] Decodes a chunked response body (chunk extensions ignored); a malformed or truncated body gives nothing, and the page is then refused.
+- [@ANCHOR: ham_proxy_inject] Inserts the not-encrypted banner after the opening body tag (or at the start) unless the page already has it.
+- [@ANCHOR: ham_proxy_has_unhandled_password] True when a password input is not marked as handled by the signature login.
+- [@ANCHOR: ham_proxy_hex] Lower-case hex of a byte string.
+- [@ANCHOR: ham_proxy_unhex] Decodes lower-case hex; an odd length or a non-hex character gives nothing.
+- [@ANCHOR: ham_proxy_message] The exact bytes that are signed: version, time, host and body hash.
+- [@ANCHOR: ham_proxy_sign_header] Builds the signed integrity header for a body, host and time with an Ed25519 key.
+- [@ANCHOR: ham_proxy_verify_header] Checks a signed integrity header against the body, host, time window and public key, saying why it failed.
+- [@ANCHOR: ham_proxy_header] Case-insensitive header lookup in a response head.
