@@ -24,6 +24,7 @@ class PeerTable(
     link: LinkType,
     private val clock: () -> Long,
     private val idle: Long = IDLE_SECONDS,
+    private val blocklist: Blocklist = Blocklist(),
 ) {
     private class Entry(val network: Ipv6Prefix, var last: Long)
 
@@ -37,6 +38,7 @@ class PeerTable(
     /** The peer's public key for traffic toward `destination`, or null when the directory has no current record. */
     fun onPacket(destination: String): String? {
         val now = clock()
+        if (blocklist.disabled || blocklist.blocksDestination(destination)) return null
         for ((key, entry) in peers) {
             if (entry.network.contains(destination)) {
                 entry.last = now
@@ -47,13 +49,25 @@ class PeerTable(
         if (last != null && now - last < REFUSED_SECONDS) return null
         val record = lookup(destination)
         val network = record?.let { Ipv6Prefix.parse(it.prefix60) }
-        if (record == null || network == null || !network.contains(destination)) {
+        if (record == null || network == null || !network.contains(destination) || blocklist.blocksKey(record.publicKey)) {
             refused[destination] = now
             return null
         }
         wg.addPeer(record.publicKey, record.endpoint, record.prefix60)
         peers[record.publicKey] = Entry(network, now)
         return record.publicKey
+    }
+
+    /** Removes the peer with this public key now (a rogue router named by the signed deprecation list); true if there was one. */
+    fun evict(publicKey: String): Boolean {
+        if (peers.remove(publicKey) == null) return false
+        wg.removePeer(publicKey)
+        return true
+    }
+
+    /** Removes every peer. */
+    fun evictAll() {
+        for (key in peers.keys.toList()) evict(key)
     }
 
     /** Removes every peer idle for longer than the idle time; returns their public keys. */
