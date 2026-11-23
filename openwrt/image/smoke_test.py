@@ -56,7 +56,7 @@ class Console:
             try:
                 self.buf += self.q.get(timeout=1)
             except queue.Empty:
-                pass
+                continue
         return None
 
     def send(self, text):
@@ -98,6 +98,7 @@ def main():
             return 1
         con.send("\n")
         time.sleep(2)
+        con.run("for i in $(seq 40); do /etc/init.d/uhttpd running && break; sleep 3; done; sleep 5", 200)  # boot settle
         res = con.run("apk list -I 2>&1 | grep -E '^(hams-node|luci-app-hams-node)-'")
         out = res[0] if res else ""
         check("packages installed", bool(res) and res[1] == 0 and "hams-node-" in out and "luci-app-hams-node-" in out, out.strip())
@@ -108,10 +109,10 @@ def main():
         res = con.run("ubus call hams-node status", 30)
         check("rpcd hams-node status answers", bool(res) and res[1] == 0, (res[0] if res else "").strip()[:120])
         # LuCI answers its login page with 403 to an unauthenticated request; uclient-fetch reports the status
-        res = con.run("uclient-fetch -O /dev/null http://127.0.0.1/cgi-bin/luci/ 2>&1", 30)
+        res = con.run("uclient-fetch -O /dev/null http://$(uci get network.loopback.ipaddr | cut -d/ -f1)/cgi-bin/luci/ 2>&1", 30)
         out = res[0] if res else ""
         check("LuCI answers (login page)", bool(res) and ("403" in out or "Download completed" in out), out.strip()[:300])
-        res = con.run("uclient-fetch -qO- http://127.0.0.1/luci-static/resources/view/hams-node/status.js | head -c 200", 30)
+        res = con.run("uclient-fetch -qO- http://$(uci get network.loopback.ipaddr | cut -d/ -f1)/luci-static/resources/view/hams-node/status.js | head -c 200", 30)
         check("LuCI hams-node view served", bool(res) and res[1] == 0 and len(res[0].strip()) > 50)
     finally:
         con.close()

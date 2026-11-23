@@ -2,11 +2,12 @@
 """The serial-console command wrapper: output and exit code come back between unique markers."""
 
 import pathlib
-import sys
+import importlib.util
 import unittest
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
-import smoke_test  # noqa: E402
+_spec = importlib.util.spec_from_file_location("smoke_test", pathlib.Path(__file__).resolve().parents[1] / "smoke_test.py")
+smoke_test = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(smoke_test)
 
 
 class ParseTests(unittest.TestCase):
