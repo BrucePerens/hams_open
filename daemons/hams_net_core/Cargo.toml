@@ -1,0 +1,20 @@
+[package]
+name = "hams_net_core"
+version = "0.1.0"
+edition = "2021"
+description = "Shared, platform-free core of Hams.com Net: peer table, directory client, SIIT mapping, Part 97 boundary rules"
+license = "AGPL-3.0-or-later"
+publish = false
+rust-version = "1.98"
+
+[dependencies]
+serde_json = "1"
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
