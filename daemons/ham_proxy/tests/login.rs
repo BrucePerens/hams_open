@@ -183,12 +183,9 @@ fn junk_and_unknown_nonces_are_refused_and_other_paths_pass_through() {
     assert!(respond("/.ham/loginx", SITE, &ch, &v, NOW).is_none());
 }
 
-fn make_cert() -> (std::path::PathBuf, std::path::PathBuf, std::path::PathBuf) {
-    static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-    let n = N.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    let dir = std::env::temp_dir().join(format!("ham_proxy_login_{}_{n}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let (c, k) = (dir.join("c.pem"), dir.join("k.pem"));
+fn make_cert() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let (c, k) = (dir.path().join("c.pem"), dir.path().join("k.pem"));
     assert!(Command::new("openssl")
         .args([
             "req",
@@ -248,7 +245,7 @@ fn login_works_over_the_integrity_only_link() {
         &sign_hex(&key, j["audience"].as_str().unwrap(), nonce),
     ));
     assert!(r.starts_with("HTTP/1.1 200") && r.contains("W1AW"), "{r}");
-    std::fs::remove_dir_all(&dir).ok();
+    drop(dir);
 }
 
 #[test]
@@ -306,5 +303,5 @@ fn the_http_verifier_asks_hams_com_and_trusts_only_a_success_result() {
             && req.contains("\"signature_b64\":\"c2ln\""),
         "{req}"
     );
-    std::fs::remove_dir_all(&dir).ok();
+    drop(dir);
 }
