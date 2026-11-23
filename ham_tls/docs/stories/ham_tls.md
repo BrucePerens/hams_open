@@ -15,5 +15,6 @@ Wire behaviour (tested): the payload is readable on the wire; a flipped byte mak
 
 ## Policy (engine-independent)
 
-- [@ANCHOR: ham_policy:whitelist] `Whitelist(entries).permits(host)`: every `.ham` name plus listed domains (`example.org` exact, `*.example.org` subdomains); anything else is refused.
+- [@ANCHOR: ham_policy:whitelist_init] `Whitelist(entries)` builds the permit set.
+- [@ANCHOR: ham_policy:whitelist] `Whitelist.permits(host)`: every `.ham` name plus listed domains (`example.org` exact, `*.example.org` subdomains); anything else is refused.
 - [@ANCHOR: ham_policy:log_connection] `log_connection(stream, callsign, host, suite, now=None)`: one UTC-stamped station-identification line per connection; raises `ValueError` without a callsign.
