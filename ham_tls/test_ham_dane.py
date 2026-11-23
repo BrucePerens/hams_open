@@ -2,7 +2,6 @@
 """Tests for ham_dane: DANE-EE (usage 3) TLSA checks for .ham servers."""
 
 import hashlib
-import os
 import ssl
 import tempfile
 import unittest
