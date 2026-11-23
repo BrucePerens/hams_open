@@ -7,6 +7,8 @@ Design: `docs/proposals/IPV6_MEMBER_NETWORK.md`, "Phones: Android and iOS". Code
   (only `.ham`, ham-network and whitelisted traffic is proxied; PAC text), `LinkGuard` (RF/unknown links refused), `CaGuidance`.
 - `app/`: `VpnService` that routes only the ham-network prefix into the tunnel, and a screen with the CA guidance.
 
+Native core: `daemons/hams_net_ffi` exposes `hams_net_core` (SIIT map, peer table) through UniFFI; `gradle :core:test` builds it with cargo and generates the Kotlin bindings (JNA), and `NativeCoreTest` calls it. The older Kotlin `PeerTable` stays until the app switches over.
+
 Build: JDK 21, Gradle 8.10, Android SDK (platform 35, build-tools 35.0.0), `ANDROID_HOME` set:
 `gradle :core:test` and `gradle :app:assembleDebug`.
 

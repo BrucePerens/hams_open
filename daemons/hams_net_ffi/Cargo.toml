@@ -1,0 +1,27 @@
+[package]
+name = "hams_net_ffi"
+version = "0.1.0"
+edition = "2021"
+description = "UniFFI bindings (Kotlin for the Android app, Swift for iOS) over hams_net_core"
+license = "AGPL-3.0-or-later"
+publish = false
+rust-version = "1.98"
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+
+[dependencies]
+hams_net_core = { path = "../hams_net_core" }
+uniffi = { version = "0.29", features = ["cli"] }
+
+[lints.rust]
+missing_docs = "warn"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
