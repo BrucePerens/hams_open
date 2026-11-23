@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Build side (OpenWrt SDK / buildroot): add to feeds.conf, then
+#   ./scripts/feeds update hams && ./scripts/feeds install -a -p hams
+src-link hams /path/to/hams_open/openwrt
+
+# Device side (OpenWrt 25.12 apk): put the feed URL in /etc/apk/repositories.d/hams.list
+#   https://FEED_HOST/hams_node/packages.adb
+# and copy hams-feed-public.pem to /etc/apk/keys/. Not published yet (relay release hold).
