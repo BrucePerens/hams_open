@@ -128,7 +128,7 @@ asks for fuzzing of every parser; longer runs (hours) and a corpus kept between 
 
 ## The anchor convention (ADR 0090)
 
-ADR 0090 (`hams_shared/docs/adrs/0090_universal_function_test_anchor_ratchet.md`) requires every function
+hams.com ADR 0090 requires every function
 to have a test anchor. In this crate:
 
 - A non-test function carries a comment line immediately above it with the anchor marker and a unique

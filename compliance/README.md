@@ -175,7 +175,7 @@ Developers can provision new compliance documents using the `compliance.document
 
 <security_architecture>
 ## 4. Security & Zero-Sudo
-This module adheres to **ADR-0002 (Zero-Sudo)** and **ADR-0005 (Service Account Web Isolation)**. ADRs are Architecture Decision Records; these two are now consolidated into `docs/adrs/MASTER_01_SECURITY_ZERO_SUDO.md`. Zero-Sudo means code does not use `.sudo()` or stay as the superuser; it switches to a dedicated, narrowly privileged service account instead.
+This module adheres to **ADR-0002 (Zero-Sudo)** and **ADR-0005 (Service Account Web Isolation)**. ADRs are Architecture Decision Records; these two are now consolidated into hams.com ADR MASTER 01. Zero-Sudo means code does not use `.sudo()` or stay as the superuser; it switches to a dedicated, narrowly privileged service account instead.
 
 * **Micro-Privilege Account:** Automated post-install configuration is executed via the `compliance.user_compliance_service` service account, a member of the "Micro-Privilege: Compliance Service" group.
 * **ACLs:** The service account's group is granted read/write on `website`; read/write/create on `website.page` and `ir.ui.view`; read-only on `res.groups` and `res.company`; and full access to `compliance.document`. `[@ANCHOR: COMM_compliance_security_acls]` The group is `compliance.group_compliance_service` ("Micro-Privilege: Compliance Service", in the privilege "Global Compliance"), declared in `security/security_data.xml`; the rules are in `security/ir.model.access.csv`. Public, portal and internal users may only read `compliance.document`. The group also lets the GDPR service group write `res.users` for the erasure base contract. No row grants delete on website, page or view. Test: `test_security.py`.
