@@ -30,6 +30,10 @@ class TestPagerDutyHooks(HamsTransactionCase):
         """
         # A host without the hamsd_pager_monitor account registers at the legacy flat file as the service account itself.
         self.safe_patch_object(hooks.grp, "getgrall", return_value=[])
+        # A row an earlier run registered under the family directory (this database persists between runs) would keep its group.
+        self.env.cr.execute(  # audit-ignore-sql: test fixture, static text
+            "DELETE FROM daemon_key_registry WHERE name = 'Pager Duty - Generalized Monitor'"
+        )
         registry_cls = type(self.env["daemon.key.registry"])
         original_register = registry_cls.register_daemon
         caller_uids = []

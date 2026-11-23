@@ -12,8 +12,13 @@ from psycopg2 import IntegrityError
 
 from odoo.tests.common import tagged
 from odoo.tools import mute_logger
+from odoo.addons.pager_duty.models.pager_check import PagerCheck
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from unittest.mock import mock_open, MagicMock
+
+
+# The real function, kept before setUp replaces it for every test.
+_REAL_MONITOR_GROUP_ID = PagerCheck.__dict__["_monitor_group_id"].__func__
 
 
 @tagged("post_install", "-at_install")
@@ -21,6 +26,9 @@ class TestGeneralizedConfig(HamsTransactionCase):
     def setUp(self):
         super().setUp()
         self.admin = self.env.ref("base.user_admin")
+        # A host (or this test's namespace) with the hamsd_pager_monitor account writes the file 0640 in its group: the tests below that check
+        # 0600 are about a host without it; test_06g pins the account case.
+        self.safe_patch_object(type(self.env["pager.check"]), "_monitor_group_id", return_value=None)
         self.json_payload = """
         {
           "checks": [
@@ -234,12 +242,11 @@ class TestGeneralizedConfig(HamsTransactionCase):
 
     def test_06h_the_monitor_group_id_is_none_where_the_account_does_not_exist(self):
         # [@ANCHOR: pager_duty:test_monitor_group_id]
-        check_model = self.env["pager.check"].with_user(self.admin)
         self.safe_patch_object(grp, "getgrall", return_value=[])
-        self.assertIsNone(type(check_model)._monitor_group_id())
+        self.assertIsNone(_REAL_MONITOR_GROUP_ID())
         entry = SimpleNamespace(gr_name="hamsd_pager_monitor", gr_gid=4242)
         self.safe_patch_object(grp, "getgrall", return_value=[entry])
-        self.assertEqual(type(check_model)._monitor_group_id(), 4242)
+        self.assertEqual(_REAL_MONITOR_GROUP_ID(), 4242)
 
     def test_06f_a_write_that_fails_part_way_leaves_the_previous_config_in_place(self):
         """The export used to truncate pager_config.json first and then write, so a full disk or any failure after the open left
