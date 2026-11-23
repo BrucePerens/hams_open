@@ -121,3 +121,14 @@ members can also opt out on `/my/ipv6`, after which hams.com drops their rows. E
 - `hams-node-report` read OLSR files that AREDN 4 does not have; it now reads `/etc/arednlink/{hosts,services}` and
   `/var/run/arednlink/{hosts,services}/*` (#3249).
 - LuCI is not in the AREDN image, so luci-app-hams-node was checked on stock OpenWrt 25.12.5 (see the luci-app to-do).
+
+### Jool on stock AREDN 4.26.10.0 (solved 2026-11-23)
+Built from AREDN's own tree (github.com/aredn/aredn tag 4.26.10.0, OpenWrt f5dae5ece4, release `config.buildinfo`; `./scripts/feeds install jool libnl`;
+`CONFIG_PACKAGE_kmod-jool-netfilter=m`, `CONFIG_PACKAGE_jool-tools-netfilter=m`; `make package/kernel/linux/compile package/jool/compile package/libnl/compile`),
+the modules load and work on the UNMODIFIED stock image (no custom firmware). Needed apks: kmod-jool-netfilter, jool-tools-netfilter, kmod-crypto-md5
+and the six libnl packages (libnl200, -core200, -genl200, -cli200, -nf200, -route200; the AREDN store has only libnl-tiny). Install:
+`apk add --allow-untrusted ./*.apk` resolves all dependencies. The kmod depends on `kernel=6.12.94~5a659643ce3911a4604e3e1c36ff86d9-r1` (the node's
+`apk list -I kernel`); a rebuild gets a different hash (0fa03e...), so write the node's hash into `build_dir/.../linux-6.12.94/.vermagic` before building
+the kmods. Test: three QEMU VMs (v6 host, stock AREDN with Jool, v4 host; `-netdev socket`): `ping -6` and `wget` through pool6 `2001:db8:c::/96` worked, and
+`hams-node-siit render` + `apply` created the instance. The earlier SDK-built module (`genlmsg_reply -111`) stays unexplained; the tree-built one works.
+Each other target/release needs its own kmod build with the same recipe.
