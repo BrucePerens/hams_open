@@ -2,6 +2,9 @@
 //! The whitelist and station-ID line that ham_proxy used to own.
 use hams_net_core::policy::{format_utc, log_line, Whitelist};
 
+// Tests [@ANCHOR: hams_net_core_policy_whitelist]
+// Tests [@ANCHOR: hams_net_core_policy_whitelist_parse]
+// Tests [@ANCHOR: hams_net_core_policy_whitelist_add_site]
 // Tests [@ANCHOR: hams_net_core_policy_whitelist_permits]
 // Tests [@ANCHOR: hams_net_core_policy_whitelist_permits_path]
 #[test]
@@ -14,6 +17,7 @@ fn whitelist_permits_ham_names_exact_wildcard_and_signed_paths() {
     assert!(!w.permits_path("news.com", "/ab"));
 }
 
+// Tests [@ANCHOR: hams_net_core_policy_format_utc]
 // Tests [@ANCHOR: hams_net_core_policy_log_line]
 #[test]
 fn log_line_needs_a_callsign() {
