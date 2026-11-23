@@ -82,7 +82,7 @@ fn start_proxy(c: &Path, k: &Path, site_addr: String) -> String {
 }
 
 /// TCP tee between ham client and proxy that records the bytes both ways.
-fn start_tee(target: String, log: Arc<Mutex<Vec<u8>>>) -> String {
+fn start_tee(target: String, log: Arc<Mutex<Vec<u8>>>, tamper: bool) -> String {
     let l = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = l.local_addr().unwrap().to_string();
     thread::spawn(move || {
@@ -90,9 +90,17 @@ fn start_tee(target: String, log: Arc<Mutex<Vec<u8>>>) -> String {
         let Ok(u) = TcpStream::connect(&target) else {
             return;
         };
-        let pump = |mut a: TcpStream, mut b: TcpStream, log: Arc<Mutex<Vec<u8>>>| {
+        let pump = |mut a: TcpStream, mut b: TcpStream, log: Arc<Mutex<Vec<u8>>>, flip: bool| {
             let mut buf = [0u8; 4096];
             while let Ok(n) = a.read(&mut buf) {
+                // Tamper: change one letter of the readable page body on its way to the client.
+                if let Some(i) = buf[..n]
+                    .windows(9)
+                    .position(|w| w == b"site-body")
+                    .filter(|_| flip)
+                {
+                    buf[i] = b'S';
+                }
                 if n == 0 || b.write_all(&buf[..n]).is_err() {
                     break;
                 }
@@ -101,8 +109,8 @@ fn start_tee(target: String, log: Arc<Mutex<Vec<u8>>>) -> String {
             let _ = b.shutdown(std::net::Shutdown::Write);
         };
         let (c2, u2, l2) = (c.try_clone().unwrap(), u.try_clone().unwrap(), log.clone());
-        let t = thread::spawn(move || pump(u2, c2, l2));
-        pump(c, u, log);
+        let t = thread::spawn(move || pump(u2, c2, l2, tamper));
+        pump(c, u, log, false);
         let _ = t.join();
     });
     addr
@@ -121,7 +129,7 @@ fn integrity_only_request_reaches_site_and_wire_is_readable() {
     let (c, k) = make_cert(&d);
     let proxy = start_proxy(&c, &k, start_site(&c, &k));
     let log = Arc::new(Mutex::new(Vec::new()));
-    let tee = start_tee(proxy, log.clone());
+    let tee = start_tee(proxy, log.clone(), false);
     let cli = ham_connector(&c).unwrap();
     let mut s = cli
         .connect("localhost", TcpStream::connect(tee).unwrap())
@@ -224,4 +232,28 @@ fn binary_serves_a_request() {
     child.kill().unwrap();
     child.wait().unwrap();
     assert!(out.ends_with("site-body-xyz"));
+}
+
+#[test]
+fn tampered_page_on_the_ham_wire_is_detected() {
+    // Tests [@ANCHOR: ham_proxy_serve_one]
+    let d = tmpdir("tamper");
+    let (c, k) = make_cert(&d);
+    let proxy = start_proxy(&c, &k, start_site(&c, &k));
+    let log = Arc::new(Mutex::new(Vec::new()));
+    let tee = start_tee(proxy, log, true);
+    let cli = ham_connector(&c).unwrap();
+    let mut s = cli
+        .connect("localhost", TcpStream::connect(tee).unwrap())
+        .unwrap();
+    s.write_all(b"GET / HTTP/1.0\r\n\r\n").unwrap();
+    let mut out = String::new();
+    assert!(
+        s.read_to_string(&mut out).is_err(),
+        "a changed byte must fail the MAC, got {out:?}"
+    );
+    assert!(
+        !out.contains("Site-body"),
+        "tampered text must not be delivered"
+    );
 }
