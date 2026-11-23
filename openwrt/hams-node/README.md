@@ -47,12 +47,11 @@ internet put the second NIC in: add `list ports 'eth1:u'` under the `option vlan
 
 Results:
 
-- Install: `apk add --allow-untrusted ./hams-node-0.1.0-r1.apk` (what Package settings does) is refused: **the image has no
-  `jool-tools-siit` or `kmod-jool-siit`** (not in the AREDN feeds; no `jool` module in `/lib/modules/6.12.94`), so Jool SIIT cannot run on this
-  image. With stub packages for those two names the apk installs, `/etc/init.d/hams-node start` runs, and the files land.
+- Install: `apk add --allow-untrusted ./hams-node-0.1.0-r1.apk` (what Package settings does) is refused: **the image has no Jool**
+  (`jool-tools-netfilter` and `kmod-jool-netfilter`, the 25.12 feed names; not in the AREDN feeds; no `jool` module in `/lib/modules/6.12.94`).
+  See "Jool on AREDN" below. With stub packages for those two names the apk installs, `/etc/init.d/hams-node start` runs, and the files land.
 - `hams-node-siit render` with the real `jsonfilter`: the Jool instance file is correct; a null `prefix96` row is skipped, a mesh name
-  with `;` is skipped with a message. `jool_siit file handle` could not be run (no Jool). `apply` exits 0 even when `jool_siit`
-  fails (it only prints), which hides the failure from procd.
+  with `;` is skipped with a message. `apply` used to exit 0 when `jool_siit` failed; fixed (#3235).
 - WireGuard: kmod-wireguard and wireguard-tools are in the image. `hams-node-wg apply wgt0 internet peers` added the peer and a
   handshake completed against a second local interface (loopback and 10.0.2.15 endpoints); `rf` is refused. Bug found and fixed: the
   bad-character check never matched under busybox ash (hams_open #3227). AREDN policy routing (`ip rule` lookups of tables 20 to 28,
@@ -82,3 +81,34 @@ exit 3, the cron line and token are removed, and no request is made again until 
 enrolled device token (`/etc/hams-node/device_token`, mode 0600) over HTTPS. hams.com publishes them as
 `<host>.<mesh>.<callsign>.ham` and drops them 24 hours after the reports stop. Exit codes: 0 reported, 1 refused or not
 enrolled, 3 token revoked, 4 hams.com unreachable (cron retries).
+
+## Second round on the virtual AREDN node, and stock OpenWrt (2026-11-23)
+
+### Jool on AREDN
+- OpenWrt 25.12 packages Jool as `kmod-jool-netfilter` and `jool-tools-netfilter` (one kernel module set and one tools package that holds
+  `jool_siit`); `hams-node` now depends on those (#3248). Build with the 25.12.5 SDK: add the `packages` feed to `feeds.conf`, install both,
+  `make package/jool/compile`; the SDK feeds lack `libnl` and `argp-standalone` (copy `package/libs/libnl` and `package/libs/argp-standalone`
+  from the openwrt tree at the SDK's commit).
+- Kernel match: AREDN builds its kernel without namespaces, cgroups, keys and seccomp (`config.buildinfo` next to the image). A kmod built in the
+  stock SDK loads only after those options are removed from the SDK's `autoconf.h` (otherwise `jool_common: Unknown symbol __put_net`), and
+  `apk add` refuses it because the kernel ABI hash differs; extracting the `.ko` by hand and `insmod` works. The module then loads but every
+  Jool netlink reply fails (`genlmsg_reply() failed. (errcode -111)`), also with a kmod built from a full OpenWrt tree configured with
+  AREDN's own `config.buildinfo`, so AREDN's firmware tree differs somewhere we cannot see. **Jool does not work on AREDN 4.26.10.0 with an
+  out-of-tree kmod.** Unblock: AREDN ships `kmod-jool-netfilter` in its own build (so kernel and module match), or a hams-node gateway runs
+  on a stock OpenWrt router on the LAN of the AREDN node (the second gateway form).
+- Stock OpenWrt 25.12.5 x86-64 in QEMU: `apk add` pulls Jool from the feed, the real `jool_siit` accepts the files rendered by
+  `hams-node-siit render` (`jool_siit -i mesh7 global display` shows `pool6: 2001:db8:ab01:7::/96`), `apply` replaces the instance and exits 1
+  when an instance file is invalid.
+
+### hams-node-wg, hams-node-ondemand on AREDN
+- `ip rule add to PREFIX lookup main priority 90` works on AREDN's `ip` and sits below its priority-100 rules; `hams-node-wg down` removes it (#3234).
+- `hams-node-ondemand`: the nft table did not load (`chain fwd` is an nft keyword; statements need a newline before the closing brace; fixed in
+  #3243). After that: the ruleset loads on AREDN's nft; a `nft monitor new elements` event for a member /60 (set element added by hand, since a
+  one-host VM has no forward path) makes the daemon look the /60 up (stub lookup API), add the WireGuard peer with allowed-ips the /60, and
+  write `peers`; with `idle_minutes 1` the peer and its state line were removed within about two minutes (`expire` loop every 60 s). RSS:
+  daemon shell 0.8 MB, its pipeline subshell 1.1 MB, `nft monitor` 3.1 MB, the expire loop shell about 1 MB: about 6 MB in total.
+  uclient-fetch sends the POST body chunked (no Content-Length): the lookup server must accept that.
+- `/usr/libexec/rpcd` does not exist on AREDN: create it before installing the rpcd plugin of luci-app-hams-node.
+- `hams-node-report` read OLSR files that AREDN 4 does not have; it now reads `/etc/arednlink/{hosts,services}` and
+  `/var/run/arednlink/{hosts,services}/*` (#3249).
+- LuCI is not in the AREDN image, so luci-app-hams-node was checked on stock OpenWrt 25.12.5 (see the luci-app to-do).
