@@ -89,6 +89,8 @@ apply_list() {
 		for p in $(echo "${prefixes:-}" | tr , ' '); do ip -6 route del unreachable "$p" 2>/dev/null; done
 	done < "$listfile"
 	cp "$1" "$listfile"
+	# revoked member certificates are enforced by the management front end (hams-node-mtls), which reads the list when it is applied
+	if [ -f "$state/mtls/nginx.conf" ] && command -v hams-node-mtls > /dev/null 2>&1; then hams-node-mtls -s "$state" apply; fi
 }
 
 # entries PATH-PREFIX (add or entries): "KEY prefixes" lines from the payload.
