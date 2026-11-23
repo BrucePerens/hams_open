@@ -1,0 +1,64 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-report: tell hams.com which hosts and advertised services this AREDN node's mesh has, so they are published as
+# <host>.<mesh>.<callsign>.ham. Authenticated by the enrolled device token (root-only file) over HTTPS; the server knows the
+# mesh from the device's own approved gateway. Run from cron well inside hams.com's 24 hour expiry.
+#   hams-node-report OPTIONS run | start | stop
+# OPTIONS: -u BASE_URL (https://hams.com) -s STATE_DIR (/etc/hams-node) [-c CRONTAB (/etc/crontabs/root)]
+#          [-H HOSTS_FILE (/var/run/hosts_olsr)] [-S SERVICES_FILE (/var/run/services_olsr)]
+# Exit: 0 reported; 1 refused or not enrolled; 3 token revoked (hams-node-enroll marked it); 4 hams.com unreachable (cron tries again later).
+set -u
+base=https://hams.com state=/etc/hams-node cron=/etc/crontabs/root hostsfile=/var/run/hosts_olsr svcfile=/var/run/services_olsr
+while getopts u:s:c:H:S: opt; do
+	case $opt in
+	u) base=$OPTARG ;; s) state=$OPTARG ;; c) cron=$OPTARG ;; H) hostsfile=$OPTARG ;; S) svcfile=$OPTARG ;;
+	*) exit 2 ;;
+	esac
+done
+shift $((OPTIND - 1))
+[ $# -ge 1 ] || { echo "usage: hams-node-report [-u URL] [-s DIR] run | start | stop" >&2; exit 2; }
+umask 077
+tokenfile=$state/device_token statusfile=$state/status reply=$state/report_reply.json
+job="/usr/sbin/hams-node-report run"
+
+# hosts_olsr: "10.1.2.3<tab>node" -> {"node":"10.1.2.3"}; only safe characters, at most 2000
+hosts_json() {
+	awk 'BEGIN { printf "{" }
+		$1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && $2 ~ /^[A-Za-z0-9._-]+$/ && length($2) <= 253 && !($2 in seen) && n < 2000 {
+			seen[$2] = 1; printf "%s\"%s\":\"%s\"", (n++ ? "," : ""), $2, $1 }
+		END { printf "}" }' "$hostsfile" 2>/dev/null || printf '{}'
+}
+# services_olsr: "http://node:80/path|tcp|Name" -> [["Name","node"]]
+services_json() {
+	awk -F'|' 'BEGIN { printf "[" }
+		NF >= 3 {
+			node = $1; sub(/^[A-Za-z]+:\/\//, "", node); sub(/[:\/].*$/, "", node)
+			name = $3; gsub(/[^A-Za-z0-9 ._-]/, "", name)
+			if (node ~ /^[A-Za-z0-9._-]+$/ && name != "" && length(name) <= 253 && n < 2000) {
+				printf "%s[\"%s\",\"%s\"]", (n++ ? "," : ""), name, node }
+		}
+		END { printf "]" }' "$svcfile" 2>/dev/null || printf '[]'
+}
+
+do_run() {
+	[ "$(cat "$statusfile" 2>/dev/null)" = revoked ] && exit 3
+	[ -s "$tokenfile" ] || { echo "hams-node-report: not enrolled" >&2; exit 1; }
+	token=$(cat "$tokenfile")
+	case $token in '' | *[!A-Za-z0-9_=/+-]*) echo "hams-node-report: bad token file" >&2; exit 1 ;; esac
+	body="{\"jsonrpc\":\"2.0\",\"method\":\"call\",\"params\":{\"token\":\"$token\",\"hosts\":$(hosts_json),\"services\":$(services_json)}}"
+	rm -f "$reply"
+	uclient-fetch -q -O "$reply" --header='Content-Type: application/json' --post-data="$body" "$base/api/ipv6/gateway/report" \
+		|| { echo "hams-node-report: hams.com unreachable" >&2; exit 4; }
+	[ -s "$reply" ] || exit 4
+	case $(jsonfilter -i "$reply" -e '@.result.status') in
+	success) ;;
+	*) echo "hams-node-report: refused" >&2; exit 1 ;;
+	esac
+}
+
+case $1 in
+run) do_run ;;
+start) grep -qF "$job" "$cron" 2>/dev/null || echo "*/30 * * * * $job" >> "$cron" ;;
+stop) [ -f "$cron" ] && { grep -vF "$job" "$cron" > "$cron.new"; mv "$cron.new" "$cron"; } ;;
+*) exit 2 ;;
+esac
