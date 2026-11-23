@@ -131,8 +131,33 @@ define Package/hams-node-bird/install
 	$(INSTALL_CONF) ./files/etc/config/hams_node_bird $(1)/etc/config/
 endef
 
+define Package/hams-node-fw
+  SECTION:=net
+  CATEGORY:=Network
+  TITLE:=hams.com Net firewall zones and rf interface registry for hams-node
+  URL:=https://hams.com
+  DEPENDS:=+hams-node +uci
+  PKGARCH:=all
+endef
+
+define Package/hams-node-fw/description
+  Firewall zones for the ham network (inbound closed except ports the member opens; encrypted-service ports never toward RF)
+  and the registry of radio-link interfaces on which hams-node-wg refuses WireGuard.
+endef
+
+define Package/hams-node-fw/conffiles
+/etc/config/hams_node_fw
+endef
+
+define Package/hams-node-fw/install
+	$(INSTALL_DIR) $(1)/usr/sbin $(1)/etc/config
+	$(INSTALL_BIN) ./files/usr/sbin/hams-node-fw $(1)/usr/sbin/
+	$(INSTALL_CONF) ./files/etc/config/hams_node_fw $(1)/etc/config/
+endef
+
 $(eval $(call BuildPackage,hams-node))
 $(eval $(call BuildPackage,hams-node-enroll))
 $(eval $(call BuildPackage,hams-node-report))
 $(eval $(call BuildPackage,hams-node-traffic))
 $(eval $(call BuildPackage,hams-node-bird))
+$(eval $(call BuildPackage,hams-node-fw))
