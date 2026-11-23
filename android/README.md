@@ -9,6 +9,8 @@ Design: `docs/proposals/IPV6_MEMBER_NETWORK.md`, "Phones: Android and iOS". Code
 
 Native core: `daemons/hams_net_ffi` exposes `hams_net_core` (SIIT map, peer table) through UniFFI; `gradle :core:test` builds it with cargo and generates the Kotlin bindings (JNA), and `NativeCoreTest` calls it. The older Kotlin `PeerTable` stays until the app switches over.
 
+The app packages `libhams_net_ffi.so` for arm64-v8a: the `:app:buildNativeArm64` task runs cargo with the NDK linker (`ANDROID_NDK_HOME`, default `/home/bruce/agent_work/tools/android/ndk/28.2.13676358`, installed with `sdkmanager "ndk;28.2.13676358"`) and the result goes to `app/build/generated/jniLibs/arm64-v8a/`; the merge-jniLibs task depends on it.
+
 Build: JDK 21, Gradle 8.10, Android SDK (platform 35, build-tools 35.0.0), `ANDROID_HOME` set:
 `gradle :core:test` and `gradle :app:assembleDebug`.
 
