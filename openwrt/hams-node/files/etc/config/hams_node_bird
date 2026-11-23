@@ -12,3 +12,6 @@ config bird 'main'
 	option rf_live '0'
 	# route server addresses
 	# list server '2001:db8::1'
+	# direct RF neighbours, "ASN,ADDRESS,INTERFACE[,PREFIX]": plain BGP sessions over the radio link, no route server and no internet needed;
+	# their routes win over the route servers'. No password on RF (Part 97).
+	# list neighbor '4200000007,fe80::7,rf0'

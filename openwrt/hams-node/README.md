@@ -155,3 +155,10 @@ Each other target/release needs its own kmod build with the same recipe.
 `hams_node_lan.main.interface` (default `lan`, at most 16) `ip6assign 64` and its own `ip6hint` (0, 1, 2 ...), and sets
 `dhcp.<if>.ra` and `dhcpv6` to `server`, so netifd cuts one /64 per LAN out of the /60 and odhcpd sends router advertisements
 and answers DHCPv6. `hams-node-lan remove` undoes it. Anything that is not a /60 changes nothing. Not exercised on a real router.
+
+## Routing without the route servers (`hams-node-bird`)
+
+`list neighbor 'ASN,ADDRESS,INTERFACE[,PREFIX]'` in `/etc/config/hams_node_bird` adds a direct eBGP session over an RF link (BGP, not
+Babel: BIRD and the /40 filters are already here and AREDN's Babel stays inside the AREDN mesh). Neighbour routes get local-pref 300, the
+route servers' 200 (RF-tagged) or 100, so RF-reachable prefixes use the RF path and everything else the route servers. The sessions work
+with no route server configured, so RF islands keep routing with the internet gone. RF sessions have no password (Part 97).

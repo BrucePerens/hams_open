@@ -117,7 +117,7 @@ define Package/hams-node-bird
 endef
 
 define Package/hams-node-bird/description
-  Renders the node's BIRD 2 configuration (a session to each hams.com route server, RF-first local preference) from
+  Renders the node's BIRD 2 configuration (a session to each hams.com route server and to each configured RF neighbour, RF-first local preference) from
   /etc/config/hams_node_bird. Off by default.
 endef
 
