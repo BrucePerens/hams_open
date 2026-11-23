@@ -85,7 +85,7 @@ class StatusTests(unittest.TestCase):
         bindir.mkdir()
         initdir.mkdir()
         for name, text in (("uclient-fetch", FETCH), ("usign", USIGN), ("wg", LOGGER), ("ip", LOGGER), ("ifdown", LOGGER), ("ifup", LOGGER),
-                           ("hams-node-report", LOGGER), ("hams-node-traffic", LOGGER)):
+                           ("hams-node-report", LOGGER), ("hams-node-traffic", LOGGER), ("hams-node-mtls", LOGGER)):
             (bindir / name).write_text(text)
             (bindir / name).chmod(0o755)
         for name in ("hams-node-bird", "hams-node-ondemand"):
@@ -192,6 +192,20 @@ class StatusTests(unittest.TestCase):
         self.assertEqual(self.listed(), ["%s 2001:db8:ab00:40::/60,2001:db8:ab01::/48" % ENTRY_B["key"]], "removal applied, addition kept")
         self.assertIn("ip -6 route del unreachable 2001:db8:ab00:30::/60", self.actions(), "a removal lifts the block")
         self.assertIn("ip -6 route replace unreachable 2001:db8:ab01::/48", self.actions())
+
+    def test_revoked_member_certificates_are_kept_for_the_mtls_check_and_never_touch_wireguard(self):
+        cert = {"type": "revoked_member_cert", "key": "abcdef", "issuer_sha256": "a1" * 32, "revoked_at": "2026-11-20T12:00:00Z", "reason": "key_compromise"}
+        self.queue(self.status(list_seq=2), self.full(2, ENTRY_A, cert))
+        self.assertEqual(self.run_script().returncode, 0)
+        self.assertEqual(self.listed(), sorted(["%s 2001:db8:ab00:30::/60" % ENTRY_A["key"], "cert:%s:abcdef " % ("a1" * 32)]))
+        self.assertFalse([a for a in self.actions() if "abcdef" in a], "a certificate serial is never given to wg or ip")
+        self.assertNotIn("hams-node-mtls -s %s apply" % self.state, self.actions(), "management is not under mtls here")
+        (self.state / "mtls").mkdir()
+        (self.state / "mtls" / "nginx.conf").write_text("x")
+        self.queue(self.status(list_seq=3), self.delta(2, 3, remove=["abcdef"]))
+        self.assertEqual(self.run_script().returncode, 0)
+        self.assertIn("hams-node-mtls -s %s apply" % self.state, self.actions(), "the front end is told to re-read the list")
+        self.assertEqual(self.listed(), ["%s 2001:db8:ab00:30::/60" % ENTRY_A["key"]], "a delta removal lifts the certificate entry")
 
     def test_a_gap_a_replay_and_a_bad_signature_are_refused_and_a_gap_asks_for_the_full_list(self):
         self.queue(self.status(list_seq=2), self.full(2, ENTRY_A))
