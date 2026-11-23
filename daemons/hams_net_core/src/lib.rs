@@ -7,6 +7,7 @@
 pub mod boundary;
 pub mod crypto;
 pub mod dane;
+pub mod deprecation;
 pub mod directory;
 pub mod login;
 pub mod peers;
