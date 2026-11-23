@@ -1,0 +1,53 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-ssh: once the node is enrolled and the owner has put a public key on it, SSH accepts keys only (dropbear PasswordAuth and
+# RootPasswordAuth off). The key is added in LuCI (System > Administration > SSH-Keys), which is itself reachable only with the owner's
+# member certificate (hams-node-mtls). With no key installed nothing changes, so the owner is never locked out.
+#   hams-node-ssh [-s STATE_DIR] [-k AUTHORIZED_KEYS] apply   key-only when enrolled and a key exists; else leave as is
+#   hams-node-ssh [-s STATE_DIR] off                          restore the saved dropbear password settings (unenrol or recovery)
+# Recovery: physical reset (firstboot) restores password login; enrol again.
+set -u
+state=/etc/hams-node keys=/etc/dropbear/authorized_keys
+while getopts s:k: opt; do
+	case $opt in
+	s) state=$OPTARG ;; k) keys=$OPTARG ;;
+	*) exit 2 ;;
+	esac
+done
+shift $((OPTIND - 1))
+[ $# -eq 1 ] || { echo "usage: hams-node-ssh [-s DIR] [-k KEYS] apply | off" >&2; exit 2; }
+orig=$state/ssh.orig
+sections() { uci -q show dropbear | sed -n 's/^dropbear\.\([^.=]*\)=dropbear$/\1/p'; }
+restart() { [ -x /etc/init.d/dropbear ] && /etc/init.d/dropbear restart; return 0; }
+
+do_apply() {
+	[ -s "$state/device_token" ] || { echo "hams-node-ssh: not enrolled; SSH unchanged" >&2; return 0; }
+	grep -qE '^(ssh-|ecdsa-|sk-)' "$keys" 2>/dev/null || { echo "hams-node-ssh: no authorized key yet; password login kept (add one in LuCI)" >&2; return 0; }
+	[ -f "$orig" ] || for s in $(sections); do
+		echo "$s $(uci -q get "dropbear.$s.PasswordAuth") $(uci -q get "dropbear.$s.RootPasswordAuth")" >> "$orig"
+	done
+	for s in $(sections); do
+		uci set "dropbear.$s.PasswordAuth=off"
+		uci set "dropbear.$s.RootPasswordAuth=off"
+	done
+	uci commit dropbear
+	restart
+	echo "hams-node-ssh: SSH now accepts keys only" >&2
+}
+
+do_off() {
+	[ -f "$orig" ] || return 0
+	while read -r s pw rpw; do
+		if [ -n "$pw" ]; then uci set "dropbear.$s.PasswordAuth=$pw"; else uci -q delete "dropbear.$s.PasswordAuth"; fi
+		if [ -n "$rpw" ]; then uci set "dropbear.$s.RootPasswordAuth=$rpw"; else uci -q delete "dropbear.$s.RootPasswordAuth"; fi
+	done < "$orig"
+	uci commit dropbear
+	rm -f "$orig"
+	restart
+}
+
+case $1 in
+apply) do_apply ;;
+off) do_off ;;
+*) exit 2 ;;
+esac

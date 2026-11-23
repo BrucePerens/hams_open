@@ -12,6 +12,7 @@ SBIN = HERE.parent / "files" / "usr" / "sbin"
 UCI = """#!/bin/sh
 if [ "$1" = batch ]; then cat >> "$FAKE/batch"; exit 0; fi
 if [ "$1" = commit ]; then echo "$*" >> "$FAKE/commits"; exit 0; fi
+if [ "$2" = show ]; then cat "$FAKE/firewall_show" 2>/dev/null; exit 0; fi
 key=${3#hams_node_fw.main.}
 grep "^$key=" "$FAKE/uci" | head -n 1 | cut -d= -f2-
 """
@@ -83,6 +84,53 @@ class FwTests(unittest.TestCase):
         env = Env(self)
         self.assertEqual(env.run(SBIN / "hams-node-fw", "is-rf", "rf0").returncode, 0)
         self.assertEqual(env.run(SBIN / "hams-node-fw", "is-rf", "wg-hams").returncode, 1)
+
+
+FIREWALL_SHOW = """firewall.lan=zone
+firewall.lan.name=lan
+firewall.hams_zone=zone
+firewall.hams_zone.name=ham
+firewall.hams_rf_zone=zone
+firewall.hams_rf_zone.name=hamrf
+firewall.hams_in_tcp_8080=rule
+firewall.hams_in_tcp_8080.name=hams-open-tcp-8080
+firewall.hams_rf_in_udp_5000=rule
+firewall.my_hams_in_x=rule
+firewall.hams_mine=zone
+"""
+
+
+class RemoveTests(unittest.TestCase):
+    def test_remove_deletes_only_the_sections_it_created(self):
+        env = Env(self)
+        (env.root / "firewall_show").write_text(FIREWALL_SHOW)
+        self.assertEqual(env.run(SBIN / "hams-node-fw", "remove").returncode, 0)
+        batch = env.read("batch")
+        self.assertEqual(sorted(batch), sorted([
+            "delete firewall.hams_zone", "delete firewall.hams_rf_zone",
+            "delete firewall.hams_in_tcp_8080", "delete firewall.hams_rf_in_udp_5000"]))
+        self.assertEqual(env.read("commits"), ["commit firewall"])
+
+    def test_remove_is_idempotent_when_nothing_is_left(self):
+        env = Env(self)
+        (env.root / "firewall_show").write_text("firewall.lan=zone\n")
+        self.assertEqual(env.run(SBIN / "hams-node-fw", "remove").returncode, 0)
+        self.assertEqual(env.run(SBIN / "hams-node-fw", "remove").returncode, 0)
+        self.assertEqual(env.read("batch"), [])
+        self.assertEqual(env.read("commits"), [])
+
+    def test_remove_works_when_the_fw_config_is_disabled(self):
+        env = Env(self, enabled="0")
+        (env.root / "firewall_show").write_text(FIREWALL_SHOW)
+        self.assertEqual(env.run(SBIN / "hams-node-fw", "remove").returncode, 0)
+        self.assertIn("delete firewall.hams_zone", env.read("batch"))
+
+    def test_apply_while_disabled_removes_stale_zones(self):
+        env = Env(self, enabled="0")
+        (env.root / "firewall_show").write_text(FIREWALL_SHOW)
+        self.assertEqual(env.run(SBIN / "hams-node-fw", "apply").returncode, 0)
+        self.assertIn("delete firewall.hams_zone", env.read("batch"))
+        self.assertEqual(env.read("commits"), ["commit firewall"])
 
 
 class WireguardRefusedOnRfInterface(unittest.TestCase):

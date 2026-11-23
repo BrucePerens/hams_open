@@ -1,7 +1,7 @@
 # tenant_sites
 
 Serve other sites (perens.com, postopen.org, ...) as websites of this one Odoo, isolated from the
-main site. The architecture decision is `hams_shared/docs/adrs/0106_tenants_inside_one_odoo.md`.
+main site. The architecture decision is hams.com ADR 0106.
 
 ## How a request is classified (`models/ir_http.py`)
 

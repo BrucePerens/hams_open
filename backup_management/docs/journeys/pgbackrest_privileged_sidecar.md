@@ -2,7 +2,7 @@
 
 `backup.worker.service` runs as `odoo` under `NoNewPrivileges=true`/`ProtectSystem=strict` and cannot read
 PostgreSQL's own `0700 postgres:postgres` data directory, so it cannot run a real `pgbackrest backup` itself.
-See ADR 0103 (`hams_shared/docs/adrs/0103_pgbackrest_privileged_backup_sidecar.md`) for the full architecture
+See hams.com ADR 0103 for the full architecture
 decision; this journey walks through what actually happens end to end.
 
 1. **Trigger**: an admin clicks "Backup Now" on a pgbackrest-engine `backup.config`, or its scheduled cron

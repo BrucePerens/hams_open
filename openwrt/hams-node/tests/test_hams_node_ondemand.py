@@ -133,7 +133,7 @@ class OnDemandTests(unittest.TestCase):
 
 class ConfigTests(unittest.TestCase):
     def test_package_installs_the_daemon_files(self):
-        makefile = (HERE.parent / "Makefile").read_text()
+        makefile = "".join(p.read_text() for p in sorted((HERE.parent / "pkg").glob("*.mk")))
         for name in ("sbin/hams-node-ondemand", "init.d/hams-node-ondemand", "config/hams_node_ondemand"):
             self.assertIn(name, makefile)
         self.assertIn("option link_type 'internet'", (HERE.parent / "files/etc/config/hams_node_ondemand").read_text())

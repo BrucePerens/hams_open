@@ -1,0 +1,22 @@
+#!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Loads the ham-network firewall zones (uci hams_node_fw) into the firewall config and reloads the firewall.
+START=19
+USE_PROCD=1
+INITD=${HAMS_NODE_INITD:-/etc/init.d}
+
+start_service() {
+	hams-node-fw apply || return 1
+	[ -x "$INITD/firewall" ] && "$INITD/firewall" reload
+	return 0
+}
+
+stop_service() {
+	hams-node-fw remove || return 1
+	[ -x "$INITD/firewall" ] && "$INITD/firewall" reload
+	return 0
+}
+
+service_triggers() {
+	procd_add_reload_trigger hams_node_fw
+}

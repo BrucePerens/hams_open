@@ -20,3 +20,7 @@ Jool SIIT itself (stand-ins), real enrolment, WireGuard peers. Tests: `python3 -
 `tools/lan_test.py IMAGE` (stock or test image, QEMU, no root): copies `hams-node-lan` in over the console, applies `2001:db8:ab40:10::/60`
 and checks that netifd gives br-lan `2001:db8:ab40:10::1/64`, odhcpd runs, and `remove` takes the /64 out of netifd's interface status
 (the kernel address lingers a while). Verified on OpenWrt 25.12.5 x86-64. It does not check a client's address (one guest only).
+
+`tools/endpoint_test.py IMAGE` (stock image, QEMU with a second NIC for `apk add openssl-util`): copies `hams-node-endpoint` in, runs it with a
+stand-in `uclient-fetch` that keeps the request body, and checks on the host that the body's MAC equals the portal's formula and that the
+private key is not in it. Verified on OpenWrt 25.12.5 x86-64 (busybox ash, `openssl base64`, `hexdump`; the image has no `base64` or `od`).
