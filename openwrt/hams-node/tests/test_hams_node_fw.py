@@ -63,7 +63,7 @@ class FwTests(unittest.TestCase):
 
     def test_no_open_ports_means_no_rules(self):
         lines = Env(self, open="").run(SBIN / "hams-node-fw", "render").stdout.splitlines()
-        self.assertEqual([l for l in lines if "=rule" in l and "hams_in_" in l], [])
+        self.assertEqual([ln for ln in lines if "=rule" in ln and "hams_in_" in ln], [])
         self.assertIn("set firewall.hams_zone.input=DROP", lines)
 
     def test_encrypted_service_port_never_opened_toward_rf(self):
@@ -139,7 +139,9 @@ class RemoveTests(unittest.TestCase):
         self.assertEqual(env.read("commits"), ["commit firewall"])
 
     def test_enabled_when_enrolled_unless_switched_off(self):
-        run = lambda env: env.run(SBIN / "hams-node-fw", "render").stdout
+        def run(env):
+            return env.run(SBIN / "hams-node-fw", "render").stdout
+
         self.assertIn("set firewall.hams_zone.name=ham", run(Env(self, enabled="", prefix60="2001:db8:ab40:10::/60")))
         self.assertEqual(run(Env(self, enabled="", prefix60="")), "")
         self.assertEqual(run(Env(self, enabled="0", prefix60="2001:db8:ab40:10::/60")), "")
@@ -149,7 +151,7 @@ class RemoveTests(unittest.TestCase):
         self.assertIn("set firewall.hams_fwd_lan_ham=forwarding", lines)
         self.assertIn("set firewall.hams_fwd_lan_ham.src=lan", lines)
         self.assertIn("set firewall.hams_fwd_lan_ham.dest=ham", lines)
-        self.assertEqual([l for l in lines if l.endswith("=forwarding")], ["set firewall.hams_fwd_lan_ham=forwarding"])
+        self.assertEqual([ln for ln in lines if ln.endswith("=forwarding")], ["set firewall.hams_fwd_lan_ham=forwarding"])
         for z in ("ham", "hamrf"):
             sec = "hams_drop_%s_lan" % z
             self.assertIn("set firewall.%s=rule" % sec, lines)
@@ -157,7 +159,7 @@ class RemoveTests(unittest.TestCase):
             self.assertIn("set firewall.%s.dest=lan" % sec, lines)
             self.assertIn("set firewall.%s.target=DROP" % sec, lines)
         # "list open" only ever opens the router's own input (no dest on an open rule)
-        self.assertEqual([l for l in lines if l.startswith("set firewall.hams_in_") and ".dest=" in l and "dest_port" not in l], [])
+        self.assertEqual([ln for ln in lines if ln.startswith("set firewall.hams_in_") and ".dest=" in ln and "dest_port" not in ln], [])
 
     def test_ensure_iface_puts_ham_and_rf_interfaces_in_zones(self):
         env = Env(self, iface="", rf_iface="")
