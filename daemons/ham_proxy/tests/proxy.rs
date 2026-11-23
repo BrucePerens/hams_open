@@ -34,11 +34,11 @@ fn make_cert(dir: &std::path::Path) -> (PathBuf, PathBuf) {
     (c, k)
 }
 
-fn tmpdir(n: &str) -> PathBuf {
-    // temp-dir-ignore: one small per-process directory of test certificates; /tmp is cleared on reboot
-    let d = std::env::temp_dir().join(format!("ham_proxy_{n}_{}", std::process::id()));
-    std::fs::create_dir_all(&d).unwrap();
-    d
+fn tmpdir(n: &str) -> tempfile::TempDir {
+    tempfile::Builder::new()
+        .prefix(&format!("ham_proxy_{n}_"))
+        .tempdir()
+        .unwrap()
 }
 
 /// Site: normal TLS server answering any request with a fixed body.
@@ -126,7 +126,7 @@ fn integrity_only_request_reaches_site_and_wire_is_readable() {
     // Tests [@ANCHOR: ham_proxy_site_connector]
     // Tests [@ANCHOR: ham_proxy_require_integrity_only]
     let d = tmpdir("ok");
-    let (c, k) = make_cert(&d);
+    let (c, k) = make_cert(d.path());
     let proxy = start_proxy(&c, &k, start_site(&c, &k));
     let log = Arc::new(Mutex::new(Vec::new()));
     let tee = start_tee(proxy, log.clone(), false);
@@ -154,7 +154,7 @@ fn integrity_only_request_reaches_site_and_wire_is_readable() {
 #[test]
 fn encrypting_client_is_refused() {
     let d = tmpdir("enc");
-    let (c, k) = make_cert(&d);
+    let (c, k) = make_cert(d.path());
     let proxy = start_proxy(&c, &k, "127.0.0.1:1".to_string());
     let mut b = SslConnector::builder(SslMethod::tls_client()).unwrap();
     b.set_ca_file(&c).unwrap();
@@ -168,7 +168,7 @@ fn encrypting_client_is_refused() {
 #[test]
 fn tls12_null_sha256_also_works() {
     let d = tmpdir("t12");
-    let (c, k) = make_cert(&d);
+    let (c, k) = make_cert(d.path());
     let proxy = start_proxy(&c, &k, start_site(&c, &k));
     let mut b = SslConnector::builder(SslMethod::tls_client()).unwrap();
     b.set_ca_file(&c).unwrap();
@@ -194,7 +194,7 @@ fn binary_serves_a_request() {
     // Tests [@ANCHOR: ham_proxy_run]
     // Tests [@ANCHOR: ham_proxy_arg]
     let d = tmpdir("bin");
-    let (c, k) = make_cert(&d);
+    let (c, k) = make_cert(d.path());
     let site = start_site(&c, &k);
     let port = TcpListener::bind("127.0.0.1:0")
         .unwrap()
@@ -238,7 +238,7 @@ fn binary_serves_a_request() {
 fn tampered_page_on_the_ham_wire_is_detected() {
     // Tests [@ANCHOR: ham_proxy_serve_one]
     let d = tmpdir("tamper");
-    let (c, k) = make_cert(&d);
+    let (c, k) = make_cert(d.path());
     let proxy = start_proxy(&c, &k, start_site(&c, &k));
     let log = Arc::new(Mutex::new(Vec::new()));
     let tee = start_tee(proxy, log, true);
