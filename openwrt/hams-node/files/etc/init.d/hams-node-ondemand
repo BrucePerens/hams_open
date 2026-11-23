@@ -21,8 +21,9 @@ start_service() {
 	nft -f - <<NFT || return 1
 table inet hams_ondemand {
 	set seen { type ipv6_addr; flags dynamic,timeout; timeout ${idle}m; }
-	chain fwd { type filter hook forward priority -5; policy accept;
-		ip6 daddr $net update @seen { ip6 daddr & ffff:ffff:ffff:fff0:: } }
+	chain forward_seen { type filter hook forward priority -5; policy accept;
+		ip6 daddr $net update @seen { ip6 daddr & ffff:ffff:ffff:fff0:: }
+	}
 }
 NFT
 	opts="-i $iface -t $type -u $url -s /tmp/hams-node-ondemand -m $max"
