@@ -1,0 +1,6 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# A change of the WAN address publishes the new WireGuard endpoint at once (the cron line only refreshes).
+[ "$ACTION" = ifup ] || [ "$ACTION" = ifupdate ] || exit 0
+[ "$INTERFACE" = "$(uci -q get hams_node_endpoint.main.interface 2>/dev/null || echo wan)" ] || exit 0
+hams-node-endpoint update >/dev/null 2>&1 &
