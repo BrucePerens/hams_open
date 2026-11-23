@@ -24,6 +24,10 @@ function draw(box, s) {
 		row(_('Refused, other'), String(b.refused_other || 0)),
 		row(_('Ham-side traffic'), b.integrity_only ? _('Integrity-only (authenticated, not encrypted)') : '-')
 	];
+	if (s.disabled)
+		rows.unshift(row(_('Switched off by hams.com'), E('strong', { 'class': 'label-danger' }, (s.disabled_reason || _('no reason given')) + ' ' + _('(tunnels and routes are down; your configuration is kept. Re-enrol your router from the hams.com Net page, then ask staff to re-enable it.)'))));
+	if (s.deprecated)
+		rows.push(row(_('Blocked rogue entries'), String(s.deprecated)));
 	if (s.code)
 		rows.splice(1, 0, row(_('Enrol code'), E('strong', {}, s.code)));
 	var peers = (s.peers || []).map(function(p) {

@@ -18,7 +18,7 @@ P1, P2 = "2001:db8:ab40::/60", "2001:db8:ab50::/60"
 
 
 class RfRouteTests(unittest.TestCase):
-    def run_script(self, link_type, prefixes, iface="br-rf0", action="apply"):
+    def run_script(self, link_type, prefixes, iface="br-rf0", action="apply", deplist=None):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         root = pathlib.Path(tmp.name)
@@ -29,9 +29,17 @@ class RfRouteTests(unittest.TestCase):
         fake.chmod(0o755)
         src = root / "prefixes"
         src.write_text(prefixes)
-        env = dict(os.environ, PATH="%s:%s" % (fake.parent, os.environ["PATH"]))
+        env = dict(os.environ, PATH="%s:%s" % (fake.parent, os.environ["PATH"]), HAMS_NODE_DEPRECATION_LIST=str(root / "deprecation_list"))
+        if deplist is not None:
+            (root / "deprecation_list").write_text(deplist)
         result = subprocess.run(["sh", str(SCRIPT), action, iface, link_type, str(src)], env=env, capture_output=True, text=True)
         return result, (log.read_text().splitlines() if log.exists() else [])
+
+    def test_a_deprecated_prefix_gets_no_route_over_rf_or_the_tunnel(self):
+        for link in ("rf", "internet"):
+            result, calls = self.run_script(link, "%s\n%s\n" % (P1, P2), deplist="KEYAAAA %s,2001:db8:ffff::/48\n" % P1)
+            self.assertFalse([c for c in calls if P1 in c], link)
+            self.assertTrue([c for c in calls if P2 in c], link)
 
     def test_rf_routes_get_the_low_metric_and_never_enter_the_tunnel_table(self):
         result, calls = self.run_script("rf", "# members\n%s\n%s\n" % (P1, P2))

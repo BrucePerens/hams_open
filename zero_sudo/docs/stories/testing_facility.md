@@ -152,6 +152,10 @@ The [module README](../../README.md) attributes the end-of-test Database Leak Pr
 
 `HamsHttpCase.tearDownClass(cls)` runs once after the class. It closes the class's pooled Chrome (`_chrome_pool.close()`), stops the two crypto-secret patchers, then, holding the per-class lock file `/opt/hams/test/socat_certs/hams_test_proxy_<uid>_<class>.lock` exclusively, stops the `socat` TLS proxy of the class: SIGTERM to its process group (unless that group is ours), `terminate()`, a 2 s wait, then SIGKILL of the group and `kill()`; it closes the proxy's log file and releases the lock. Errors are logged, never raised, and `_socat_proc` is set to `None`. It never signals its own process group.
 
+### Load Factor `[@ANCHOR: zero_sudo:load_factor_scaling]`
+
+`load_factor() -> int` is the 1-minute load average divided by the CPU count, rounded up, at least 1. The dev box runs at load 50-100 on 32 CPUs, and fixed waits sized for an idle machine failed there (round 191: HTTP reads, Chrome CDP calls, hoot suites) and passed alone. `HamsHttpCase.url_open` multiplies its timeout by it, `_patched_websocket_request` multiplies every CDP call timeout (core's 10 s), and `_patched_chrome_init` sets the browser's `throttling_factor` to at least it, which scales page-ready, `browser_js` and tour deadlines. A real hang still ends, only later.
+
 ### url_open Wrapper `[@ANCHOR: zero_sudo:hams_http_case_url_open]`
 
 **Signature.** `url_open(self, url, data=None, timeout=30, headers=None, allow_redirects=True, head=False, **kwargs) -> requests.Response`.
@@ -159,7 +163,7 @@ The [module README](../../README.md) attributes the end-of-test Database Leak Pr
 | Argument | Meaning |
 |---|---|
 | `url`, `data`, `headers`, `allow_redirects` | Passed to core `HttpCase.url_open` unchanged. |
-| `timeout` | Seconds, default 30 (core's is 10): the first request after Odoo rebuilds its routing map waits for that rebuild (11.8 s was measured), and a slow answer is not a failure. A hang still is. |
+| `timeout` | Seconds, default 30 (core's is 10): the first request after Odoo rebuilds its routing map waits for that rebuild (11.8 s was measured), and a slow answer is not a failure. A hang still is. The value is multiplied by `load_factor()`. |
 | `head` | `True` sends a `HEAD` request (`method="HEAD"`). |
 | `**kwargs` | Passed on, except `verify`, which is dropped (the opener's `verify` is already `False` for the self-signed proxy). |
 

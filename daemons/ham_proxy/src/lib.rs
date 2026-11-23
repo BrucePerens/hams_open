@@ -3,6 +3,7 @@
 //! Half-duplex request/response relay: one request head (no body) is read from the ham, sent to the site, and the
 //! response is streamed back until the site closes. A prototype for measuring, not a finished proxy.
 
+pub mod crypto;
 pub mod dane;
 pub mod indicator;
 pub mod login;
