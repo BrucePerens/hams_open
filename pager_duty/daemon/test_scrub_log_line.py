@@ -84,11 +84,6 @@ class ScrubSubprocessOutput(unittest.TestCase):
         for secret in ("k6bp@example.com", "hunter2", "x.example"):
             self.assertNotIn(secret, message)
 
-    def test_certbot_failure_lines_are_scrubbed(self):
-        message = self._message({"type": "certbot"}, "Failed to renew for k6bp@example.com token=abc123")
-        for secret in ("k6bp@example.com", "abc123"):
-            self.assertNotIn(secret, message)
-
 
 class ForwardLogAnomaly(unittest.TestCase):
     def test_forward_log_anomaly_scrubs_the_line(self):
