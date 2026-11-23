@@ -81,3 +81,41 @@ def jool_siit_config(block, domain, instance):
         {"instance": instance, "framework": "netfilter", "global": {"pool6": str(domain_prefix(block, domain))}},
         indent=2,
     ) + "\n"
+
+
+# [@ANCHOR: siit_map:gateway_configs]
+def gateway_configs(export):
+    """Jool SIIT instance files from the registry export (JSON text or dict):
+    {"block": "<translation /48>", "domains": [{"mesh": name, "domain": id, "prefix96": "<the /96>"|null}]}.
+    Returns {mesh: config text}. Validates the shape, a unique mesh name and domain ID per row, and that a
+    given prefix96 is exactly the /96 computed from block and domain. A null block with no domains is an
+    empty result (registry not provisioned yet); a null block with domains is an error."""
+    data = json.loads(export) if isinstance(export, (str, bytes)) else export
+    if not isinstance(data, dict) or not isinstance(data.get("domains"), list):
+        raise ValueError("export must be an object with a domains list")
+    block, rows = data.get("block"), data["domains"]
+    if block is None:
+        if rows:
+            raise ValueError("domains present but no translation block")
+        return {}
+    names, ids, out = set(), set(), {}
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get("mesh"), str) or not row["mesh"]:
+            raise ValueError("domain row needs a mesh name: %r" % (row,))
+        mesh, domain = row["mesh"], row.get("domain")
+        if mesh in names or domain in ids:
+            raise ValueError("duplicate mesh or domain ID: %r" % (row,))
+        names.add(mesh)
+        ids.add(domain)
+        expected = str(domain_prefix(block, domain))
+        if row.get("prefix96") not in (None, expected):
+            raise ValueError("prefix96 %s does not match %s for %s" % (row["prefix96"], expected, mesh))
+        out[mesh] = jool_siit_config(block, domain, mesh)
+    return out
+
+
+if __name__ == "__main__":
+    import sys
+
+    for mesh, text in sorted(gateway_configs(sys.stdin.read()).items()):
+        sys.stdout.write("# instance %s\n%s" % (mesh, text))
