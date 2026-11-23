@@ -6,10 +6,16 @@ to upload. Mesh-to-WAN is off by default on AREDN; this package does not change 
 
 Build (verified with the x86-64 SDK, `hams-node-0.1.0-r1.apk`; unpack the SDK in an empty directory):
 
-    echo "src-link hams <repo>/openwrt" > feeds.conf
-    ./scripts/feeds update hams && ./scripts/feeds install hams-node
+    printf 'src-git packages https://git.openwrt.org/feed/packages.git^<commit in the SDK feeds.conf.default>\nsrc-link hams <repo>/openwrt\n' > feeds.conf
+    ./scripts/feeds update packages hams && ./scripts/feeds install hams-node
     make defconfig && echo CONFIG_PACKAGE_hams-node=m >> .config && make defconfig
     make package/hams-node/compile        # bin/packages/<arch>/hams/hams-node-*.apk
+
+The `packages` feed line is needed by `hams-node-mtls`: nginx with TLS is `nginx-ssl` there (`nginx-full` also has SSL but is larger; the
+old one-line feeds.conf replaced the SDK's default feeds, which is why `nginx-ssl` did not resolve before). To build only `hams-node-mtls` and
+its siblings without compiling Jool, set `CONFIG_PACKAGE_hams-node-mtls=m` in `.config` and run
+`make -C package/feeds/hams/hams-node compile TOPDIR=$PWD` (bin/packages/<arch>/hams/hams-node-mtls-*.apk; its depends include `nginx-ssl`,
+checked with `apk adbdump`).
 
 The package is architecture independent (shell scripts); use the SDK of the node's target for the dependency
 metadata.
@@ -180,8 +186,7 @@ self-signed one (pin it or use `curl -k`); use the member certificate with `curl
 - Recovery if the owner certificate is lost or the member's callsign changes hands: a physical reset (`firstboot`, or the reset button) restores
   the stock login, then enrol again. Nothing remote can remove the requirement.
 - Tested on the OpenWrt 25.12.5 x86-64 image in QEMU with a test CA (`image/tools/mtls_test.py`): owner 200, another member 403, none, revoked and
-  other-CA refused, uhttpd only on loopback, `off` restores port 80. The SDK in this session could not resolve `nginx-ssl`, so the test
-  `.apk` was packed by hand from the same files; the `Makefile` block is unbuilt by the SDK.
+  other-CA refused, uhttpd only on loopback, `off` restores port 80. The `.apk` is built by the SDK from `pkg/hams-node-mtls.mk` (see Build).
 
 ## Endpoint updates (`hams-node-endpoint`, separate package)
 
