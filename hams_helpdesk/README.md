@@ -560,6 +560,7 @@ Entries for the helper functions that have no user-visible story of their own. E
 
 ### Module install hook
 
+- `[@ANCHOR: hams_helpdesk:exception_reporter_key_target]` `exception_reporter_key_target()` returns the `(key file, OS group)` the reporter key is registered with: `/opt/hams/etc/keys/exception_report/exception_reporter.env` and `hamsd_exception_report` when that group exists on the host, else the legacy flat `/opt/hams/etc/keys/exception_reporter.env` with no group. `register_exception_reporter_key` uses it and, when a group is set, registers as the Daemon Key Manager (only a manager may set the group); `migrations/1.4` runs it again on an installed database. Tested by `tests/test_exception_reporter_key.py`.
 - `[@ANCHOR: hams_helpdesk:post_init_hook]` `post_init_hook(env)` runs once when the module is first installed and calls `register_exception_reporter_key(env)` so the Daemon Key Manager issues the reporter key; installed databases get the same through `migrations/1.1`. It takes the install environment and returns nothing. **Tests:** `test_the_post_init_hook_registers_the_key_on_a_fresh_install`.
 
 ### Request filters (`models/ir_http_exception.py`)
