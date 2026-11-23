@@ -85,6 +85,7 @@ const VT_MINOR_END: u32 = 64;
 pub const VNWA_CODEC: (u16, u16) = (0x08bb, 0x29c0);
 
 impl Default for Policy {
+    // [@ANCHOR: relay_broker_policy_default]
     fn default() -> Policy {
         if cfg!(target_os = "macos") {
             Policy::macos()
@@ -350,9 +351,18 @@ mod tests {
     }
 
     // Tests [@ANCHOR: relay_broker_policy_macos]
+    // Tests [@ANCHOR: relay_broker_policy_default]
     #[test]
     fn the_macos_policy_has_one_serial_major_and_no_audio_class() {
         let p = Policy::macos();
+        assert_eq!(
+            Policy::default(),
+            if cfg!(target_os = "macos") {
+                Policy::macos()
+            } else {
+                Policy::linux()
+            }
+        );
         assert_eq!(p.class_of_major(9), Some(DeviceClass::Serial));
         assert_eq!(p.class_of_major(116), None);
         assert_eq!(p.device_root, PathBuf::from("/dev"));

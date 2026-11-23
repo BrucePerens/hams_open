@@ -1667,6 +1667,138 @@ The macOS `Os` is built and tested on a Mac (`cargo test` on macOS; its oracle t
 
 **Returns.** The policy. **Errors.** None. **Side effects.** None. **Tests.** `the_macos_policy_has_one_serial_major_and_no_audio_class` (policy.rs).
 
+### `property` (os_macos.rs) [@ANCHOR: relay_broker:relay_broker_macos_property]
+
+**Purpose.** Splits one `ioreg` property line (`"key" = value`) into key and value.
+
+**Signature.** `fn property(line: &str) -> Option<(&str, &str)>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `line`: `&str`, one output line. |
+
+**Returns.** `None` when the line is not a property. **Errors.** As stated. **Side effects.** Reads only (`run`, `serial_nodes`, `usb_identity` and `list_devices` start the fixed `ioreg`; `bind_udp` opens a socket; `open_device` opens the node). **Tests.** `garbage_and_empty_text_parse_to_no_nodes` (os_macos.rs).
+
+### `MacOs::run` (os_macos.rs) [@ANCHOR: relay_broker:relay_broker_macos_run]
+
+**Purpose.** Runs one fixed program with a fixed argument list, an empty environment (only `PATH`) and no shell, and returns its standard output.
+
+**Signature.** `fn run(program: &Path, args: &[&str]) -> io::Result<Vec<u8>>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `program` and `args`: the fixed command; nothing from a caller reaches them except an account or group name already validated upstream. |
+
+**Returns.** The output bytes when the program exits 0; an `io::Error` naming the program otherwise. **Errors.** As stated. **Side effects.** Reads only (`run`, `serial_nodes`, `usb_identity` and `list_devices` start the fixed `ioreg`; `bind_udp` opens a socket; `open_device` opens the node). **Tests.** `adding_to_a_group_without_rights_or_for_a_missing_group_fails` (os_macos.rs).
+
+### `MacOs::serial_nodes` (os_macos.rs) [@ANCHOR: relay_broker:relay_broker_macos_serial_nodes]
+
+**Purpose.** Every serial node of the I/O Registry: those under USB devices with their ids (`parse_ioreg` of `ioreg -r -c IOUSBHostDevice -l -w0`) plus the ones with no USB parent (`ioreg -r -c IOSerialBSDClient`, ids 0).
+
+**Signature.** `fn serial_nodes(&self) -> io::Result<Vec<SerialNode>>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | (none beyond `self`). |
+
+**Returns.** The nodes; an error when `ioreg` cannot run. **Errors.** As stated. **Side effects.** Reads only (`run`, `serial_nodes`, `usb_identity` and `list_devices` start the fixed `ioreg`; `bind_udp` opens a socket; `open_device` opens the node). **Tests.** `every_listed_serial_node_exists_and_usb_ids_are_known_to_system_profiler` (os_macos.rs).
+
+### `new_udp_socket` (os_macos.rs) [@ANCHOR: relay_broker:relay_broker_macos_new_udp_socket]
+
+**Purpose.** Makes a UDP socket of one address family that closes on exec (macOS has no `SOCK_CLOEXEC`, so the flag is set right after `socket`).
+
+**Signature.** `fn new_udp_socket(family: AddressFamily) -> nix::Result<OwnedFd>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `family`: `Inet` or `Inet6`. |
+
+**Returns.** The descriptor. **Errors.** As stated. **Side effects.** Reads only (`run`, `serial_nodes`, `usb_identity` and `list_devices` start the fixed `ioreg`; `bind_udp` opens a socket; `open_device` opens the node). **Tests.** `a_bound_udp_descriptor_is_a_real_socket_on_the_port_and_the_port_is_then_taken` (os_macos.rs).
+
+### `MacOs::node_kind` (os_macos.rs) [@ANCHOR: relay_broker:relay_broker_macos_node_kind]
+
+**Purpose.** `lstat` of a path as a `NodeKind`, without following a final symlink; `Missing` when it cannot be examined.
+
+**Signature.** `fn node_kind(&self, path: &Path) -> NodeKind`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `path`: any path. |
+
+**Returns.** The kind. **Errors.** As stated. **Side effects.** Reads only (`run`, `serial_nodes`, `usb_identity` and `list_devices` start the fixed `ioreg`; `bind_udp` opens a socket; `open_device` opens the node). **Tests.** `node_numbers_equal_what_stat_prints_for_dev_null` (os_macos.rs).
+
+### `MacOs::open_device` (os_macos.rs) [@ANCHOR: relay_broker:relay_broker_macos_open_device]
+
+**Purpose.** Opens a device node with `O_NOFOLLOW | O_CLOEXEC | O_NOCTTY | O_NONBLOCK`, then clears `O_NONBLOCK` so the worker receives an ordinary blocking descriptor.
+
+**Signature.** `fn open_device(&self, path: &Path, read_only: bool) -> io::Result<OwnedFd>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `path`: the node; `read_only`: open read-only or read-write. |
+
+**Returns.** The descriptor; the `io::Error` of `open` (a symlink is refused). **Errors.** As stated. **Side effects.** Reads only (`run`, `serial_nodes`, `usb_identity` and `list_devices` start the fixed `ioreg`; `bind_udp` opens a socket; `open_device` opens the node). **Tests.** `an_opened_descriptor_is_blocking_and_closes_on_exec` (os_macos.rs).
+
+### `MacOs::fd_kind` (os_macos.rs) [@ANCHOR: relay_broker:relay_broker_macos_fd_kind]
+
+**Purpose.** `fstat` of an open descriptor as a `NodeKind` (the post-open check that the opened object is the kind that was approved).
+
+**Signature.** `fn fd_kind(&self, fd: BorrowedFd<'_>) -> NodeKind`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `fd`: an open descriptor. |
+
+**Returns.** The kind; `Missing` when `fstat` fails. **Errors.** As stated. **Side effects.** Reads only (`run`, `serial_nodes`, `usb_identity` and `list_devices` start the fixed `ioreg`; `bind_udp` opens a socket; `open_device` opens the node). **Tests.** `node_numbers_equal_what_stat_prints_for_dev_null` (os_macos.rs).
+
+### `MacOs::usb_identity` (os_macos.rs) [@ANCHOR: relay_broker:relay_broker_macos_usb_identity]
+
+**Purpose.** The USB vendor id, product id and product string behind a `/dev/cu.*` or `/dev/tty.*` node, from `serial_nodes`.
+
+**Signature.** `fn usb_identity(&self, path: &Path) -> UsbIdentity`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `path`: a device path. |
+
+**Returns.** `Usb(vid, pid, product)`, `NotUsb` (not a serial node, or no USB parent), or `Unreadable` when `ioreg` cannot run. **Errors.** As stated. **Side effects.** Reads only (`run`, `serial_nodes`, `usb_identity` and `list_devices` start the fixed `ioreg`; `bind_udp` opens a socket; `open_device` opens the node). **Tests.** `every_listed_serial_node_exists_and_usb_ids_are_known_to_system_profiler` (os_macos.rs).
+
+### `MacOs::list_devices` (os_macos.rs) [@ANCHOR: relay_broker:relay_broker_macos_list_devices]
+
+**Purpose.** Lists the serial nodes (both the call-out and the dial-in path of each), sorted by path, at most `MAX_DEVICES`, with the USB ids and strings (0 and empty for non-USB). No audio nodes exist in `/dev` on macOS.
+
+**Signature.** `fn list_devices(&self) -> Vec<DeviceDescriptor>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | (none beyond `self`). |
+
+**Returns.** The descriptors; empty when `ioreg` cannot run. **Errors.** As stated. **Side effects.** Reads only (`run`, `serial_nodes`, `usb_identity` and `list_devices` start the fixed `ioreg`; `bind_udp` opens a socket; `open_device` opens the node). **Tests.** `every_listed_serial_node_exists_and_usb_ids_are_known_to_system_profiler` (os_macos.rs).
+
+### `MacOs::bind_udp` (os_macos.rs) [@ANCHOR: relay_broker:relay_broker_macos_bind_udp]
+
+**Purpose.** Binds a UDP socket on every address (dual stack, plain IPv4 when IPv6 is unavailable) and returns the descriptor; a port in use is refused, not shared.
+
+**Signature.** `fn bind_udp(&self, port: u16) -> io::Result<OwnedFd>`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | `port`: the UDP port (0 picks a free one). |
+
+**Returns.** The bound descriptor; `AddrInUse` for a taken port. **Errors.** As stated. **Side effects.** Reads only (`run`, `serial_nodes`, `usb_identity` and `list_devices` start the fixed `ioreg`; `bind_udp` opens a socket; `open_device` opens the node). **Tests.** `a_bound_udp_descriptor_is_a_real_socket_on_the_port_and_the_port_is_then_taken` (os_macos.rs).
+
+### `Policy::default` (policy.rs) [@ANCHOR: relay_broker:relay_broker_policy_default]
+
+**Purpose.** The platform default policy: `Policy::macos()` on macOS, `Policy::linux()` elsewhere.
+
+**Signature.** `fn default() -> Policy`
+
+| Argument | Type and range | Meaning |
+|---|---|---|
+| (see signature) | | (none). |
+
+**Returns.** The policy. **Errors.** As stated. **Side effects.** Reads only (`run`, `serial_nodes`, `usb_identity` and `list_devices` start the fixed `ioreg`; `bind_udp` opens a socket; `open_device` opens the node). **Tests.** `the_macos_policy_has_one_serial_major_and_no_audio_class` (policy.rs).
+
 ## Data structures
 
 Every data structure of the broker, explained in full (ADR 0113): purpose, fields, who builds and reads it. Each sits under the anchor on its definition in `src/`.

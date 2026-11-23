@@ -49,6 +49,7 @@ pub struct SerialNode {
 }
 
 /// The value of an `ioreg` property line: `"key" = 1507` or `"key" = "text"`.
+// [@ANCHOR: relay_broker_macos_property]
 fn property(line: &str) -> Option<(&str, &str)> {
     let rest = line.trim_start_matches([' ', '|']).strip_prefix('"')?;
     let (key, value) = rest.split_once("\" = ")?;
@@ -147,6 +148,7 @@ pub fn parse_ioreg(text: &str) -> Vec<SerialNode> {
 
 impl MacOs {
     /// Runs a fixed program with a fixed argument list, an empty environment and no shell; its standard output when it exits 0.
+    // [@ANCHOR: relay_broker_macos_run]
     fn run(program: &Path, args: &[&str]) -> io::Result<Vec<u8>> {
         let output = Command::new(program)
             .args(args)
@@ -165,6 +167,7 @@ impl MacOs {
     }
 
     /// The serial nodes under USB devices, plus the ones with no USB parent (`ioreg -r -c IOSerialBSDClient`, ids 0).
+    // [@ANCHOR: relay_broker_macos_serial_nodes]
     fn serial_nodes(&self) -> io::Result<Vec<SerialNode>> {
         let usb = Self::run(&self.ioreg, &["-r", "-c", "IOUSBHostDevice", "-l", "-w0"])?;
         let mut nodes = parse_ioreg(&String::from_utf8_lossy(&usb));
@@ -192,6 +195,7 @@ fn parse_dscl_search(text: &str) -> Vec<String> {
         .collect()
 }
 
+// [@ANCHOR: relay_broker_macos_new_udp_socket]
 fn new_udp_socket(family: nix::sys::socket::AddressFamily) -> nix::Result<OwnedFd> {
     use nix::sys::socket::{socket, SockFlag, SockType};
     let fd = socket(family, SockType::Datagram, SockFlag::empty(), None)?;
@@ -211,6 +215,7 @@ impl Os for MacOs {
         socket_peer(socket)
     }
 
+    // [@ANCHOR: relay_broker_macos_node_kind]
     fn node_kind(&self, path: &Path) -> NodeKind {
         match lstat(path) {
             Ok(st) => kind_of_stat(&st),
@@ -218,6 +223,7 @@ impl Os for MacOs {
         }
     }
 
+    // [@ANCHOR: relay_broker_macos_open_device]
     fn open_device(&self, path: &Path, read_only: bool) -> io::Result<OwnedFd> {
         let access = if read_only {
             OFlag::O_RDONLY
@@ -232,6 +238,7 @@ impl Os for MacOs {
         Ok(fd)
     }
 
+    // [@ANCHOR: relay_broker_macos_fd_kind]
     fn fd_kind(&self, fd: BorrowedFd<'_>) -> NodeKind {
         match fstat(fd) {
             Ok(st) => kind_of_stat(&st),
@@ -239,6 +246,7 @@ impl Os for MacOs {
         }
     }
 
+    // [@ANCHOR: relay_broker_macos_usb_identity]
     fn usb_identity(&self, path: &Path) -> UsbIdentity {
         let Some(name) = path.to_str() else {
             return UsbIdentity::NotUsb;
@@ -261,6 +269,7 @@ impl Os for MacOs {
         }
     }
 
+    // [@ANCHOR: relay_broker_macos_list_devices]
     fn list_devices(&self) -> Vec<DeviceDescriptor> {
         let mut out = Vec::new();
         for node in self.serial_nodes().unwrap_or_default() {
@@ -304,6 +313,7 @@ impl Os for MacOs {
         Self::run(&self.dseditgroup, &Self::add_to_group_args(user, group)).map(|_| ())
     }
 
+    // [@ANCHOR: relay_broker_macos_bind_udp]
     fn bind_udp(&self, port: u16) -> io::Result<OwnedFd> {
         use nix::sys::socket::{bind, setsockopt, sockopt, AddressFamily, SockaddrIn, SockaddrIn6};
         use std::os::fd::AsRawFd;
@@ -444,6 +454,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: os_macos_parse_ioreg]
+    // Tests [@ANCHOR: relay_broker_macos_property]
     #[test]
     fn garbage_and_empty_text_parse_to_no_nodes() {
         assert!(parse_ioreg("").is_empty());
@@ -451,6 +462,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: relay_broker_kind_of_stat]
+    // Tests [@ANCHOR: relay_broker_macos_node_kind]
+    // Tests [@ANCHOR: relay_broker_macos_fd_kind]
     #[test]
     fn node_numbers_equal_what_stat_prints_for_dev_null() {
         // Oracle: /usr/bin/stat prints the major (%Hr) and minor (%Lr) of the node.
@@ -475,6 +488,7 @@ mod tests {
         );
     }
 
+    // Tests [@ANCHOR: relay_broker_macos_open_device]
     #[test]
     fn an_opened_descriptor_is_blocking_and_closes_on_exec() {
         let fd = MacOs::default()
@@ -532,6 +546,7 @@ mod tests {
         assert!(os.groups_of("no-such-account-xyz").is_empty());
     }
 
+    // Tests [@ANCHOR: relay_broker_macos_run]
     #[test]
     fn adding_to_a_group_without_rights_or_for_a_missing_group_fails() {
         assert_eq!(
@@ -543,6 +558,8 @@ mod tests {
             .is_err());
     }
 
+    // Tests [@ANCHOR: relay_broker_macos_new_udp_socket]
+    // Tests [@ANCHOR: relay_broker_macos_bind_udp]
     #[test]
     fn a_bound_udp_descriptor_is_a_real_socket_on_the_port_and_the_port_is_then_taken() {
         let os = MacOs::default();
@@ -586,6 +603,9 @@ mod tests {
         assert!(ours.abs_diff(oracle) <= 2);
     }
 
+    // Tests [@ANCHOR: relay_broker_macos_serial_nodes]
+    // Tests [@ANCHOR: relay_broker_macos_usb_identity]
+    // Tests [@ANCHOR: relay_broker_macos_list_devices]
     #[test]
     fn every_listed_serial_node_exists_and_usb_ids_are_known_to_system_profiler() {
         let os = MacOs::default();
