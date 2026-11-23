@@ -1,0 +1,10 @@
+# Fetches the signed whitelist. The gateway verifies the signature and expiry itself on every connection, so a bad download only means
+# the old file is replaced by a file the gateway refuses (nothing permitted until the next good fetch); keep the last good copy.
+[Unit]
+Description=Fetch the Hams.com Net signed site whitelist
+
+[Service]
+Type=oneshot
+DynamicUser=yes
+StateDirectory=ham_gateway
+ExecStart=/bin/sh -c 'curl -fsS --max-time 30 -o /var/lib/ham_gateway/whitelist.new https://www.hams.com/ipv6/whitelist.json && mv /var/lib/ham_gateway/whitelist.new /var/lib/ham_gateway/whitelist.json'

@@ -81,10 +81,17 @@ fn run() -> Result<(), ProxyError> {
     };
     // `--signed-whitelist FILE --whitelist-key HEXFILE` (the hams.com list, re-read and verified on every connection) or the plain
     // `--whitelist FILE`; either needs `--callsign` and `--log`.
-    let signed = match (arg(&args, "--signed-whitelist"), arg(&args, "--whitelist-key")) {
+    let signed = match (
+        arg(&args, "--signed-whitelist"),
+        arg(&args, "--whitelist-key"),
+    ) {
         (Some(f), Some(k)) => Some((PathBuf::from(f), load_key(&k)?)),
         (None, None) => None,
-        _ => return Err(ProxyError::Tls("--signed-whitelist needs --whitelist-key".to_string())),
+        _ => {
+            return Err(ProxyError::Tls(
+                "--signed-whitelist needs --whitelist-key".to_string(),
+            ))
+        }
     };
     // `--sign-key PEM` (Ed25519 private key) turns on the signed `X-Ham-Integrity` header on HTML responses.
     let sign: Option<Arc<PKey<Private>>> = match arg(&args, "--sign-key") {

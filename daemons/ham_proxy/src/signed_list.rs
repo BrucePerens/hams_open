@@ -52,29 +52,48 @@ pub fn parse_utc(s: &str) -> Option<u64> {
 /// Verify `text` (the published JSON) under the raw 32-byte Ed25519 `key` at unix time `now`, and return the whitelist it names.
 pub fn verify_list(text: &str, key: &[u8], now: u64) -> Result<Whitelist, ListError> {
     let doc: serde_json::Value = serde_json::from_str(text).map_err(|_| ListError::Malformed)?;
-    let field = |n: &str| doc.get(n).and_then(|v| v.as_str()).and_then(|s| decode_block(s).ok());
+    let field = |n: &str| {
+        doc.get(n)
+            .and_then(|v| v.as_str())
+            .and_then(|s| decode_block(s).ok())
+    };
     let (payload, sig) = field("payload")
         .zip(field("signature"))
         .ok_or(ListError::Malformed)?;
-    let pkey = PKey::public_key_from_raw_bytes(key, Id::ED25519).map_err(|_| ListError::Malformed)?;
+    let pkey =
+        PKey::public_key_from_raw_bytes(key, Id::ED25519).map_err(|_| ListError::Malformed)?;
     let mut v = Verifier::new_without_digest(&pkey).map_err(|_| ListError::Malformed)?;
     if !v.verify_oneshot(&sig, &payload).unwrap_or(false) {
         return Err(ListError::BadSignature);
     }
-    let body: serde_json::Value = serde_json::from_slice(&payload).map_err(|_| ListError::Malformed)?;
-    let expires = body.get("expires").and_then(|v| v.as_str()).and_then(parse_utc);
+    let body: serde_json::Value =
+        serde_json::from_slice(&payload).map_err(|_| ListError::Malformed)?;
+    let expires = body
+        .get("expires")
+        .and_then(|v| v.as_str())
+        .and_then(parse_utc);
     if expires.is_none_or(|e| e <= now) {
         return Err(ListError::Expired);
     }
-    let entries = body.get("entries").and_then(|v| v.as_array()).ok_or(ListError::Malformed)?;
+    let entries = body
+        .get("entries")
+        .and_then(|v| v.as_array())
+        .ok_or(ListError::Malformed)?;
     let mut w = Whitelist::default();
     for e in entries {
-        let host = e.get("host").and_then(|v| v.as_str()).ok_or(ListError::Malformed)?;
+        let host = e
+            .get("host")
+            .and_then(|v| v.as_str())
+            .ok_or(ListError::Malformed)?;
         let paths = match e.get("paths") {
             None => Vec::new(),
             Some(p) => p
                 .as_array()
-                .and_then(|a| a.iter().map(|x| x.as_str().map(str::to_string)).collect::<Option<Vec<_>>>())
+                .and_then(|a| {
+                    a.iter()
+                        .map(|x| x.as_str().map(str::to_string))
+                        .collect::<Option<Vec<_>>>()
+                })
                 .ok_or(ListError::Malformed)?,
         };
         w.add_site(host, paths);
@@ -85,7 +104,8 @@ pub fn verify_list(text: &str, key: &[u8], now: u64) -> Result<Whitelist, ListEr
 // [@ANCHOR: ham_proxy_list_unhex]
 /// Bytes of a hex string, `None` if it is odd-length or not hex.
 pub fn unhex(s: &str) -> Option<Vec<u8>> {
-    (s.len() % 2 == 0)
+    s.len()
+        .is_multiple_of(2)
         .then(|| {
             (0..s.len())
                 .step_by(2)

@@ -122,8 +122,15 @@ fn cert(n: &str) -> (PathBuf, PathBuf) {
     std::fs::create_dir_all(&d).unwrap();
     let (c, k) = (d.join("c.pem"), d.join("k.pem"));
     let ok = Command::new("openssl")
-        .args(["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "2"])
-        .args(["-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost"])
+        .args([
+            "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "2",
+        ])
+        .args([
+            "-subj",
+            "/CN=localhost",
+            "-addext",
+            "subjectAltName=DNS:localhost",
+        ])
         .arg("-keyout")
         .arg(&k)
         .arg("-out")
@@ -148,7 +155,8 @@ fn gateway_flow(
     let (c, k) = cert(n);
     let mut b = SslAcceptor::mozilla_intermediate_v5(SslMethod::tls_server()).unwrap();
     b.set_certificate_chain_file(&c).unwrap();
-    b.set_private_key_file(&k, openssl::ssl::SslFiletype::PEM).unwrap();
+    b.set_private_key_file(&k, openssl::ssl::SslFiletype::PEM)
+        .unwrap();
     let site_acc = Arc::new(b.build());
     let sl = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = sl.local_addr().unwrap().port();
@@ -271,4 +279,114 @@ fn gateway_without_a_whitelist_permits_nothing_and_encrypting_ham_clients_are_re
         .connect("localhost", TcpStream::connect(paddr).unwrap())
         .is_err());
     assert!(t.join().unwrap().is_err());
+}
+
+#[test]
+fn policy_replace_swaps_the_whitelist() {
+    // Tests [@ANCHOR: ham_proxy_policy_replace]
+    let p = Policy::new(
+        list_for(r#"[{"host":"a.example.org"}]"#),
+        "w1aw",
+        Box::new(Sink(Arc::default())),
+    )
+    .unwrap();
+    assert!(p.permits("a.example.org", "/"));
+    p.replace(list_for(r#"[{"host":"b.example.org"}]"#));
+    assert!(!p.permits("a.example.org", "/") && p.permits("b.example.org", "/"));
+}
+
+fn binary_get(port: u16, c: &std::path::Path, host: &str, site_port: u16) -> String {
+    let cli = ham_connector(c).unwrap();
+    let mut tcp = None;
+    for _ in 0..50 {
+        if let Ok(t) = TcpStream::connect(("127.0.0.1", port)) {
+            tcp = Some(t);
+            break;
+        }
+        thread::sleep(std::time::Duration::from_millis(100));
+    }
+    let mut s = cli.connect("localhost", tcp.unwrap()).unwrap();
+    let _ = s.write_all(format!("GET /x HTTP/1.0\r\nHost: {host}:{site_port}\r\n\r\n").as_bytes());
+    let mut out = String::new();
+    let _ = s.read_to_string(&mut out);
+    out
+}
+
+#[test]
+fn binary_gateway_reads_the_signed_file_each_connection() {
+    // Tests [@ANCHOR: ham_proxy_load_key]
+    // Tests [@ANCHOR: ham_proxy_load_list]
+    let (c, k) = cert("bin");
+    let d = c.parent().unwrap().to_path_buf();
+    let mut b = SslAcceptor::mozilla_intermediate_v5(SslMethod::tls_server()).unwrap();
+    b.set_certificate_chain_file(&c).unwrap();
+    b.set_private_key_file(&k, openssl::ssl::SslFiletype::PEM)
+        .unwrap();
+    let site_acc = Arc::new(b.build());
+    let sl = TcpListener::bind("127.0.0.1:0").unwrap();
+    let site_port = sl.local_addr().unwrap().port();
+    thread::spawn(move || {
+        for s in sl.incoming().flatten() {
+            if let Ok(mut t) = site_acc.accept(s) {
+                let mut buf = [0u8; 1024];
+                let _ = t.read(&mut buf);
+                let _ = t.write_all(b"HTTP/1.0 200 OK\r\n\r\nsite-body-xyz");
+            }
+        }
+    });
+    let (sk, raw) = key();
+    let hex: String = raw.iter().map(|b| format!("{b:02x}")).collect();
+    std::fs::write(d.join("key.hex"), format!("{hex}\n")).unwrap();
+    let list = d.join("whitelist.json");
+    std::fs::write(
+        &list,
+        sign(&sk, "2099-01-01T00:00:00Z", r#"[{"host":"localhost"}]"#),
+    )
+    .unwrap();
+    let port = TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ham_proxy"))
+        .args([
+            "--gateway",
+            "--listen",
+            &format!("127.0.0.1:{port}"),
+            "--callsign",
+            "w1aw",
+        ])
+        .arg("--cert")
+        .arg(&c)
+        .arg("--key")
+        .arg(&k)
+        .arg("--ca")
+        .arg(&c)
+        .arg("--signed-whitelist")
+        .arg(&list)
+        .arg("--whitelist-key")
+        .arg(d.join("key.hex"))
+        .arg("--log")
+        .arg(d.join("id.log"))
+        .spawn()
+        .unwrap();
+    let good = binary_get(port, &c, "localhost", site_port);
+    // the file is replaced by one signed with another key: the next connection gets nothing
+    std::fs::write(
+        &list,
+        sign(
+            &key().0,
+            "2099-01-01T00:00:00Z",
+            r#"[{"host":"localhost"}]"#,
+        ),
+    )
+    .unwrap();
+    let bad = binary_get(port, &c, "localhost", site_port);
+    child.kill().unwrap();
+    child.wait().unwrap();
+    assert!(good.ends_with("site-body-xyz"), "{good}");
+    assert!(!bad.contains("site-body"), "{bad}");
+    assert!(std::fs::read_to_string(d.join("id.log"))
+        .unwrap()
+        .contains("W1AW -> localhost"));
 }

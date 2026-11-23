@@ -7,8 +7,8 @@ pub mod dane;
 pub mod indicator;
 pub mod login;
 pub mod policy;
-pub mod signed_list;
 pub mod session;
+pub mod signed_list;
 
 use openssl::error::ErrorStack;
 use openssl::pkey::{PKey, Private};
@@ -155,8 +155,11 @@ fn request_target(head: &str) -> Option<(String, String, String)> {
     let host = host.trim_end_matches('.').to_string();
     let plain = !host.is_empty()
         && host.len() < 254
-        && host.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'.' || c == b'-');
-    (plain && port.bytes().all(|c| c.is_ascii_digit()) && !port.is_empty()).then_some((host, port, path))
+        && host
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || c == b'.' || c == b'-');
+    (plain && port.bytes().all(|c| c.is_ascii_digit()) && !port.is_empty())
+        .then_some((host, port, path))
 }
 
 // [@ANCHOR: ham_proxy_serve_one]
