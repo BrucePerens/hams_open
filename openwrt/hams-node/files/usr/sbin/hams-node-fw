@@ -1,22 +1,37 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-or-later
-# hams-node-fw render | apply | is-rf INTERFACE
+# hams-node-fw render | apply | remove | is-rf INTERFACE
 # From uci hams_node_fw: firewall zone "ham" for the Internet-tunnel interfaces and zone "hamrf" for radio links; input and forward are
 # DROP (inbound closed by default), output ACCEPT, and only the ports in "list open" get a rule. Part 97: an encrypted-service port
 # (ssh, https, DoT, mail TLS, ...) is never opened toward RF; the interface is also the registry of rf links, so
 # `hams-node-fw is-rf IFACE` (exit 0 = IFACE is a radio link) lets hams-node-wg refuse WireGuard there. render prints `uci batch` text;
 # apply feeds it to uci and commits the firewall config (reload the firewall afterwards). AREDN's own zones are not touched.
+# remove deletes every firewall section this package created (zones hams_zone/hams_rf_zone, rules hams_in_*/hams_rf_in_*), nothing else;
+# apply with enabled != 1 does the same. Both are idempotent.
 set -u
 get() { uci -q get "hams_node_fw.main.$1" 2>/dev/null; }
 ENCRYPTED_PORTS=" tcp:22 tcp:443 tcp:853 tcp:993 tcp:995 tcp:465 tcp:8883 tcp:1194 udp:51820 udp:5525 udp:500 udp:4500 udp:1194 "
 
+# the firewall sections this package names itself: zones and rules, identified by their section-name prefix
+remove_batch() {
+	uci -q show firewall | sed -n 's/^firewall\.\(hams_zone\|hams_rf_zone\|hams_in_[^.=]*\|hams_rf_in_[^.=]*\)=.*/\1/p' |
+		while read -r s; do echo "delete firewall.$s"; done
+}
+
+remove() {
+	batch=$(remove_batch)
+	[ -n "$batch" ] || return 0
+	printf '%s\n' "$batch" | uci batch && uci commit firewall
+}
+
 case ${1:-} in
+remove) ;;
 is-rf)
 	[ $# -eq 2 ] || { echo "usage: hams-node-fw is-rf INTERFACE" >&2; exit 2; }
 	for i in $(get rf_iface); do [ "$i" = "$2" ] && exit 0; done
 	exit 1 ;;
 render | apply) ;;
-*) echo "usage: hams-node-fw render | apply | is-rf INTERFACE" >&2; exit 2 ;;
+*) echo "usage: hams-node-fw render | apply | remove | is-rf INTERFACE" >&2; exit 2 ;;
 esac
 
 render() {
@@ -48,6 +63,8 @@ render() {
 }
 
 if [ "$1" = render ]; then render; exit $?; fi
+if [ "$1" = remove ]; then remove; exit $?; fi
+[ "$(get enabled)" = 1 ] || { remove; exit $?; }
 batch=$(render) || exit 1
 [ -n "$batch" ] || exit 0
 printf '%s\n' "$batch" | uci batch && uci commit firewall

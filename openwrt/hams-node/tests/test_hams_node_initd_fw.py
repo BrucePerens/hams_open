@@ -50,6 +50,19 @@ class InitTests(unittest.TestCase):
         self.assertEqual(log, ["trigger hams_node_fw"])
         self.assertIn("USE_PROCD=1", (INITD / "hams-node-fw").read_text())
 
+    def test_stop_removes_zones_and_reloads_firewall(self):
+        self.tool("hams-node-fw", 'echo "fw $*" >> "$FAKE/log"\n')
+        self.tool("firewall", 'echo "firewall $*" >> "$FAKE/log"\n')
+        result, log = self.run_fn("hams-node-fw", "stop_service")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(log, ["fw remove", "firewall reload"])
+
+    def test_prerm_removes_zones_only_on_package_removal(self):
+        mk = (HERE.parent / "pkg" / "hams-node-fw.mk").read_text()
+        prerm = mk.split("define Package/hams-node-fw/prerm", 1)[1].split("endef", 1)[0]
+        self.assertIn("/usr/sbin/hams-node-fw remove", prerm)
+        self.assertIn('"$$1" != remove', prerm)
+
 
 if __name__ == "__main__":
     unittest.main()

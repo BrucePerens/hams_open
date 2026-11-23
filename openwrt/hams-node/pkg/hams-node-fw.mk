@@ -17,6 +17,12 @@ define Package/hams-node-fw/conffiles
 /etc/config/hams_node_fw
 endef
 
+define Package/hams-node-fw/prerm
+#!/bin/sh
+[ -n "$$IPKG_INSTROOT" ] || [ "$$1" != remove ] || { /usr/sbin/hams-node-fw remove && /etc/init.d/firewall reload; }
+exit 0
+endef
+
 define Package/hams-node-fw/install
 	$(INSTALL_DIR) $(1)/usr/sbin $(1)/etc/config
 	$(INSTALL_BIN) ./files/usr/sbin/hams-node-fw $(1)/usr/sbin/
