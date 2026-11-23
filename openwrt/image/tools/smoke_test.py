@@ -82,6 +82,20 @@ RF_WG = [
     "hams-node-wg apply rf0 internet /tmp/peers 2>&1; echo rc=$?",
 ]
 
+# hams-node-update against a local signed feed (/root/update-feed holds hams-node at -r1, installed, and -r2; build_test_image.sh -n). The image's
+# own repository lists point at a build-host path, so they are set aside. A failing health check must roll back to -r1; then a pass installs -r2.
+UPDATE_SETUP = [
+    "mkdir -p /tmp/aside; mv /etc/apk/repositories /etc/apk/repositories.d/* /tmp/aside/ 2>/dev/null; true",
+    "(uhttpd -f -p 127.0.0.1:8099 -h /root/update-feed >/dev/null 2>&1 &); sleep 1",
+    "uci set hams_node_update.main.feed_url=http://127.0.0.1:8099; uci set hams_node_update.main.public_key=/etc/hams-node/hams-feed-public.pem",
+    "uci set hams_node_update.main.packages=hams-node; uci set hams_node_update.main.health_cmd=false; uci commit hams_node_update",
+]
+UPDATE_FAIL = ["hams-node-update run 2>&1; echo rc=$?", "apk list -I hams-node; cat /var/lib/hams-node-update/status"]
+UPDATE_PASS = [
+    "uci set hams_node_update.main.health_cmd=''; uci commit hams_node_update",
+    "hams-node-update run 2>&1; echo rc=$?", "apk list -I hams-node; cat /var/lib/hams-node-update/status",
+]
+
 
 def run_all(con, cmds, timeout=60):
     """Run each command line; the joined output, or None if one of them never completed."""
@@ -197,6 +211,12 @@ def main():
         check("firewall: inbound from the ham zone is dropped by default", not http_answers(port))
         out = run_all(con, FW_OPEN)
         check("firewall: opening tcp 80 in uci opens it", out is not None and "st=0" in out and http_answers(port))
+        out = run_all(con, UPDATE_SETUP + UPDATE_FAIL, 120)
+        check("update: a failing health check rolls back to the installed version", out is not None and "rc=1" in out
+              and "hams-node-0.1.0-r1" in out and "rolled back" in out, (out or "").strip().replace("\r\n", " | ")[-250:])
+        out = run_all(con, UPDATE_PASS, 120)
+        check("update: from a local signed feed installs the newer version", out is not None and "rc=0" in out
+              and "hams-node-0.1.0-r2" in out and "updated" in out, (out or "").strip().replace("\r\n", " | ")[-250:])
         out = run_all(con, RF_WG, 30)
         check("rf interface refuses WireGuard", out is not None and "rc=1" in out and "refusing WireGuard" in out, (out or "").strip()[:200])
     finally:
