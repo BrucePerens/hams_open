@@ -93,6 +93,35 @@ class MtlsTests(unittest.TestCase):
         self.assertTrue((self.state / "mtls" / "server.key").stat().st_size > 0)
         self.assertIn("hams-node-mtls crl", self.cron.read_text())
 
+    def ca_fingerprint(self):
+        out = subprocess.run(["openssl", "x509", "-in", str(self.state / "member-ca.pem"), "-noout", "-fingerprint", "-sha256"], capture_output=True, text=True, check=True).stdout
+        return out.split("=", 1)[1].strip().replace(":", "").lower()
+
+    def test_a_certificate_on_the_deprecation_list_is_refused_without_the_crl(self):
+        self.enrolled()
+        fingerprint = self.ca_fingerprint()
+        (self.state / "deprecation_list").write_text("KEYB64== 2001:db8::/60\ncert:%s:abcdef \ncert:%s:1f \ncert:%s:77 \ncert:%s:zz;rm \n" % (fingerprint, fingerprint, "00" * 32, fingerprint))
+        self.assertEqual(self.run_script("apply").returncode, 0)
+        conf = self.conf()
+        self.assertIn("map $ssl_client_serial $hams_revoked {", conf)
+        self.assertIn('"ABCDEF" 1;', conf)
+        self.assertIn('"1F" 1;', conf, "an odd number of digits is padded as nginx prints it")
+        self.assertNotIn('"77"', conf, "an entry of another issuer is not ours")
+        self.assertNotIn("zz", conf)
+        self.assertIn("if ($hams_revoked) { return 403; }", conf)
+        self.assertNotIn("ssl_crl", conf, "no CRL was needed")
+
+    def test_without_a_list_nothing_is_refused_and_a_removal_lifts_the_block(self):
+        self.enrolled()
+        self.assertEqual(self.run_script("apply").returncode, 0)
+        self.assertNotIn('" 1;', self.conf().split("$hams_revoked {")[1].split("}")[0])
+        (self.state / "deprecation_list").write_text("cert:%s:abcdef \n" % self.ca_fingerprint())
+        self.run_script("apply")
+        self.assertIn('"ABCDEF" 1;', self.conf())
+        (self.state / "deprecation_list").write_text("")
+        self.run_script("apply")
+        self.assertNotIn("ABCDEF", self.conf())
+
     def test_not_enrolled_changes_nothing(self):
         result = self.run_script("apply")
         self.assertEqual(result.returncode, 0)

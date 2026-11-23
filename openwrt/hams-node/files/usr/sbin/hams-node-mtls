@@ -28,12 +28,37 @@ ca=$state/member-ca.pem
 inner=127.0.0.1:8080
 cron=${HAMS_NODE_CRON:-/etc/crontabs/root}
 job="/usr/sbin/hams-node-mtls crl"
+# revoked member certificates named by the signed deprecation list (hams-node-status keeps it): "cert:ISSUER_SHA256:SERIAL" lines
+deplist=${HAMS_NODE_DEPRECATION_LIST:-$state/deprecation_list}
 
 # crl_fresh FILE: its nextUpdate has not passed (openssl crl has no -checkend)
 crl_fresh() {
 	nu=$(openssl crl -in "$1" -noout -nextupdate -dateopt iso_8601 2>/dev/null | cut -d= -f2)
 	nu=${nu%Z}
 	[ -n "$nu" ] && [ "$(date -u -d "$nu" +%s 2>/dev/null || echo 0)" -gt "$(date -u +%s)" ]
+}
+
+# ca_fingerprints: the SHA-256 fingerprint (lowercase hex) of every certificate in the member CA bundle
+ca_fingerprints() {
+	awk -v d="$dir" '/BEGIN CERTIFICATE/ { n++ } n { print > (d "/ca_" n ".pem") }' "$ca"
+	for f in "$dir"/ca_*.pem; do
+		[ -f "$f" ] && openssl x509 -in "$f" -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2 | tr -d : | tr A-F a-f
+	done
+	rm -f "$dir"/ca_*.pem
+}
+
+# revoked_serials: nginx map lines for the listed certificates whose issuer is one of the pinned CAs (so the CRL endpoint is not needed)
+revoked_serials() {
+	[ -r "$deplist" ] || return 0
+	fps=$(ca_fingerprints)
+	grep '^cert:' "$deplist" | while IFS=: read -r _ issuer serial; do
+		serial=${serial% }
+		case $serial in '' | *[!0-9a-f]*) continue ;; esac
+		echo "$fps" | grep -qx "$issuer" || continue
+		up=$(echo "$serial" | tr a-f A-F)
+		[ $((${#up} % 2)) = 1 ] && up=0$up
+		echo "		\"$up\" 1;"
+	done
 }
 
 reload_nginx() { [ -x /etc/init.d/hams-node-mtls ] && { /etc/init.d/hams-node-mtls enable; /etc/init.d/hams-node-mtls restart; }; return 0; }
@@ -72,6 +97,7 @@ do_apply() {
 	if [ -s "$dir/identity.crl" ] && [ -s "$dir/crls.pem" ] && crl_fresh "$dir/identity.crl"; then
 		crlline="ssl_crl $dir/crls.pem;"
 	fi
+	revoked=$(revoked_serials)
 	# the callsign is a Subject attribute under 1.3.6.1.4.1.66926.1.1 (and 12348.1.1), printed by nginx in the legacy DN form
 	callre=$(printf '%s' "$owner" | sed 's|/|\\/|g')
 	cat > "$conf" <<N
@@ -86,6 +112,10 @@ http {
 		default 0;
 		"~(^|/)1\\.3\\.6\\.1\\.4\\.1\\.66926\\.1\\.1=$callre(/|\$)" 1;
 	}
+	map \$ssl_client_serial \$hams_revoked {
+		default 0;
+$revoked
+	}
 	server {
 		listen 443 ssl;
 		listen [::]:443 ssl;
@@ -96,6 +126,7 @@ http {
 		ssl_verify_client on;
 		ssl_verify_depth 5;
 		$crlline
+		if (\$hams_revoked) { return 403; }
 		if (\$hams_owner = 0) { return 403; }
 		location / {
 			proxy_pass http://$inner;
