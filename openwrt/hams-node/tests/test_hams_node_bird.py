@@ -3,6 +3,7 @@
 
 import os
 import pathlib
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -67,6 +68,15 @@ class BirdTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         result, conf, _ = self.render(secret=None)
         self.assertNotEqual(result.returncode, 0)
+
+    @unittest.skipUnless(shutil.which("bird") or os.path.exists("/usr/sbin/bird"), "bird is not installed")
+    def test_bird_parses_the_generated_file(self):
+        bird = shutil.which("bird") or "/usr/sbin/bird"
+        for over in ({"rf_live": "0"}, {"rf_live": "1"}):
+            result, conf, out = self.render(**over)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            parsed = subprocess.run([bird, "-p", "-c", str(out)], capture_output=True, text=True)
+            self.assertEqual(parsed.returncode, 0, parsed.stdout + parsed.stderr)
 
 
 if __name__ == "__main__":
