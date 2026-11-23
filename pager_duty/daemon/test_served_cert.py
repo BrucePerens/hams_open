@@ -28,15 +28,15 @@ def serve_once(days, tmp):
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     ctx.load_cert_chain(crt, key)
     srv = socket.socket()
-    srv.bind(("127.0.0.1", 0))
+    srv.bind(("127.0.0.1", 0))  # burn-ignore-self-hosted-server: the test spawns its own local TLS server
     srv.listen(1)
 
     def run():
         conn, _ = srv.accept()
         try:
             ctx.wrap_socket(conn, server_side=True).close()
-        except OSError:
-            pass
+        except OSError as e:  # the client may hang up early; the test asserts on the client side
+            print(f"test server: {e}", file=sys.stderr)
         srv.close()
 
     threading.Thread(target=run, daemon=True).start()
@@ -56,7 +56,7 @@ class ServedCertTests(unittest.TestCase):
 
     def test_nothing_listening_fails(self):
         s = socket.socket()
-        s.bind(("127.0.0.1", 0))
+        s.bind(("127.0.0.1", 0))  # burn-ignore-self-hosted-server: a free local port, nothing listens on it
         port = s.getsockname()[1]
         s.close()
         self.assertIn("Could not read", gm.served_cert_problem("a.test", port=port))

@@ -291,7 +291,7 @@ def _dig_addresses(dig, domain, rtype):
 
 
 # [@ANCHOR: pager_duty:served_cert_problem]
-def served_cert_problem(domain, port=443, host="127.0.0.1"):
+def served_cert_problem(domain, port=443, host="127.0.0.1"):  # burn-ignore-self-hosted-server: a host systemd daemon asking the web server on its own machine, not a service in another container
     """One line saying why the certificate this server serves for `domain` is not healthy (unreadable, or fewer than
     CERTBOT_MIN_DAYS_LEFT days left), or None. Connects to the local web server with the domain as SNI and does not verify
     the chain, so an already expired certificate is reported by its expiry rather than as a handshake error."""
