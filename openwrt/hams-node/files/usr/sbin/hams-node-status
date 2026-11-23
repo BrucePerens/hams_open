@@ -8,10 +8,15 @@
 # The status also names the sequence number of the signed deprecation list (rogue routers' keys and prefixes). When it is ahead of the
 # list held here, the delta since the held number is fetched (the full list when the delta does not line up); documents are ordered by
 # sequence number only, never by clock. Each listed peer is evicted and each listed prefix gets an unreachable route.
-#   hams-node-status OPTIONS run | start | stop
+#   hams-node-status OPTIONS run | gossip | serve | listen | start | stop
 # OPTIONS: -u BASE_URL (https://hams.com) -s STATE_DIR (/etc/hams-node) [-c CRONTAB] [-i WG_INTERFACE (uci hams_node_ondemand.main.interface, else wg-hams)] [-d INIT_DIR (/etc/init.d)]
+# Gossip (works with hams.com unreachable): `serve` answers one neighbour on stdin/stdout (run by `listen`, nc on tcp 5710, from the init script):
+# the neighbour sends "HAMS-GOSSIP SEQ"; when the held list is newer, the stored chain of signed documents (the last full list and the deltas after it,
+# exactly as hams.com signed them) is sent, one per line. `gossip` asks each neighbour (the on-demand WireGuard peers' routers, ADDRESS::1 of their /60,
+# and the addresses in gossip_neighbours, one per line, e.g. RF-link neighbours) and verifies and applies what comes back with the same rules as a
+# document from hams.com. Nothing but already signed documents is relayed; a neighbour is asked at most once per run.
 # State files: device_token, deprecation.pub (usign public key line, written by hams-node-enroll), disabled (the reason; present while off),
-# deprecation_seq, deprecation_list ("KEY prefix,prefix" per line), status_seq.
+# deprecation_seq, deprecation_list ("KEY prefix,prefix" per line), deprecation_chain ("full|delta FROM BODY SIG" per line), status_seq.
 # Exit: 0 handled; 4 no information (nothing changed).
 set -u
 base=https://hams.com state=/etc/hams-node cron=/etc/crontabs/root iface='' initdir=/etc/init.d
@@ -22,16 +27,18 @@ while getopts u:s:c:i:d: opt; do
 	esac
 done
 shift $((OPTIND - 1))
-[ $# -ge 1 ] || { echo "usage: hams-node-status [-u URL] [-s DIR] [-c CRONTAB] [-i IFACE] [-d INITDIR] run | start | stop" >&2; exit 2; }
+[ $# -ge 1 ] || { echo "usage: hams-node-status [-u URL] [-s DIR] [-c CRONTAB] [-i IFACE] [-d INITDIR] run | gossip | serve | listen | start | stop" >&2; exit 2; }
 [ -n "$iface" ] || iface=$(uci -q get hams_node_ondemand.main.interface 2>/dev/null)
 : "${iface:=wg-hams}"
 case $iface in '' | *[!A-Za-z0-9_-]*) echo "hams-node-status: bad interface name" >&2; exit 1 ;; esac
 umask 077
 mkdir -p "$state" || exit 1
 tokenfile=$state/device_token pubfile=$state/deprecation.pub disabledfile=$state/disabled
-seqfile=$state/deprecation_seq listfile=$state/deprecation_list statusseq=$state/status_seq
+seqfile=$state/deprecation_seq listfile=$state/deprecation_list statusseq=$state/status_seq chainfile=$state/deprecation_chain
+nbrfile=$state/gossip_neighbours peersfile=$state/peers gossip_port=5710
 reply=$state/status_reply.json payload=$state/status_payload.json
 job="/usr/sbin/hams-node-status run"
+job_gossip="/usr/sbin/hams-node-status gossip"
 services="hams-node-bird hams-node-ondemand"
 daemons="hams-node-report hams-node-traffic"
 
@@ -39,12 +46,20 @@ number() { case $1 in '' | *[!0-9]*) echo 0 ;; *) echo "$1" ;; esac; }
 
 # fetch ENDPOINT JSON: 0 when the reply carried a correctly signed document, left in $payload; else 1 (no information).
 fetch() {
-	rm -f "$reply" "$payload" "$state/sig" "$state/pub" "$state/payload.bin"
+	rm -f "$reply" "$payload"
 	[ -s "$pubfile" ] || return 1
 	uclient-fetch -q -O "$reply" --header='Content-Type: application/json' \
 		--post-data="{\"jsonrpc\":\"2.0\",\"method\":\"call\",\"params\":$2}" "$base/api/ipv6/$1" 2>/dev/null || return 1
 	[ -s "$reply" ] || return 1
 	body=$(jsonfilter -i "$reply" -e '@.result.payload') && sig=$(jsonfilter -i "$reply" -e '@.result.signature') || return 1
+	verify "$body" "$sig"
+}
+
+# verify BODY SIG: 0 when the base64 payload is correctly signed by the deprecation key, left in $payload; else 1.
+verify() {
+	body=$1 sig=$2
+	rm -f "$payload" "$state/sig" "$state/pub" "$state/payload.bin"
+	[ -s "$pubfile" ] || return 1
 	case $body$sig in *[!A-Za-z0-9+/=]*) return 1 ;; esac
 	printf '%s' "$body" | base64 -d > "$state/payload.bin" 2>/dev/null || return 1
 	printf 'untrusted comment: hams.com\n%s\n' "$sig" > "$state/sig"
@@ -111,37 +126,76 @@ entries() {
 	done
 }
 
+# apply_payload: apply the verified document in $payload when it lines up with the held list (full: seq not older; delta: from = held seq).
+# 0 applied (state, chain and sequence number updated), 1 does not line up. $body and $sig are the signed envelope, kept for gossip.
+apply_payload() {
+	have=$(number "$(cat "$seqfile" 2>/dev/null)")
+	kind=$(field kind) seq=$(number "$(field seq)") new=$state/deprecation_new
+	case $kind in
+	full) [ "$seq" -ge "$have" ] || return 1; entries entries > "$new"; from=0 ;;
+	delta)
+		from=$(number "$(field from)")
+		[ "$(field from)" = "$have" ] && [ "$seq" -ge "$have" ] || return 1
+		touch "$listfile"
+		entries add > "$new.add"
+		i=0
+		: > "$new.remove"
+		while r=$(field "remove[$i]"); do echo "$r" >> "$new.remove"; i=$((i + 1)); done
+		: > "$new"
+		while read -r k rest; do
+			[ -n "$k" ] || continue
+			grep -qxF "${k##*:}" "$new.remove" && continue # a certificate line is cert:ISSUER:SERIAL; the delta names the serial
+			grep -q "^$k " "$new.add" && continue
+			echo "$k $rest" >> "$new"
+		done < "$listfile"
+		cat "$new.add" >> "$new"
+		rm -f "$new.add" "$new.remove" ;;
+	*) return 1 ;;
+	esac
+	apply_list "$new"
+	echo "$seq" > "$seqfile"
+	rm -f "$new"
+	if [ "$kind" = full ]; then : > "$chainfile"; fi
+	echo "$kind $from $body $sig" >> "$chainfile"
+	return 0
+}
+
 do_list() { # the status named a newer list
 	have=$(number "$(cat "$seqfile" 2>/dev/null)")
 	for ask in "$have" 0; do
 		fetch deprecations "{\"token\":\"$token\",\"have_seq\":$ask,\"have_time\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\"}" || return 4
-		kind=$(field kind) seq=$(number "$(field seq)") new=$state/deprecation_new
-		case $kind in
-		full) [ "$seq" -ge "$have" ] || return 4; entries entries > "$new" ;;
-		delta)
-			[ "$(field from)" = "$have" ] && [ "$ask" = "$have" ] && [ "$seq" -ge "$have" ] || continue # does not line up: ask for the full list
-			touch "$listfile"
-			entries add > "$new.add"
-			i=0
-			: > "$new.remove"
-			while r=$(field "remove[$i]"); do echo "$r" >> "$new.remove"; i=$((i + 1)); done
-			: > "$new"
-			while read -r k rest; do
-				[ -n "$k" ] || continue
-				grep -qxF "${k##*:}" "$new.remove" && continue # a certificate line is cert:ISSUER:SERIAL; the delta names the serial
-				grep -q "^$k " "$new.add" && continue
-				echo "$k $rest" >> "$new"
-			done < "$listfile"
-			cat "$new.add" >> "$new"
-			rm -f "$new.add" "$new.remove" ;;
-		*) return 4 ;;
-		esac
-		apply_list "$new"
-		echo "$seq" > "$seqfile"
-		rm -f "$new"
-		return 0
+		[ "$(field kind)" = delta ] && [ "$ask" != "$have" ] && continue
+		apply_payload && return 0
 	done
 	return 4
+}
+
+do_serve() { # one neighbour on stdin/stdout
+	read -r word theirs || return 0
+	[ "$word" = HAMS-GOSSIP ] || return 0
+	[ "$(number "$(cat "$seqfile" 2>/dev/null)")" -gt "$(number "$theirs")" ] && [ -s "$chainfile" ] || return 0
+	cat "$chainfile"
+}
+
+do_gossip() {
+	[ -e "$disabledfile" ] && return 0
+	{ cat "$nbrfile" 2>/dev/null
+	  while read -r _ _ pfx _; do base6=${pfx%%/*}; case $base6 in *::) echo "${base6}1" ;; esac; done < "$peersfile" 2>/dev/null
+	} | sort -u | head -n 8 | while read -r addr; do
+		case $addr in '' | *[!0-9a-fA-F:]*) continue ;; esac
+		echo "HAMS-GOSSIP $(number "$(cat "$seqfile" 2>/dev/null)")" | timeout 10 nc -w 5 "$addr" "$gossip_port" 2>/dev/null | head -n 60 | head -c 262144 > "$state/gossip_in"
+		while read -r kind from b s; do
+			case $kind in full | delta) ;; *) continue ;; esac
+			case $b$s in '' | *[!A-Za-z0-9+/=]*) continue ;; esac
+			verify "$b" "$s" || continue
+			[ "$(field kind)" = "$kind" ] || continue
+			[ "$(number "$(field seq)")" -gt "$(number "$(cat "$seqfile" 2>/dev/null)")" ] || continue
+			body=$b sig=$s
+			apply_payload
+		done < "$state/gossip_in"
+	done
+	rm -f "$state/gossip_in"
+	return 0
 }
 
 do_run() {
@@ -159,13 +213,17 @@ do_run() {
 	*) exit 4 ;;
 	esac
 	[ -e "$disabledfile" ] && exit 0
-	if [ "$listseq" != "$(number "$(cat "$seqfile" 2>/dev/null)")" ]; then do_list || exit 4; fi
+	if [ "$listseq" -gt "$(number "$(cat "$seqfile" 2>/dev/null)")" ]; then do_list || exit 4; fi
 	exit 0
 }
 
 case $1 in
 run) do_run ;;
-start) grep -qF "$job" "$cron" 2>/dev/null || echo "*/2 * * * * $job" >> "$cron" ;;
-stop) [ -f "$cron" ] && { grep -vF "$job" "$cron" > "$cron.new"; mv "$cron.new" "$cron"; } ;;
+gossip) do_gossip ;;
+serve) do_serve ;;
+listen) exec nc -ll -p "$gossip_port" -e "/usr/sbin/hams-node-status -s $state serve" ;;
+start) grep -qF "$job" "$cron" 2>/dev/null || echo "*/2 * * * * $job" >> "$cron"
+	grep -qF "$job_gossip" "$cron" 2>/dev/null || echo "*/2 * * * * $job_gossip" >> "$cron" ;;
+stop) [ -f "$cron" ] && { grep -vF "hams-node-status " "$cron" > "$cron.new"; mv "$cron.new" "$cron"; } ;;
 *) exit 2 ;;
 esac

@@ -266,3 +266,12 @@ held list (`deprecation_seq`, `deprecation_list`) the router asks for the delta 
 full list when the delta does not line up; documents are ordered by sequence number only, never by clock, and replayed, out-of-order or
 wrongly signed ones are refused. Each listed peer is evicted and each listed prefix gets an `unreachable` route. Format and endpoints:
 `docs/proposals/IPV6_DEPRECATION_LIST.md` in hams_com.
+
+Gossip (works with hams.com unreachable): the init script `hams-node-status` runs `hams-node-status listen` (busybox `nc` on tcp 5710, opened in
+`hams_node_fw`; it is not an encrypted service, so it may also face RF links). A neighbour sends `HAMS-GOSSIP SEQ`; when the held list is newer
+the router answers with the stored chain (`deprecation_chain`: the last full list and the deltas after it, exactly as hams.com signed them,
+one per line). The cron line `hams-node-status gossip` (every 2 minutes, with `run`) asks up to 8 neighbours (the on-demand peers' routers at
+the first address of their /60, plus any addresses in `/etc/hams-node/gossip_neighbours`, which RF-link setup may fill) and applies each
+returned document only if the signature verifies and it lines up (full: not older; delta: `from` equals the held number); forged, replayed and
+gapped documents are refused. Nothing but signed documents is relayed, and a router that is up to date is sent nothing. The documents are
+authenticated, not secret, so nothing is hidden on RF.

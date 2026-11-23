@@ -50,6 +50,16 @@ except (InvalidSignature, AssertionError):
 LOGGER = """#!/bin/sh
 echo "$(basename "$0") $*" >> "$FAKE/actions"
 """
+# nc stand-in: "nc -w 5 ADDRESS PORT" talks to the neighbour whose state directory is in $NEIGHBOUR (its hams-node-status serve), the address is logged
+NC = """#!/bin/sh
+echo "nc $*" >> "$FAKE/actions"
+[ -n "${NEIGHBOUR:-}" ] || exit 1
+exec sh "$SCRIPT" -s "$NEIGHBOUR" serve
+"""
+TIMEOUT = """#!/bin/sh
+shift
+exec "$@"
+"""
 ENTRY_A = {"id": 3, "key": "KEYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", "prefixes": ["2001:db8:ab00:30::/60"], "reason": "emergency"}
 ENTRY_B = {"id": 4, "key": "KEYBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=", "prefixes": ["2001:db8:ab00:40::/60", "2001:db8:ab01::/48"], "reason": "abuse"}
 
@@ -85,14 +95,14 @@ class StatusTests(unittest.TestCase):
         bindir.mkdir()
         initdir.mkdir()
         for name, text in (("uclient-fetch", FETCH), ("usign", USIGN), ("wg", LOGGER), ("ip", LOGGER), ("ifdown", LOGGER), ("ifup", LOGGER),
-                           ("hams-node-report", LOGGER), ("hams-node-traffic", LOGGER), ("hams-node-mtls", LOGGER)):
+                           ("nc", NC), ("timeout", TIMEOUT), ("hams-node-report", LOGGER), ("hams-node-traffic", LOGGER), ("hams-node-mtls", LOGGER)):
             (bindir / name).write_text(text)
             (bindir / name).chmod(0o755)
         for name in ("hams-node-bird", "hams-node-ondemand"):
             (initdir / name).write_text(LOGGER.replace("basename \"$0\"", "echo init.d/%s" % name).replace('$(echo init.d/%s)' % name, "init.d/%s" % name))
             (initdir / name).chmod(0o755)
         self.initdir = initdir
-        self.env = dict(os.environ, FAKE=str(self.fake), PATH="%s:%s:%s" % (bindir, HERE, os.environ["PATH"]))
+        self.env = dict(os.environ, FAKE=str(self.fake), PATH="%s:%s:%s" % (bindir, HERE, os.environ["PATH"]), SCRIPT=str(SCRIPT))
 
     def queue(self, *replies):
         (self.fake / "replies").write_text("\n".join(replies) + "\n")
@@ -229,10 +239,81 @@ class StatusTests(unittest.TestCase):
         self.run_script()
         self.assertEqual([c[0] for c in self.calls()], ["https://portal.example/api/ipv6/status"])
 
+    def neighbour(self, *rounds):
+        """A second router that already holds the list, got from the same (signing) hams.com; returns its state directory."""
+        other = self.root / "neighbour"
+        other.mkdir()
+        for name in ("device_token", "deprecation.pub"):
+            (other / name).write_text((self.state / name).read_text())
+        saved = self.state
+        self.state = other
+        try:
+            for replies in rounds:
+                self.queue(*replies)
+                self.assertEqual(self.run_script().returncode, 0)
+        finally:
+            self.state = saved
+        return other
+
+    def gossip(self, neighbour, address="2001:db8:ab00:30::1"):
+        (self.state / "gossip_neighbours").write_text(address + "\n")
+        self.env["NEIGHBOUR"] = str(neighbour)
+        (self.fake / "replies").write_text("")
+        return self.run_script("gossip")
+
+    def test_a_neighbour_hands_over_the_signed_chain_with_hams_com_unreachable(self):
+        other = self.neighbour((self.status(list_seq=2), self.full(2, ENTRY_A)), (self.status(list_seq=3), self.delta(2, 3, add=[ENTRY_B])))
+        self.assertEqual(len((other / "deprecation_chain").read_text().splitlines()), 2, "the full list and the delta after it are kept as signed")
+        (self.fake / "actions").write_text("")
+        (self.fake / "calls").unlink()
+        self.assertEqual(self.gossip(other).returncode, 0)
+        self.assertEqual((self.state / "deprecation_seq").read_text().strip(), "3")
+        self.assertEqual(self.listed(), sorted(["%s 2001:db8:ab00:30::/60" % ENTRY_A["key"], "%s 2001:db8:ab00:40::/60,2001:db8:ab01::/48" % ENTRY_B["key"]]))
+        self.assertIn("wg set wgtest peer %s remove" % ENTRY_A["key"], self.actions(), "the rogue peer is evicted without hams.com")
+        self.assertIn("nc -w 5 2001:db8:ab00:30::1 5710", self.actions())
+        self.assertFalse((self.fake / "calls").exists(), "hams.com was never asked")
+        before = (self.state / "deprecation_chain").read_text()
+        self.assertEqual(self.gossip(other).returncode, 0)
+        self.assertEqual((self.state / "deprecation_chain").read_text(), before, "an up to date router is sent nothing and keeps the chain")
+
+    def test_gossip_refuses_wrong_signatures_replays_and_gaps(self):
+        other = self.neighbour((self.status(list_seq=2), self.full(2, ENTRY_A)))
+        self.assertEqual(self.gossip(other).returncode, 0)
+        self.assertEqual(self.listed(), ["%s 2001:db8:ab00:30::/60" % ENTRY_A["key"]])
+        forger = Signer()
+        fake = json.loads(forger.reply({"kind": "full", "seq": 9, "entries": []}))["result"]
+        evil = self.root / "evil"
+        evil.mkdir()
+        (evil / "deprecation_seq").write_text("9\n")
+        (evil / "deprecation_chain").write_text("full 0 %s %s\n" % (fake["payload"], fake["signature"]))
+        self.gossip(evil)
+        gap = json.loads(self.delta(5, 7, remove=[ENTRY_A["key"]]))["result"]
+        (evil / "deprecation_chain").write_text("delta 5 %s %s\n" % (gap["payload"], gap["signature"]))
+        self.gossip(evil)
+        old = json.loads(self.full(1))["result"]
+        (evil / "deprecation_chain").write_text("full 0 %s %s\n" % (old["payload"], old["signature"]))
+        self.gossip(evil)
+        self.assertEqual((self.state / "deprecation_seq").read_text().strip(), "2", "forged, gapped and older documents change nothing")
+        self.assertEqual(self.listed(), ["%s 2001:db8:ab00:30::/60" % ENTRY_A["key"]])
+
+    def test_serve_sends_only_when_newer_and_ignores_anything_else(self):
+        other = self.neighbour((self.status(list_seq=2), self.full(2, ENTRY_A)))
+        run = lambda text: subprocess.run(["sh", str(SCRIPT), "-s", str(other), "serve"], input=text, env=self.env, capture_output=True, text=True, timeout=30).stdout
+        self.assertEqual(run("HAMS-GOSSIP 2\n"), "")
+        self.assertEqual(run("GET / HTTP/1.0\n"), "")
+        self.assertEqual(run("HAMS-GOSSIP 0\n"), (other / "deprecation_chain").read_text())
+
+    def test_peers_of_the_on_demand_daemon_are_asked_at_their_router_address(self):
+        other = self.neighbour((self.status(list_seq=2), self.full(2, ENTRY_A)))
+        (self.state / "peers").write_text("PK 2001:db8:ab00:50 2001:db8:ab00:50::/60 192.0.2.7:51820\n")
+        self.env["NEIGHBOUR"] = str(other)
+        self.assertEqual(self.run_script("gossip").returncode, 0)
+        self.assertIn("nc -w 5 2001:db8:ab00:50::1 5710", self.actions())
+
     def test_start_and_stop_manage_one_cron_line_every_two_minutes(self):
         self.assertEqual(self.run_script("start").returncode, 0)
         self.assertEqual(self.run_script("start").returncode, 0)
-        self.assertEqual(self.cron.read_text().splitlines(), ["*/2 * * * * /usr/sbin/hams-node-status run"])
+        self.assertEqual(self.cron.read_text().splitlines(), ["*/2 * * * * /usr/sbin/hams-node-status run", "*/2 * * * * /usr/sbin/hams-node-status gossip"])
         self.assertEqual(self.run_script("stop").returncode, 0)
         self.assertEqual(self.cron.read_text(), "")
 
