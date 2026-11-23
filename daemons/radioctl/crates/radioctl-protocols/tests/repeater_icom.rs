@@ -184,6 +184,28 @@ fn a_rig_without_the_capability_refuses_every_repeater_op() {
 }
 
 // Tests [@ANCHOR: radioctl_civ_engine_decode]
+#[test]
+fn split_and_shift_reads_do_not_answer_each_other_on_the_virtual_icom() {
+    let desc = repeater_rigs().into_iter().next().expect("a repeater rig");
+    let mut engine = CivEngine::new(desc.clone()).expect("engine");
+    let mut rig = VirtualRig::from_description(&desc).expect("rig");
+    let mut ask = |op: Op| exchange(&mut engine, &mut rig, op);
+    assert_eq!(
+        ask(Op::SetRepeaterShift(RepeaterShift::Minus)),
+        vec![Inbound::Ack]
+    );
+    // The rig has one 0F answer, the shift code: the split read is a clean Nak, not a wrong value.
+    assert_eq!(ask(Op::GetSplit), vec![Inbound::Nak]);
+    assert_eq!(
+        value(ask(Op::GetRepeaterShift)),
+        Observation::RepeaterShift(RepeaterShift::Minus)
+    );
+    assert_eq!(ask(Op::SetSplit(true)), vec![Inbound::Ack]);
+    assert_eq!(value(ask(Op::GetSplit)), Observation::Split(true));
+    assert_eq!(ask(Op::GetRepeaterShift), vec![Inbound::Nak]);
+}
+
+// Tests [@ANCHOR: radioctl_civ_engine_decode]
 // Tests [@ANCHOR: radioctl_virtual_tone_flag_index]
 // Tests [@ANCHOR: radioctl_civ_engine_encode_repeater]
 // Tests [@ANCHOR: radioctl_civ_engine_decode_tone_flag]
