@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
+import grp
 import uuid
 import json
 import os
@@ -422,6 +423,15 @@ class PagerCheck(models.Model):
             return False
         return heartbeat_is_current(check.last_heartbeat, fields.Datetime.now(), interval_sec)
 
+    # Verified by [@ANCHOR: pager_duty:test_monitor_group_id]
+    @staticmethod
+    def _monitor_group_id():
+        """The gid of the monitor's OS group, or None on a host where that account does not exist."""
+        for entry in grp.getgrall():
+            if entry.gr_name == "hamsd_pager_monitor":
+                return entry.gr_gid
+        return None
+
     @api.model
     def _get_config_path(self):
         # Prefer the system-wide writable configuration directory in production/test environments
@@ -693,7 +703,12 @@ class PagerCheck(models.Model):
             # the current contents are readable by another local account.
             try:
                 with os.fdopen(fd, "w", encoding="utf-8") as f:
-                    os.fchmod(f.fileno(), 0o600)
+                    # The monitor runs as its own account, hamsd_pager_monitor (hams_shared MANIFEST): where that account exists the
+                    # file is 0640 with its group, which odoo belongs to (chgrp to one's own group is allowed); elsewhere it stays 0600.
+                    monitor_gid = self._monitor_group_id()
+                    os.fchmod(f.fileno(), 0o600 if monitor_gid is None else 0o640)
+                    if monitor_gid is not None:
+                        os.fchown(f.fileno(), -1, monitor_gid)
                     # fd is now owned by `f` -- its own `with` exit closes it,
                     # on every path including a write failure, so there is no
                     # separate os.close() to pair with this os.open().

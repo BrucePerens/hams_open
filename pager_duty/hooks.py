@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
+import grp
 import logging
 
 _logger = logging.getLogger(__name__)
@@ -262,16 +263,40 @@ def post_init_hook(env):
             _logger.exception("An error occurred during autodiscovery:")
 
     # Register Daemons for Automated Key Vault Provisioning
-    # Registered as pager_duty's own service account, which register_daemon()
-    # authorizes to provision a key for itself -- not as base.user_admin, which
-    # this hook used until 2026-09-16 against the zero-sudo design.
-    # Verified by [@ANCHOR: pager_duty:test_post_init_hook_registers_as_own_service_account]
     if "daemon.key.registry" in env:
-        svc_uid = env["zero_sudo.security.utils"]._get_service_uid(
-            "pager_duty.user_pager_service_internal"
-        )
-        env["daemon.key.registry"].with_user(svc_uid).register_daemon(
-            daemon_name="Pager Duty - Generalized Monitor",
-            user_xml_id="pager_duty.user_pager_service_internal",
-            env_file_path="/opt/hams/etc/keys/pager_duty.env",
-        )
+        register_pager_monitor_key(env)
+
+
+PAGER_MONITOR_GROUP = "hamsd_pager_monitor"
+PAGER_MONITOR_KEY_FILE = "/opt/hams/etc/keys/pager_monitor/pager_duty.env"
+PAGER_MONITOR_LEGACY_KEY_FILE = "/opt/hams/etc/keys/pager_duty.env"
+
+
+# [@ANCHOR: pager_duty:pager_monitor_key_target]
+# Verified by [@ANCHOR: pager_duty:test_pager_monitor_key_target]
+def pager_monitor_key_target():
+    """(key file, OS group) of the monitor's Odoo key: the family key directory and group where the account hamsd_pager_monitor exists
+    on this host, else the legacy flat odoo-only file (a rotation cannot write the family directory before provisioning)."""
+    if PAGER_MONITOR_GROUP not in {entry.gr_name for entry in grp.getgrall()}:
+        return PAGER_MONITOR_LEGACY_KEY_FILE, None
+    return PAGER_MONITOR_KEY_FILE, PAGER_MONITOR_GROUP
+
+
+# [@ANCHOR: pager_duty:register_pager_monitor_key]
+# Verified by [@ANCHOR: pager_duty:test_pager_monitor_key_target]
+# Verified by [@ANCHOR: test_post_init_hook_registers_as_own_service_account]
+def register_pager_monitor_key(env):
+    """Has the Daemon Key Manager issue the monitor's key at pager_monitor_key_target(). Registered as pager_duty's own service
+    account, which register_daemon() authorizes to provision a key for itself (not base.user_admin: the zero-sudo design), except when
+    an OS group is set, which only a Daemon Key Manager may do. Idempotent: register_daemon updates the row by name (path, group)."""
+    utils = env["zero_sudo.security.utils"]
+    path, group = pager_monitor_key_target()
+    caller_uid = utils._get_service_uid(
+        "daemon_key_manager.user_daemon_key_manager_service" if group else "pager_duty.user_pager_service_internal"
+    )
+    env["daemon.key.registry"].with_user(caller_uid).register_daemon(
+        daemon_name="Pager Duty - Generalized Monitor",
+        user_xml_id="pager_duty.user_pager_service_internal",
+        env_file_path=path,
+        os_group=group,
+    )

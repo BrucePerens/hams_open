@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
+from odoo.addons.pager_duty import hooks
 from odoo.addons.pager_duty.hooks import post_init_hook, _claim_info_alias
 import logging
+from types import SimpleNamespace
 
 _logger = logging.getLogger(__name__)
 
@@ -54,6 +56,28 @@ class TestPagerDutyHooks(HamsTransactionCase):
             [("name", "=", "Pager Duty - Generalized Monitor")]
         )
         self.assertEqual(registry.user_id.id, svc_uid)
+
+    def test_pager_monitor_key_target(self):
+        # [@ANCHOR: pager_duty:test_pager_monitor_key_target]
+        # Tests [@ANCHOR: pager_duty:pager_monitor_key_target]
+        # Tests [@ANCHOR: pager_duty:register_pager_monitor_key]
+        self.safe_patch_object(hooks.grp, "getgrall", return_value=[])
+        self.assertEqual(hooks.pager_monitor_key_target(), (hooks.PAGER_MONITOR_LEGACY_KEY_FILE, None))
+        self.safe_patch_object(hooks.grp, "getgrall", return_value=[SimpleNamespace(gr_name="hamsd_pager_monitor")])
+        self.assertEqual(
+            hooks.pager_monitor_key_target(),
+            ("/opt/hams/etc/keys/pager_monitor/pager_duty.env", "hamsd_pager_monitor"),
+        )
+        # With the group, the Daemon Key Manager registers it (only a manager may set an OS group).
+        registry_cls = type(self.env["daemon.key.registry"])
+        seen = []
+        self.safe_patch_object(
+            registry_cls, "register_daemon",
+            new=lambda registry_self, **kw: seen.append((registry_self.env.uid, kw["env_file_path"], kw["os_group"])),
+        )
+        hooks.register_pager_monitor_key(self.env)
+        manager_uid = self.env["zero_sudo.security.utils"]._get_service_uid("daemon_key_manager.user_daemon_key_manager_service")
+        self.assertEqual(seen, [(manager_uid, "/opt/hams/etc/keys/pager_monitor/pager_duty.env", "hamsd_pager_monitor")])
 
     def test_claims_info_alias_when_free(self):
         # Tests [@ANCHOR: pager_duty_info_alias_claim]

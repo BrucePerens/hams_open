@@ -102,7 +102,7 @@ REDIS_USERNAME = os.getenv("REDIS_USERNAME") or None
 
 
 # The EnvironmentFile systemd read ODOO_RPC_KEY from when this daemon started (written by daemon_key_manager).
-ODOO_KEY_ENV_FILE = os.environ.get("PAGER_KEY_ENV_FILE", "/opt/hams/etc/keys/pager_duty.env")
+ODOO_KEY_ENV_FILE = os.environ.get("PAGER_KEY_ENV_FILE", "/opt/hams/etc/keys/pager_monitor/pager_duty.env")
 
 
 # [@ANCHOR: pager_duty_generalized_monitor_odoo_client]

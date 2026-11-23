@@ -10,7 +10,7 @@
     "category": "Ham Radio",
     "post_init_hook": "post_init_hook",
     "license": "AGPL-3",
-    "version": "1.2",
+    "version": "1.3",
     "depends": [
         "base",
         "mail",

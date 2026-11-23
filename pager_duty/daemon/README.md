@@ -27,7 +27,7 @@ The daemon reads its configuration file once, at startup, so restart it after pu
 
 ### Rotated key (`OdooClient`)
 
-The monitor reads `ODOO_RPC_KEY` from its systemd `EnvironmentFile` (`/opt/hams/etc/keys/pager_duty.env`, overridable with `PAGER_KEY_ENV_FILE`) when it starts. A daemon key
+The monitor reads `ODOO_RPC_KEY` from its systemd `EnvironmentFile` (`/opt/hams/etc/keys/pager_monitor/pager_duty.env`, group `hamsd_pager_monitor`; a host without that account keeps `/opt/hams/etc/keys/pager_duty.env`; overridable with `PAGER_KEY_ENV_FILE`) when it starts. A daemon key
 rotation rewrites that file but cannot restart a running daemon (Odoo has no privilege to), so the client re-reads it itself.
 
 ### `[@ANCHOR: pager_duty:odoo_client_reload_key]` `OdooClient.reload_key()`
