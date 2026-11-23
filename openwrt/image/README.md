@@ -16,3 +16,7 @@ Node-network checks (uci-driven, throwaway test values): `hams-node-bird` render
 `x.ham` to a stub dnsmasq on 127.0.0.2:5353 and public names stay off it; `hams-node-fw` loads the ham zone, a connection from the host through QEMU's
 forward is dropped until `tcp:80` is opened in uci; `hams-node-wg` refuses an interface set to rf. Not exercised: a live route-server session (no /40 yet),
 Jool SIIT itself (stand-ins), real enrolment, WireGuard peers. Tests: `python3 -m unittest discover -s openwrt/image/tests`.
+
+`tools/lan_test.py IMAGE` (stock or test image, QEMU, no root): copies `hams-node-lan` in over the console, applies `2001:db8:ab40:10::/60`
+and checks that netifd gives br-lan `2001:db8:ab40:10::1/64`, odhcpd runs, and `remove` takes the /64 out of netifd's interface status
+(the kernel address lingers a while). Verified on OpenWrt 25.12.5 x86-64. It does not check a client's address (one guest only).

@@ -1,0 +1,51 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-lan: hand the member's /60 to the LAN interfaces. netifd takes one /64 per LAN (ip6assign 64, a distinct ip6hint each) from
+# the /60, which is declared as a prefix of a static interface "hamnet"; odhcpd then sends router advertisements and answers DHCPv6.
+#   hams-node-lan apply     read uci hams_node.main.prefix60 and hams_node_lan.main.interface (a list, default "lan"), configure, reload
+#   hams-node-lan remove    undo it
+# Exit: 0 done; 1 no valid /60 or interface list (nothing changed).
+set -u
+cmd=${1:-}
+case $cmd in apply | remove) ;; *) echo "usage: hams-node-lan apply | remove" >&2; exit 2 ;; esac
+
+ifaces=$(uci -q get hams_node_lan.main.interface)
+[ -n "$ifaces" ] || ifaces=lan
+n=0
+for i in $ifaces; do
+	case $i in '' | *[!A-Za-z0-9_]*) echo "hams-node-lan: bad interface name: $i" >&2; exit 1 ;; esac
+	n=$((n + 1))
+done
+[ "$n" -le 16 ] || { echo "hams-node-lan: a /60 holds 16 /64s, $n interfaces listed" >&2; exit 1; }
+
+if [ "$cmd" = remove ]; then
+	uci -q delete network.hamnet
+	for i in $ifaces; do
+		uci -q delete network.$i.ip6assign
+		uci -q delete network.$i.ip6hint
+		uci -q delete dhcp.$i.ra
+		uci -q delete dhcp.$i.dhcpv6
+	done
+else
+	prefix=$(uci -q get hams_node.main.prefix60)
+	case $prefix in *:*/60) ;; *) echo "hams-node-lan: no valid /60 in hams_node.main.prefix60" >&2; exit 1 ;; esac
+	case $prefix in *[!0-9a-fA-F:/]*) echo "hams-node-lan: no valid /60 in hams_node.main.prefix60" >&2; exit 1 ;; esac
+	uci set network.hamnet=interface
+	uci set network.hamnet.proto=static
+	uci set network.hamnet.device=lo
+	uci -q delete network.hamnet.ip6prefix
+	uci add_list network.hamnet.ip6prefix="$prefix"
+	k=0
+	for i in $ifaces; do
+		uci set network.$i.ip6assign=64
+		uci set network.$i.ip6hint=$(printf '%x' "$k")
+		uci set dhcp.$i=dhcp
+		uci set dhcp.$i.interface=$i
+		uci set dhcp.$i.ra=server
+		uci set dhcp.$i.dhcpv6=server
+		k=$((k + 1))
+	done
+fi
+uci commit network
+uci commit dhcp
+reload_config

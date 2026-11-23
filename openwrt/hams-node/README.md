@@ -74,6 +74,10 @@ login secret is never typed into or stored on the router. `hams-node-enroll fetc
 enrol) renews the configuration into `/etc/config/hams_node` and `hams_node_ondemand`. A revoked token stops the node:
 exit 3, the cron line and token are removed, and no request is made again until the member enrols anew.
 
+`hams-node-enroll unenroll` revokes the device token on hams.com (`/api/ipv6/enroll/unenroll`, own device only), then removes the
+WireGuard peers and interface, the `hams_node` and `hams_node_ondemand` settings, the key, the token and the cron line. If hams.com
+cannot be reached it exits 4 and removes nothing; run it again. A token hams.com already refuses is dropped and the rest removed.
+
 ## Automatic update (`hams-node-update`, separate package)
 
 Off until `/etc/config/hams_node_update` has a `feed_url` (https; the directory with `packages.adb`) and a `public_key` (path of the
@@ -143,3 +147,11 @@ and the six libnl packages (libnl200, -core200, -genl200, -cli200, -nf200, -rout
 the kmods. Test: three QEMU VMs (v6 host, stock AREDN with Jool, v4 host; `-netdev socket`): `ping -6` and `wget` through pool6 `2001:db8:c::/96` worked, and
 `hams-node-siit render` + `apply` created the instance. The earlier SDK-built module (`genlmsg_reply -111`) stays unexplained; the tree-built one works.
 Each other target/release needs its own kmod build with the same recipe.
+
+## /60 to the LANs (`hams-node-lan`, separate package)
+
+`hams-node-lan apply` (run by `hams-node-enroll` after every enrol and renewal when installed) declares the member's /60
+(`hams_node.main.prefix60`) as the `ip6prefix` of a static interface `network.hamnet`, gives every interface listed in
+`hams_node_lan.main.interface` (default `lan`, at most 16) `ip6assign 64` and its own `ip6hint` (0, 1, 2 ...), and sets
+`dhcp.<if>.ra` and `dhcpv6` to `server`, so netifd cuts one /64 per LAN out of the /60 and odhcpd sends router advertisements
+and answers DHCPv6. `hams-node-lan remove` undoes it. Anything that is not a /60 changes nothing. Not exercised on a real router.
