@@ -1,0 +1,14 @@
+# hams-node BIRD 2 settings: the node's sessions to the hams.com route servers (multi-hop). Off by default.
+config bird 'main'
+	option enabled '0'
+	# AS number, the /40 supernet, this node's /60 and router-id serial from the hams.com router configuration page
+	option asn ''
+	option prefix ''
+	option prefix60 ''
+	option serial ''
+	# root-only file holding the BGP password (never put it in this file)
+	option secret_file '/etc/hams-node/bird.secret'
+	# set to 1 only while the node has a live RF link: its routes are then tagged with the RF community
+	option rf_live '0'
+	# route server addresses
+	# list server '2001:db8::1'

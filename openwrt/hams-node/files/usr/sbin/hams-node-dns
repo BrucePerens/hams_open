@@ -12,7 +12,10 @@ out=${2:-$(get out)}
 [ -n "$out" ] || out=/tmp/dnsmasq.d/hams-ham.conf
 resolvers=$(get resolver) prefix=$(get prefix)
 [ -n "$resolvers" ] || exit 0
-for r in $resolvers; do case $r in *[!A-Fa-f0-9:.]*) echo "hams-node-dns: bad resolver address" >&2; exit 1 ;; esac; done
+# an address, optionally with dnsmasq's "#PORT"
+for r in $resolvers; do
+	case $r in *[!A-Fa-f0-9:.#]* | *#*#* | *#*[!0-9]* | *#) echo "hams-node-dns: bad resolver address" >&2; exit 1 ;; esac
+done
 
 rev=
 if [ -n "$prefix" ]; then

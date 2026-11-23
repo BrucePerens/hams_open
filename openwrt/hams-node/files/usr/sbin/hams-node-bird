@@ -1,0 +1,47 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-bird render [OUTFILE]
+# Writes the node's BIRD 2 configuration from uci hams_node_bird, in the format of the hams.com router configuration ZIP
+# (ham_ipv6net/client/router_config.py bird_conf): one session to every route server, export of the node's own /60 only, import of
+# other members' /60../64 inside the /40. RF-first (ham_ipv6net/client/rf_policy.py node_import_filter): routes tagged with the RF large
+# community (4200000000, 1, 1) get local-pref 200, all others 100; the node tags its own routes only while rf_live is 1.
+# Nothing is written (exit 0) while multi-hop is not enabled or the /40 is unset. The BGP password is read from a root-only file.
+set -u
+[ "${1:-}" = render ] || { echo "usage: hams-node-bird render [OUTFILE]" >&2; exit 2; }
+out=${2:-/etc/bird.conf}
+get() { uci -q get "hams_node_bird.main.$1" 2>/dev/null; }
+
+[ "$(get enabled)" = 1 ] || exit 0
+asn=$(get asn) prefix=$(get prefix) p60=$(get prefix60) serial=$(get serial) secret_file=$(get secret_file) rf=$(get rf_live) servers=$(get server)
+[ -n "$prefix" ] && [ -n "$servers" ] || exit 0
+for v in "$asn" "$serial"; do case $v in '' | *[!0-9]*) echo "hams-node-bird: asn and serial must be numbers" >&2; exit 1 ;; esac; done
+for v in "$prefix" "$p60" $servers; do case $v in '' | *[!A-Fa-f0-9:./]*) echo "hams-node-bird: bad address or prefix" >&2; exit 1 ;; esac; done
+[ -r "$secret_file" ] || { echo "hams-node-bird: cannot read the secret file" >&2; exit 1; }
+secret=$(head -n 1 "$secret_file")
+case $secret in '' | *[!A-Za-z0-9._+=/-]*) echo "hams-node-bird: bad secret" >&2; exit 1 ;; esac
+local=${p60%%/*}1   # the node's router-id address ...:XXX0::1 (the prefix ends in "::")
+case $p60 in *::/60) ;; *) echo "hams-node-bird: prefix60 must end in ::/60" >&2; exit 1 ;; esac
+rid="$(( (serial >> 24) & 255 )).$(( (serial >> 16) & 255 )).$(( (serial >> 8) & 255 )).$(( serial & 255 ))"
+RF="4200000000, 1, 1"
+tag=
+[ "$rf" = 1 ] && tag="    bgp_large_community.add(($RF));
+"
+
+umask 077
+tmp="$out.new"
+{
+	echo "# hams-node: BIRD 2 configuration for AS$asn, $p60. Written by hams-node-bird; check with: bird -p -c $out"
+	echo "router id $rid;"
+	printf 'protocol device {\n}\n'
+	printf 'protocol static own60 {\n    ipv6;\n    route %s unreachable;\n}\n' "$p60"
+	printf 'protocol kernel {\n    ipv6 {\n        import none;\n        export all;\n    };\n}\n'
+	printf 'filter hams_out {\n    if net ~ [%s{60,64}] then {\n%s        accept;\n    }\n    reject;\n}\n' "$p60" "$tag"
+	printf 'filter hams_in {\n    if net ~ [%s{60,64}] && !(net ~ [%s{60,64}]) then {\n' "$prefix" "$p60"
+	printf '        if bgp_large_community ~ [(%s)] then bgp_local_pref = 200; else bgp_local_pref = 100;\n        accept;\n    }\n    reject;\n}\n' "$RF"
+	i=0
+	for s in $servers; do
+		i=$((i + 1))
+		printf 'protocol bgp hams_rs%d {\n    local %s as %d;\n    neighbor %s as 4200000000;\n    authentication md5;\n    password "%s";\n' "$i" "$local" "$asn" "$s" "$secret"
+		printf '    hold time 180;\n    keepalive time 60;\n    ipv6 {\n        next hop self;\n        import filter hams_in;\n        export filter hams_out;\n    };\n}\n'
+	done
+} > "$tmp" && mv "$tmp" "$out"

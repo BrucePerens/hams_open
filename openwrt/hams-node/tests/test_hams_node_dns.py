@@ -53,8 +53,12 @@ class DnsTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0)
             self.assertIsNone(lines)
 
+    def test_resolver_port_allowed(self):
+        _, lines = self.render(resolver="127.0.0.2#5353", prefix="")
+        self.assertEqual([l for l in lines if l.startswith("server=")], ["server=/ham/127.0.0.2#5353"])
+
     def test_bad_input_refused(self):
-        for over in ({"resolver": "1.2.3.4;rm"}, {"prefix": "2001:db8::/41"}, {"prefix": "zz::/40"}):
+        for over in ({"resolver": "1.2.3.4;rm"}, {"resolver": "1.2.3.4#x"}, {"resolver": "1.2.3.4#"}, {"resolver": "1.2.3.4#5#6"}, {"prefix": "2001:db8::/41"}, {"prefix": "zz::/40"}):
             result, lines = self.render(**over)
             self.assertNotEqual(result.returncode, 0, over)
             self.assertIsNone(lines)
