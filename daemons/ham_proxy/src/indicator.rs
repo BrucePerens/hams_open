@@ -106,6 +106,7 @@ pub fn sign_header(
     ))
 }
 
+// [@ANCHOR: ham_proxy_verify_error]
 /// Why a header failed verification.
 #[derive(Debug, PartialEq, Eq)]
 pub enum VerifyError {

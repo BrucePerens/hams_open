@@ -108,6 +108,7 @@ fn chunked_html_is_decoded_and_encoded_html_refused() {
 
 #[test]
 fn signed_header_verifies_and_rejects_tamper_wrong_host_replay_and_other_key() {
+    // Tests [@ANCHOR: ham_proxy_verify_error]
     // Tests [@ANCHOR: ham_proxy_sign_header]
     // Tests [@ANCHOR: ham_proxy_verify_header]
     // Tests [@ANCHOR: ham_proxy_unhex]
@@ -178,6 +179,7 @@ fn make_cert(dir: &Path) -> (PathBuf, PathBuf) {
 
 /// Site returning `resp` verbatim; proxy in front; returns the ham-side response bytes.
 fn via_proxy(tag: &str, resp: Vec<u8>, key: Option<PKey<Private>>) -> Vec<u8> {
+    // temp-dir-ignore: one small per-process directory of test certificates; /tmp is cleared on reboot
     let d = std::env::temp_dir().join(format!("ham_ind_{tag}_{}", std::process::id()));
     std::fs::create_dir_all(&d).unwrap();
     let (c, k) = make_cert(&d);
@@ -219,6 +221,7 @@ fn via_proxy(tag: &str, resp: Vec<u8>, key: Option<PKey<Private>>) -> Vec<u8> {
 
 #[test]
 fn end_to_end_html_gets_indicator_and_verifiable_header() {
+    // Tests [@ANCHOR: ham_proxy_error]
     // Tests [@ANCHOR: ham_proxy_request_identity]
     // Tests [@ANCHOR: ham_proxy_serve_one_signed]
     let (k, p) = keypair();
