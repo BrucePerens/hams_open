@@ -12,3 +12,5 @@ config fw 'main'
 	# list rf_iface 'rf0'   (added automatically by hams-node-rf-route)
 	# Inbound ports opened from the ham network, "tcp:PORT" or "udp:PORT" (encrypted-service ports are refused on RF zones)
 	# list open 'tcp:8080'
+	# hams-node-status answers neighbours with the signed deprecation list here (not an encrypted service, so RF links may use it too)
+	list open 'tcp:5710'
