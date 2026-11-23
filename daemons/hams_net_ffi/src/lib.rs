@@ -1,6 +1,10 @@
 //! Kotlin/Swift view of `hams_net_core`: the SIIT map and the on-demand peer table. The platform supplies the
 //! directory lookup, the WireGuard backend and the clock as callback interfaces.
 
+use hams_net_core::crypto::{BadKey, Crypto};
+use hams_net_core::deprecation::{
+    Change as DepChange, DeprecationList as CoreList, Entry as DepEntry,
+};
 use hams_net_core::directory::{Prefix60, Record};
 use hams_net_core::peers::{LinkType, PeerTable as CoreTable, Wg};
 use hams_net_core::siit::Block;
@@ -166,5 +170,157 @@ impl PeerTable {
             .map_err(|_| refused("peer table lock poisoned"))?
             .expire(now)
             .map_err(refused)
+    }
+}
+
+/// The platform's cryptographic primitives (Android's Conscrypt/Tink): the core stays free of native crypto.
+#[uniffi::export(with_foreign)]
+pub trait PlatformCrypto: Send + Sync {
+    /// Ed25519 check of `signature` over `message` under the raw 32-byte `key`.
+    fn ed25519_verify(&self, key: Vec<u8>, signature: Vec<u8>, message: Vec<u8>) -> bool;
+    /// Bytes of standard base64 text, empty if it does not decode.
+    fn base64_decode(&self, text: String) -> Vec<u8>;
+}
+
+struct ForeignCrypto(Arc<dyn PlatformCrypto>);
+
+impl Crypto for ForeignCrypto {
+    fn sha256(&self, _: &[u8]) -> Option<Vec<u8>> {
+        None
+    }
+    fn sha512(&self, _: &[u8]) -> Option<Vec<u8>> {
+        None
+    }
+    fn ed25519_verify(&self, key: &[u8], sig: &[u8], msg: &[u8]) -> Result<bool, BadKey> {
+        if key.len() != 32 {
+            return Err(BadKey);
+        }
+        Ok(self
+            .0
+            .ed25519_verify(key.to_vec(), sig.to_vec(), msg.to_vec()))
+    }
+    fn base64_encode(&self, _: &[u8]) -> String {
+        String::new()
+    }
+    fn base64_decode(&self, text: &str) -> Option<Vec<u8>> {
+        Some(self.0.base64_decode(text.into())).filter(|b| !b.is_empty())
+    }
+    fn random16(&self) -> Option<[u8; 16]> {
+        None
+    }
+}
+
+/// One listed key as the platform sees it.
+#[derive(uniffi::Record)]
+pub struct ListedKey {
+    /// WireGuard public key, or `cert:ISSUER:SERIAL` for a revoked member certificate.
+    pub key: String,
+    /// Prefixes of that router (empty for a certificate).
+    pub prefixes: Vec<String>,
+}
+
+/// What a signed document changed: the platform evicts and blocks `added` and lifts `removed`.
+#[derive(uniffi::Record)]
+pub struct ListChange {
+    /// Newly listed.
+    pub added: Vec<ListedKey>,
+    /// No longer listed.
+    pub removed: Vec<ListedKey>,
+}
+
+fn listed(e: Vec<DepEntry>) -> Vec<ListedKey> {
+    e.into_iter()
+        .map(|e| ListedKey {
+            key: e.key,
+            prefixes: e.prefixes,
+        })
+        .collect()
+}
+
+fn list_change(c: DepChange) -> ListChange {
+    ListChange {
+        added: listed(c.added),
+        removed: listed(c.removed),
+    }
+}
+
+/// The signed deprecation list and its gossip (see `hams_net_core::deprecation`). The platform fetches documents from hams.com
+/// or a neighbour (tcp 5710), passes them in, and enforces the returned changes.
+#[derive(uniffi::Object)]
+pub struct DeprecationList {
+    crypto: ForeignCrypto,
+    list: Mutex<CoreList>,
+}
+
+#[uniffi::export]
+impl DeprecationList {
+    // [@ANCHOR: hams_net_ffi_deprecation_new]
+    /// An empty list that trusts the usign public key line from enrolment.
+    #[uniffi::constructor]
+    pub fn new(crypto: Arc<dyn PlatformCrypto>, public_key: String) -> Result<Arc<Self>, NetError> {
+        let crypto = ForeignCrypto(crypto);
+        let list =
+            CoreList::new(&crypto, &public_key).ok_or_else(|| refused("not a usign public key"))?;
+        Ok(Arc::new(Self {
+            crypto,
+            list: Mutex::new(list),
+        }))
+    }
+
+    // [@ANCHOR: hams_net_ffi_deprecation_seq]
+    /// The held sequence number (0 for none).
+    pub fn seq(&self) -> Result<u64, NetError> {
+        Ok(self
+            .list
+            .lock()
+            .map_err(|_| refused("list lock poisoned"))?
+            .seq())
+    }
+
+    // [@ANCHOR: hams_net_ffi_deprecation_apply]
+    /// Apply a signed envelope (`payload` and `signature`, base64) from hams.com; none when it is refused (the platform then asks hams.com for the full list).
+    pub fn apply(
+        &self,
+        payload: String,
+        signature: String,
+    ) -> Result<Option<ListChange>, NetError> {
+        let mut l = self
+            .list
+            .lock()
+            .map_err(|_| refused("list lock poisoned"))?;
+        Ok(l.apply(&self.crypto, &payload, &signature).map(list_change))
+    }
+
+    // [@ANCHOR: hams_net_ffi_deprecation_gossip_request]
+    /// The line to send a neighbour.
+    pub fn gossip_request(&self) -> Result<String, NetError> {
+        Ok(self
+            .list
+            .lock()
+            .map_err(|_| refused("list lock poisoned"))?
+            .gossip_request())
+    }
+
+    // [@ANCHOR: hams_net_ffi_deprecation_gossip_reply]
+    /// The answer to a neighbour's request line (empty unless the held list is newer).
+    pub fn gossip_reply(&self, request: String) -> Result<String, NetError> {
+        Ok(self
+            .list
+            .lock()
+            .map_err(|_| refused("list lock poisoned"))?
+            .gossip_reply(&request))
+    }
+
+    // [@ANCHOR: hams_net_ffi_deprecation_accept_gossip]
+    /// Apply a neighbour's reply; the changes of the documents that verified and lined up.
+    pub fn accept_gossip(&self, reply: String) -> Result<Vec<ListChange>, NetError> {
+        let mut l = self
+            .list
+            .lock()
+            .map_err(|_| refused("list lock poisoned"))?;
+        Ok(l.accept_gossip(&self.crypto, &reply)
+            .into_iter()
+            .map(list_change)
+            .collect())
     }
 }
