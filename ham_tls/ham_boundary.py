@@ -20,6 +20,7 @@ ENCRYPTED_TCP = (22, 443, 853, 993, 995, 465, 8883, 1194)  # SSH, HTTPS, DoT, ma
 ENCRYPTED_PROTOCOLS = ("esp",)  # IPsec payload encryption (AH is integrity-only and not listed)
 
 
+# Verified by [@ANCHOR: ham_boundary:render_ruleset]
 def _ports(ports):
     return "{ %s }" % ", ".join(str(int(p)) for p in sorted(set(ports)))
 
