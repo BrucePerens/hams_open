@@ -9,7 +9,8 @@ import sys
 args = sys.argv[1:]
 data = json.load(open(args[args.index("-i") + 1]))
 node = data
-for key, index in re.findall(r"\.(\w+)(?:\[(\d+)\])?", args[args.index("-e") + 1]):
+for dotted, quoted, index in re.findall(r'(?:\.(\w+)|\["([^"]+)"\])(?:\[(\d+)\])?', args[args.index("-e") + 1]):
+    key = dotted or quoted
     try:
         node = node[key]
         if index:

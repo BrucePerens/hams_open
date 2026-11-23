@@ -1,0 +1,23 @@
+#!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Renders /etc/hams-node/bird.conf from uci hams_node_bird, checks it with bird -p and runs BIRD 2 as its own instance
+# (own config and control socket; the bird2 package's own service is not used). Nothing runs while multi-hop is off.
+START=96
+USE_PROCD=1
+CONF=${HAMS_NODE_ETC:-/etc/hams-node}/bird.conf
+
+start_service() {
+	mkdir -p "$(dirname "$CONF")"
+	rm -f "$CONF"
+	hams-node-bird render "$CONF" || return 1
+	[ -s "$CONF" ] || return 0
+	bird -p -c "$CONF" || return 1
+	procd_open_instance
+	procd_set_param command /usr/sbin/bird -f -c "$CONF" -s /var/run/hams-node-bird.ctl
+	procd_set_param respawn
+	procd_close_instance
+}
+
+service_triggers() {
+	procd_add_reload_trigger hams_node_bird
+}

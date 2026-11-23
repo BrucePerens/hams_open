@@ -1,0 +1,45 @@
+#!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Renders the dnsmasq snippet for .ham and the member reverse zone (uci hams_node_dns) and restarts dnsmasq (a reload does not re-read its conf-dir). Stop removes it.
+START=96
+USE_PROCD=1
+INITD=${HAMS_NODE_INITD:-/etc/init.d}
+OUT=${HAMS_NODE_DNS_OUT:-/tmp/dnsmasq.d/hams-ham.conf}
+
+reload_dnsmasq() {
+	[ -x "$INITD/dnsmasq" ] && "$INITD/dnsmasq" restart
+	return 0
+}
+
+# OpenWrt's dnsmasq reads extra files only from the directory in dhcp.@dnsmasq[0].confdir (its instance directory otherwise); set it when
+# unset, and write the snippet into whatever directory is set.
+ensure_confdir() {
+	local dir
+	dir=$(uci -q get 'dhcp.@dnsmasq[0].confdir')
+	if [ -z "$dir" ]; then
+		dir=$(dirname "$OUT")
+		uci -q get 'dhcp.@dnsmasq[0]' >/dev/null || return 0
+		uci set "dhcp.@dnsmasq[0].confdir=$dir" && uci commit dhcp
+	fi
+	OUT=$dir/$(basename "$OUT")
+	# dnsmasq's rebind protection drops private answers (AREDN's 10.x hosts); .ham names are exempt
+	uci -q get 'dhcp.@dnsmasq[0].rebind_domain' | grep -qw ham || {
+		uci add_list 'dhcp.@dnsmasq[0].rebind_domain=ham' && uci commit dhcp
+	}
+}
+
+start_service() {
+	ensure_confdir
+	rm -f "$OUT"
+	hams-node-dns render "$OUT" || return 1
+	reload_dnsmasq
+}
+
+stop_service() {
+	rm -f "$OUT"
+	reload_dnsmasq
+}
+
+service_triggers() {
+	procd_add_reload_trigger hams_node_dns
+}

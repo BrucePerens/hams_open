@@ -1,0 +1,5 @@
+# hams-node-endpoint: what is published as this node's WireGuard endpoint
+config endpoint 'main'
+	option interface 'wan'
+	option port '51820'
+	# option host 'gw.example.org'
