@@ -264,6 +264,10 @@ def ensure_executable(cmd_name):
 
 
 CERTBOT_MAX_REPORTED_DOMAINS = 10
+# Readiness is judged from the certificate the local web server actually serves for each domain: no certbot run (it needs
+# root; the daemon is an unprivileged user under ProtectSystem=strict) and no file permissions (/etc/letsencrypt/live is
+# root-only). certbot renews at 30 days left, so fewer than CERTBOT_MIN_DAYS_LEFT means renewal is not working.
+CERTBOT_MIN_DAYS_LEFT = 14
 
 
 # [@ANCHOR: pager_duty:dig_addresses]
@@ -284,6 +288,32 @@ def _dig_addresses(dig, domain, rtype):
         if not line.startswith(";") and len(line.split()) >= 5 and line.split()[3] == wanted
     ]
     return status.group(1), addresses
+
+
+# [@ANCHOR: pager_duty:served_cert_problem]
+def served_cert_problem(domain, port=443, host="127.0.0.1"):
+    """One line saying why the certificate this server serves for `domain` is not healthy (unreadable, or fewer than
+    CERTBOT_MIN_DAYS_LEFT days left), or None. Connects to the local web server with the domain as SNI and does not verify
+    the chain, so an already expired certificate is reported by its expiry rather than as a handshake error."""
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    try:
+        with socket.create_connection((host, port), timeout=5) as sock:
+            with ctx.wrap_socket(sock, server_hostname=domain) as ssock:
+                pem = ssl.DER_cert_to_PEM_cert(ssock.getpeercert(binary_form=True))
+        openssl, _ = ensure_executable("openssl")
+        if not openssl:
+            return f"Could not check the certificate for {domain}: the openssl tool is not installed on this server."
+        res = subprocess.run(
+            [openssl, "x509", "-noout", "-checkend", str(CERTBOT_MIN_DAYS_LEFT * 86400)],
+            input=pem, capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, ssl.SSLError, subprocess.TimeoutExpired) as e:
+        return f"Could not read the certificate served for {domain}: {e}."
+    if res.returncode != 0:
+        return f"The certificate served for {domain} expires in under {CERTBOT_MIN_DAYS_LEFT} days; renewal is not working."
+    return None
 
 
 # [@ANCHOR: pager_duty:certbot_domain_problem]
@@ -1712,34 +1742,21 @@ def execute_check(check, client=None):
             ) as e:  # audit-ignore-catch-all
                 logger.warning(f"Could not verify public IP for domain matching: {e}")
 
-        exe, _ = ensure_executable("certbot")
-        if exe:
-            try:
-                res = subprocess.run(
-                    [exe, "renew", "--dry-run"],
-                    capture_output=True,
-                    text=True,
-                    timeout=300,
+        # With no domains (or "auto") there is nothing to check; a wildcard name has no host to ask for.
+        if domains and domains != "auto":
+            expiring = [
+                problem
+                for problem in (
+                    served_cert_problem(d.strip())
+                    for d in domains.split(",")
+                    if d.strip() and not d.strip().startswith("*.")
                 )
-                if res.returncode != 0:
-                    failed = [
-                        scrub_log_line(line.strip())
-                        for line in (res.stdout + "\n" + res.stderr).split("\n")
-                        if "Failed to renew" in line or "Challenge failed" in line
-                    ]
-                    err_msg = "Certbot dry-run failed!"
-                    if failed:
-                        err_msg += " " + " | ".join(failed[:2])
-                    return False, err_msg
-            except subprocess.TimeoutExpired:
-                return False, "Certbot dry-run timed out."
-            except (
-                ConnectionError,
-                socket.timeout,
-                Exception,
-            ) as e:  # audit-ignore-catch-all
-                logger.warning("Certbot renew check failed: %s", e)
-                return False, f"Certbot execution error: {e}"
+                if problem
+            ]
+            if expiring:
+                shown = expiring[:CERTBOT_MAX_REPORTED_DOMAINS]
+                more = len(expiring) - len(shown)
+                return False, "\n".join(shown) + (f" (and {more} more)" if more else "")
 
         return True, "OK"
 
