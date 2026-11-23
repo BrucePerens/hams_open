@@ -27,6 +27,7 @@ pub const BLOCK_PAGE: &str = "<!doctype html><html><body><div id=\"ham-integrity
 encrypted: do not send secrets.</div><h1>Blocked</h1><p>This page asks for a password on a ham link, which is \
 not encrypted. Use the signature login at <a href=\"/.ham/login\">/.ham/login</a>.</p></body></html>";
 
+// [@ANCHOR: ham_proxy_find_ci]
 fn find_ci(h: &[u8], needle: &str, from: usize) -> Option<usize> {
     let n = needle.as_bytes();
     if n.is_empty() || h.len() < n.len() {
@@ -35,6 +36,7 @@ fn find_ci(h: &[u8], needle: &str, from: usize) -> Option<usize> {
     (from..=h.len() - n.len()).find(|&i| h[i..i + n.len()].eq_ignore_ascii_case(n))
 }
 
+// [@ANCHOR: ham_proxy_inject]
 /// Insert the banner after the opening `<body ...>` tag (or at the start), unless it is already there.
 pub fn inject(html: &[u8]) -> Vec<u8> {
     if find_ci(html, BANNER_ID, 0).is_some() {
@@ -50,6 +52,7 @@ pub fn inject(html: &[u8]) -> Vec<u8> {
     out
 }
 
+// [@ANCHOR: ham_proxy_has_unhandled_password]
 /// True if some `<input type=password>` is not marked as handled by the signature login.
 pub fn has_unhandled_password(html: &[u8]) -> bool {
     let mut pos = 0;
@@ -72,6 +75,7 @@ fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
+// [@ANCHOR: ham_proxy_unhex]
 fn unhex(s: &str) -> Option<Vec<u8>> {
     if !s.len().is_multiple_of(2) || !s.is_ascii() {
         return None;
@@ -86,6 +90,7 @@ fn message(ts: u64, host: &str, sha: &str) -> Vec<u8> {
     format!("ham-integrity-v1\n{ts}\n{host}\n{sha}\n").into_bytes()
 }
 
+// [@ANCHOR: ham_proxy_sign_header]
 /// Build the header value for `body` served for `host` at unix time `ts`, signed with an Ed25519 key.
 pub fn sign_header(
     key: &PKey<Private>,
@@ -101,6 +106,7 @@ pub fn sign_header(
     ))
 }
 
+// [@ANCHOR: ham_proxy_verify_error]
 /// Why a header failed verification.
 #[derive(Debug, PartialEq, Eq)]
 pub enum VerifyError {
@@ -116,6 +122,7 @@ pub enum VerifyError {
     BadSignature,
 }
 
+// [@ANCHOR: ham_proxy_verify_header]
 /// Verify a header value against the received body, the host asked for, the proxy key and the clock.
 pub fn verify_header(
     value: &str,
@@ -161,6 +168,7 @@ pub fn verify_header(
     Ok(())
 }
 
+// [@ANCHOR: ham_proxy_dechunk]
 /// Decode a chunked body; `None` if malformed.
 pub fn dechunk(mut b: &[u8]) -> Option<Vec<u8>> {
     let mut out = Vec::new();
