@@ -52,7 +52,8 @@ class EnrollTests(unittest.TestCase):
         bindir.mkdir()
         for name, body in {
             "uclient-fetch": FETCH,
-            "wg": '#!/bin/sh\ncase $1 in genkey) echo "%s";; pubkey) echo "%s";; esac\n' % (KEY, KEY),
+            "wg": '#!/bin/sh\ncase $1 in genkey) echo "%s";; pubkey) echo "%s";; show) echo "peerA"; echo "peerB";; *) echo "wg $*" >> "$FAKE/wg";; esac\n' % (KEY, KEY),
+            "ip": '#!/bin/sh\necho "ip $*" >> "$FAKE/ip"\n',
             "uci": '#!/bin/sh\ncase $* in *"get hams_node_enroll.main.url"*) cat "$FAKE/uci_url" 2>/dev/null; exit 0 ;; esac\necho "$*" >> "$FAKE/uci"\n',
         }.items():
             (bindir / name).write_text(body)
@@ -135,6 +136,41 @@ class EnrollTests(unittest.TestCase):
         result = self.run_script("fetch")  # no queued reply: uclient-fetch fails
         self.assertEqual(result.returncode, 4)
         self.assertTrue((self.state / "device_token").exists())
+
+    def test_unenroll_revokes_server_side_then_removes_peers_key_uci_and_cron(self):
+        self.assertEqual(self.enroll().returncode, 0)
+        (self.fake / "uci").unlink()
+        self.queue("unenroll", reply(status="success"))
+        result = self.run_script("unenroll")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        sent = [c for c in self.calls() if "/unenroll" in c]
+        self.assertIn('"token":"tok_en-1"', sent[0])
+        for name in ("device_token", "wg.key", "status"):
+            self.assertFalse((self.state / name).exists(), name)
+        self.assertNotIn("hams-node-enroll fetch", self.cron.read_text())
+        wg = (self.fake / "wg").read_text()
+        self.assertIn("wg set wg-hams peer peerA remove", wg)
+        self.assertIn("wg set wg-hams peer peerB remove", wg)
+        self.assertIn("ip link del wg-hams", (self.fake / "ip").read_text())
+        uci = (self.fake / "uci").read_text()
+        for section in ("hams_node.main", "hams_node_ondemand.main"):
+            self.assertIn("delete " + section, uci)
+
+    def test_unenroll_with_an_unreachable_portal_keeps_everything_for_a_retry(self):
+        self.assertEqual(self.enroll().returncode, 0)
+        result = self.run_script("unenroll")  # no queued reply: uclient-fetch fails
+        self.assertEqual(result.returncode, 4)
+        self.assertTrue((self.state / "device_token").exists())
+        self.assertTrue((self.state / "wg.key").exists())
+
+    def test_unenroll_after_a_revocation_still_cleans_up_locally(self):
+        self.assertEqual(self.enroll().returncode, 0)
+        self.queue("config", reply(status="error", message="refused"))
+        self.assertEqual(self.run_script("fetch").returncode, 3)
+        result = self.run_script("unenroll")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((self.state / "wg.key").exists())
+        self.assertNotIn("/unenroll", " ".join(self.calls()), "no token left to send")
 
     def test_no_password_anywhere_in_the_package(self):
         # every package file is scanned except hams-node-bird (it legitimately has BGP "password", BIRD keyword)

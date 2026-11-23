@@ -74,6 +74,10 @@ login secret is never typed into or stored on the router. `hams-node-enroll fetc
 enrol) renews the configuration into `/etc/config/hams_node` and `hams_node_ondemand`. A revoked token stops the node:
 exit 3, the cron line and token are removed, and no request is made again until the member enrols anew.
 
+`hams-node-enroll unenroll` revokes the device token on hams.com (`/api/ipv6/enroll/unenroll`, own device only), then removes the
+WireGuard peers and interface, the `hams_node` and `hams_node_ondemand` settings, the key, the token and the cron line. If hams.com
+cannot be reached it exits 4 and removes nothing; run it again. A token hams.com already refuses is dropped and the rest removed.
+
 ## Automatic update (`hams-node-update`, separate package)
 
 Off until `/etc/config/hams_node_update` has a `feed_url` (https; the directory with `packages.adb`) and a `public_key` (path of the
