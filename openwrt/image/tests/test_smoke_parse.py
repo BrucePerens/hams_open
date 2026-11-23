@@ -37,7 +37,7 @@ class HttpAnswersTests(unittest.TestCase):
 
     def serve(self, reply):
         srv = socket.socket()
-        srv.bind(("127.0.0.1", 0))
+        srv.bind(("0.0.0.0", 0))
         srv.listen(1)
         self.addCleanup(srv.close)
 
@@ -52,7 +52,7 @@ class HttpAnswersTests(unittest.TestCase):
                     try:
                         c.recv(1)
                     except OSError:
-                        pass
+                        return  # the client gave up first
 
         threading.Thread(target=run, daemon=True).start()
         return srv.getsockname()[1]
