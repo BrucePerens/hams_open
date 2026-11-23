@@ -7,3 +7,5 @@ UniFFI bindings over `hams_net_core` for the Android app (Kotlin) and iOS (Swift
 - [@ANCHOR: hams_net_ffi_peer_table_new] `PeerTable(directory, wireguard, interface, rfLink)`: on-demand peers; the platform supplies the directory lookup and WireGuard backend; an RF link is refused.
 - [@ANCHOR: hams_net_ffi_peer_table_on_packet] `onPacket(destination, now)`: refresh or create the peer for a destination; its public key or null.
 - [@ANCHOR: hams_net_ffi_peer_table_expire] `expire(now)`: remove idle peers.
+
+Swift: `tools/swift_bindings.sh [OUT_DIR]` generates `hams_net_ffi.swift` plus the C header and modulemap from the built library (any host), and on macOS builds the static library, compiles `swift/hello.swift` against the generated bindings with `swiftc` and runs it (SIIT round trip, refused address; verified on mac1 with the Command Line Tools only). With a full Xcode it also builds iOS and iOS-simulator static libraries and `HamsNetFfi.xcframework`; without Xcode it prints SKIP (mac1 has no Xcode, so the XCFramework step is untested).
