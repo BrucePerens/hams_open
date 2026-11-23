@@ -12,6 +12,7 @@ class WhitelistTests(unittest.TestCase):
         self.whitelist = ham_policy.Whitelist(["example.org", "*.wiki.test"])
 
     def test_ham_names_are_always_permitted(self):
+        # Tests [@ANCHOR: ham_policy:whitelist]
         self.assertTrue(self.whitelist.permits("node.ham"))
         self.assertTrue(self.whitelist.permits("A.B.HAM."))
 
@@ -26,6 +27,7 @@ class WhitelistTests(unittest.TestCase):
 
 class StationIdLogTests(unittest.TestCase):
     def test_log_line_names_station_destination_suite_and_time(self):
+        # Tests [@ANCHOR: ham_policy:log_connection]
         out = io.StringIO()
         ham_policy.log_connection(out, "w1aw", "node.ham", "NULL-SHA256", now=1700000000)
         line = out.getvalue()
