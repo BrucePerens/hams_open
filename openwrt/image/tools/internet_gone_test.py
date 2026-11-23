@@ -12,6 +12,7 @@ Run through agent_procs.py (about 10 minutes, needs the host's internet for the 
 import argparse
 import os
 import pathlib
+import re
 import sys
 import time
 
@@ -34,6 +35,80 @@ node IN AAAA 2001:db8:ab00:20::1
 """
 
 
+# Internet phase of a guest: the user-mode NIC on br-lan (IPv4 only: apk tries IPv6 first and fails), then bird2 and unbound.
+ONLINE = """
+sysctl -w net.ipv6.conf.all.disable_ipv6=1 >/dev/null
+ip addr flush dev br-lan
+ip addr add 10.0.2.15/24 dev br-lan
+ip route add default via 10.0.2.2
+echo nameserver 10.0.2.3 > /etc/resolv.conf
+for i in 1 2 3 4 5 6; do
+    apk update >/dev/null 2>&1
+    apk add bird2 bird2c unbound-daemon >/tmp/apk.log 2>&1 && break
+    sleep 3
+done
+tail -n 3 /tmp/apk.log
+which bird birdc unbound
+sysctl -w net.ipv6.conf.all.disable_ipv6=0
+/etc/init.d/dnsmasq stop
+"""
+
+
+BIRD_SETUP = """
+touch /etc/config/hams_node_bird
+uci set hams_node_bird.main=bird
+uci set hams_node_bird.main.enabled=1
+uci set hams_node_bird.main.asn={asn}
+uci set hams_node_bird.main.prefix=2001:db8:ab00::/40
+uci set hams_node_bird.main.prefix60={p60}
+uci set hams_node_bird.main.serial={serial}
+uci add_list hams_node_bird.main.neighbor='{nasn},{nll},eth1'
+uci commit hams_node_bird
+ip addr add {own}/128 dev lo
+# eth1 is the stock image\'s wan zone, which refuses BGP; on a node the hams-node-fw "hamrf" zone opens tcp 179 toward RF
+nft insert rule inet fw4 input iifname eth1 tcp dport 179 accept
+/etc/init.d/bird stop
+/etc/init.d/hams-node-bird start
+sleep 2
+ps | grep "[b]ird"
+"""
+ZONE_SETUP = """
+touch /etc/config/hams_node_zone
+uci set hams_node_zone.main=dns
+uci set hams_node_zone.main.enabled=1
+uci set hams_node_zone.main.port=53
+uci add_list hams_node_zone.main.primary=2001:db8:ab00::53
+uci commit hams_node_zone
+hams-node-zone render /tmp/ub.ext
+printf 'server:\\n    username: ""\\n    chroot: ""\\n    pidfile: ""\\n    do-ip6: yes\\ninclude: /tmp/ub.ext\\n' > /tmp/ub.conf
+unbound -c /tmp/ub.conf
+sleep 3
+nslookup node.ham 127.0.0.1
+"""
+
+
+DEPRECATION_CHECK = """
+mkdir -p /etc/hams-node
+bad=$(wg genkey | wg pubkey)
+good=$(wg genkey | wg pubkey)
+echo "$bad 2001:db8:ab00:30::/60,2001:db8:ab00:31::/60" > /etc/hams-node/deprecation_list
+printf '%s [2001:db8::9]:51820 2001:db8:ab00:30::/60\\n%s [2001:db8::9]:51820 2001:db8:ab00:40::/60\\n' "$bad" "$good" > /tmp/peers
+ip link add wgt0 type wireguard
+wg set wgt0 private-key /dev/stdin <<EOF
+$(wg genkey)
+EOF
+hams-node-wg apply wgt0 internet /tmp/peers
+wg show wgt0 peers | grep -q "$bad" && echo bad=present || echo bad=absent
+wg show wgt0 peers | grep -q "$good" && echo good=present || echo good=absent
+"""
+
+
+def sh(con, text, timeout):
+    """Run a multi-line script on the guest: pushed as a file, because the serial console truncates long lines."""
+    con.send("cat > /tmp/s.sh <<'HAMS_EOF'\n%s\nHAMS_EOF\n" % text.strip().replace("\t", "    "))
+    return con.run("sh /tmp/s.sh", timeout)
+
+
 def rf_netdev(name):
     if name == "A":
         return ["-netdev", "socket,id=rf,listen=127.0.0.1:%d" % PORT]
@@ -41,7 +116,7 @@ def rf_netdev(name):
 
 
 def out(res):
-    return (res[0] if res else "").strip()
+    return re.sub(r"\x1b\[[0-9;]*m", "", res[0] if res else "TIMEOUT").strip()
 
 
 def main():
@@ -52,7 +127,7 @@ def main():
     failures = []
 
     def check(name, ok, detail=""):
-        print("%s %s %s" % ("PASS" if ok else "FAIL", name, detail.replace("\r\n", " | ")[-200:]))
+        print("%s %s %s" % ("PASS" if ok else "FAIL", name, detail.replace("\r\n", " | ")[-300:]))
         if not ok:
             failures.append(name)
 
@@ -69,70 +144,60 @@ def main():
         time.sleep(8)
         # internet phase: packages, the cached zone, the scripts
         for name, con in cons.items():
-            con.run("ip addr flush dev br-lan; ip addr add 10.0.2.15/24 dev br-lan; ip route add default via 10.0.2.2; "
-                    "echo nameserver 10.0.2.3 > /etc/resolv.conf; /etc/init.d/dnsmasq stop", 30)
-            res = con.run("apk update >/dev/null 2>&1; apk add bird2 unbound-daemon >/dev/null 2>&1; which bird unbound", 400)
-            check("%s: bird and unbound installed" % name, bool(res) and "/bird" in res[0] and "/unbound" in res[0], out(res))
-            for script in ("hams-node-bird", "hams-node-zone", "hams-node-time"):
+            con.send("cat > /tmp/online.sh <<'HAMS_EOF'\n%s\nHAMS_EOF\n" % ONLINE.strip())  # short lines: the serial console truncates long ones
+            res = con.run("sh /tmp/online.sh", 900)
+            check("%s: bird and unbound installed" % name, "/usr/sbin/bird" in out(res) and "/usr/sbin/unbound" in out(res) and "birdc" in out(res), out(res))
+            for script in ("hams-node-bird", "hams-node-zone", "hams-node-time", "hams-node-wg"):
                 push(con, SBIN / script, "/usr/sbin/" + script)
-            con.run("mkdir -p /etc/hams-node; cat > /etc/hams-node/ham.zone <<'EOF'\n%sEOF" % ZONE, 20)
+            push(con, SBIN.parents[1] / "etc" / "init.d" / "hams-node-bird", "/etc/init.d/hams-node-bird")
+            con.run("chmod 755 /etc/init.d/hams-node-bird", 10)
+            sh(con, "mkdir -p /etc/hams-node\ncat > /etc/hams-node/ham.zone <<'EOF'\n%sEOF" % ZONE, 20)
         # cut the internet
         for name, con in cons.items():
-            con.run("ip route del default; ip addr flush dev br-lan", 20)
-            res = con.run("uclient-fetch -T 3 -qO /dev/null http://10.0.2.2/ ; echo rc=$?", 30)
-            check("%s: internet is cut" % name, "rc=0" not in out(res), out(res))
+            res = sh(con, "ip route del default\nip addr flush dev br-lan\nuclient-fetch -T 3 -qO /dev/null http://10.0.2.2/\necho fetch=$?", 60)
+            check("%s: internet is cut" % name, "fetch=" in out(res) and "fetch=0" not in out(res), out(res))
         # the RF link
         ll = {}
         for name, con in cons.items():
-            con.run("ip link set eth1 up", 10)
-            time.sleep(4)
-            res = con.run("ip -6 addr show dev eth1 | awk '/inet6 fe80/{print $2}' | cut -d/ -f1", 20)
+            res = sh(con, "ip link set eth1 up\nsleep 4\nip -6 addr show dev eth1 | awk '/inet6 fe80/{print $2}' | cut -d/ -f1", 40)
             ll[name] = out(res).split()[-1] if out(res) else ""
             check("%s: RF link-local address" % name, ll[name].startswith("fe80"), ll[name])
+        setup = {}
         for name, con in cons.items():
             other = "B" if name == "A" else "A"
             n = NODES[name]
-            con.run("touch /etc/config/hams_node_bird; uci set hams_node_bird.main=bird; uci set hams_node_bird.main.enabled=1; "
-                    "uci set hams_node_bird.main.asn=%s; uci set hams_node_bird.main.prefix=2001:db8:ab00::/40; "
-                    "uci set hams_node_bird.main.prefix60=%s; uci set hams_node_bird.main.serial=%s; "
-                    "uci add_list hams_node_bird.main.neighbor='%s,%s,eth1'; uci commit hams_node_bird; "
-                    "ip addr add %s1/128 dev lo; hams-node-bird render /etc/bird.conf; bird -p -c /etc/bird.conf; "
-                    "bird -c /etc/bird.conf -s /tmp/bird.ctl" % (n["asn"], n["p60"], n["serial"], NODES[other]["asn"], ll[other],
-                                                                 n["p60"].split("/")[0]), 60)
+            setup[name] = sh(con, BIRD_SETUP.format(asn=n["asn"], p60=n["p60"], serial=n["serial"], nasn=NODES[other]["asn"], nll=ll[other],
+                                      own=n["p60"].split("/")[0] + "1"), 60)
         # scenario A: the nodes route over RF with no route server
-        time.sleep(25)
-        res = cons["A"].run("birdc -s /tmp/bird.ctl show protocols | grep hams_rf1", 30)
-        check("A: BGP session to B over RF is Established", "Established" in out(res), out(res))
-        res = cons["A"].run("ip -6 route show 2001:db8:ab00:20::/60", 20)
+        time.sleep(30)
+        res = sh(cons["A"], "birdc -s /var/run/hams-node-bird.ctl show protocols | grep hams_rf1", 30)
+        check("A: BGP session to B over RF is Established", "Established" in out(res), out(res) + " || " + out(setup["A"]))
+        res = sh(cons["A"], "ip -6 route show 2001:db8:ab00:20::/60", 20)
         check("A: route to B's /60 learned over RF", "eth1" in out(res), out(res))
-        res = cons["A"].run("ping -6 -c 3 -W 3 -I 2001:db8:ab00:10::1 2001:db8:ab00:20::1; echo rc=$?", 40)
+        res = sh(cons["A"], "ping -6 -c 3 -W 3 -I 2001:db8:ab00:10::1 2001:db8:ab00:20::1\necho rc=$?", 40)
         check("A: ping B across the RF link, internet cut", "rc=0" in out(res), out(res))
         # .ham from the cached zone
-        res = cons["A"].run(
-            "uci set hams_node_zone.main=dns 2>/dev/null || { touch /etc/config/hams_node_zone; uci set hams_node_zone.main=dns; }; "
-            "uci set hams_node_zone.main.enabled=1; uci set hams_node_zone.main.port=53; uci add_list hams_node_zone.main.primary=2001:db8:ab00::53; "
-            "uci commit hams_node_zone; hams-node-zone render /tmp/ub.ext; "
-            "printf 'server:\\n    username: \"\"\\n    chroot: \"\"\\n    pidfile: \"\"\\n    do-ip6: yes\\ninclude: /tmp/ub.ext\\n' > /tmp/ub.conf; "
-            "unbound -c /tmp/ub.conf; sleep 3; nslookup node.ham 127.0.0.1", 60)
+        res = sh(cons["A"], ZONE_SETUP, 60)
         check("A: .ham name resolves from the cached zone, anycast unreachable", "2001:db8:ab00:20::1" in out(res), out(res))
-        # clock: sources are scripts printing an epoch
+        # a deprecation-list entry (state the node already holds; no hams.com round trip) is honoured with the internet cut
+        res = sh(cons["A"], DEPRECATION_CHECK, 60)
+        check("A: a deprecated key is not added as a WireGuard peer, a good one is", "bad=absent" in out(res) and "good=present" in out(res), out(res))
+        # clock: sources are scripts printing an epoch; the status file says what the node decided
         for scen, srcs, want in (
-            ("B (no GPS)", {"ntp": "echo $(( $(date +%s) + 3 )) 0.1", "gps": "exit 1"}, "step"),
-            ("A+B (no internet, no GPS)", {"ntp": "exit 1", "gps": "exit 1"}, "none"),
-            ("B spoofed GPS (a year ahead)", {"ntp": "exit 1", "gps": "echo $(( $(date +%s) + 31536000 )) 1"}, "refuse"),
-            ("B spoofed GPS disagreeing with a good source", {"rtc": "echo $(date +%s) 2", "gps": "echo $(( $(date +%s) + 31536000 )) 1"}, "refuse"),
+            ("B (no GPS): the NTP source over the ham network is used", [("hamntp", "echo $(( $(date +%s) + 3 )) 0.1"), ("gps", "exit 1")], "source=hamntp"),
+            ("A+B (no internet, no GPS): the clock is left alone", [("ntp", "exit 1"), ("gps", "exit 1")], "source=none"),
+            ("B, spoofed GPS a year ahead alone: refused", [("ntp", "exit 1"), ("gps", "echo $(( $(date +%s) + 31536000 )) 1")], "refused=jump"),
+            ("B, spoofed GPS against a good source: flagged", [("gps", "echo $(( $(date +%s) + 31536000 )) 1"), ("rtc", "echo $(date +%s) 2")], "disagree=gps,rtc"),
         ):
-            cmds = "rm -f /tmp/ts.status; touch /etc/config/hams_node_time; uci -q delete hams_node_time.main; uci set hams_node_time.main=time; " \
-                   "uci set hams_node_time.main.enabled=1; "
-            for sname, body in srcs.items():
-                cmds += "printf '#!/bin/sh\\n%s\\n' > /tmp/src_%s; chmod 755 /tmp/src_%s; uci add_list hams_node_time.main.source=%s=/tmp/src_%s; " % (
-                    body.replace("$", "\\$"), sname, sname, sname, sname)
-            before = out(cons["A"].run("date +%s", 10)).split()[-1]
-            cons["A"].run(cmds + "uci commit hams_node_time; hams-node-time sync; cat /tmp/hams-node-time.status", 30)
-            after = int(out(cons["A"].run("date +%s", 10)).split()[-1])
-            delta = after - int(before)
-            ok = (delta < 600) if want in ("none", "refuse") else (0 <= delta < 600)
-            check("clock, %s: sane (moved %ds)" % (scen, delta), ok)
+            text = "rm -f /tmp/hams-node-time.status\ntouch /etc/config/hams_node_time\nuci -q delete hams_node_time.main\n" \
+                   "uci set hams_node_time.main=time\nuci set hams_node_time.main.enabled=1\nbefore=$(date +%s)\n"
+            for sname, body in srcs:
+                text += "printf '%%s\\n' '#!/bin/sh' '%s' > /tmp/src_%s\nchmod 755 /tmp/src_%s\nuci add_list hams_node_time.main.source=%s=/tmp/src_%s\n" % (
+                    body, sname, sname, sname, sname)
+            text += "uci commit hams_node_time\nhams-node-time sync\ncat /tmp/hams-node-time.status\necho moved=$(( $(date +%s) - before ))\n"
+            res = sh(cons["A"], text, 60)
+            moved = out(res).split("moved=")[-1].split()[0] if "moved=" in out(res) else "999999"
+            check("clock, %s" % scen, want in out(res) and abs(int(moved)) < 600, out(res))
     finally:
         for con in cons.values():
             con.close()
