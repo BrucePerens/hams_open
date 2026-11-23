@@ -14,7 +14,7 @@ if [ "$1" = batch ]; then cat >> "$FAKE/batch"; exit 0; fi
 if [ "$1" = commit ]; then echo "$*" >> "$FAKE/commits"; exit 0; fi
 if [ "$2" = show ]; then cat "$FAKE/firewall_show" 2>/dev/null; exit 0; fi
 if [ "$1" = add_list ]; then
-    echo "$*" >> "$FAKE/addlist"; kv=${2#hams_node_fw.main.}; k=${kv%%=*}; v=${kv#*=}
+    echo "$*" >> "$FAKE/addlist"; case $2 in hams_node_fw.main.*) ;; *) exit 0 ;; esac; kv=${2#hams_node_fw.main.}; k=${kv%%=*}; v=${kv#*=}
     if grep -q "^$k=" "$FAKE/uci"; then sed -i "s|^$k=\\(.*\\)|$k=\\1 $v|; s|^$k= |$k=|" "$FAKE/uci"; else echo "$k=$v" >> "$FAKE/uci"; fi
     exit 0
 fi
@@ -182,6 +182,67 @@ class RemoveTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("wg-ondemand", result.stderr)
         self.assertNotIn("wg-hams", result.stderr)
+
+
+class HamlanTests(unittest.TestCase):
+    def render(self, **over):
+        return Env(self, **over).run(SBIN / "hams-node-fw", "render")
+
+    def test_nothing_exists_unless_designated(self):
+        out = self.render().stdout
+        self.assertNotIn("hams_hl_", out.replace("delete firewall.hams_hl_", ""))
+        self.assertNotIn("network.hamlan", out)
+
+    def test_vlan_segment_zone_forwardings_and_isolation(self):
+        lines = self.render(hamlan_vlan="42").stdout.splitlines()
+        for want in ("set network.hamlan_dev.type=8021q", "set network.hamlan_dev.vid=42", "set network.hamlan_dev.name=br-lan.42",
+                     "set network.hamlan.device=br-lan.42", "set firewall.hams_hl_zone.name=hamlan", "set firewall.hams_hl_zone.input=DROP",
+                     "set firewall.hams_hl_zone.forward=DROP", "set firewall.hams_hl_drop_lan.src=hamlan", "set firewall.hams_hl_drop_lan.dest=lan",
+                     "set firewall.hams_hl_drop_lan.target=DROP"):
+            self.assertIn(want, lines)
+        fwd = {}
+        for ln in lines:
+            if ln.startswith("set firewall.hams_hl_fwd_") and (".src=" in ln or ".dest=" in ln):
+                sec, kv = ln[len("set firewall."):].split(".", 1)
+                fwd.setdefault(sec, {})[kv.split("=")[0]] = kv.split("=")[1]
+        edges = sorted((v["src"], v["dest"]) for v in fwd.values())
+        self.assertEqual(edges, [("ham", "hamlan"), ("hamlan", "ham"), ("hamrf", "hamlan"), ("lan", "hamlan")])
+        self.assertNotIn(("hamlan", "lan"), edges)
+        # the toward-RF side never carries an encrypted-service port
+        self.assertIn("set firewall.hams_hl_rfdrop_tcp_22.dest_port=22", lines)
+        self.assertIn("set firewall.hams_hl_rfdrop_tcp_22.src=hamrf", lines)
+
+    def test_port_segment_is_its_own_bridge(self):
+        lines = self.render(hamlan_port="lan4").stdout.splitlines()
+        self.assertIn("set network.hamlan_dev.type=bridge", lines)
+        self.assertIn("set network.hamlan_dev.name=br-hamlan", lines)
+        self.assertIn("add_list network.hamlan_dev.ports=lan4", lines)
+        self.assertIn("set network.hamlan.device=br-hamlan", lines)
+
+    def test_hamlan_open_restricts_inbound_to_listed_hosts(self):
+        lines = self.render(hamlan_vlan="42", hamlan_open="2001:db8:ab40:11::10/443 2001:db8:ab40:11::11/udp:5000").stdout.splitlines()
+        self.assertNotIn("set firewall.hams_hl_fwd_ham_in=forwarding", lines)
+        self.assertNotIn("set firewall.hams_hl_fwd_hamrf_in=forwarding", lines)
+        self.assertIn("set firewall.hams_hl_in_ham_1.dest_ip=2001:db8:ab40:11::10", lines)
+        self.assertIn("set firewall.hams_hl_in_ham_1.dest_port=443", lines)
+        self.assertIn("set firewall.hams_hl_in_ham_2.proto=udp", lines)
+        self.assertNotIn("set firewall.hams_hl_in_hamrf_1=rule", lines)  # 443 is encrypted: never toward RF
+        self.assertIn("set firewall.hams_hl_in_hamrf_2=rule", lines)
+
+    def test_bad_designations_refused(self):
+        for over in ({"hamlan_vlan": "0"}, {"hamlan_vlan": "5000"}, {"hamlan_vlan": "4x"}, {"hamlan_vlan": "42", "hamlan_port": "lan4"},
+                     {"hamlan_port": "a;b"}, {"hamlan_vlan": "42", "hamlan_open": "nonsense"}):
+            self.assertNotEqual(self.render(**over).returncode, 0, over)
+
+    def test_apply_gives_the_segment_a_slash64_through_hams_node_lan(self):
+        env = Env(self, hamlan_vlan="42")
+        (env.root / "bin" / "hams-node-lan").write_text('#!/bin/sh\necho "$*" >> "$FAKE/lancalls"\n')
+        (env.root / "bin" / "hams-node-lan").chmod(0o755)
+        self.assertEqual(env.run(SBIN / "hams-node-fw", "apply").returncode, 0)
+        self.assertIn("add_list hams_node_lan.main.interface=lan", env.read("addlist"))
+        self.assertIn("add_list hams_node_lan.main.interface=hamlan", env.read("addlist"))
+        self.assertEqual(env.read("lancalls"), ["apply"])
+        self.assertIn("commit network", env.read("commits"))
 
 
 class WireguardZoneOnApply(unittest.TestCase):
