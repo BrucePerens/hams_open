@@ -3,6 +3,7 @@
 # Usage: tools/cross_build.sh [target...]   (default: all). Output: target/cross_sizes.txt
 # Targets that cannot be built here are listed as SKIP with the reason; nothing else is hidden.
 # MIPSEL_LINKER: OpenWrt mipsel musl gcc (from the OpenWrt SDK for that target) to link the probe.
+# ANDROID_NDK_HOME defaults to the newest NDK under /home/bruce/agent_work/tools/android/ndk (sdkmanager "ndk;28.2.13676358").
 # Needs: rustup targets (see TARGETS), nightly + rust-src for the tier-3 mipsel target, the Android NDK
 # (ANDROID_NDK_HOME) for aarch64-linux-android, a macOS host for aarch64-apple-ios.
 set -u
@@ -21,6 +22,7 @@ for t in $TARGETS; do
       export RUSTFLAGS="-C linker-flavor=ld.lld -C link-self-contained=yes"
       ;;
     aarch64-linux-android)
+      ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-$(ls -d /home/bruce/agent_work/tools/android/ndk/* 2>/dev/null | tail -1)}"
       if [ -z "${ANDROID_NDK_HOME:-}" ] || [ ! -d "$ANDROID_NDK_HOME" ]; then
         echo "SKIP $t no Android NDK (set ANDROID_NDK_HOME)" >> "$OUT"; continue
       fi
@@ -50,7 +52,7 @@ for t in $TARGETS; do
   fi
   if $cmd --release $what --target "$t" ${CARGO_BUILD_JOBS:+-j "$CARGO_BUILD_JOBS"} >"target/cross_$t.log" 2>&1; then
     if [ "$what" = --lib ]; then echo "OK $t lib compiles; no binary (set MIPSEL_LINKER to an OpenWrt mipsel musl gcc to link)" >> "$OUT"; continue; fi
-    f="target/$t/release/examples/probe"
+    f="${CARGO_TARGET_DIR:-target}/$t/release/examples/probe"
     echo "OK $t $(wc -c < "$f") bytes" >> "$OUT"
   else
     echo "FAIL $t see target/cross_$t.log" >> "$OUT"
