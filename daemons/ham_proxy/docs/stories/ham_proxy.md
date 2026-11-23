@@ -19,3 +19,5 @@ Internals:
 - [@ANCHOR: ham_proxy_arg] Looks up the value following a command-line flag.
 - [@ANCHOR: ham_proxy_request_identity] Rewrites the request head for the site: any `Accept-Encoding` header is dropped and `Accept-Encoding: identity` added, so the HTML body can be inspected.
 - [@ANCHOR: ham_proxy_transform_html] Turns a buffered HTML response into what the ham gets: the signed-not-encrypted banner exactly once, the signed integrity header, and a block page when a password field appears without a signature login.
+- [@ANCHOR: ham_proxy_find_ci] Case-insensitive byte search for a tag or id in an HTML page, starting at an offset; an empty needle finds nothing.
+- [@ANCHOR: ham_proxy_dechunk] Decodes a chunked response body (chunk extensions ignored); a malformed or truncated body gives nothing, and the page is then refused.

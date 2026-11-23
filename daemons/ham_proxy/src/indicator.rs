@@ -27,6 +27,7 @@ pub const BLOCK_PAGE: &str = "<!doctype html><html><body><div id=\"ham-integrity
 encrypted: do not send secrets.</div><h1>Blocked</h1><p>This page asks for a password on a ham link, which is \
 not encrypted. Use the signature login at <a href=\"/.ham/login\">/.ham/login</a>.</p></body></html>";
 
+// [@ANCHOR: ham_proxy_find_ci]
 fn find_ci(h: &[u8], needle: &str, from: usize) -> Option<usize> {
     let n = needle.as_bytes();
     if n.is_empty() || h.len() < n.len() {
@@ -161,6 +162,7 @@ pub fn verify_header(
     Ok(())
 }
 
+// [@ANCHOR: ham_proxy_dechunk]
 /// Decode a chunked body; `None` if malformed.
 pub fn dechunk(mut b: &[u8]) -> Option<Vec<u8>> {
     let mut out = Vec::new();
@@ -190,4 +192,29 @@ pub fn header<'a>(head: &'a str, name: &str) -> Option<&'a str> {
         let (k, v) = l.split_once(':')?;
         k.eq_ignore_ascii_case(name).then(|| v.trim())
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{dechunk, find_ci};
+
+    #[test]
+    fn find_ci_matches_any_case_from_an_offset_and_not_an_empty_needle() {
+        // Tests [@ANCHOR: ham_proxy_find_ci]
+        assert_eq!(find_ci(b"<HTML><BODY>", "<body", 0), Some(6));
+        assert_eq!(find_ci(b"<HTML><BODY>", "<body", 7), None);
+        assert_eq!(find_ci(b"abc", "", 0), None);
+        assert_eq!(find_ci(b"ab", "abc", 0), None);
+    }
+
+    #[test]
+    fn dechunk_joins_chunks_ignores_extensions_and_refuses_a_truncated_body() {
+        // Tests [@ANCHOR: ham_proxy_dechunk]
+        assert_eq!(
+            dechunk(b"3\r\nabc\r\n2;x=1\r\nde\r\n0\r\n\r\n"),
+            Some(b"abcde".to_vec())
+        );
+        assert_eq!(dechunk(b"5\r\nab"), None);
+        assert_eq!(dechunk(b"zz\r\n"), None);
+    }
 }
