@@ -5,4 +5,5 @@
 //! their tests (parity).
 
 pub mod boundary;
+pub mod directory;
 pub mod siit;
