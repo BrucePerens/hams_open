@@ -160,9 +160,12 @@ Each other target/release needs its own kmod build with the same recipe.
 `dhcp.<if>.ra` and `dhcpv6` to `server`, so netifd cuts one /64 per LAN out of the /60 and odhcpd sends router advertisements
 and answers DHCPv6. `hams-node-lan remove` undoes it. Anything that is not a /60 changes nothing. Not exercised on a real router.
 
-## Routing without the route servers (`hams-node-bird`)
+## Endpoint updates (`hams-node-endpoint`, separate package)
 
-`list neighbor 'ASN,ADDRESS,INTERFACE[,PREFIX]'` in `/etc/config/hams_node_bird` adds a direct eBGP session over an RF link (BGP, not
-Babel: BIRD and the /40 filters are already here and AREDN's Babel stays inside the AREDN mesh). Neighbour routes get local-pref 300, the
-route servers' 200 (RF-tagged) or 100, so RF-reachable prefixes use the RF path and everything else the route servers. The sessions work
-with no route server configured, so RF islands keep routing with the internet gone. RF sessions have no password (Part 97).
+`hams-node-endpoint update` publishes `<WAN address>:51820` (uci `hams_node_endpoint.main`: `interface`, `port`, `host`) to
+`/api/ipv6/directory/endpoint` with the portal's signed-update format: HMAC-SHA256 over `public_key\nendpoint\ntimestamp` under the
+X25519 shared secret of the node's key (`/etc/hams-node/wg.key`, made on the device) and the portal's key (`hams_node.main.server_key`).
+openssl reads the private key from its root-only file; it is in no request, log or argument. It sends when the address changed
+or the last update is over 6 hours old (`/etc/hams-node/endpoint_sent`); a hotplug script (`ifup`/`ifupdate` of the WAN) runs it at once
+on a WAN address change, and a cron line (`start`, every 30 minutes, added when the package is installed) refreshes it. Exit 0 sent or
+nothing to do, 1 refused or not enrolled, 4 hams.com unreachable. Behind CGNAT the WAN address is not reachable; set `host`.

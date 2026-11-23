@@ -2,6 +2,7 @@
 """Tests for siit_map."""
 
 import json
+import os
 import unittest
 
 import siit_map
@@ -105,3 +106,26 @@ class GatewayConfigTests(unittest.TestCase):
         for text in bad:
             with self.assertRaises(ValueError, msg=text):
                 siit_map.gateway_configs(text)
+
+
+class ParityWithRustCoreTests(unittest.TestCase):
+    """Shared vectors with daemons/hams_net_core (tests/vectors/siit.json): both sides must agree."""
+
+    def setUp(self):
+        path = os.path.join(os.path.dirname(__file__), "..", "daemons", "hams_net_core", "tests", "vectors", "siit.json")
+        with open(path, encoding="utf-8") as handle:
+            self.vectors = json.load(handle)
+
+    def test_vectors(self):
+        # Tests [@ANCHOR: siit_map:embed]
+        # Tests [@ANCHOR: siit_map:extract]
+        for case in self.vectors["roundtrip"]:
+            address = siit_map.embed(case["block"], case["domain"], case["ipv4"])
+            self.assertEqual(str(address), case["ipv6"])
+            self.assertEqual(siit_map.extract(case["block"], address), (case["domain"], case["ipv4"]))
+        for bad in self.vectors["bad_blocks"]:
+            with self.assertRaises(ValueError, msg=bad):
+                siit_map.embed(bad, 1, "10.0.0.1")
+        for bad in self.vectors["bad_extract"]:
+            with self.assertRaises(ValueError, msg=bad):
+                siit_map.extract(self.vectors["block"], bad)
