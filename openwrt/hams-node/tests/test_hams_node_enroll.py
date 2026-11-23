@@ -99,6 +99,13 @@ class EnrollTests(unittest.TestCase):
         polls = [c for c in self.calls() if c.endswith("/poll " + c.split(" ", 1)[1])]
         self.assertIn('"device_code":"devcode123","public_key":"%s"' % KEY, polls[0])
 
+    def test_enrol_records_the_owner_callsign_and_unenroll_removes_it(self):
+        self.assertEqual(self.enroll().returncode, 0)
+        self.assertEqual((self.state / "owner").read_text().strip(), "N0CALL")
+        self.queue("unenroll", reply(status="success"))
+        self.assertEqual(self.run_script("unenroll").returncode, 0)
+        self.assertFalse((self.state / "owner").exists())
+
     def test_one_time_token_is_sent_as_the_poll_secret_without_asking_for_a_code(self):
         self.queue("poll", reply(status="success", token="tok_en-2", **CONFIG))
         result = self.run_script("enroll", "oneTimeToken_abc")
