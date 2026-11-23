@@ -18,3 +18,6 @@ Wire behaviour (tested): the payload is readable on the wire; a flipped byte mak
 - [@ANCHOR: ham_policy:whitelist_init] `Whitelist(entries)` builds the permit set.
 - [@ANCHOR: ham_policy:whitelist] `Whitelist.permits(host)`: every `.ham` name plus listed domains (`example.org` exact, `*.example.org` subdomains); anything else is refused.
 - [@ANCHOR: ham_policy:log_connection] `log_connection(stream, callsign, host, suite, now=None)`: one UTC-stamped station-identification line per connection; raises `ValueError` without a callsign.
+## DANE for .ham servers
+
+- [@ANCHOR: ham_dane:tlsa_matches] `ham_dane.tlsa_matches(cert_der, records)`: records are `(usage, selector, matching_type, data)` tuples from the signed `.ham` zone. True only if a DANE-EE (3), full-certificate (0) record with matching type 0, 1 or 2 pins the certificate; no records means refuse. Resolving the TLSA records is the proxy's job.
