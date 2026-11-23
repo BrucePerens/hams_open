@@ -65,10 +65,11 @@ uci set hams_node_bird.main.serial={serial}
 uci add_list hams_node_bird.main.neighbor='{nasn},{nll},eth1'
 uci commit hams_node_bird
 ip addr add {own}/128 dev lo
-hams-node-bird render /etc/bird.conf
-bird -p -c /etc/bird.conf && echo parsed
-bird -c /etc/bird.conf -s /tmp/bird.ctl
-sleep 1
+# eth1 is the stock image\'s wan zone, which refuses BGP; on a node the hams-node-fw "hamrf" zone opens tcp 179 toward RF
+nft insert rule inet fw4 input iifname eth1 tcp dport 179 accept
+/etc/init.d/bird stop
+/etc/init.d/hams-node-bird start
+sleep 2
 ps | grep "[b]ird"
 """
 ZONE_SETUP = """
@@ -83,6 +84,22 @@ printf 'server:\\n    username: ""\\n    chroot: ""\\n    pidfile: ""\\n    do-i
 unbound -c /tmp/ub.conf
 sleep 3
 nslookup node.ham 127.0.0.1
+"""
+
+
+DEPRECATION_CHECK = """
+mkdir -p /etc/hams-node
+bad=$(wg genkey | wg pubkey)
+good=$(wg genkey | wg pubkey)
+echo "$bad 2001:db8:ab00:30::/60,2001:db8:ab00:31::/60" > /etc/hams-node/deprecation_list
+printf '%s [2001:db8::9]:51820 2001:db8:ab00:30::/60\\n%s [2001:db8::9]:51820 2001:db8:ab00:40::/60\\n' "$bad" "$good" > /tmp/peers
+ip link add wgt0 type wireguard
+wg set wgt0 private-key /dev/stdin <<EOF
+$(wg genkey)
+EOF
+hams-node-wg apply wgt0 internet /tmp/peers
+wg show wgt0 peers | grep -q "$bad" && echo bad=present || echo bad=absent
+wg show wgt0 peers | grep -q "$good" && echo good=present || echo good=absent
 """
 
 
@@ -130,8 +147,10 @@ def main():
             con.send("cat > /tmp/online.sh <<'HAMS_EOF'\n%s\nHAMS_EOF\n" % ONLINE.strip())  # short lines: the serial console truncates long ones
             res = con.run("sh /tmp/online.sh", 900)
             check("%s: bird and unbound installed" % name, "/usr/sbin/bird" in out(res) and "/usr/sbin/unbound" in out(res) and "birdc" in out(res), out(res))
-            for script in ("hams-node-bird", "hams-node-zone", "hams-node-time"):
+            for script in ("hams-node-bird", "hams-node-zone", "hams-node-time", "hams-node-wg"):
                 push(con, SBIN / script, "/usr/sbin/" + script)
+            push(con, SBIN.parents[1] / "etc" / "init.d" / "hams-node-bird", "/etc/init.d/hams-node-bird")
+            con.run("chmod 755 /etc/init.d/hams-node-bird", 10)
             sh(con, "mkdir -p /etc/hams-node\ncat > /etc/hams-node/ham.zone <<'EOF'\n%sEOF" % ZONE, 20)
         # cut the internet
         for name, con in cons.items():
@@ -151,7 +170,7 @@ def main():
                                       own=n["p60"].split("/")[0] + "1"), 60)
         # scenario A: the nodes route over RF with no route server
         time.sleep(30)
-        res = sh(cons["A"], "birdc -s /tmp/bird.ctl show protocols | grep hams_rf1", 30)
+        res = sh(cons["A"], "birdc -s /var/run/hams-node-bird.ctl show protocols | grep hams_rf1", 30)
         check("A: BGP session to B over RF is Established", "Established" in out(res), out(res) + " || " + out(setup["A"]))
         res = sh(cons["A"], "ip -6 route show 2001:db8:ab00:20::/60", 20)
         check("A: route to B's /60 learned over RF", "eth1" in out(res), out(res))
@@ -160,6 +179,9 @@ def main():
         # .ham from the cached zone
         res = sh(cons["A"], ZONE_SETUP, 60)
         check("A: .ham name resolves from the cached zone, anycast unreachable", "2001:db8:ab00:20::1" in out(res), out(res))
+        # a deprecation-list entry (state the node already holds; no hams.com round trip) is honoured with the internet cut
+        res = sh(cons["A"], DEPRECATION_CHECK, 60)
+        check("A: a deprecated key is not added as a WireGuard peer, a good one is", "bad=absent" in out(res) and "good=present" in out(res), out(res))
         # clock: sources are scripts printing an epoch; the status file says what the node decided
         for scen, srcs, want in (
             ("B (no GPS): the NTP source over the ham network is used", [("hamntp", "echo $(( $(date +%s) + 3 )) 0.1"), ("gps", "exit 1")], "source=hamntp"),
