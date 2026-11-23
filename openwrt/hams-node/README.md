@@ -74,6 +74,17 @@ login secret is never typed into or stored on the router. `hams-node-enroll fetc
 enrol) renews the configuration into `/etc/config/hams_node` and `hams_node_ondemand`. A revoked token stops the node:
 exit 3, the cron line and token are removed, and no request is made again until the member enrols anew.
 
+## Automatic update (`hams-node-update`, separate package)
+
+Off until `/etc/config/hams_node_update` has a `feed_url` (https; the directory with `packages.adb`) and a `public_key` (path of the
+feed's public key PEM, from `openwrt/feed`). `hams-node-update schedule` adds a daily cron line; `hams-node-update run` is one pass:
+it installs the key in `/etc/apk/keys` and the feed in `/etc/apk/repositories.d/hams.list` (apk refuses an index not signed by that
+key), downloads newer versions of the listed packages into a staging directory (a failed download changes nothing), backs up
+`/etc/config/hams_node*`, installs the staged files, then checks each package is at the new version, the settings parse and the
+optional `health_cmd` succeeds. Any failure reinstalls the previous versions from the feed and restores the settings (exit 1; the
+state is in `/var/lib/hams-node-update/status`). The feed must therefore keep the previous version of each package: with no way back
+the update is not started. Tested with the real apk against a signed feed over loopback HTTP; not yet on the QEMU image.
+
 ## Reporting hosts and services (`hams-node-report`, separate package)
 
 `hams-node-report start` adds a cron line (every 30 minutes) that runs `hams-node-report run`: it reads the AREDN host list
