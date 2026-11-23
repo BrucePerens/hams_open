@@ -1,0 +1,24 @@
+# Central site gateway: ham_proxy in --gateway mode (integrity-only TLS on the ham side, verified TLS to the real site, signed whitelist).
+# Not installed anywhere until the runbook (hams_com docs/runbooks/SITE_GATEWAY_DEPLOYMENT.md) is followed. Runs at a member or club /48, never at hams.com.
+[Unit]
+Description=Hams.com Net site gateway (ham_proxy --gateway)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/ham_gateway/gateway.env
+ExecStart=/usr/local/bin/ham_proxy --gateway --listen ${GATEWAY_LISTEN} --cert /etc/ham_gateway/cert.pem --key /etc/ham_gateway/key.pem \
+    --signed-whitelist /var/lib/ham_gateway/whitelist.json --whitelist-key /etc/ham_gateway/whitelist_key.hex \
+    --callsign ${GATEWAY_CALLSIGN} --log /var/log/ham_gateway/stationid.log
+DynamicUser=yes
+StateDirectory=ham_gateway
+LogsDirectory=ham_gateway
+ConfigurationDirectory=ham_gateway
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

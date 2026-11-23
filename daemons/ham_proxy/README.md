@@ -40,3 +40,12 @@ relays request heads only, so the body hash is the client's declared value; body
 `ham_tls/ham_policy.py`: one entry per line, `example.org` exact, `*.example.org` subdomains, `#` comments; every
 `.ham` name is always allowed). A site not listed is refused before any upstream connection. Each permitted flow
 appends `UTC-time CALLSIGN -> host suite` to the log (Part 97 station identification).
+
+## Central site gateway (`--gateway`, signed whitelist)
+
+`ham_proxy --gateway --listen ADDR --cert PEM --key PEM --signed-whitelist FILE --whitelist-key HEXFILE --callsign CALL --log FILE` serves any site on the
+hams.com signed whitelist (the file at `https://www.hams.com/ipv6/whitelist.json`, the same one the browser extension verifies): the site is the request's `Host`
+(port 443, or the port in the header), the whitelist's host and path rules are checked before any upstream connection, and the site's own certificate is verified
+by normal TLS. The list file is re-read and verified (Ed25519 under the 64-hex-character raw public key in HEXFILE, not expired) for every connection; a missing,
+modified, unsigned or expired list permits only `.ham` names. `--gateway` refuses to start without a whitelist. Place it at a member or club with a routable /48,
+never at hams.com. Deployment files: `deploy/` (systemd service, whitelist refresh timer, env example); runbook `hams_com/docs/runbooks/SITE_GATEWAY_DEPLOYMENT.md`.

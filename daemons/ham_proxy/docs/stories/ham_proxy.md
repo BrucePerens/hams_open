@@ -81,3 +81,10 @@ A `.ham` server is identified by a DANE-EE TLSA record in the signed `.ham` zone
 - [@ANCHOR: ham_proxy_policy_new] `Policy::new(whitelist, callsign, sink)`: whitelist plus the log sink for one proxy; refuses an empty callsign.
 - [@ANCHOR: ham_proxy_policy_record] `Policy::record(...)`: appends the station-ID line for one permitted flow.
 - [@ANCHOR: ham_proxy_serve_one_policed] `serve_one_policed(...)`: like `serve_one_login` plus an optional `Policy`: a site not on the whitelist is refused before any upstream connection (`NotWhitelisted`), and each permitted flow is logged with callsign, host and suite.
+
+Site gateway (`--gateway`, tests `tests/gateway.rs`):
+
+- [@ANCHOR: ham_proxy_verify_list] checks the published signed whitelist (Ed25519 over the payload, then expiry) and returns a whitelist; [@ANCHOR: ham_proxy_list_error] says why it was refused (malformed, bad signature, expired); [@ANCHOR: ham_proxy_parse_utc] reads its `expires` time and [@ANCHOR: ham_proxy_list_unhex] reads the hex public key file.
+- [@ANCHOR: ham_proxy_whitelist_add_site] adds a signed-list host with its paths; [@ANCHOR: ham_proxy_whitelist_permits_path] allows a request only when the host is listed and, if the entry names paths, the path is under one of them.
+- [@ANCHOR: ham_proxy_policy_permits] and [@ANCHOR: ham_proxy_policy_replace] are the policy's host-and-path check and the swap-in of a freshly verified list; [@ANCHOR: ham_proxy_request_target] reads host, port and path from the request head in gateway mode, where `serve_one_policed` takes the site from the request and refuses (before any upstream connection) a site or path that is not permitted.
+- [@ANCHOR: ham_proxy_load_key] and [@ANCHOR: ham_proxy_load_list] are the binary's key file and per-connection list loading (a bad list gives the empty whitelist).
