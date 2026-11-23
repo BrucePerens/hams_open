@@ -1,7 +1,7 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Reproducible x86-64 test image: official OpenWrt Image Builder + our signed feed (../feed) with a throwaway key.
-# Usage: build_test_image.sh -a APK_DIR -w WORKDIR     (APK_DIR holds the hams-node and luci-app-hams-node .apk files)
+# Usage: build_test_image.sh -a APK_DIR -w WORKDIR     (APK_DIR holds the hams-node, hams-node-bird, -dns, -fw and luci-app-hams-node .apk files)
 # Result: WORKDIR/hams-test.img (raw, boots with QEMU; see tools/smoke_test.py). No root needed. Nothing is published.
 # The official feeds have no jool-tools-siit / kmod-jool-siit, which hams-node depends on; empty stand-ins are
 # built into the same test feed so the apk dependency check passes (the SIIT step itself is not exercised).
@@ -52,7 +52,7 @@ echo "file://$work/feed/packages.adb" >> "$work/ib/repositories"
 mkdir -p "$work/files/etc/apk/keys"
 cp "$work/feed/hams-feed-public.pem" "$work/files/etc/apk/keys/"
 
-PACKAGES="hams-node luci-app-hams-node luci wireguard-tools kmod-wireguard jsonfilter uclient-fetch"
+PACKAGES="hams-node hams-node-bird hams-node-dns hams-node-fw bird2 luci-app-hams-node luci wireguard-tools kmod-wireguard jsonfilter uclient-fetch"
 make -C "$work/ib" image PROFILE=generic PACKAGES="$PACKAGES" FILES="$work/files" ROOTFS_PARTSIZE=256 EXTRA_IMAGE_NAME=hams
 gz=$(ls "$work"/ib/bin/targets/x86/64/*-ext4-combined.img.gz 2>/dev/null || ls "$work"/ib/bin/targets/x86/64/*combined*.img.gz | head -1)
 gunzip -c "$gz" > "$work/hams-test.img" || true   # gzip warns about trailing garbage in combined images
