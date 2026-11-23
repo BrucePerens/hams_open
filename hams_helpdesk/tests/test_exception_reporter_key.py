@@ -29,6 +29,11 @@ class TestExceptionReporterKey(RealTransactionCase):
         self.safe_patch_object(hooks, "LEGACY_KEY_FILE", new=SCRATCH_KEY_FILE)
         self.addCleanup(self._remove_scratch_key_file)
         self._remove_scratch_key_file()
+        # This test database persists between runs and may hold the reporter row under the family directory with its group (a provisioned
+        # host registered it at install); registering the scratch path would then fail the group-directory check, so start without the row.
+        self.env.cr.execute(  # audit-ignore-sql: test fixture, static text
+            "DELETE FROM daemon_key_registry WHERE name = 'Exception Reporter (OnFailure and daemon helper)'"
+        )
 
     def _remove_scratch_key_file(self):
         if os.path.lexists(SCRATCH_KEY_FILE):
