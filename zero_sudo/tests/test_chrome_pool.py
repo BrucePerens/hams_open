@@ -183,7 +183,7 @@ class TestPooledChromeIsolation(HamsHttpCase):
         # its script registers /sw.js after allow_requests has ended; the 400 is logged as a console error, marks the test
         # unclean and the pool drops its Chrome. This page runs no script, and the tests only need an origin for storage and cookies.
         with self.allow_requests(browser=browser):
-            browser.navigate_to(self.base_url() + "/web/health", wait_stop=True)
+            browser.navigate_to(self.base_url() + "/robots.txt", wait_stop=True)
 
     # Tests [@ANCHOR: zero_sudo:pooled_chrome_start]
     # Tests [@ANCHOR: zero_sudo:start_pooled_chrome]
