@@ -1,0 +1,5 @@
+# hams-node enrolment: the router keeps only a revocable device token in a root-only file
+config enroll 'main'
+	# the hams.com portal
+	option url 'https://hams.com'
+	option state_dir '/etc/hams-node'

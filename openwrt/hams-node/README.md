@@ -65,3 +65,12 @@ Results:
   `refused_encrypted`, everything else counted in `refused_other`, AREDN services unaffected.
 - `ham_proxy` (musl, `--features vendored`, SDK cross gcc): 6,090,240 byte static binary; RSS 4.5 MB idle, 6.5 MB peak after
   8 parallel clients (400 requests, about 290 requests/s in the 2-vCPU guest); see hams_com `docs/runbooks/HAM_PROXY_IMPLEMENTATION_BASE.md`.
+
+## Enrolment (`hams-node-enroll`, separate package)
+
+`hams-node-enroll enroll` asks hams.com for a code, prints it, and waits while the member approves it at `/my/ipv6` (or
+`hams-node-enroll enroll TOKEN` with a one-time token made there). The router then keeps only a revocable device token
+(`/etc/hams-node/device_token`, mode 0600) and its own WireGuard key (`wg.key`, 0600, made on the device); the member's
+login secret is never typed into or stored on the router. `hams-node-enroll fetch` (a cron line, every 6 hours, added by
+enrol) renews the configuration into `/etc/config/hams_node` and `hams_node_ondemand`. A revoked token stops the node:
+exit 3, the cron line and token are removed, and no request is made again until the member enrols anew.
