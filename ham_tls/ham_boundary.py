@@ -30,7 +30,7 @@ def render_ruleset(config=None):
     def _ports(ports):
         return "{ %s }" % ", ".join(str(int(p)) for p in sorted(set(ports)))
 
-    mesh, wg = cfg["mesh_if"], cfg["wg_if"]
+    mesh = cfg["mesh_if"]
     udp_bad = set(ENCRYPTED_UDP) | {int(cfg["wg_port"])}
     tcp_bad = set(ENCRYPTED_TCP)
     tcp_ok = set(cfg["plain_tcp_ports"]) | {cfg["ham_tls_port"]}
@@ -64,7 +64,7 @@ def render_ruleset(config=None):
 	}
 }
 """ % {
-        "mesh": mesh, "wg": wg, "wg_port": int(cfg["wg_port"]), "group": int(cfg["nflog_group"]),
+        "mesh": mesh, "wg_port": int(cfg["wg_port"]), "group": int(cfg["nflog_group"]),
         "protos": "{ %s }" % ", ".join(ENCRYPTED_PROTOCOLS), "udp_bad": _ports(udp_bad), "tcp_bad": _ports(tcp_bad),
         "tcp_ok": _ports(tcp_ok), "udp_ok": _ports(cfg["plain_udp_ports"]),
     }
