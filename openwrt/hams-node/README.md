@@ -271,3 +271,23 @@ the first address of their /60, plus any addresses in `/etc/hams-node/gossip_nei
 returned document only if the signature verifies and it lines up (full: not older; delta: `from` equals the held number); forged, replayed and
 gapped documents are refused. Nothing but signed documents is relayed, and a router that is up to date is sent nothing. The documents are
 authenticated, not secret, so nothing is hidden on RF.
+
+## Whole package on stock AREDN 4.26.10.0, and .ham names through AREDN's dnsmasq (2026-11-23)
+
+QEMU VM from the unmodified official x86-64 image (recipe above). The apks: the `hams-node`, `-enroll`, `-dns` and `-report` packages built with
+the 25.12.5 SDK plus the nine Jool apks built from AREDN's own tree (`openwrt/aredn-jool`). `apk add --allow-untrusted --no-network` of all of them
+resolved with no AREDN or OpenWrt feed (the other subpackages need nginx-ssl, unbound, odhcpd, openssl-util, which stock AREDN lacks; they belong
+to the stock OpenWrt router form). Results:
+
+- `/etc/init.d/hams-node start` exits 0 ("active with no instances"); `jool`, `jool_siit`, `jool_common` are loaded; `jool_siit instance display` works.
+- babeld, arednlink, uhttpd, dropbear and dnsmasq stayed running through install, start, and `hams-node-dns` start/stop.
+- `hams-node-dns` (`enabled 1`, one resolver) writes `server=/ham/ADDR` into `/tmp/dnsmasq.d`, which AREDN's dnsmasq reads (`conf-dir`), and
+  sets `rebind_domain ham`. Queried through the node's own dnsmasq (a stub .ham resolver behind it): with the snippet a .ham A name and a PTR are
+  answered through the node and the same name is REFUSED without it; a `name.local.mesh` host from the arednlink hosts directory resolves the
+  same before and after.
+- A snippet that dnsmasq rejects stops AREDN's dnsmasq entirely (found by accident with a duplicated `log-facility`): only the renderer's own lines
+  go into that directory.
+- **AREDN's dnsmasq has `filter-AAAA`** (`/etc/dnsmasq.conf`): every AAAA answer, also a forwarded one, is dropped (A answered, AAAA `answers=0`;
+  a plain dnsmasq with `--filter-AAAA` and the same forward behaves the same). So through the node's resolver the SIIT AAAA of a .ham name is never
+  seen. IPv6 clients must ask the hams.com Net resolvers directly (second gateway form: the stock OpenWrt router's dnsmasq has no such filter).
+  The forward still serves the non-AAAA types (service-ad CNAME targets, TXT, PTR). The filter is firmware configuration and is not changed here.
