@@ -7,6 +7,7 @@ pub mod dane;
 pub mod indicator;
 pub mod login;
 pub mod policy;
+pub mod signed_list;
 pub mod session;
 
 use openssl::error::ErrorStack;
@@ -25,6 +26,8 @@ pub const INTEGRITY_ONLY_SUITES: [&str; 3] =
 const TLS13_SUITES: &str = "TLS_SHA256_SHA256:TLS_SHA384_SHA384";
 const TLS12_CIPHERS: &str = "NULL-SHA256:@SECLEVEL=0";
 const MAX_HEAD: usize = 65536;
+/// Pass as `site_addr` to serve any site the whitelist permits, taken from each request's `Host` (port 443): the central site gateway.
+pub const GATEWAY: &str = "*";
 
 // [@ANCHOR: ham_proxy_error]
 /// Error from setting up or running the proxy.
@@ -140,6 +143,20 @@ fn read_head<R: Read>(r: &mut R) -> Result<Vec<u8>, ProxyError> {
         head.extend_from_slice(&buf[..n]);
     }
     Ok(head)
+}
+
+// [@ANCHOR: ham_proxy_request_target]
+/// (lower-case host without port, port (default 443), path) of a request head; `None` unless the host is a plain DNS name.
+fn request_target(head: &str) -> Option<(String, String, String)> {
+    let path = head.lines().next()?.split(' ').nth(1)?.to_string();
+    let auth = indicator::header(head, "host")?.trim().to_lowercase();
+    let (host, port) = auth.rsplit_once(':').unwrap_or((auth.as_str(), "443"));
+    let port = port.to_string();
+    let host = host.trim_end_matches('.').to_string();
+    let plain = !host.is_empty()
+        && host.len() < 254
+        && host.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'.' || c == b'-');
+    (plain && port.bytes().all(|c| c.is_ascii_digit()) && !port.is_empty()).then_some((host, port, path))
 }
 
 // [@ANCHOR: ham_proxy_serve_one]
@@ -313,13 +330,32 @@ pub fn serve_one_policed(
 ) -> Result<(), ProxyError> {
     let mut ham = acceptor.accept(tcp)?;
     let suite = require_integrity_only(&ham)?;
-    if let Some(p) = policy {
-        if !p.whitelist.permits(site_name) {
+    let gateway = site_addr == GATEWAY;
+    let mut head = Vec::new();
+    let (mut name, mut addr) = (site_name.to_string(), site_addr.to_string());
+    if gateway {
+        // Central site gateway: the site is the request's Host; the whitelist (host and path) is checked before any upstream connection.
+        head = read_head(&mut ham)?;
+        let (host, port, path) =
+            request_target(&String::from_utf8_lossy(&head)).ok_or(ProxyError::BadRequest)?;
+        // A gateway with no whitelist would be an open proxy: it permits nothing.
+        if !policy.is_some_and(|p| p.permits(&host, &path)) {
+            return Err(ProxyError::NotWhitelisted(host));
+        }
+        addr = format!("{host}:{port}");
+        name = host;
+    } else if let Some(p) = policy {
+        if !p.permits(site_name, "/") {
             return Err(ProxyError::NotWhitelisted(site_name.to_string()));
         }
-        p.record(now(), site_name, &suite)?;
     }
-    let mut head = read_head(&mut ham)?;
+    if let Some(p) = policy {
+        p.record(now(), &name, &suite)?;
+    }
+    let (site_name, site_addr) = (name.as_str(), addr.as_str());
+    if !gateway {
+        head = read_head(&mut ham)?;
+    }
     if let Some((ch, v)) = login {
         let line = String::from_utf8_lossy(&head).to_string();
         let target = line.split(' ').nth(1).unwrap_or("");

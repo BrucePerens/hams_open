@@ -2,7 +2,7 @@
 //! may be reached, and the Part 97 station-identification log (UTC time, callsign, destination, suite).
 
 use std::io::Write;
-use std::sync::Mutex;
+use std::sync::{Mutex, RwLock};
 
 // [@ANCHOR: ham_proxy_whitelist]
 /// Permitted destinations: every `.ham` name plus the listed domains (`example.org` exact, `*.example.org`
@@ -11,6 +11,8 @@ use std::sync::Mutex;
 pub struct Whitelist {
     exact: Vec<String>,
     suffixes: Vec<String>,
+    /// Hosts from a signed list: (host, allowed path prefixes; empty means the whole site).
+    sites: Vec<(String, Vec<String>)>,
 }
 
 impl Whitelist {
@@ -29,6 +31,33 @@ impl Whitelist {
         w
     }
 
+    // [@ANCHOR: ham_proxy_whitelist_add_site]
+    /// Add an exact `host` with its allowed path prefixes (none: every path), as a signed list names it.
+    pub fn add_site(&mut self, host: &str, paths: Vec<String>) {
+        self.sites.push((host.to_lowercase(), paths));
+    }
+
+    // [@ANCHOR: ham_proxy_whitelist_permits_path]
+    /// Whether the request for `path` on `host` may be passed: the host must be permitted, and a signed-list entry that names
+    /// paths limits the request to those prefixes (on a `/` boundary, query ignored). Entries without paths allow every path.
+    pub fn permits_path(&self, host: &str, path: &str) -> bool {
+        let h = host.to_lowercase();
+        let h = h.trim_end_matches('.');
+        let path = path.split(['?', '#']).next().unwrap_or("");
+        let mut listed = false;
+        for (_, paths) in self.sites.iter().filter(|(s, _)| s == h) {
+            listed = true;
+            let root_ok = |p: &String| {
+                let root = p.trim_end_matches('/');
+                path == root || path.strip_prefix(root).is_some_and(|r| r.starts_with('/'))
+            };
+            if paths.is_empty() || paths.iter().any(root_ok) {
+                return true;
+            }
+        }
+        !listed && self.permits(host)
+    }
+
     // [@ANCHOR: ham_proxy_whitelist_permits]
     /// Whether `host` may be reached from a ham link.
     pub fn permits(&self, host: &str) -> bool {
@@ -37,6 +66,7 @@ impl Whitelist {
         h.ends_with(".ham")
             || self.exact.iter().any(|e| e == h)
             || self.suffixes.iter().any(|s| h.ends_with(s.as_str()))
+            || self.sites.iter().any(|(e, _)| e == h)
     }
 }
 
@@ -78,8 +108,7 @@ pub fn log_line(secs: u64, callsign: &str, host: &str, suite: &str) -> Option<St
 
 /// Whitelist plus the station-ID log sink for one proxy.
 pub struct Policy {
-    /// Permitted destinations.
-    pub whitelist: Whitelist,
+    whitelist: RwLock<Whitelist>,
     callsign: String,
     log: Mutex<Box<dyn Write + Send>>,
 }
@@ -89,10 +118,26 @@ impl Policy {
     /// Build a policy; `None` when the callsign is empty (a ham link needs one).
     pub fn new(whitelist: Whitelist, callsign: &str, log: Box<dyn Write + Send>) -> Option<Self> {
         (!callsign.trim().is_empty()).then(|| Policy {
-            whitelist,
+            whitelist: RwLock::new(whitelist),
             callsign: callsign.to_string(),
             log: Mutex::new(log),
         })
+    }
+
+    // [@ANCHOR: ham_proxy_policy_permits]
+    /// Whether the request for `path` on `host` is permitted by the current whitelist.
+    pub fn permits(&self, host: &str, path: &str) -> bool {
+        self.whitelist
+            .read()
+            .is_ok_and(|w| w.permits_path(host, path))
+    }
+
+    // [@ANCHOR: ham_proxy_policy_replace]
+    /// Swap in a new whitelist (a refreshed signed list); flows already running are not affected.
+    pub fn replace(&self, whitelist: Whitelist) {
+        if let Ok(mut w) = self.whitelist.write() {
+            *w = whitelist;
+        }
     }
 
     // [@ANCHOR: ham_proxy_policy_record]
