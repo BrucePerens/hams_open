@@ -17,3 +17,7 @@ Not exercised: Jool SIIT itself (stand-ins), real enrolment, WireGuard peers. Te
 `tools/lan_test.py IMAGE` (stock or test image, QEMU, no root): copies `hams-node-lan` in over the console, applies `2001:db8:ab40:10::/60`
 and checks that netifd gives br-lan `2001:db8:ab40:10::1/64`, odhcpd runs, and `remove` takes the /64 out of netifd's interface status
 (the kernel address lingers a while). Verified on OpenWrt 25.12.5 x86-64. It does not check a client's address (one guest only).
+
+mTLS management test: `build_test_image.sh -a APK_DIR -w WORKDIR -t FIXTURES/overlay` (an `hams-node-mtls-*.apk` in APK_DIR adds it, nginx-ssl and
+openssl-util to the image), where `tools/mtls_test.py fixtures FIXTURES` makes a TEST CA, the owner/other/revoked/rogue client certificates
+and the overlay; `tools/mtls_test.py run IMAGE FIXTURES` boots it and checks the HTTPS port with `openssl s_client` in the guest.

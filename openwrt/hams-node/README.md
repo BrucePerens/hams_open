@@ -155,3 +155,26 @@ Each other target/release needs its own kmod build with the same recipe.
 `hams_node_lan.main.interface` (default `lan`, at most 16) `ip6assign 64` and its own `ip6hint` (0, 1, 2 ...), and sets
 `dhcp.<if>.ra` and `dhcpv6` to `server`, so netifd cuts one /64 per LAN out of the /60 and odhcpd sends router advertisements
 and answers DHCPv6. `hams-node-lan remove` undoes it. Anything that is not a /60 changes nothing. Not exercised on a real router.
+
+## Management only with a member client certificate (`hams-node-mtls`, separate package)
+
+Bruce 2026-11-23: once a node is enrolled, its web management (LuCI, ubus over HTTP so rpcd and the hams-node APIs) is reachable only
+with a hams.com member (client) certificate. `hams-node-mtls apply` (run by `hams-node-enroll` after enrol and every renewal) moves
+uhttpd to `127.0.0.1:8080` and starts nginx on port 443 with `ssl_verify_client on`: the certificate must chain to the pinned member
+CA (`/etc/hams-node/member-ca.pem`: Root A, Root B, Identity Root, Identity Issuing CA, copied from hams_com `daemons/relay_ca/public_certs`)
+and its Subject callsign (`1.3.6.1.4.1.66926.1.1`) must equal the enrolled owner's callsign (`/etc/hams-node/owner`, from the enrolment
+reply). No certificate, another member's, another CA's or a revoked one is refused. The router's TLS certificate is its own
+self-signed one (pin it or use `curl -k`); use the member certificate with `curl --cert member.pem --key member.key https://ROUTER/`
+(`docs/runbooks/MEMBER_CLIENT_CERTIFICATE.md` in hams_com).
+
+- Revocation: the shipped CA-level CRLs plus the identity CRL, fetched from `/identity-ca/crl` every 6 hours by cron
+  (`hams-node-mtls crl`, signature checked against the pinned CAs, last good copy kept). While a CRL is past its `nextUpdate` (the node
+  was offline from hams.com) it is not applied, so an offline owner is not locked out; revocation is then enforced again on the next fetch.
+- Not enrolled, or after `unenroll`/`hams-node-mtls off`: uhttpd is put back as it was and the stock login is unchanged (first-boot setup).
+- LuCI still asks for the router's own login after the certificate (the certificate controls who can reach the login at all; the
+  password is no longer reachable by anyone else). SSH is a separate to-do (key-only).
+- Recovery if the owner certificate is lost or the member's callsign changes hands: a physical reset (`firstboot`, or the reset button) restores
+  the stock login, then enrol again. Nothing remote can remove the requirement.
+- Tested on the OpenWrt 25.12.5 x86-64 image in QEMU with a test CA (`image/tools/mtls_test.py`): owner 200, another member 403, none, revoked and
+  other-CA refused, uhttpd only on loopback, `off` restores port 80. The SDK in this session could not resolve `nginx-ssl`, so the test
+  `.apk` was packed by hand from the same files; the `Makefile` block is unbuilt by the SDK.
