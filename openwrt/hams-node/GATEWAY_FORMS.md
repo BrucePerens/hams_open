@@ -30,3 +30,8 @@ is small. Mesh-to-WAN stays off. The router uses the same packages as any hams-n
 
 One mesh domain ID (and its /96, from the registry export) per mesh, which `hams-node-siit render` turns into
 Jool instance files. Part 97: nothing encrypted is passed onto the mesh.
+
+## Names
+
+AREDN's own dnsmasq drops all AAAA answers (`filter-AAAA`), so in form 1 `hams-node-dns` forwards .ham for non-AAAA types only; IPv6 hosts
+that need the AAAA of a .ham name (the SIIT address) must use the hams.com Net resolvers directly, which form 2's router does by default.
