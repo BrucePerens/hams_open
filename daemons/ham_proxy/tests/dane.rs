@@ -41,10 +41,20 @@ fn sha256(d: &[u8]) -> Vec<u8> {
     hash(MessageDigest::sha256(), d).unwrap().to_vec()
 }
 
-fn tmpdir(n: &str) -> PathBuf {
+/// Scratch directory removed when dropped.
+struct Scratch(PathBuf);
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+// temp-dir-helper: the returned Scratch removes the directory when dropped
+fn tmpdir(n: &str) -> Scratch {
     let d = std::env::temp_dir().join(format!("ham_proxy_dane_{n}_{}", std::process::id()));
     std::fs::create_dir_all(&d).unwrap();
-    d
+    Scratch(d)
 }
 
 /// Stub resolver: answers one query with the given TLSA records (none gives an empty NOERROR answer).
@@ -92,7 +102,7 @@ fn start_ham_server(c: &Path, k: &Path) -> u16 {
 fn tlsa_matches_pins_only_the_certificate() {
     // Tests [@ANCHOR: ham_proxy_tlsa_matches]
     let d = tmpdir("m");
-    let (c, _) = make_cert(&d, "a");
+    let (c, _) = make_cert(&d.0, "a");
     let cert = der(&c);
     assert!(tlsa_matches(&cert, &[(3, 0, 1, sha256(&cert))]));
     assert!(tlsa_matches(&cert, &[(3, 0, 0, cert.clone())]));
@@ -111,6 +121,8 @@ fn query_and_response_round_trip() {
     // Tests [@ANCHOR: ham_proxy_tlsa_query]
     // Tests [@ANCHOR: ham_proxy_parse_tlsa]
     // Tests [@ANCHOR: ham_proxy_skip_name]
+    // Tests [@ANCHOR: ham_proxy_tlsa_type]
+    // Tests [@ANCHOR: ham_proxy_error]
     let q = tlsa_query("node.ham", 443, 7);
     assert_eq!(&q[..2], &[0, 7]);
     let want = b"\x04_443\x04_tcp\x04node\x03ham\x00";
@@ -140,8 +152,8 @@ fn pinned_ham_server_is_accepted_and_others_refused() {
     // Tests [@ANCHOR: ham_proxy_connect_ham_server]
     // Tests [@ANCHOR: ham_proxy_client_builder]
     let d = tmpdir("c");
-    let (c, k) = make_cert(&d, "good");
-    let (other, _) = make_cert(&d, "other");
+    let (c, k) = make_cert(&d.0, "good");
+    let (other, _) = make_cert(&d.0, "other");
     let port = start_ham_server(&c, &k);
     let good = vec![(3, 0, 1, sha256(&der(&c)))];
     assert_eq!(

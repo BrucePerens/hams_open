@@ -8,6 +8,7 @@ use openssl::ssl::{SslStream, SslVerifyMode};
 use std::net::{TcpStream, UdpSocket};
 use std::time::Duration;
 
+// [@ANCHOR: ham_proxy_tlsa_type]
 /// One TLSA record: usage, selector, matching type, data.
 pub type Tlsa = (u8, u8, u8, Vec<u8>);
 const TYPE_TLSA: u16 = 52;
