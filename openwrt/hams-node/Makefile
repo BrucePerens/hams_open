@@ -15,7 +15,7 @@ define Package/hams-node
   CATEGORY:=Network
   TITLE:=hams.com Net gateway (Jool SIIT and WireGuard peers) for AREDN
   URL:=https://hams.com
-  DEPENDS:=+jool-tools-siit +kmod-jool-siit +wireguard-tools +kmod-wireguard +jsonfilter +uclient-fetch
+  DEPENDS:=+jool-tools-netfilter +kmod-jool-netfilter +wireguard-tools +kmod-wireguard +jsonfilter +uclient-fetch
   PKGARCH:=all
 endef
 
