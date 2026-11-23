@@ -131,6 +131,30 @@ define Package/hams-node-bird/install
 	$(INSTALL_CONF) ./files/etc/config/hams_node_bird $(1)/etc/config/
 endef
 
+define Package/hams-node-dns
+  SECTION:=net
+  CATEGORY:=Network
+  TITLE:=hams.com Net .ham zone as a local secondary for hams-node
+  URL:=https://hams.com
+  DEPENDS:=+hams-node +unbound-daemon +uci
+  PKGARCH:=all
+endef
+
+define Package/hams-node-dns/description
+  Keeps a copy of the .ham zone on the node (unbound auth-zone, AXFR) and forwards .ham to it from dnsmasq, so names resolve
+  with the anycast servers or the internet gone. Off by default.
+endef
+
+define Package/hams-node-dns/conffiles
+/etc/config/hams_node_dns
+endef
+
+define Package/hams-node-dns/install
+	$(INSTALL_DIR) $(1)/usr/sbin $(1)/etc/config
+	$(INSTALL_BIN) ./files/usr/sbin/hams-node-dns $(1)/usr/sbin/
+	$(INSTALL_CONF) ./files/etc/config/hams_node_dns $(1)/etc/config/
+endef
+
 define Package/hams-node-fw
   SECTION:=net
   CATEGORY:=Network
@@ -207,6 +231,7 @@ $(eval $(call BuildPackage,hams-node-enroll))
 $(eval $(call BuildPackage,hams-node-report))
 $(eval $(call BuildPackage,hams-node-traffic))
 $(eval $(call BuildPackage,hams-node-bird))
+$(eval $(call BuildPackage,hams-node-dns))
 $(eval $(call BuildPackage,hams-node-fw))
 $(eval $(call BuildPackage,hams-node-update))
 $(eval $(call BuildPackage,hams-node-lan))

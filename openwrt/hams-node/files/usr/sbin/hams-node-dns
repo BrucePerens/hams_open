@@ -1,0 +1,31 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-dns render [UNBOUND_CONF [DNSMASQ_CONF]]
+# The .ham zone on the node as a local secondary: unbound loads the zone by AXFR from the anycast servers (list primary), keeps a copy in
+# the zone file and serves it from there, so .ham names resolve with the internet or the anycast servers gone (the zone is refreshed
+# on its SOA timers when they are reachable). Before the first transfer the zone is not held yet and unbound asks the anycast servers
+# (fallback-enabled). dnsmasq (AREDN's resolver) forwards .ham to unbound on a local port. The zone is DNSSEC signed: a trust anchor
+# (uci trust_anchor, a DS record) lets unbound validate it. Nothing is written while disabled or without a primary.
+set -u
+get() { uci -q get "hams_node_dns.main.$1" 2>/dev/null; }
+[ "${1:-}" = render ] || { echo "usage: hams-node-dns render [UNBOUND_CONF [DNSMASQ_CONF]]" >&2; exit 2; }
+ub=${2:-/etc/unbound/unbound_ext.conf} dm=${3:-/etc/dnsmasq.d/hams-node-dns.conf}
+[ "$(get enabled)" = 1 ] || exit 0
+primaries=$(get primary) port=$(get port) zonefile=$(get zonefile) anchor=$(get trust_anchor)
+[ -n "$primaries" ] || exit 0
+port=${port:-5354} zonefile=${zonefile:-/etc/hams-node/ham.zone}
+for v in $primaries; do case $v in *[!A-Fa-f0-9:.]*) echo "hams-node-dns: bad primary address" >&2; exit 1 ;; esac; done
+case $port in '' | *[!0-9]*) echo "hams-node-dns: bad port" >&2; exit 1 ;; esac
+case $zonefile in '' | *[!A-Za-z0-9_./-]*) echo "hams-node-dns: bad zone file path" >&2; exit 1 ;; esac
+case $anchor in *[!A-Za-z0-9.\ ]*) echo "hams-node-dns: bad trust anchor" >&2; exit 1 ;; esac
+{
+	echo "# hams-node: local secondary of the .ham zone. Written by hams-node-dns."
+	printf 'server:\n    interface: 127.0.0.1@%s\n    interface: ::1@%s\n' "$port" "$port"
+	[ -n "$anchor" ] && printf '    trust-anchor: "%s"\n' "$anchor"
+	printf 'auth-zone:\n    name: "ham."\n'
+	for p in $primaries; do printf '    primary: %s\n' "$p"; done
+	printf '    zonefile: "%s"\n    for-downstream: yes\n    for-upstream: yes\n    fallback-enabled: yes\n' "$zonefile"
+	printf 'forward-zone:\n    name: "ham."\n'
+	for p in $primaries; do printf '    forward-addr: %s\n' "$p"; done
+} > "$ub.new" && mv "$ub.new" "$ub"
+printf '# hams-node: .ham to the local secondary\nserver=/ham/127.0.0.1#%s\n' "$port" > "$dm.new" && mv "$dm.new" "$dm"
