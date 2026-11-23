@@ -1,0 +1,13 @@
+{
+	"luci-app-hams-node": {
+		"description": "Grant access to the hams.com Net node status and settings",
+		"read": {
+			"ubus": { "hams-node": [ "status" ] },
+			"uci": [ "hams_node", "hams_node_ondemand" ]
+		},
+		"write": {
+			"ubus": { "hams-node": [ "enroll_start" ] },
+			"uci": [ "hams_node", "hams_node_ondemand" ]
+		}
+	}
+}

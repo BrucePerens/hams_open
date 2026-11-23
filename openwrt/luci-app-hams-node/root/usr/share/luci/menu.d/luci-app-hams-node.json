@@ -1,0 +1,8 @@
+{
+	"admin/services/hams-node": {
+		"title": "hams.com Net",
+		"order": 60,
+		"action": { "type": "view", "path": "hams-node/status" },
+		"depends": { "acl": [ "luci-app-hams-node" ], "uci": { "hams_node": true } }
+	}
+}
