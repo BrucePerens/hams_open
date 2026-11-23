@@ -1,0 +1,12 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Single sign-on CGI: only nginx (which has verified the owner's member certificate) reaches this, on 127.0.0.1:8081.
+# Opens a rpcd session for the internal "hams-owner" login and hands LuCI the session cookie; see hams-node-mtls.
+dir=/etc/hams-node/mtls
+fail() { printf 'Status: 500 Internal Server Error\r\nContent-Type: text/plain\r\n\r\nsign-in failed\n'; exit 0; }
+sid=$(ubus call session login "{\"username\":\"hams-owner\",\"password\":\"$(cat "$dir/sso.secret")\",\"timeout\":3600}" 2>/dev/null |
+	jsonfilter -e '@.ubus_rpc_session')
+[ -n "$sid" ] || fail
+ubus call session set "{\"ubus_rpc_session\":\"$sid\",\"values\":{\"token\":\"$(openssl rand -hex 16)\"}}" >/dev/null 2>&1 || fail
+[ -e "$dir/seen" ] || /usr/sbin/hams-node-mtls lock
+printf 'Status: 302 Found\r\nLocation: /cgi-bin/luci/\r\nSet-Cookie: sysauth_http=%s; path=/; HttpOnly; Secure; SameSite=Strict\r\nSet-Cookie: sysauth_https=%s; path=/; HttpOnly; Secure; SameSite=Strict\r\n\r\n' "$sid" "$sid"

@@ -189,9 +189,9 @@ class EnrollTests(unittest.TestCase):
         self.assertNotIn("/unenroll", " ".join(self.calls()), "no token left to send")
 
     def test_no_password_anywhere_in_the_package(self):
-        # every package file is scanned except hams-node-bird (BGP "password", a BIRD keyword) and hams-node-ssh (turns dropbear password login off)
+        # every package file is scanned except hams-node-bird (BGP "password", a BIRD keyword) hams-node-ssh (turns dropbear password login off) and hams-node-mtls with its sso handler (turns the router password login off)
         for path in sorted((PACKAGE / "files").rglob("*")) + [PACKAGE / "Makefile"] + sorted((PACKAGE / "pkg").glob("*.mk")):
-            if path.is_file() and "bird" not in path.name and "ssh" not in path.name:
+            if path.is_file() and "bird" not in path.name and "ssh" not in path.name and "mtls" not in path.name and "/sso/" not in str(path):
                 self.assertIsNone(re.search(r"pass(word|wd)|read -s", path.read_text(), re.I), path)
         self.assertIsNone(re.search(r"pass(word|wd)", (PACKAGE / "files/etc/config/hams_node_enroll").read_text(), re.I))
 

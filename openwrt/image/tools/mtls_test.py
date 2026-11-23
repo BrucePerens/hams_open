@@ -90,6 +90,18 @@ def fetch(con, client, path):
     return (res[0] if res else "").replace("\r", "")
 
 
+def request(con, client, method, path, cookie="", body=""):
+    """Status, Location, Set-Cookie lines and a marker for LuCI's login form, as one string, for one request with that client certificate."""
+    tls = "-cert /root/clients/%s.pem -key /root/clients/%s.key" % (client, client) if client else ""
+    head = "%s %s HTTP/1.0\\r\\nHost: x\\r\\n" % (method, path)
+    if cookie:
+        head += "Cookie: %s\\r\\n" % cookie
+    if body:
+        head += "Content-Type: application/x-www-form-urlencoded\\r\\nContent-Length: %d\\r\\n" % len(body)
+    res = con.run("printf '%s\\r\\n%s' | openssl s_client -quiet -connect 127.0.0.1:443 %s 2>&1 | grep -i -E '^HTTP/1|^Location|^Set-Cookie|luci_password|alert' | cut -c1-200" % (head, body, tls), 60)
+    return (res[0] if res else "").replace("\r", "")
+
+
 def run(image, d):
     d = pathlib.Path(d)
     con = smoke_test.Console(image)
@@ -121,9 +133,31 @@ def run(image, d):
         for name, text in (("", "no certificate"), ("revoked", "revoked certificate"), ("rogue", "certificate from another CA")):
             out = fetch(con, name, static)
             check("%s is refused (400 or a TLS alert, never 200)" % text, "HTTP/1.1 200" not in out, out.strip().replace("\n", " | ")[:160])
+        # single sign-on: the verified owner reaches LuCI without a password; nobody else does
+        con.run("h=$(openssl passwd -1 rootpw); sed -i \"s|^root:[^:]*|root:$h|\" /etc/shadow", 30)
+        page = "/cgi-bin/luci/admin/status/overview"
+        out = request(con, "owner", "GET", page)
+        check("owner without a session is sent to sign-in", "302" in out and "/hams-sso" in out, out.strip().replace("\n", " | ")[:200])
+        out = request(con, "owner", "GET", "/hams-sso")
+        cookie = [c.split(":", 1)[1].split(";")[0].strip() for c in out.splitlines() if c.lower().startswith("set-cookie: sysauth_http")]
+        check("owner sign-in sets the LuCI session cookie", "302" in out and bool(cookie), out.strip().replace("\n", " | ")[:200])
+        out = request(con, "owner", "GET", page, cookie[0] if cookie else "x=y")
+        check("owner opens LuCI with no password prompt", "HTTP/1.1 200" in out and "luci_password" not in out, out.strip().replace("\n", " | ")[:200])
+        for name, text in (("other", "another member's certificate"), ("", "no certificate"), ("rogue", "a certificate from another CA")):
+            out = request(con, name, "GET", "/hams-sso")
+            check("sign-in with %s is refused" % text, "Set-Cookie" not in out and "HTTP/1.1 302" not in out, out.strip().replace("\n", " | ")[:160])
+        out = request(con, "other", "GET", page, cookie[0] if cookie else "x=y")
+        check("a stolen session cookie without the owner certificate is refused", "HTTP/1.1 200" not in out, out.strip().replace("\n", " | ")[:160])
+        res = con.run("ubus call session login '{\"username\":\"root\",\"password\":\"rootpw\"}' >/dev/null 2>&1; echo rpcd_root_rc=$?", 30)
+        out = res[0] if res else ""
+        check("root password login is refused once the owner has signed in", "rpcd_root_rc=0" not in out and "rpcd_root_rc=" in out, out.strip())
+        out = request(con, "owner", "POST", "/cgi-bin/luci", "", "luci_username=root&luci_password=rootpw")
+        check("LuCI password form does not log in", "Set-Cookie" not in out, out.strip().replace("\n", " | ")[:200])
         res = con.run("/usr/sbin/hams-node-mtls off 2>&1; echo rc=$?; sleep 3; netstat -tln | grep -E ':80 '", 60)
         out = res[0] if res else ""
         check("off restores uhttpd on port 80", bool(res) and "rc=0" in out and ":80 " in out, out.strip().replace("\r\n", " | ")[-200:])
+        res = con.run("ubus call session login '{\"username\":\"root\",\"password\":\"rootpw\"}' >/dev/null 2>&1; echo rpcd_root_rc=$?", 30)
+        check("off brings the root password login back", "rpcd_root_rc=0" in (res[0] if res else ""), res[0].strip() if res else "")
     finally:
         con.close()
     return 1 if failures else 0

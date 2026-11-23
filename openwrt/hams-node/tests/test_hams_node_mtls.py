@@ -12,7 +12,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 PACKAGE = HERE.parent
 SCRIPT = PACKAGE / "files" / "usr" / "sbin" / "hams-node-mtls"
 SHIPPED_CA = PACKAGE / "files" / "etc" / "hams-node" / "member-ca.pem"
-UCI = '#!/bin/sh\necho "$*" >> "$FAKE/uci"\ncase $* in "-q get uhttpd.main.listen_http") echo 0.0.0.0:80;; "-q get uhttpd.main.listen_https") echo 0.0.0.0:443;; esac\n'
+UCI = '#!/bin/sh\necho "$*" >> "$FAKE/uci"\ncase $* in "-q show rpcd") printf "rpcd.@rpcd[0]=rpcd\\nrpcd.cfg1=login\\nrpcd.cfg2=login\\nrpcd.hamsowner=login\\n";; "-q get uhttpd.main.listen_http") echo 0.0.0.0:80;; "-q get uhttpd.main.listen_https") echo 0.0.0.0:443;; esac\n'
 FETCH = '#!/bin/sh\nwhile [ $# -gt 1 ]; do [ "$1" = -O ] && out=$2; shift; done\n[ -f "$FAKE/crl.der" ] || exit 1\ncp "$FAKE/crl.der" "$out"\n'
 
 
@@ -121,6 +121,42 @@ class MtlsTests(unittest.TestCase):
         (self.state / "deprecation_list").write_text("")
         self.run_script("apply")
         self.assertNotIn("ABCDEF", self.conf())
+
+    def test_apply_sets_up_single_sign_on_and_keeps_the_stock_logins_until_the_first_sign_in(self):
+        self.enrolled()
+        self.assertEqual(self.run_script("apply").returncode, 0)
+        conf, uci = self.conf(), self.uci()
+        self.assertIn("location = /hams-sso", conf)
+        self.assertIn("error_page 403 = @sso;", conf)
+        self.assertIn("return 302 /hams-sso;", conf)
+        self.assertIn("set rpcd.hamsowner.username=hams-owner", uci)
+        self.assertIn("add_list uhttpd.hamssso.listen_http=127.0.0.1:8081", uci)  # burn-ignore-ssrf-test-value: expected config text on the router, nothing connects
+        self.assertNotIn("delete rpcd.cfg1", uci)
+        secret = (self.state / "mtls" / "sso.secret").read_text().strip()
+        self.assertEqual(len(secret), 48)
+        self.assertNotIn(secret, conf + uci)
+
+    def test_lock_removes_every_stock_login_but_the_sso_one_and_stays_locked_on_reapply(self):
+        self.enrolled()
+        self.run_script("apply")
+        self.assertEqual(self.run_script("lock").returncode, 0)
+        uci = self.uci()
+        self.assertIn("delete rpcd.cfg1", uci)
+        self.assertIn("delete rpcd.cfg2", uci)
+        self.assertNotIn("delete rpcd.hamsowner\n", uci.split("delete rpcd.cfg2")[1])
+        self.assertTrue((self.state / "mtls" / "seen").exists())
+        (self.fake / "uci").unlink()
+        self.run_script("apply")
+        self.assertIn("delete rpcd.cfg1", self.uci())
+
+    def test_off_restores_the_stock_rpcd_logins(self):
+        self.enrolled()
+        self.run_script("apply")
+        self.run_script("lock")
+        (self.fake / "uci").unlink()
+        self.run_script("off")
+        self.assertIn("import rpcd", self.uci())
+        self.assertIn("delete uhttpd.hamssso", self.uci())
 
     def test_not_enrolled_changes_nothing(self):
         result = self.run_script("apply")
