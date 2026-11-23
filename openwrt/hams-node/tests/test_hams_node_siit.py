@@ -66,5 +66,28 @@ class RenderTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
 
 
+class ApplyTests(unittest.TestCase):
+    def apply(self, jool_exit):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = pathlib.Path(tmp.name)
+        (root / "siit").mkdir()
+        (root / "siit" / "a.json").write_text("{}")
+        (root / "bin").mkdir()
+        fake = root / "bin" / "jool_siit"
+        fake.write_text("#!/bin/sh\nexit %d\n" % jool_exit)
+        fake.chmod(0o755)
+        env = dict(os.environ, PATH="%s:%s" % (root / "bin", os.environ["PATH"]))
+        return subprocess.run(["sh", str(SCRIPT), "apply", str(root / "siit")], env=env, capture_output=True, text=True)
+
+    def test_apply_succeeds_when_jool_does(self):
+        self.assertEqual(self.apply(0).returncode, 0)
+
+    def test_apply_fails_when_jool_siit_fails(self):
+        result = self.apply(1)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("failed", result.stderr)
+
+
 if __name__ == "__main__":
     unittest.main()

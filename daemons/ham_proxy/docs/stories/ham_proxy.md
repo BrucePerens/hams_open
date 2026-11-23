@@ -37,6 +37,18 @@ Internals:
 - [@ANCHOR: ham_proxy_login_http_verify] The verifier posts the serial, nonce, audience and signature to `/ham/login/verify` and accepts only a `success` answer that names a callsign.
 - [@ANCHOR: ham_proxy_serve_one_login] `serve_one_login` is `serve_one_signed` plus the `/.ham/login` answers.
 
+## DANE for .ham servers
+
+A `.ham` server is identified by a DANE-EE TLSA record in the signed `.ham` zone, not by a CA. The resolver (the node's validating resolver) is given as `ip:port`.
+
+- [@ANCHOR: ham_proxy_tlsa_matches] `tlsa_matches(cert_der, records)`: true only if a usage 3, selector 0 record with matching type 0, 1 or 2 pins the certificate; no records means refuse.
+- [@ANCHOR: ham_proxy_tlsa_query] `tlsa_query(host, port, id)`: the DNS packet asking for the TLSA records of `_port._tcp.host`.
+- [@ANCHOR: ham_proxy_parse_tlsa] `parse_tlsa(packet)`: the TLSA records of a DNS response; empty for an error response or garbage.
+- [@ANCHOR: ham_proxy_resolve_tlsa] `resolve_tlsa(resolver, host, port)`: one UDP query to the resolver, 3 s timeout.
+- [@ANCHOR: ham_proxy_connect_ham_server] `connect_ham_server(tcp, host, port, resolver)`: integrity-only TLS client; refuses an encrypting suite, and refuses (`NotPinned`) a certificate that no TLSA record pins or a name with no records.
+- [@ANCHOR: ham_proxy_skip_name] Steps over a (possibly compressed) DNS name inside a response.
+- [@ANCHOR: ham_proxy_client_builder] The integrity-only client builder shared by `ham_connector` and `connect_ham_server`.
+
 ## Page indicator (signed, not encrypted)
 
 - [@ANCHOR: ham_proxy_request_identity] Before the request goes to the site its `Accept-Encoding` is replaced by `identity`, so an HTML body can be inspected and given the banner.
@@ -51,4 +63,4 @@ Internals:
 - [@ANCHOR: ham_proxy_dechunk] `dechunk(body)`: decodes a chunked body; `None` if malformed.
 - [@ANCHOR: ham_proxy_http_response] Builds a complete HTTP/1.1 response (status, extra headers, body) for block pages and rewritten HTML.
 - [@ANCHOR: ham_proxy_serve_one_signed] `serve_one_signed(...)`: one ham connection with the indicator and optional signed header; non-HTML is streamed unchanged.
-- [@ANCHOR: ham_proxy_error] `ProxyError`: `Tls(text)` OpenSSL refused something; `Io(error)` socket error; `EncryptedLink(suite)` the negotiated suite encrypts; `BadRequest` request head too long or cut off.
+- [@ANCHOR: ham_proxy_error] `ProxyError`: `Tls(text)` OpenSSL refused something; `Io(error)` socket error; `EncryptedLink(suite)` the negotiated suite encrypts; `NotPinned(host)` no TLSA record pins the `.ham` server's certificate; `BadRequest` request head too long or cut off.

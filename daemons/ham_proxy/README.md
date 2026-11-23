@@ -21,3 +21,6 @@ hams.com member certificate (ECDSA P-256, the same proof `ham_member_certs` alre
 hams.com checks the signature against the key it recorded (`POST /ham/login/verify`, over verified TLS). Nothing secret or reusable crosses the air, no
 custom crypto is involved, and no key is derived or used for encryption. Enable with `--verify HAMS_COM_HOST:443`. Code: `src/login.rs`; tests:
 `tests/login.rs` (replay, eavesdropper, wrong key, expired challenge, wrong site).
+## Types
+
+- [@ANCHOR: ham_proxy_tlsa_type] `Tlsa`: tuple `(usage, selector, matching_type, data)`, one TLSA record: usage 3 is DANE-EE, selector 0 the full certificate, matching type 0/1/2 exact/SHA-256/SHA-512, data the bytes to compare.
