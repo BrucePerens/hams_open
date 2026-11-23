@@ -169,3 +169,12 @@ openssl reads the private key from its root-only file; it is in no request, log 
 or the last update is over 6 hours old (`/etc/hams-node/endpoint_sent`); a hotplug script (`ifup`/`ifupdate` of the WAN) runs it at once
 on a WAN address change, and a cron line (`start`, every 30 minutes, added when the package is installed) refreshes it. Exit 0 sent or
 nothing to do, 1 refused or not enrolled, 4 hams.com unreachable. Behind CGNAT the WAN address is not reachable; set `host`.
+
+## Key-only SSH (`hams-node-ssh`, separate package)
+
+Once the node is enrolled (`hams-node-enroll` runs `hams-node-ssh apply` after enrol and every renewal) and `/etc/dropbear/authorized_keys`
+holds at least one key, dropbear's `PasswordAuth` and `RootPasswordAuth` are set to off on every instance. With no key installed nothing
+changes, so the owner cannot lock themselves out; add the key in LuCI (System > Administration > SSH-Keys), which `hams-node-mtls` limits
+to the owner's member certificate. `unenroll` (or `hams-node-ssh off`) restores the saved settings. Recovery after losing the key: physical
+reset, then enrol again. OpenSSH user certificates issued from the member identity are a separate decision for Bruce
+(`night_shift_todo/medium/router-ssh-openssh-certificates-option-4dafb623.md`).
