@@ -15,3 +15,4 @@ Each space is a domain with its own 16-bit ID, so two meshes that both use 10/8 
 - [@ANCHOR: aredn_names:local_mesh_name] The inverse recovers `<node>.local.mesh` and refuses names outside that mesh and callsign.
 - [@ANCHOR: aredn_names:zone_text] Zone data from the registry export and the gateways: a translated AAAA per host and a CNAME per advertised service, only for active domains of gateways handed in (a withdrawn gateway publishes nothing); empty while the translation block is unset.
 - [@ANCHOR: aredn_names:label] Node, mesh, service and callsign names are normalised to DNS labels (lowercase, `.local.mesh` dropped, `/` to `-`); anything else is refused.
+- [@ANCHOR: aredn_resolver:dnsmasq_conf] The gateway drops a dnsmasq file on the AREDN node that forwards only `.ham` to our resolvers (IPv6 addresses only); the node keeps resolving its own mesh names, and with no resolvers the file is empty.
