@@ -134,6 +134,7 @@ The core model defining monitoring checks.
 *   `action_autodiscover(self)`: Scans the system to automatically generate recommended monitoring checks for web services, databases, etc. Checks whose name already exists are skipped, and the JSON file is pushed afterwards.
 *   `action_trigger_check(self)`: Does not run the check. It only shows a notice that the external daemon runs checks on its own polling schedule.
 *   `_schedule_config_export(self)`: [@ANCHOR: pager_duty:schedule_config_export] Called by `create`, `write` (only when an exported field changes) and `unlink`: queues one post-commit rewrite of `pager_config.json` for the transaction, however many checks changed, so a check deleted any way (a migration, a shell) leaves the daemon's file. A failed export is logged and never raised, and a rolled-back change never reaches the file.
+*   `_monitor_group_id()`: [@ANCHOR: pager_duty:monitor_group_id] The gid of the `hamsd_pager_monitor` group, or `None` on a host where it does not exist; the exported `pager_config.json` is group-owned by it (0640) when it does.
 *   `update_lets_encrypt_domains(self, domains)`: Sets the target of the first `certbot` (Certbot Readiness) check to the comma-joined `domains`, creating that check if none exists, then pushes the JSON file.
 
 #### Feed freshness (`feed:` target), functions and data
