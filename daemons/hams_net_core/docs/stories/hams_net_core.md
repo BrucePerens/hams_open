@@ -22,3 +22,6 @@ Platform-free Rust crate shared by the local relay, hams-node and the phone apps
 
 ## Cross builds
 Run `tools/cross_build.sh` (optional target list) to build a small probe binary for the OpenWrt/Linux musl targets (x86_64, aarch64, armv7, mipsel), Android and iOS, and record sizes in `target/cross_sizes.txt`. Pure Rust, so the musl targets link with rust-lld and no C toolchain; mipsel (tier 3) compiles the library only unless `MIPSEL_LINKER` names an OpenWrt mipsel gcc; Android uses `ANDROID_NDK_HOME` (default: the NDK installed with sdkmanager under /home/bruce/agent_work/tools/android/ndk); iOS needs a macOS host. Skipped targets are reported as SKIP, never silently.
+
+## Policy (moved from ham_proxy)
+`hams_net_core::policy` holds the whitelist (`Whitelist::parse`, `add_site`, `permits`, `permits_path`) and the Part 97 station-ID line (`format_utc`, `log_line`); `ham_proxy` re-exports them and keeps only its log sink. The behaviour and the [@ANCHOR: ham_proxy_whitelist] story in `ham_proxy/docs/stories/ham_proxy.md` are unchanged.
