@@ -3,6 +3,7 @@
 # -*- coding: utf-8 -*-
 import json
 import grp
+from types import SimpleNamespace
 import os
 import subprocess
 import tempfile
@@ -219,7 +220,6 @@ class TestGeneralizedConfig(HamsTransactionCase):
 
     def test_06g_where_the_monitor_account_exists_the_file_is_0640_in_its_group(self):
         """pager-os-monitor runs as hamsd_pager_monitor, which reads the file through the group odoo belongs to."""
-        # [@ANCHOR: pager_duty:test_monitor_group_id]
         # Tests [@ANCHOR: generalized_pager_config]
         check_model = self.env["pager.check"].with_user(self.admin)
         own_gid = os.getgid()
@@ -231,9 +231,15 @@ class TestGeneralizedConfig(HamsTransactionCase):
             status = os.stat(path)
         self.assertEqual(result["params"]["type"], "success")
         self.assertEqual((status.st_mode & 0o777, status.st_gid), (0o640, own_gid))
-        # Without the account on the host there is no group to use.
+
+    def test_06h_the_monitor_group_id_is_none_where_the_account_does_not_exist(self):
+        # [@ANCHOR: pager_duty:test_monitor_group_id]
+        check_model = self.env["pager.check"].with_user(self.admin)
         self.safe_patch_object(grp, "getgrall", return_value=[])
         self.assertIsNone(type(check_model)._monitor_group_id())
+        entry = SimpleNamespace(gr_name="hamsd_pager_monitor", gr_gid=4242)
+        self.safe_patch_object(grp, "getgrall", return_value=[entry])
+        self.assertEqual(type(check_model)._monitor_group_id(), 4242)
 
     def test_06f_a_write_that_fails_part_way_leaves_the_previous_config_in_place(self):
         """The export used to truncate pager_config.json first and then write, so a full disk or any failure after the open left

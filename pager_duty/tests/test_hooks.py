@@ -28,6 +28,8 @@ class TestPagerDutyHooks(HamsTransactionCase):
         the final key rotation, which writes under /opt/hams/etc/keys, is
         replaced.
         """
+        # A host without the hamsd_pager_monitor account registers at the legacy flat file as the service account itself.
+        self.safe_patch_object(hooks.grp, "getgrall", return_value=[])
         registry_cls = type(self.env["daemon.key.registry"])
         original_register = registry_cls.register_daemon
         caller_uids = []
