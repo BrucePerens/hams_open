@@ -26,7 +26,7 @@ class Relay:
 
     def __init__(self, target, mutate=None):
         self.listener = socket.socket()
-        self.listener.bind(("127.0.0.1", 0))
+        self.listener.bind(("127.0.0.1", 0))  # burn-ignore-test-local-server: hermetic loopback fixture
         self.listener.listen()
         self.address = self.listener.getsockname()
         self.target, self.mutate, self.seen, self.chunks = target, mutate, b"", []
@@ -59,7 +59,7 @@ class Echo:
             context.maximum_version = ssl.TLSVersion.TLSv1_2
             context.set_ciphers(ciphers)
         self.listener = socket.socket()
-        self.listener.bind(("127.0.0.1", 0))
+        self.listener.bind(("127.0.0.1", 0))  # burn-ignore-test-local-server: hermetic loopback fixture
         self.listener.listen()
         self.address, self.context, self.received, self.error = self.listener.getsockname(), context, [], None
         threading.Thread(target=self._run, daemon=True).start()
