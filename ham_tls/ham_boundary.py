@@ -62,6 +62,23 @@ def render_ruleset(config=None):
 		tcp dport %(tcp_bad)s meta mark set %(mark)d
 	}
 
+	chain steer_out {
+		# the node's own encrypted traffic (config fetch, reports, updates, ham_proxy TLS, WireGuard) gets the same mark, so it is re-routed
+		# through the tunnel-only table and never leaves over an RF route
+		type route hook output priority -150; policy accept;
+		meta l4proto %(protos)s meta mark set %(mark)d
+		udp dport %(udp_bad)s meta mark set %(mark)d
+		tcp dport %(tcp_bad)s meta mark set %(mark)d
+	}
+
+	chain output {
+		# backstop: whatever routing decided, an encrypted-port packet never leaves on the RF interface
+		type filter hook output priority 0; policy accept;
+		oifname "%(mesh)s" meta l4proto %(protos)s counter name refused_encrypted drop
+		oifname "%(mesh)s" udp dport %(udp_bad)s counter name refused_encrypted drop
+		oifname "%(mesh)s" tcp dport %(tcp_bad)s counter name refused_encrypted drop
+	}
+
 	chain forward {
 		type filter hook forward priority -10; policy accept;
 		oifname != "%(mesh)s" accept

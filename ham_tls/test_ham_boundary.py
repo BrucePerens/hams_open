@@ -88,6 +88,23 @@ class BoundaryTests(unittest.TestCase):
         self.assertLess(steer.index("return"), steer.index("meta mark set"))
         self.assertIn("meta mark set 7", ham_boundary.render_ruleset({"tunnel_mark": 7}))
 
+    def test_the_nodes_own_encrypted_traffic_is_marked_in_the_output_hook(self):
+        out = chain(self.text, "steer_out")
+        self.assertIn("type route hook output", out)
+        self.assertIn("meta l4proto { esp } meta mark set 151", out)
+        self.assertRegex(out, r"udp dport \{[^}]*51820[^}]*\} meta mark set 151")
+        self.assertRegex(out, r"tcp dport \{[^}]*443[^}]*\} meta mark set 151")
+        self.assertNotRegex(out, r"dport \{[^}]*\b(80|8443|53)\b[^}]*\} meta mark")
+
+    def test_backstop_drops_encrypted_ports_leaving_on_the_rf_interface(self):
+        out = chain(self.text, "output")
+        self.assertIn("type filter hook output", out)
+        self.assertRegex(out, r'oifname "br-dtdlink" udp dport \{[^}]*51820[^}]*\} counter name refused_encrypted drop')
+        self.assertRegex(out, r'oifname "br-dtdlink" tcp dport \{[^}]*443[^}]*\} counter name refused_encrypted drop')
+        self.assertIn('oifname "br-dtdlink" meta l4proto { esp } counter name refused_encrypted drop', out)
+        self.assertNotRegex(out, r"dport \{[^}]*\b(80|8443|53)\b[^}]*\} counter")
+        self.assertIn('oifname "wlan0-mesh" tcp dport', chain(ham_boundary.render_ruleset({"mesh_if": "wlan0-mesh"}), "output"))
+
     def test_other_interfaces_are_not_filtered(self):
         self.assertIn('oifname != "br-dtdlink" accept', chain(self.text, "forward"))
 
