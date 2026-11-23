@@ -79,6 +79,7 @@ apply_list() {
 	while read -r key prefixes; do
 		[ -n "$key" ] || continue
 		grep -q "^$key " "$listfile" && continue
+		case $key in cert:*) continue ;; esac
 		wg set "$iface" peer "$key" remove 2>/dev/null
 		for p in $(echo "${prefixes:-}" | tr , ' '); do ip -6 route replace unreachable "$p" 2>/dev/null; done
 	done < "$1"
@@ -94,6 +95,12 @@ apply_list() {
 entries() {
 	i=0
 	while key=$(field "$1[$i].key"); do
+		if [ "$(field "$1[$i].type")" = revoked_member_cert ]; then # a revoked member client certificate: "cert:ISSUER:SERIAL " (hams-node-mtls reads it)
+			issuer=$(field "$1[$i].issuer_sha256")
+			case $key$issuer in *[!A-Za-z0-9]*) ;; *) echo "cert:$issuer:$key " ;; esac
+			i=$((i + 1))
+			continue
+		fi
 		pfx=''
 		j=0
 		while p=$(field "$1[$i].prefixes[$j]"); do pfx="${pfx:+$pfx,}$p"; j=$((j + 1)); done
@@ -119,7 +126,7 @@ do_list() { # the status named a newer list
 			: > "$new"
 			while read -r k rest; do
 				[ -n "$k" ] || continue
-				grep -qxF "$k" "$new.remove" && continue
+				grep -qxF "${k##*:}" "$new.remove" && continue # a certificate line is cert:ISSUER:SERIAL; the delta names the serial
 				grep -q "^$k " "$new.add" && continue
 				echo "$k $rest" >> "$new"
 			done < "$listfile"
