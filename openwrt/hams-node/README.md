@@ -25,6 +25,10 @@ the daemon asks the members-only directory lookup (member certificate), checks t
 nothing and are not asked again for 60 s. At most `max_peers` (256) peers; the oldest idle one goes first. An `rf` link is refused.
 Not exercised on a real device or in the AREDN VM; the nft ruleset and `nft monitor` parsing are untested here.
 
+Adding a subpackage: create `pkg/<name>.mk` with its `define Package/<name>`, `/description`, `/conffiles` and `/install` blocks
+(copy `pkg/hams-node-report.mk`; the file name is the package name). Do not edit `Makefile`: it includes `pkg/*.mk` in sorted order
+and calls `BuildPackage` for each, so parallel subpackage changes never touch the same file.
+
 Tests: `python3 -m unittest discover -s openwrt/hams-node/tests` (a stand-in `jsonfilter` is used on the dev box).
 
 ## Tested on a virtual AREDN node (2026-11-23)
