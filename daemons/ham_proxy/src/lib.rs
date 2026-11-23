@@ -3,6 +3,8 @@
 //! Half-duplex request/response relay: one request head (no body) is read from the ham, sent to the site, and the
 //! response is streamed back until the site closes. A prototype for measuring, not a finished proxy.
 
+pub mod dane;
+
 use openssl::error::ErrorStack;
 use openssl::ssl::{
     SslAcceptor, SslConnector, SslContextBuilder, SslFiletype, SslMethod, SslStream, SslVerifyMode,
@@ -28,6 +30,8 @@ pub enum ProxyError {
     Io(io::Error),
     /// The negotiated suite encrypts (or is unknown), so the ham link is refused.
     EncryptedLink(String),
+    /// A `.ham` server's certificate is not pinned by any TLSA record (or there are none).
+    NotPinned(String),
     /// The request head was too long or ended early.
     BadRequest,
 }
@@ -74,11 +78,17 @@ pub fn ham_acceptor(cert: &Path, key: &Path) -> Result<SslAcceptor, ProxyError> 
     Ok(b.build())
 }
 
+/// Client builder that offers only integrity-only suites.
+pub(crate) fn ham_client_builder() -> Result<openssl::ssl::SslConnectorBuilder, ProxyError> {
+    let mut b = SslConnector::builder(SslMethod::tls_client())?;
+    null_only(&mut b)?;
+    Ok(b)
+}
+
 // [@ANCHOR: ham_proxy_ham_connector]
 /// Client-side connector that offers only integrity-only suites (used by tests and the ham client).
 pub fn ham_connector(ca: &Path) -> Result<SslConnector, ProxyError> {
-    let mut b = SslConnector::builder(SslMethod::tls_client())?;
-    null_only(&mut b)?;
+    let mut b = ham_client_builder()?;
     b.set_ca_file(ca)?;
     Ok(b.build())
 }
