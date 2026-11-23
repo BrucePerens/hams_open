@@ -21,7 +21,7 @@ while read -r key endpoint allowed extra; do
 	if [ -n "$extra" ] || [ -z "$allowed" ]; then
 		echo "hams-node-wg: bad line, skipped" >&2; status=1; continue
 	fi
-	case $key$endpoint$allowed in *[!A-Za-z0-9+/=.:,_[]-]*) echo "hams-node-wg: bad characters, skipped" >&2; status=1; continue ;; esac
+	case $key$endpoint$allowed in *[!]A-Za-z0-9+/=.:,_[-]*) echo "hams-node-wg: bad characters, skipped" >&2; status=1; continue ;; esac
 	wg set "$iface" peer "$key" endpoint "$endpoint" allowed-ips "$allowed" || status=1
 done < "$file"
 exit $status
