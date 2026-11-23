@@ -25,6 +25,7 @@ class NameTests(unittest.TestCase):
 
     def test_bad_labels_are_refused(self):
         # Tests [@ANCHOR: aredn_names:ham_name]
+        # Tests [@ANCHOR: aredn_names:label]
         for host in ("", "-x", "a b", "a.b", "x" * 64):
             with self.assertRaises(ValueError):
                 aredn_names.ham_name(host, "bay", "K6BP")
