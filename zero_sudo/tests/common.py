@@ -78,7 +78,6 @@ _test_callsign_counter = itertools.count(1)
 # about this counter or get_callsign()'s per-class memoization.
 
 
-# [@ANCHOR: zero_sudo:generate_test_callsign]
 # [@ANCHOR: zero_sudo:load_factor_scaling]
 def load_factor():
     """Multiplier for every wait of a test (HTTP reads, Chrome CDP calls, page-ready and tour deadlines): the 1-minute load
@@ -90,6 +89,7 @@ def load_factor():
         return 1
 
 
+# [@ANCHOR: zero_sudo:generate_test_callsign]
 def generate_test_callsign(prefix="T"):
     """
     Generates a unique callsign for tests to prevent database UniqueViolation leaks.
