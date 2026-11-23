@@ -1,5 +1,9 @@
 # hams-node firewall zones for the hams.com Net. Inbound from the ham network is closed except what is opened here.
 config fw 'main'
+	# Optional separate ham-reachable segment (zone hamlan), only if set: a VLAN id or ports, not both
+	# option hamlan_vlan '42'
+	# list hamlan_port 'lan4'
+	# list hamlan_open '2001:db8:ab40:11::10/443'
 	# on by default once the node is enrolled; set to '0' to switch the zones off
 	# option enabled '0'
 	# Internet-tunnel interfaces (WireGuard) of the ham network; hams-node-wg and hams-node-ondemand add theirs here themselves

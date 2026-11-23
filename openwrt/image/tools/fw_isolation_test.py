@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Three OpenWrt x86-64 VMs in QEMU (no root) joined by socket links: ROUTER (hams-node-fw copied in), OUTSIDER on the ham side and LANHOST on the
-router's LAN. Checks that the outsider cannot reach the LAN host or the router's own ssh / LuCI / rpcd (only the port the member opened), that the
-LAN host can reach the outsider, and that replies work. Usage: fw_isolation_test.py IMAGE [--timeout S]. Run through agent_procs.py. Exit 0 = pass."""
+"""Four OpenWrt x86-64 VMs in QEMU (no root) joined by socket links: ROUTER (hams-node-fw copied in), OUTSIDER on the ham side, LANHOST on the
+router's LAN and HAMLANHOST on a port the member designated as a separate ham-reachable segment (zone hamlan). Checks that the outsider cannot reach the LAN host or the router's own ssh / LuCI / rpcd (only the port the member opened), that the
+LAN host can reach the outsider, and that replies work; that the outsider reaches the hamlan host while the hamlan host cannot reach the home LAN. Usage: fw_isolation_test.py IMAGE [--timeout S]. Run through agent_procs.py. Exit 0 = pass."""
 
 import argparse
 import pathlib
@@ -15,7 +15,7 @@ from lan_test import push  # noqa: E402
 
 SBIN = pathlib.Path(__file__).resolve().parents[2] / "hams-node" / "files" / "usr" / "sbin"
 ROUTER_SETUP = [
-    "touch /etc/config/hams_node /etc/config/hams_node_fw; uci set hams_node.main=gateway; uci set hams_node.main.prefix60=2001:db8:ab40:10::/60",
+    "touch /etc/config/hams_node /etc/config/hams_node_fw /etc/config/hams_node_lan; uci set hams_node_lan.main=lan; uci set hams_node.main=gateway; uci set hams_node.main.prefix60=2001:db8:ab40:10::/60",
     "uci set hams_node_fw.main=fw; uci add_list hams_node_fw.main.open=tcp:8080; uci commit",
     "uci delete network.wan; uci delete network.wan6; uci delete network.@device[0].ports; uci add_list network.@device[0].ports=eth2",
     "uci set network.lan.ipaddr=10.20.0.1/24; uci set network.ham=interface; uci set network.ham.proto=static; uci set network.ham.device=eth1",
@@ -24,7 +24,16 @@ ROUTER_SETUP = [
     "hams-node-fw ensure ham; echo ensure=$?; sleep 3; uci get hams_node_fw.main.iface",
 ]
 OUTSIDER_SETUP = [
-    "/etc/init.d/firewall stop; ip addr add 10.30.0.2/24 dev eth1; ip link set eth1 up; ip route add 10.20.0.0/24 via 10.30.0.1",
+    "/etc/init.d/firewall stop; ip addr add 10.30.0.2/24 dev eth1; ip link set eth1 up; ip route add 10.20.0.0/24 via 10.30.0.1; ip route add 10.40.0.0/24 via 10.30.0.1",
+    "echo hi > /tmp/index.html; (uhttpd -f -p 0.0.0.0:8000 -h /tmp >/dev/null 2>&1 &); sleep 1",
+]
+HAMLAN_ROUTER = [
+    "uci set hams_node_fw.main.hamlan_port=eth3; uci commit hams_node_fw; hams-node-fw apply; echo apply=$?",
+    "uci set network.hamlan.ipaddr=10.40.0.1/24; uci commit network; /etc/init.d/network restart; /etc/init.d/firewall reload; sleep 10",
+    "ip -6 addr show dev br-hamlan scope global",
+]
+HAMLANHOST_SETUP = [
+    "/etc/init.d/firewall stop; ip addr add 10.40.0.2/24 dev eth1; ip link set eth1 up; ip route add default via 10.40.0.1",
     "echo hi > /tmp/index.html; (uhttpd -f -p 0.0.0.0:8000 -h /tmp >/dev/null 2>&1 &); sleep 1",
 ]
 LANHOST_SETUP = [
@@ -52,12 +61,13 @@ def main():
     ap.add_argument("image")
     ap.add_argument("--timeout", type=int, default=300)
     args = ap.parse_args()
-    ham, lan = free_port(), free_port()
-    router = Console(args.image, extra=[*nic(ham, "52:54:00:aa:01:01", "listen"), *nic(lan, "52:54:00:aa:02:01", "listen")])
+    ham, lan, hl = free_port(), free_port(), free_port()
+    router = Console(args.image, extra=[*nic(ham, "52:54:00:aa:01:01", "listen"), *nic(lan, "52:54:00:aa:02:01", "listen"), *nic(hl, "52:54:00:aa:03:01", "listen")])
     time.sleep(4)
     outsider = Console(args.image, extra=nic(ham, "52:54:00:aa:01:02", "connect"))
     lanhost = Console(args.image, extra=nic(lan, "52:54:00:aa:02:02", "connect"))
-    vms = (router, outsider, lanhost)
+    hamlanhost = Console(args.image, extra=nic(hl, "52:54:00:aa:03:02", "connect"))
+    vms = (router, outsider, lanhost, hamlanhost)
     failures = []
 
     def check(name, ok, detail=""):
@@ -77,7 +87,8 @@ def main():
             con.send("\n")
         time.sleep(8)
         push(router, SBIN / "hams-node-fw", "/usr/sbin/hams-node-fw")
-        for con, cmds in ((router, ROUTER_SETUP), (outsider, OUTSIDER_SETUP), (lanhost, LANHOST_SETUP)):
+        push(router, SBIN / "hams-node-lan", "/usr/sbin/hams-node-lan")
+        for con, cmds in ((router, ROUTER_SETUP), (outsider, OUTSIDER_SETUP), (lanhost, LANHOST_SETUP), (hamlanhost, HAMLANHOST_SETUP)):
             for cmd in cmds:
                 res = out(con, cmd, 90)
                 if "ensure=" in res:
@@ -102,8 +113,20 @@ def main():
         check("LAN host can ping the outsider", "ping=0" in res, res.strip()[-40:])
         res = out(router, "hams-node-fw check; echo check=$?")
         check("no up WireGuard interface is outside a zone (check)", "check=0" in res, res.strip()[-80:])
+        # the member designates port eth3 as a ham-reachable segment (zone hamlan)
+        for cmd in HAMLAN_ROUTER:
+            res = out(router, cmd, 120)
+        check("hamlan segment gets a /64 of the /60 through hams-node-lan", "2001:db8:ab40:11" in res, res.strip()[-120:])
+        check("outsider reaches the host on the hamlan segment", ok(outsider, "http://10.40.0.2:8000/"))
+        check("LAN host reaches the hamlan host (outbound)", ok(lanhost, "http://10.40.0.2:8000/"))
+        check("hamlan host reaches the outsider (hamlan to ham)", ok(hamlanhost, "http://10.30.0.2:8000/"))
+        check("hamlan host cannot reach the home LAN host", not ok(hamlanhost, "http://10.20.0.2:8000/"))
+        res = out(hamlanhost, "ping -c 2 -W 2 10.20.0.2 >/dev/null 2>&1; echo ping=$?")
+        check("hamlan host cannot ping the home LAN host", "ping=1" in res, res.strip()[-40:])
+        check("hamlan host cannot reach the router's LuCI", not ok(hamlanhost, "http://10.40.0.1/"))
+        check("outsider still cannot reach the home LAN host with hamlan on", not ok(outsider, "http://10.20.0.2:8000/"))
         if failures:
-            print(out(router, "ip addr; ip route; uci show network | grep -E 'ports|ipaddr|device'"))
+            print(out(router, "uci show hams_node_lan; uci show network.hamlan; ifstatus hamlan | grep -A4 prefix; ip addr; ip route; uci show network | grep -E 'ports|ipaddr|device'"))
             print(out(lanhost, "ip -br addr; ip route"))
     finally:
         for con in vms:
