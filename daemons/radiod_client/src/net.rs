@@ -118,8 +118,9 @@ fn open_group(
     s.set_reuse_port(true)?;
     // Bound to the group itself (not 0.0.0.0) so the kernel delivers only this group's datagrams: bound to any address,
     // the socket also receives every other group joined by any socket on the host that uses the same port (a second
-    // `radiod` on another group, or our own other link). Windows cannot bind a multicast address.
-    let bind_ip = if cfg!(windows) {
+    // `radiod` on another group, or our own other link). Windows cannot bind a multicast address, and a macOS socket bound to one
+    // cannot send (`sendto` fails with `EADDRNOTAVAIL`, measured on macOS 27), and this socket sends the commands too.
+    let bind_ip = if cfg!(any(windows, target_os = "macos")) {
         Ipv4Addr::UNSPECIFIED
     } else {
         group
@@ -737,7 +738,8 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radiod_client_net_open_group]
-    #[cfg(not(windows))]
+    // Not on Windows or macOS: there the socket is bound to every address, so it also hears the other groups on its port.
+    #[cfg(not(any(windows, target_os = "macos")))]
     #[tokio::test]
     async fn a_socket_hears_only_its_own_group() {
         let handle = Handle::current();
