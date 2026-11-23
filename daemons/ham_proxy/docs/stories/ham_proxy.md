@@ -35,6 +35,12 @@ Internals:
 - [@ANCHOR: ham_proxy_login_respond] `GET /.ham/login?serial&nonce&sig` is answered 200 with the callsign when hams.com confirms the signature, else 403; any other path goes to the site.
 - [@ANCHOR: ham_proxy_login_http_verifier] hams.com checks the signature against the key it recorded for the member certificate, over verified TLS.
 - [@ANCHOR: ham_proxy_login_http_verify] The verifier posts the serial, nonce, audience and signature to `/ham/login/verify` and accepts only a `success` answer that names a callsign.
+- [@ANCHOR: ham_proxy_session_derive_key] After login the browser's ephemeral P-256 key (`epk`, covered by its login signature) and the proxy's give an ECDH secret; `derive_key` hashes it with the login nonce into a 32-byte MAC key. The key is used for MAC only, never encryption.
+- [@ANCHOR: ham_proxy_session_unhex] Hex decoding for the peer public point (odd length or non-hex is refused).
+- [@ANCHOR: ham_proxy_session_mac] `mac` is HMAC-SHA256 over `ham-req-v1`, method, target, host, timestamp, nonce and body hash.
+- [@ANCHOR: ham_proxy_session_open] A login that sent `epk` answers with a `session` id and the proxy's `epk`; the key is stored with the callsign for 8 hours.
+- [@ANCHOR: ham_proxy_session_check] A request with `X-Ham-Session` must carry `X-Ham-Ts` (within 60 s), a fresh `X-Ham-Nonce` and the right `X-Ham-Mac`; a captured session id, an edited request or a replayed one is refused (403).
+- [@ANCHOR: ham_proxy_session_head] The head sent to the site has all client `X-Ham-*` headers removed and, for a verified session, `X-Ham-Callsign`.
 - [@ANCHOR: ham_proxy_serve_one_login] `serve_one_login` is `serve_one_signed` plus the `/.ham/login` answers.
 
 ## DANE for .ham servers

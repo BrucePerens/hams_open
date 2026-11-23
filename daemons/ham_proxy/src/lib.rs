@@ -7,6 +7,7 @@ pub mod dane;
 pub mod indicator;
 pub mod login;
 pub mod policy;
+pub mod session;
 
 use openssl::error::ErrorStack;
 use openssl::pkey::{PKey, Private};
@@ -176,6 +177,24 @@ fn request_identity(head: &[u8]) -> Vec<u8> {
     out
 }
 
+// [@ANCHOR: ham_proxy_session_head]
+/// The request head sent to the site: every client-supplied `X-Ham-*` header removed (so none can be spoofed)
+/// and, for a verified session, `X-Ham-Callsign: CALL` added. A site that wants the member trusts only that header.
+pub fn session_head(head: &str, who: Option<&str>) -> Vec<u8> {
+    let mut lines: Vec<String> = head
+        .trim_end_matches("\r\n")
+        .split("\r\n")
+        .filter(|l| !l.to_ascii_lowercase().starts_with("x-ham-"))
+        .map(str::to_string)
+        .collect();
+    if let Some(c) = who {
+        lines.push(format!("X-Ham-Callsign: {c}"));
+    }
+    let mut out = lines.join("\r\n").into_bytes();
+    out.extend_from_slice(b"\r\n\r\n");
+    out
+}
+
 // [@ANCHOR: ham_proxy_http_response]
 fn http_response(status: &str, extra: &[(&str, String)], body: &[u8]) -> Vec<u8> {
     let mut h = format!("HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\n");
@@ -300,14 +319,29 @@ pub fn serve_one_policed(
         }
         p.record(now(), site_name, &suite)?;
     }
-    let head = read_head(&mut ham)?;
+    let mut head = read_head(&mut ham)?;
     if let Some((ch, v)) = login {
-        let line = String::from_utf8_lossy(&head);
+        let line = String::from_utf8_lossy(&head).to_string();
         let target = line.split(' ').nth(1).unwrap_or("");
         if let Some(out) = login::respond(target, site_name, ch, v, now()) {
             ham.write_all(&out)?;
             ham.shutdown().ok();
             return Ok(());
+        }
+        match ch.sessions.check(&line, now()) {
+            Ok(who) => head = session_head(&line, who.as_deref()),
+            Err(_) => {
+                let body = b"{\"error\":\"session proof refused\"}";
+                let mut out = format!(
+                    "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                    body.len()
+                )
+                .into_bytes();
+                out.extend_from_slice(body);
+                ham.write_all(&out)?;
+                ham.shutdown().ok();
+                return Ok(());
+            }
         }
     }
     let up_tcp = TcpStream::connect(site_addr)?;

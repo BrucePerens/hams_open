@@ -10,9 +10,14 @@
 //! * `GET /.ham/login?serial=HEX&nonce=HEX&sig=HEX` where `sig` is the raw r||s ECDSA signature over
 //!   `hams-member-cert-possession-v1\n<audience>\n<nonce>`. Answers 200 `{"callsign":...}` or 403.
 //!
+//! With an `epk=HEX` parameter (the browser's ephemeral P-256 public point) the audience becomes
+//! `ham-login:SITE:epk=HEX`, so the signature also covers `epk`, and the 200 answer adds `"session"` and the
+//! proxy's `"epk"`: see [`crate::session`] for what the agreed key authenticates afterwards.
+//!
 //! A nonce is single use and lives [`TTL_SECS`] seconds, so a captured exchange cannot be replayed, and the
 //! audience names the site, so it cannot be used for another one.
 
+use crate::session::Sessions;
 use crate::ProxyError;
 use openssl::base64::encode_block;
 use openssl::rand::rand_bytes;
@@ -31,7 +36,11 @@ const MAX_PENDING: usize = 1024;
 // [@ANCHOR: ham_proxy_login_challenges]
 /// Outstanding challenges: nonce -> issue time.
 #[derive(Default)]
-pub struct Challenges(Mutex<HashMap<String, u64>>);
+pub struct Challenges {
+    pending: Mutex<HashMap<String, u64>>,
+    /// Sessions opened by a login that sent an `epk` (see [`crate::session`]).
+    pub sessions: Sessions,
+}
 
 impl Challenges {
     // [@ANCHOR: ham_proxy_login_issue]
@@ -40,7 +49,7 @@ impl Challenges {
         let mut b = [0u8; 16];
         rand_bytes(&mut b)?;
         let nonce: String = b.iter().map(|x| format!("{x:02x}")).collect();
-        let mut m = self.0.lock().map_err(|_| ProxyError::BadRequest)?;
+        let mut m = self.pending.lock().map_err(|_| ProxyError::BadRequest)?;
         m.retain(|_, t| now.saturating_sub(*t) <= TTL_SECS);
         if m.len() >= MAX_PENDING {
             return Err(ProxyError::BadRequest);
@@ -52,7 +61,7 @@ impl Challenges {
     // [@ANCHOR: ham_proxy_login_take]
     /// Spend `nonce`: true only the first time, and only while it is unexpired.
     pub fn take(&self, nonce: &str, now: u64) -> bool {
-        let Ok(mut m) = self.0.lock() else {
+        let Ok(mut m) = self.pending.lock() else {
             return false;
         };
         m.remove(nonce)
@@ -105,7 +114,7 @@ pub fn respond(
     if path != PATH {
         return None;
     }
-    let aud = audience(site);
+    let mut aud = audience(site);
     if query.is_empty() {
         return Some(match ch.issue(now) {
             Ok(n) => json(
@@ -130,14 +139,30 @@ pub fn respond(
     if !ch.take(nonce, now) {
         return Some(refuse());
     }
+    let epk = param(query, "epk");
+    if let Some(e) = epk {
+        if !is_hex(e) {
+            return Some(refuse());
+        }
+        aud = format!("{aud}:epk={e}");
+    }
     let raw: Vec<u8> = (0..sig.len())
         .step_by(2)
         .filter_map(|i| u8::from_str_radix(&sig[i..i + 2], 16).ok())
         .collect();
     Some(match v.verify(serial, nonce, &aud, &encode_block(&raw)) {
-        Some(call) if call.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'/') => {
-            json("200 OK", &format!("{{\"callsign\":\"{call}\"}}"))
-        }
+        Some(call) if call.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'/') => match epk {
+            None => json("200 OK", &format!("{{\"callsign\":\"{call}\"}}")),
+            Some(e) => match ch.sessions.open(&call, e, nonce, now) {
+                Ok((sid, ours)) => json(
+                    "200 OK",
+                    &format!(
+                        "{{\"callsign\":\"{call}\",\"session\":\"{sid}\",\"epk\":\"{ours}\"}}"
+                    ),
+                ),
+                Err(_) => refuse(),
+            },
+        },
         _ => refuse(),
     })
 }
