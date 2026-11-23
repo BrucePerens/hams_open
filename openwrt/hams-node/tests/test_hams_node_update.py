@@ -91,11 +91,11 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
 
     def serve(self):
-        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Quiet, directory=str(self.root)))
+        server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), functools.partial(Quiet, directory=str(self.root)))  # burn-ignore-ssrf-test-value: loopback server of this test only
         threading.Thread(target=server.serve_forever, daemon=True).start()
         self.addCleanup(server.server_close)
         self.addCleanup(server.shutdown)
-        self.url = "http://127.0.0.1:%d/feed" % server.server_address[1]
+        self.url = "http://127.0.0.1:%d/feed" % server.server_address[1]  # burn-ignore-ssrf-test-value: loopback server of this test only
 
     def install(self, version):
         """Install ht VERSION into the apk root straight from its file (the node's state before an update)."""
