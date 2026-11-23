@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-"""Compare same-named kernel modules of a release (extracted apks) and a build tree: vermagic, __versions CRCs and all code/data sections must be equal.
+"""Compare same-named kernel modules of a release (extracted apks) and a build tree: vermagic, CRCs and code/data sections must be equal.
 usage: compare_modabi.py RELEASE_DIR BUILD_DIR [--min-modules N]; exit 0 only if >= N modules compared and all identical."""
 import os
 import struct
 import sys
 
 
+# [@ANCHOR: aredn_jool:compare_modabi_sections]
 def sections(data):
     if data[:4] != b"\x7fELF":
         raise ValueError("not ELF")
@@ -34,6 +35,7 @@ def sections(data):
     return out, is64, end
 
 
+# [@ANCHOR: aredn_jool:compare_modabi_abi]
 def abi(path):
     with open(path, "rb") as fh:
         data = fh.read()
@@ -55,6 +57,7 @@ def abi(path):
     return (magic[0].decode() if magic else ""), crcs, code
 
 
+# [@ANCHOR: aredn_jool:compare_modabi_find]
 def find(root):
     res = {}
     for d, _dirs, files in os.walk(root):
@@ -64,6 +67,7 @@ def find(root):
     return res
 
 
+# [@ANCHOR: aredn_jool:compare_modabi_main]
 def main(argv):
     rel, build = argv[1], argv[2]
     need = int(argv[argv.index("--min-modules") + 1]) if "--min-modules" in argv else 1
@@ -76,7 +80,7 @@ def main(argv):
         diff += [k for k in set(rcode) | set(bcode) if k != ".modinfo" and rcode.get(k) != bcode.get(k)][:5]
         if rm != bm or diff:
             bad += 1
-            print("MISMATCH %s: vermagic %r vs %r; CRC diffs %s" % (name, rm, bm, diff[:5]))
+            print("MISMATCH %s: vermagic %r vs %r; differs in %s" % (name, rm, bm, diff[:5]))
         else:
             ok += 1
             print("same %s (%d sections, %d CRCs)" % (name, len(rcode), len(rc)))

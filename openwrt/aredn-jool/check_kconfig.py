@@ -13,6 +13,7 @@ LAYOUT = ("NET_NS", "NETFILTER_EGRESS", "NF_CONNTRACK_EVENTS", "NF_CONNTRACK_LAB
           "NET_CLS_ACT", "NET_SCHED", "XFRM", "SECURITY_NETWORK", "NETFILTER_NETLINK_ACCT", "NET_NS_REFCNT_TRACKER")
 
 
+# [@ANCHOR: aredn_jool:check_kconfig_parse]
 def parse(path):
     cfg = {}
     with open(path, encoding="utf-8") as fh:
@@ -23,6 +24,7 @@ def parse(path):
     return cfg
 
 
+# [@ANCHOR: aredn_jool:check_kconfig_main]
 def main(argv):
     pub, tree, linux = parse(argv[1]), parse(argv[2]), parse(argv[3])
     bad = []
