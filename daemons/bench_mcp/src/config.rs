@@ -33,6 +33,7 @@ pub const DRIVER_KINDS: &[(&str, Kind)] = &[
     ("rx888", Kind::Rx888),
     ("siglent_sds", Kind::Scope),
     ("siglent_ssa", Kind::Sa),
+    ("usb_blaster", Kind::UsbBlaster),
     ("usb_hub", Kind::UsbHub),
     ("vnwa_open", Kind::Vna),
 ];
@@ -91,6 +92,8 @@ pub enum Kind {
     Rx888,
     /// The Glasgow Interface Explorer (`glasgow` module): digital I/O (UART, I2C, SPI, JTAG, SWD, logic analyzer, GPIO) through the pinned `glasgow` tool.
     Glasgow,
+    /// An Altera USB-Blaster JTAG cable through openFPGALoader (`usb_blaster` module).
+    UsbBlaster,
 }
 
 /// The longest `max_on_s` a config may ask for (one day).
@@ -124,6 +127,7 @@ pub struct Instrument {
     pub rotator: crate::rotator::Config,
     pub elad: crate::elad::Config,
     pub example: crate::example::Config,
+    pub usb_blaster: crate::usb_blaster::Config,
     pub sa: crate::sa::Config,
     pub procedure: crate::procedure::Config,
     pub rx888: crate::rx888::Config,
@@ -397,6 +401,7 @@ pub fn parse(text: &str) -> Result<Vec<Instrument>, String> {
             procedure: module_config!(procedure, driver_name, c, name),
             rx888: module_config!(rx888, driver_name, c, name),
             glasgow: module_config!(glasgow, driver_name, c, name),
+            usb_blaster: module_config!(usb_blaster, driver_name, c, name),
         };
         match (inst.kind, &inst.host, &inst.serial) {
             (Kind::Scope, None, _) => return Err(format!("{name}: a scope needs \"host\"")),

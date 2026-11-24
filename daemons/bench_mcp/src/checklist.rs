@@ -75,6 +75,14 @@ const SAFE_STATE_COMPANION: &[(&str, &str)] = &[
 /// inside the call and leaves nothing running or energised. Do not add to it without the owner agreeing.
 const FULL_WITHOUT_SAFE_STATE: &[(&str, &str)] = &[
     (
+        "bench_jtag_sram_load",
+        "a load into FPGA SRAM is volatile and drives no output by itself; a power cycle of the board clears it, and the cable holds no state",
+    ),
+    (
+        "bench_jtag_flash_write",
+        "the flash write runs to the end inside the call, is off unless the owner enables it in the config and approves each use, and leaves nothing driven",
+    ),
+    (
         "bench_scope_self_cal",
         "the scope runs its own calibration to the end inside the call and nothing is left driven afterwards; it cannot be aborted",
     ),
