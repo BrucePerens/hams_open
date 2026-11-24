@@ -74,6 +74,9 @@ do_apply() {
 	# revocation: the CA-level CRLs shipped with the package plus the identity CRL; the verifier uses them only while the identity CRL is
 	# fresh (an offline node must not lock its owner out; the CRL is refreshed from cron). The deprecation list is read by the verifier.
 	cat "$state/member-crls.pem" "$dir/identity.crl" > "$dir/crls.pem" 2>/dev/null
+	gate="proxy_method GET;
+			proxy_pass_request_body off;
+			proxy_set_header Content-Length \"\";"
 	cat > "$conf" <<N
 # made by hams-node-mtls; do not edit
 worker_processes 1;
@@ -82,6 +85,10 @@ error_log syslog:server=unix:/dev/log warn;
 events { worker_connections 64; }
 http {
 	access_log off;
+	map \$uri \$hams_target {
+		default app;
+		/hams-sso sso;
+	}
 	server {
 		listen 443 ssl;
 		listen [::]:443 ssl;
@@ -89,23 +96,35 @@ http {
 		ssl_certificate_key $dir/server.key;
 		ssl_protocols TLSv1.2 TLSv1.3;
 		ssl_client_certificate $ca;
-		# nginx only asks for the certificate; /hams-verify (a loopback CGI) is the whole check: chain to the member CA, the enrolled
-		# owner, the deprecation list, and a 30 day grace on the dates so a wrong clock or an outage cannot lock the owner out
+		# nginx only asks for the certificate. OpenWrt's nginx-ssl has no auth_request module, so every request first goes to the verify CGI
+		# (GET, no body, the certificate in the query string: uhttpd does not pass unknown headers to a CGI). The CGI answers 403, or 200
+		# with X-Accel-Redirect to the named location that serves the real request (30 day grace on the dates, deprecation list strict).
 		ssl_verify_client optional_no_ca;
-		auth_request /hams-verify;
-		location = /hams-verify {
-			internal;
-			auth_request off;
-			proxy_pass http://$sso/cgi-bin/verify;
-			proxy_pass_request_body off;
-			proxy_set_header Content-Length "";
-			proxy_set_header X-Client-Cert \$ssl_client_escaped_cert;
+		# nginx still refuses an expired or not-yet-valid certificate itself (error 495, even with optional_no_ca): send that request through
+		# the same gate, which allows it inside the 30 day grace (the owner then opens /hams-sso for the sign-in: a second error_page hop
+		# is not possible)
+		error_page 495 = @expired;
+		location @expired {
+			set \$hams_verify http://$sso/cgi-bin/verify?\$hams_target:\$ssl_client_escaped_cert;
+			proxy_pass \$hams_verify;
+			$gate
 		}
 		location = /hams-sso {
-			proxy_pass http://$sso/cgi-bin/sso;
+			set \$hams_verify http://$sso/cgi-bin/verify?sso:\$ssl_client_escaped_cert;
+			proxy_pass \$hams_verify;
+			$gate
+		}
+		location @sso_app {
+			set \$hams_sso http://$sso/cgi-bin/sso;
+			proxy_pass \$hams_sso;
 		}
 		location @sso { return 302 /hams-sso; }
 		location / {
+			set \$hams_verify http://$sso/cgi-bin/verify?app:\$ssl_client_escaped_cert;
+			proxy_pass \$hams_verify;
+			$gate
+		}
+		location @app {
 			# no or an expired LuCI session shows LuCI's 403 login page: sign the verified owner in instead
 			proxy_intercept_errors on;
 			error_page 403 = @sso;

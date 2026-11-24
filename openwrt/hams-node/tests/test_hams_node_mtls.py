@@ -82,8 +82,8 @@ class MtlsTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         conf = self.conf()
         self.assertIn("ssl_verify_client optional_no_ca;", conf, "the verify CGI is the check, so the dates get a grace")
-        self.assertIn("auth_request /hams-verify;", conf)
-        self.assertIn("proxy_set_header X-Client-Cert $ssl_client_escaped_cert;", conf)
+        self.assertNotIn("\n\t\tauth_request ", conf, "OpenWrt's nginx-ssl is built without the auth_request module")
+        self.assertIn("verify?app:$ssl_client_escaped_cert;", conf)
         self.assertIn("ssl_client_certificate %s;" % (self.state / "member-ca.pem"), conf)
         self.assertIn("proxy_pass http://127.0.0.1:8080;", conf)  # burn-ignore-ssrf-test-value: expected config text on the router, nothing connects
         uci = self.uci()
@@ -151,12 +151,23 @@ class MtlsTests(unittest.TestCase):
         self.run_script("apply")
         self.assertEqual(self.conf(), before, "a list change needs no nginx reload: the verify CGI reads the list on every request")
 
-    def test_the_verify_location_is_internal_and_passes_only_the_certificate_not_the_body(self):
+    def test_every_request_goes_through_the_verify_gate_before_the_application_without_auth_request(self):
         self.enrolled()
         self.run_script("apply")
-        location = self.conf().split("location = /hams-verify {")[1].split("}")[0]
-        for line in ("internal;", "auth_request off;", "proxy_pass http://127.0.0.1:8081/cgi-bin/verify;", "proxy_pass_request_body off;"):  # burn-ignore-ssrf-test-value: expected config text on the router, nothing connects
-            self.assertIn(line, location)
+        conf = self.conf()
+        for place, target in (("location / {", "app"), ("location = /hams-sso {", "sso")):
+            gate = conf.split(place)[1].split("}")[0]
+            for line in ("proxy_pass $hams_verify;", "proxy_method GET;", "proxy_pass_request_body off;",
+                         "set $hams_verify http://127.0.0.1:8081/cgi-bin/verify?%s:$ssl_client_escaped_cert;" % target):  # burn-ignore-ssrf-test-value: expected config text on the router, nothing connects
+                self.assertIn(line, gate, place)
+        self.assertNotIn("error_page 399", conf)
+        self.assertIn("error_page 495 = @expired;", conf, "nginx rejects an expired certificate itself; it goes through the same gate")
+        expired = conf.split("location @expired {")[1].split("}")[0]
+        self.assertIn("verify?$hams_target:$ssl_client_escaped_cert;", expired)
+        self.assertIn("proxy_pass_request_body off;", expired)
+        app = conf.split("location @app {")[1].split("}")[0]
+        self.assertIn("proxy_pass http://127.0.0.1:8080;", app)  # burn-ignore-ssrf-test-value: expected config text on the router, nothing connects
+        self.assertIn("error_page 403 = @sso;", app, "LuCI's login page is replaced by the single sign-on redirect")
 
     def test_a_slash_callsign_is_accepted_and_a_callsign_with_other_characters_is_not(self):
         self.enrolled("K6BP/W7")

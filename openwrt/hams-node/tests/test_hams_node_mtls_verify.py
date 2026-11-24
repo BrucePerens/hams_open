@@ -13,6 +13,7 @@ import urllib.parse
 HERE = pathlib.Path(__file__).resolve().parent
 VERIFY = HERE.parent / "files" / "usr" / "lib" / "hams-node" / "sso" / "cgi-bin" / "verify"
 DAY = 86400
+ALLOWED = "allowed: 200 with X-Accel-Redirect"
 OWNER_OID = "1.3.6.1.4.1.66926.1.1"
 DATE = '#!/bin/sh\ncase "$*" in "-u +%%s") echo "$NOW";; *) exec %s "$@";; esac\n' % shutil.which("date")
 
@@ -54,28 +55,29 @@ class VerifyTests(unittest.TestCase):
 
     def verify(self, pem, days=0):
         env = dict(os.environ, PATH="%s:%s" % (self.root / "bin", os.environ["PATH"]), NOW=str(int(time.time()) + days * DAY),
-                   HAMS_NODE_STATE=str(self.state), HTTP_X_CLIENT_CERT=urllib.parse.quote(pem, safe=""))
+                   HAMS_NODE_STATE=str(self.state), QUERY_STRING="app:" + urllib.parse.quote(pem, safe=""))
         out = subprocess.run(["sh", str(VERIFY)], env=env, capture_output=True, text=True, timeout=60).stdout
-        return out.splitlines()[0]
+        lines = out.splitlines()
+        return ALLOWED if lines[0] == "Status: 200 OK" and "X-Accel-Redirect: @app" in lines else lines[0]
 
     def test_an_in_date_owner_certificate_passes(self):
-        self.assertEqual(self.verify(self.leaf), "Status: 200 OK")
+        self.assertEqual(self.verify(self.leaf), ALLOWED)
 
     def test_ten_days_after_expiry_still_passes_and_forty_days_is_refused(self):
-        self.assertEqual(self.verify(self.leaf, 365 + 10), "Status: 200 OK")
+        self.assertEqual(self.verify(self.leaf, 365 + 10), ALLOWED)
         self.assertEqual(self.verify(self.leaf, 365 + 40), "Status: 403 Forbidden")
 
     def test_a_clock_far_behind_passes_within_thirty_days_and_not_beyond(self):
-        self.assertEqual(self.verify(self.leaf, -10), "Status: 200 OK")
+        self.assertEqual(self.verify(self.leaf, -10), ALLOWED)
         self.assertEqual(self.verify(self.leaf, -40), "Status: 403 Forbidden")
 
     def test_a_certificate_on_the_deprecation_list_is_refused_even_in_date(self):
         (self.state / "deprecation_list").write_text("KEYB64== 2001:db8::/60\ncert:%s:1f \n" % self.fingerprint)
         self.assertEqual(self.verify(self.leaf), "Status: 403 Forbidden")
         (self.state / "deprecation_list").write_text("cert:%s:0001F \ncert:%s:77 \n" % ("00" * 32, self.fingerprint))
-        self.assertEqual(self.verify(self.leaf), "Status: 200 OK", "another issuer's entry and another serial do not match")
+        self.assertEqual(self.verify(self.leaf), ALLOWED, "another issuer's entry and another serial do not match")
         (self.state / "deprecation_list").write_text("")
-        self.assertEqual(self.verify(self.leaf), "Status: 200 OK", "a removal lifts the block")
+        self.assertEqual(self.verify(self.leaf), ALLOWED, "a removal lifts the block")
 
     def test_a_certificate_from_another_chain_is_refused(self):
         self.assertEqual(self.verify(make_leaf(self.root / "other", "N0CALL")), "Status: 403 Forbidden")
