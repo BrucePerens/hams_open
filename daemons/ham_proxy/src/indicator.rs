@@ -69,6 +69,7 @@ pub fn has_unhandled_password(html: &[u8]) -> bool {
     false
 }
 
+// [@ANCHOR: ham_proxy_decode_refs]
 /// A character reference (`&#119;`, `&#x77;`) decoded; text otherwise unchanged. Enough for attribute values a browser would read as another word.
 fn decode_refs(v: &[u8]) -> String {
     let t = String::from_utf8_lossy(v);

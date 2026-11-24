@@ -274,6 +274,7 @@ fn end_to_end_non_html_is_byte_identical() {
 fn password_detector_reads_attributes_not_substrings() {
     // Tests [@ANCHOR: ham_proxy_has_unhandled_password]
     // Tests [@ANCHOR: ham_proxy_parse_attrs]
+    // Tests [@ANCHOR: ham_proxy_decode_refs]
     let pw = |h: &str| indicator::has_unhandled_password(h.as_bytes());
     // a quoted '>' used to end the tag early and hide the type
     assert!(pw(r#"<input value=">" type=password>"#));
