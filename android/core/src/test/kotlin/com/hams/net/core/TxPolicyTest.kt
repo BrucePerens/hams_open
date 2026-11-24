@@ -7,7 +7,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class TxPolicyTest {
-    private val packet = byteArrayOf(0x60, 0, 0, 0)
+    private val packet = Pkt.readable
 
     private fun rf(demo: DemoLock, holds: TxHolds, tnc: VirtualTnc, blocklist: Blocklist = Blocklist()) =
         RfInterface(tnc, "N0CALL", OwnedTxGate(demo, holds, blocklist)).also { it.enable() }

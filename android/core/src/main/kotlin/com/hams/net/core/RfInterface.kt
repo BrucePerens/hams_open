@@ -25,7 +25,7 @@ object RfPolicy {
 }
 
 /** An RF interface: IP packets go out unencrypted as KISS data frames, only when the [TxGate] allows keying. */
-class RfInterface(private val port: SerialPort, private val callsign: String, private val gate: TxGate) {
+class RfInterface(private val port: SerialPort, private val callsign: String, private val gate: TxGate, val boundary: RfBoundary = RfBoundary()) {
     var enabled = false
         private set
     val link = LinkType.RF
@@ -43,9 +43,9 @@ class RfInterface(private val port: SerialPort, private val callsign: String, pr
     /** Refuses WireGuard (or any encrypting suite) on this interface. */
     fun attach(suite: LinkSuite) = RfPolicy.requireUnencrypted(link, suite)
 
-    /** Sends one packet; false (nothing written) unless enabled and the gate allows keying. */
+    /** Sends one packet; false (nothing written) unless enabled, readable-only per [RfBoundary], and the gate allows keying. */
     fun send(packet: ByteArray): Boolean {
-        if (!enabled) return false
+        if (!enabled || boundary.check(packet) != null) return false
         return gate.key { port.write(Kiss.encode(packet)) }
     }
 
