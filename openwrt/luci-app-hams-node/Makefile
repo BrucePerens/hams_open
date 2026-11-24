@@ -16,7 +16,7 @@ define Package/luci-app-hams-node
   SUBMENU:=3. Applications
   TITLE:=LuCI page for the hams.com Net node (hams-node)
   URL:=https://hams.com
-  DEPENDS:=+hams-node +luci-base +rpcd
+  DEPENDS:=+hams-node +hams-node-proxyca +luci-base +rpcd
   PKGARCH:=all
 endef
 

@@ -2,7 +2,7 @@
 	"luci-app-hams-node": {
 		"description": "Grant access to the hams.com Net node status and settings",
 		"read": {
-			"ubus": { "hams-node": [ "status" ] },
+			"ubus": { "hams-node": [ "status", "proxy_ca" ] },
 			"uci": [ "hams_node", "hams_node_ondemand" ]
 		},
 		"write": {
