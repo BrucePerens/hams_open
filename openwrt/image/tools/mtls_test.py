@@ -153,6 +153,12 @@ def run(image, d):
         check("root password login is refused once the owner has signed in", "rpcd_root_rc=0" not in out and "rpcd_root_rc=" in out, out.strip())
         out = request(con, "owner", "POST", "/cgi-bin/luci", "", "luci_username=root&luci_password=rootpw")
         check("LuCI password form does not log in", "Set-Cookie" not in out, out.strip().replace("\n", " | ")[:200])
+        # the 30 day grace on the dates (the test certificates are valid for 30 days): 35 days on is 5 days expired, 65 days on is 35
+        for days, ok, text in ((35, True, "5 days past expiry is still served"), (65, False, "35 days past expiry is refused"), (-5, True, "a clock 5 days before the start is still served"), (-35, False, "a clock 35 days before the start is refused")):
+            con.run("date -s @$(( $(date +%%s) + %d * 86400 )) >/dev/null; sleep 1" % days, 30)
+            out = fetch(con, "owner", static)
+            check("owner certificate %s" % text, ("HTTP/1.1 200" in out) == ok, out.strip().replace("\n", " | ")[:160])
+            con.run("date -s @$(( $(date +%%s) - %d * 86400 )) >/dev/null; sleep 1" % days, 30)
         res = con.run("/usr/sbin/hams-node-mtls off 2>&1; echo rc=$?; sleep 3; netstat -tln | grep -E ':80 '", 60)
         out = res[0] if res else ""
         check("off restores uhttpd on port 80", bool(res) and "rc=0" in out and ":80 " in out, out.strip().replace("\r\n", " | ")[-200:])

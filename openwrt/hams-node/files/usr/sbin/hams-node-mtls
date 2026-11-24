@@ -1,8 +1,8 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-or-later
 # hams-node-mtls: the router's web management (LuCI, ubus over HTTP, so rpcd and the hams-node APIs) is reachable only with a
-# hams.com member (client) certificate that chains to the pinned member CA AND carries the enrolled owner's callsign.
-# nginx terminates TLS on :443 and demands the certificate; uhttpd is moved to 127.0.0.1:8080 behind it.
+# hams.com member (client) certificate that chains to the pinned member CA AND carries the enrolled owner's callsign (checked by the verify CGI, with a 30 day grace on the dates).
+# nginx terminates TLS on :443 and asks for the certificate; uhttpd is moved to 127.0.0.1:8080 behind it.
 #   hams-node-mtls [-s STATE_DIR] [-u BASE_URL] apply   (re)render the nginx config from the owner file; does nothing when not enrolled
 #   hams-node-mtls [-s STATE_DIR] [-u BASE_URL] crl     fetch the identity CRL, verify it against the pinned CAs, keep the last good one
 #   hams-node-mtls [-s STATE_DIR] lock                  turn the router password login off (run by the sso handler after the first verified owner)
@@ -34,37 +34,12 @@ inner=127.0.0.1:8080
 sso=127.0.0.1:8081
 cron=${HAMS_NODE_CRON:-/etc/crontabs/root}
 job="/usr/sbin/hams-node-mtls crl"
-# revoked member certificates named by the signed deprecation list (hams-node-status keeps it): "cert:ISSUER_SHA256:SERIAL" lines
-deplist=${HAMS_NODE_DEPRECATION_LIST:-$state/deprecation_list}
 
 # crl_fresh FILE: its nextUpdate has not passed (openssl crl has no -checkend)
 crl_fresh() {
 	nu=$(openssl crl -in "$1" -noout -nextupdate -dateopt iso_8601 2>/dev/null | cut -d= -f2)
 	nu=${nu%Z}
 	[ -n "$nu" ] && [ "$(date -u -d "$nu" +%s 2>/dev/null || echo 0)" -gt "$(date -u +%s)" ]
-}
-
-# ca_fingerprints: the SHA-256 fingerprint (lowercase hex) of every certificate in the member CA bundle
-ca_fingerprints() {
-	awk -v d="$dir" '/BEGIN CERTIFICATE/ { n++ } n { print > (d "/ca_" n ".pem") }' "$ca"
-	for f in "$dir"/ca_*.pem; do
-		[ -f "$f" ] && openssl x509 -in "$f" -noout -fingerprint -sha256 2>/dev/null | cut -d= -f2 | tr -d : | tr A-F a-f
-	done
-	rm -f "$dir"/ca_*.pem
-}
-
-# revoked_serials: nginx map lines for the listed certificates whose issuer is one of the pinned CAs (so the CRL endpoint is not needed)
-revoked_serials() {
-	[ -r "$deplist" ] || return 0
-	fps=$(ca_fingerprints)
-	grep '^cert:' "$deplist" | while IFS=: read -r _ issuer serial; do
-		serial=${serial% }
-		case $serial in '' | *[!0-9a-f]*) continue ;; esac
-		echo "$fps" | grep -qx "$issuer" || continue
-		up=$(echo "$serial" | tr a-f A-F)
-		[ $((${#up} % 2)) = 1 ] && up=0$up
-		echo "		\"$up\" 1;"
-	done
 }
 
 reload_nginx() { [ -x /etc/init.d/hams-node-mtls ] && { /etc/init.d/hams-node-mtls enable; /etc/init.d/hams-node-mtls restart; }; return 0; }
@@ -96,16 +71,12 @@ do_apply() {
 		openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 3650 -subj "/CN=hams-node" \
 			-keyout "$dir/server.key" -out "$dir/server.crt" 2>/dev/null || exit 1
 	fi
-	# revocation: the CA-level CRLs shipped with the package plus the identity CRL; used only while every one is fresh
-	# (an offline node must not lock its owner out; the CRL is refreshed from cron)
-	crlline=''
+	# revocation: the CA-level CRLs shipped with the package plus the identity CRL; the verifier uses them only while the identity CRL is
+	# fresh (an offline node must not lock its owner out; the CRL is refreshed from cron). The deprecation list is read by the verifier.
 	cat "$state/member-crls.pem" "$dir/identity.crl" > "$dir/crls.pem" 2>/dev/null
-	if [ -s "$dir/identity.crl" ] && [ -s "$dir/crls.pem" ] && crl_fresh "$dir/identity.crl"; then
-		crlline="ssl_crl $dir/crls.pem;"
-	fi
-	revoked=$(revoked_serials)
-	# the callsign is a Subject attribute under 1.3.6.1.4.1.66926.1.1 (and 12348.1.1), printed by nginx in the legacy DN form
-	callre=$(printf '%s' "$owner" | sed 's|/|\\/|g')
+	gate="proxy_method GET;
+			proxy_pass_request_body off;
+			proxy_set_header Content-Length \"\";"
 	cat > "$conf" <<N
 # made by hams-node-mtls; do not edit
 worker_processes 1;
@@ -114,13 +85,9 @@ error_log syslog:server=unix:/dev/log warn;
 events { worker_connections 64; }
 http {
 	access_log off;
-	map \$ssl_client_s_dn_legacy \$hams_owner {
-		default 0;
-		"~(^|/)1\\.3\\.6\\.1\\.4\\.1\\.66926\\.1\\.1=$callre(/|\$)" 1;
-	}
-	map \$ssl_client_serial \$hams_revoked {
-		default 0;
-$revoked
+	map \$uri \$hams_target {
+		default app;
+		/hams-sso sso;
 	}
 	server {
 		listen 443 ssl;
@@ -129,16 +96,35 @@ $revoked
 		ssl_certificate_key $dir/server.key;
 		ssl_protocols TLSv1.2 TLSv1.3;
 		ssl_client_certificate $ca;
-		ssl_verify_client on;
-		ssl_verify_depth 5;
-		$crlline
-		if (\$hams_revoked) { return 403; }
-		if (\$hams_owner = 0) { return 403; }
+		# nginx only asks for the certificate. OpenWrt's nginx-ssl has no auth_request module, so every request first goes to the verify CGI
+		# (GET, no body, the certificate in the query string: uhttpd does not pass unknown headers to a CGI). The CGI answers 403, or 200
+		# with X-Accel-Redirect to the named location that serves the real request (30 day grace on the dates, deprecation list strict).
+		ssl_verify_client optional_no_ca;
+		# nginx still refuses an expired or not-yet-valid certificate itself (error 495, even with optional_no_ca): send that request through
+		# the same gate, which allows it inside the 30 day grace (the owner then opens /hams-sso for the sign-in: a second error_page hop
+		# is not possible)
+		error_page 495 = @expired;
+		location @expired {
+			set \$hams_verify http://$sso/cgi-bin/verify?\$hams_target:\$ssl_client_escaped_cert;
+			proxy_pass \$hams_verify;
+			$gate
+		}
 		location = /hams-sso {
-			proxy_pass http://$sso/cgi-bin/sso;
+			set \$hams_verify http://$sso/cgi-bin/verify?sso:\$ssl_client_escaped_cert;
+			proxy_pass \$hams_verify;
+			$gate
+		}
+		location @sso_app {
+			set \$hams_sso http://$sso/cgi-bin/sso;
+			proxy_pass \$hams_sso;
 		}
 		location @sso { return 302 /hams-sso; }
 		location / {
+			set \$hams_verify http://$sso/cgi-bin/verify?app:\$ssl_client_escaped_cert;
+			proxy_pass \$hams_verify;
+			$gate
+		}
+		location @app {
 			# no or an expired LuCI session shows LuCI's 403 login page: sign the verified owner in instead
 			proxy_intercept_errors on;
 			error_page 403 = @sso;

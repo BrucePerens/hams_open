@@ -22,6 +22,7 @@ define Package/hams-node-mtls/install
 	$(INSTALL_DIR) $(1)/usr/lib/hams-node/sso/cgi-bin $(1)/usr/sbin $(1)/etc/init.d $(1)/etc/hams-node
 	$(INSTALL_BIN) ./files/usr/sbin/hams-node-mtls $(1)/usr/sbin/
 	$(INSTALL_BIN) ./files/usr/lib/hams-node/sso/cgi-bin/sso $(1)/usr/lib/hams-node/sso/cgi-bin/
+	$(INSTALL_BIN) ./files/usr/lib/hams-node/sso/cgi-bin/verify $(1)/usr/lib/hams-node/sso/cgi-bin/
 	$(INSTALL_BIN) ./files/etc/init.d/hams-node-mtls $(1)/etc/init.d/
 	$(INSTALL_DATA) ./files/etc/hams-node/member-ca.pem $(1)/etc/hams-node/
 	$(INSTALL_DATA) ./files/etc/hams-node/member-crls.pem $(1)/etc/hams-node/

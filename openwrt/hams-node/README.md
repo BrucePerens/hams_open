@@ -208,13 +208,18 @@ and answers DHCPv6. `hams-node-lan remove` undoes it. Anything that is not a /60
 
 Bruce 2026-11-23: once a node is enrolled, its web management (LuCI, ubus over HTTP so rpcd and the hams-node APIs) is reachable only
 with a hams.com member (client) certificate. `hams-node-mtls apply` (run by `hams-node-enroll` after enrol and every renewal) moves
-uhttpd to `127.0.0.1:8080` and starts nginx on port 443 with `ssl_verify_client on`: the certificate must chain to the pinned member
+uhttpd to `127.0.0.1:8080` and starts nginx on port 443 with `ssl_verify_client optional_no_ca`; every request first goes to the loopback CGI `verify`, which answers 403 or an
+`X-Accel-Redirect` to the real request (nginx only asks for the certificate; the CGI is the whole check, ADR 0122; OpenWrt's `nginx-ssl` has no
+`auth_request` module, and nginx's own expiry rejection, error 495, is sent through the same gate with `error_page 495`): the certificate must chain to the pinned member
 CA (`/etc/hams-node/member-ca.pem`: Root A, Root B, Identity Root, Identity Issuing CA, copied from hams_com `daemons/relay_ca/public_certs`)
 and its Subject callsign (`1.3.6.1.4.1.66926.1.1`) must equal the enrolled owner's callsign (`/etc/hams-node/owner`, from the enrolment
 reply). No certificate, another member's, another CA's or a revoked one is refused. The router's TLS certificate is its own
 self-signed one (pin it or use `curl -k`); use the member certificate with `curl --cert member.pem --key member.key https://ROUTER/`
 (`docs/runbooks/MEMBER_CLIENT_CERTIFICATE.md` in hams_com).
 
+- Dates: the CGI accepts a certificate up to 30 days past `notAfter` and up to 30 days before `notBefore`, so an outage that outlasts the
+  certificate, or a clock far wrong, does not lock the owner out. Revocation is not relaxed: the signed deprecation list is read on every
+  request, and the CRLs apply as below.  Tested in QEMU on OpenWrt 25.12.5 (nginx 1.30.7): `openwrt/image/tools/mtls_test.py`, which also moves the guest clock 5 and 35 days either way. In the grace window LuCI's 403 login page is not turned into the sign-in redirect (nginx allows one error_page hop); the owner opens `/hams-sso`.
 - Revocation: the shipped CA-level CRLs plus the identity CRL, fetched from `/identity-ca/crl` every 6 hours by cron
   (`hams-node-mtls crl`, signature checked against the pinned CAs, last good copy kept). While a CRL is past its `nextUpdate` (the node
   was offline from hams.com) it is not applied, so an offline owner is not locked out; revocation is then enforced again on the next fetch.
