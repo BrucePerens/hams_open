@@ -304,6 +304,17 @@ to the stock OpenWrt router form). Results:
   a plain dnsmasq with `--filter-AAAA` and the same forward behaves the same). So through the node's resolver the SIIT AAAA of a .ham name is never
   seen. IPv6 clients must ask the hams.com Net resolvers directly (second gateway form: the stock OpenWrt router's dnsmasq has no such filter).
   The forward still serves the non-AAAA types (service-ad CNAME targets, TXT, PTR). The filter is firmware configuration and is not changed here.
+- **AAAA for IPv6 clients (final rule, tested 2026-11-23).** The filter is not only a setting: a second dnsmasq of AREDN's own binary (no
+  `filter-AAAA`, `-C /dev/null`) also answers every forwarded AAAA with NODATA (`config ... is NODATA` in its log; a local `host-record` AAAA is
+  answered), and that build has no DHCPv6/RA. So `hams-node-dns` offers `option v6_addr ADDR` (and `v6_iface`, default `br-lan`): the init script
+  adds ADDR/128 to the interface and an nft nat table `hams_dns6` sends port 53 (udp and tcp) of ADDR to the first IPv6 resolver of the `resolver`
+  list (`ADDR#PORT` allowed), with masquerade. No process runs; AREDN's dnsmasq is untouched (the DNAT precedes local delivery, so its own socket on
+  that address never sees the queries; the node's own address still answers without AAAA). IPv6 clients get ADDR as resolver from whatever sends
+  their router advertisements (RDNSS) or DHCPv6; all their queries reach that resolver. The firewall zone toward the resolver must allow the
+  forward (AREDN's fw4 only forwards lan to its wifi zone; the test added one accept rule).
+  Tested on stock 4.26.10.0 x86-64, two QEMU VMs (client and node on one segment, a stub resolver on the host): from the client `AAAA foo.n0call.ham`
+  at ADDR returned `2001:db8:5::1`, A returned the A record, the same AAAA at the node's own address stayed empty, `stop` removed the table and AREDN's
+  dnsmasq kept running. Router advertisement of ADDR is not tested.
 - **AAAA for IPv6 clients (final rule, tested 2026-11-23).** The filter is not a setting of our snippet: a second dnsmasq of AREDN's own binary
   (no `filter-AAAA` in its config, `-C /dev/null`) also answers every forwarded AAAA with NODATA (`config ... is NODATA` in its log; a local
   `host-record` AAAA is answered), and that build has no DHCPv6/RA. So `hams-node-dns` offers `option v6_addr ADDR` (and `v6_iface`, default
