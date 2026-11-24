@@ -55,9 +55,8 @@ fn bench(extra: &str) -> Vec<Instrument> {
 }
 
 fn file(name: &str) -> String {
-    let d = std::env::temp_dir().join(format!("bench_usb_blaster_test_{}", std::process::id()));
-    std::fs::create_dir_all(&d).unwrap();
-    let p = d.join(name);
+    // The per-process scratch directory is removed when the test process exits, pass or fail.
+    let p = crate::testdir::process_dir().join(name);
     std::fs::write(&p, b"bits").unwrap();
     p.to_string_lossy().into_owned()
 }
