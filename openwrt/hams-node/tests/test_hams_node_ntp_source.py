@@ -24,7 +24,7 @@ def packet(first=0x24, stratum=2, epoch=EPOCH):
 class FakeServer:
     def __init__(self, reply):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind(("127.0.0.1", 0))
+        self.sock.bind(("127.0.0.1", 0))  # burn-ignore-self-hosted-server: a fake NTP server this test starts itself
         self.sock.settimeout(8)
         self.port = self.sock.getsockname()[1]
         self.reply = reply
@@ -60,7 +60,7 @@ class NtpSourceTests(unittest.TestCase):
     def serve(self, reply):
         server = FakeServer(reply)
         self.addCleanup(server.close)
-        return "127.0.0.1:%d" % server.port
+        return "127.0.0.1:%d" % server.port  # burn-ignore-self-hosted-server: a fake NTP server this test starts itself
 
     def test_a_good_answer_gives_the_epoch_and_a_small_error(self):
         result = self.query([self.serve(packet())])
@@ -85,7 +85,7 @@ class NtpSourceTests(unittest.TestCase):
         self.assertEqual(self.query([self.serve(packet())], name="hamnet-ntp").returncode, 0)
 
     def test_a_server_name_with_shell_characters_is_skipped(self):
-        self.assertNotEqual(self.query(["127.0.0.1;touch x"]).returncode, 0)
+        self.assertNotEqual(self.query(["127.0.0.1;touch x"]).returncode, 0)  # burn-ignore-self-hosted-server: a fake NTP server this test starts itself
 
 
 if __name__ == "__main__":
