@@ -6,8 +6,6 @@ config bird 'main'
 	option prefix ''
 	option prefix60 ''
 	option serial ''
-	# root-only file holding the BGP password (never put it in this file)
-	option secret_file '/etc/hams-node/bird.secret'
 	# set to 1 only while the node has a live RF link: its routes are then tagged with the RF community
 	option rf_live '0'
 	# route server addresses

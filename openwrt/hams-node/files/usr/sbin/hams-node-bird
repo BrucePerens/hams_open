@@ -5,7 +5,8 @@
 # (ham_ipv6net/client/router_config.py bird_conf): one session to every route server, export of the node's own /60 only, import of
 # other members' /60../64 inside the /40. RF-first (ham_ipv6net/client/rf_policy.py node_import_filter): routes tagged with the RF large
 # community (4200000000, 1, 1) get local-pref 200, all others 100; the node tags its own routes only while rf_live is 1.
-# Nothing is written (exit 0) while multi-hop is not enabled or the /40 is unset. The BGP password is read from a root-only file.
+# Nothing is written (exit 0) while multi-hop is not enabled or the /40 is unset. The route-server sessions run inside the WireGuard tunnel, which authenticates the peer, so they carry no BGP
+# password (the OpenWrt kernel has no TCP-MD5: bird refuses `authentication md5` there); the import and export filters bound what a peer may announce.
 # Direct RF neighbours (list neighbor 'ASN,ADDRESS,INTERFACE,PREFIX60[,SIIT96]'), configured statically so RF islands route among
 # themselves with the internet and the route servers gone: one eBGP session each over the radio link, local-pref 300 (a neighbour's route
 # beats the same prefix from a route server, 200/100). BGP rather than Babel: BIRD and the /40 filters are already here, members are
@@ -23,7 +24,7 @@ case $mode in render) out=${2:-/etc/bird.conf} ;; ah) action=${2:-} ;; *) echo "
 get() { uci -q get "hams_node_bird.main.$1" 2>/dev/null; }
 
 [ "$(get enabled)" = 1 ] || exit 0
-asn=$(get asn) prefix=$(get prefix) p60=$(get prefix60) serial=$(get serial) secret_file=$(get secret_file) rf=$(get rf_live) servers=$(get server)
+asn=$(get asn) prefix=$(get prefix) p60=$(get prefix60) serial=$(get serial) rf=$(get rf_live) servers=$(get server)
 nbrs=$(get neighbor)
 [ -n "$prefix" ] && { [ -n "$servers" ] || [ -n "$nbrs" ]; } || exit 0
 for v in "$asn" "$serial"; do case $v in '' | *[!0-9]*) echo "hams-node-bird: asn and serial must be numbers" >&2; exit 1 ;; esac; done
@@ -80,12 +81,6 @@ ip xfrm policy add src $1/128 dst $2/128 proto tcp dir $([ "$1" = "$mine" ] && e
 	exit 0
 fi
 for v in "$prefix" "$p60" $servers; do case $v in '' | *[!A-Fa-f0-9:./]*) echo "hams-node-bird: bad address or prefix" >&2; exit 1 ;; esac; done
-secret=
-if [ -n "$servers" ]; then
-	[ -r "$secret_file" ] || { echo "hams-node-bird: cannot read the secret file" >&2; exit 1; }
-	secret=$(head -n 1 "$secret_file")
-	case $secret in '' | *[!A-Za-z0-9._+=/-]*) echo "hams-node-bird: bad secret" >&2; exit 1 ;; esac
-fi
 local=${p60%%/*}1   # the node's router-id address ...:XXX0::1 (the prefix ends in "::")
 case $p60 in *::/60) ;; *) echo "hams-node-bird: prefix60 must end in ::/60" >&2; exit 1 ;; esac
 rid="$(( (serial >> 24) & 255 )).$(( (serial >> 16) & 255 )).$(( (serial >> 8) & 255 )).$(( serial & 255 ))"
@@ -121,7 +116,7 @@ tmp="$out.new"
 	i=0
 	for s in $servers; do
 		i=$((i + 1))
-		printf 'protocol bgp hams_rs%d {\n    local %s as %d;\n    neighbor %s as 4200000000;\n    authentication md5;\n    password "%s";\n' "$i" "$local" "$asn" "$s" "$secret"
+		printf 'protocol bgp hams_rs%d {\n    local %s as %d;\n    neighbor %s as 4200000000;\n' "$i" "$local" "$asn" "$s"
 		printf '    hold time 180;\n    keepalive time 60;\n    ipv6 {\n        next hop self;\n        import filter hams_in;\n        export filter hams_out;\n    };\n}\n'
 	done
 } > "$tmp" && mv "$tmp" "$out"

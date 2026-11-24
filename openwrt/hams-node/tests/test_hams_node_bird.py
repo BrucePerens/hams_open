@@ -45,7 +45,8 @@ class BirdTests(unittest.TestCase):
         self.assertIn("local 2001:db8:ab00:10::1 as 4200000001;", conf)
         self.assertIn("neighbor 2001:db8:ab00::1 as 4200000000;", conf)
         self.assertIn("neighbor 2001:db8:ab00::2 as 4200000000;", conf)
-        self.assertIn('password "s3cret";', conf)
+        self.assertNotIn("password", conf)
+        self.assertNotIn("authentication", conf)  # the tunnel authenticates the peer; the OpenWrt kernel has no TCP-MD5
         self.assertIn("net ~ [2001:db8:ab00:10::/60{60,64}]", conf)
         self.assertEqual(oct(out.stat().st_mode & 0o777), "0o600")
 
@@ -68,10 +69,13 @@ class BirdTests(unittest.TestCase):
             result, conf, _ = self.render(**over)
             self.assertNotEqual(result.returncode, 0, over)
             self.assertIsNone(conf)
-        result, conf, _ = self.render(secret='a"b')
-        self.assertNotEqual(result.returncode, 0)
-        result, conf, _ = self.render(secret=None)
-        self.assertNotEqual(result.returncode, 0)
+
+    def test_route_server_sessions_need_no_secret_file(self):
+        for secret in (None, 'a"b'):
+            result, conf, _ = self.render(secret=secret)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(conf.count("protocol bgp hams_rs"), 2)
+            self.assertNotIn("a\"b", conf)
 
     N1 = "4200000007,fe80::7,rf0,2001:db8:ab00:70::/60"
     N2 = "4200000008,fe80::8,rf1,2001:db8:ab00:20::/60,2001:db8:ab00:ffff::/96"
