@@ -1,31 +1,23 @@
 package com.hams.net.core
 
+import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
+import org.bouncycastle.crypto.signers.Ed25519Signer
 import uniffi.hams_net_ffi.PlatformCrypto
-import java.security.KeyFactory
-import java.security.Signature
-import java.security.spec.X509EncodedKeySpec
 import java.util.Base64
 
 /**
- * The platform primitives for the shared Rust core, from the JDK/Android provider (Ed25519 needs Android 13+ or a JDK 15+;
- * on an older system every check says "not verified", which fails open: nothing is ever applied unverified).
+ * The platform primitives for the shared Rust core. Ed25519 is BouncyCastle's lightweight pure-Java verifier, so it works on
+ * every Android version the app supports (the platform provider only has Ed25519 from Android 13). Any malformed input says "not verified".
  */
 object JvmCrypto : PlatformCrypto {
-    // DER prefix of an X.509 SubjectPublicKeyInfo holding a raw 32-byte Ed25519 key.
-    private val SPKI = byteArrayOf(0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00)
-
     override fun ed25519Verify(key: ByteArray, signature: ByteArray, message: ByteArray): Boolean = try {
-        if (key.size != 32 || signature.size != 64) {
-            false
-        } else {
-            val pub = KeyFactory.getInstance("Ed25519").generatePublic(X509EncodedKeySpec(SPKI + key))
-            Signature.getInstance("Ed25519").run {
-                initVerify(pub)
-                update(message)
-                verify(signature)
+        key.size == 32 && signature.size == 64 &&
+            Ed25519Signer().run {
+                init(false, Ed25519PublicKeyParameters(key, 0))
+                update(message, 0, message.size)
+                verifySignature(signature)
             }
-        }
-    } catch (e: java.security.GeneralSecurityException) {
+    } catch (e: RuntimeException) {
         false
     }
 
