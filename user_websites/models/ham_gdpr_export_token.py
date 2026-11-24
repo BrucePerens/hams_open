@@ -9,7 +9,7 @@ import inspect
 from itertools import islice
 
 from odoo import models, fields, api, _
-from odoo.exceptions import AccessError
+from odoo.exceptions import AccessError, UserError
 from odoo.addons.zero_sudo import public_rpc
 
 # How long a browser has to hand the redirected token to the export daemon
@@ -22,6 +22,10 @@ TOKEN_EXPIRY_MINUTES = 5
 # Rows one export_page call returns at most, and how long after its first use a token may still page its export.
 EXPORT_PAGE_ROWS = 5000
 EXPORT_WINDOW_MINUTES = 60
+
+# Export links one member may request in an hour. The link is clicked once per download; the cap only stops a session
+# (or a script holding one) from filling the table.
+MAX_TOKENS_PER_HOUR = 10
 
 # Rows the daily vacuum deletes per page.
 TOKEN_VACUUM_PAGE = 1000
@@ -83,6 +87,11 @@ class HamGdprExportToken(models.Model):
         svc_uid = self.env["zero_sudo.security.utils"]._get_service_uid(
             "user_websites.user_gdpr_export_service"
         )
+        recent = self.with_user(svc_uid).search_count(
+            [("user_id", "=", requesting_uid), ("create_date", ">=", fields.Datetime.now() - timedelta(hours=1))]
+        )
+        if recent >= MAX_TOKENS_PER_HOUR:
+            raise UserError(_("You have requested several exports in the last hour. Please try again later."))
         self.with_user(svc_uid).create({"user_id": requesting_uid, "token": token})
         return token
 
