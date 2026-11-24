@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 # hams-node-pool add NAME.ham IP6 | del NAME.ham | list | apply | clear
 # A small IPv4 pool on the AREDN side. `add` gives a .ham name the next free pool address and records it; `apply` makes it real: the pool
-# address is added to lo (so the node answers ARP for it), Jool SIIT maps it to the target (explicit address map, see jool_siit eamt), dnsmasq answers
+# address is added to the AREDN-side interface (AREDN sets arp_ignore=1, so an address on lo is never answered for on the LAN), Jool SIIT maps it to the target (explicit address map, see jool_siit eamt), dnsmasq answers
 # the name's A query with it (a longer match than hams-node-web's address=/ham/), and an nft table lets only the listed unencrypted TCP ports from the
 # AREDN-side interface reach the pool. Targets must lie inside the Hams.com Net prefix, so the pool can never be a way into the member's own LAN
 # or the mesh. Nothing here encrypts or tunnels over RF.
@@ -13,10 +13,14 @@ die() { echo "hams-node-pool: $1" >&2; exit 1; }
 inst=$(get instance) pool=$(get pool4) pfx=$(get net_prefix) iface=$(get iface) ports=$(get port) map=$(get map) out=$(get dns_out)
 [ -n "$map" ] || map=/etc/hams-node/pool.map
 [ -n "$out" ] || out=/tmp/dnsmasq.d/hams-pool.conf
+fwf=${HAMS_NODE_POOL_FW:-/etc/hams-node/pool-fw.nft}
 case $inst in '' | *[!A-Za-z0-9_-]*) die "instance is required" ;; esac
 case $pfx in '' | *[!0-9a-fA-F:]*) die "net_prefix is required" ;; esac
 case $iface in '' | *[!A-Za-z0-9_.-]*) die "iface is required" ;; esac
-for p in $ports; do case $p in '' | *[!0-9]*) die "bad port" ;; esac; done
+# the same TCP ports ham_boundary treats as encrypted (ham_tls/ham_boundary.py ENCRYPTED_TCP): never allowed toward RF
+for p in $ports; do
+	case $p in '' | *[!0-9]*) die "bad port" ;; 22 | 443 | 853 | 993 | 995 | 465 | 8883 | 1194) die "port $p is an encrypted service; Part 97 forbids it toward RF" ;; esac
+done
 base=${pool%/*} len=${pool#*/}
 case $base in
 10.*.*.* | 172.1[6-9].*.* | 172.2?.*.* | 172.3[01].*.* | 192.168.*.*) ;;
@@ -29,6 +33,26 @@ size=$((1 << (32 - len)))
 [ $((last % size)) -eq 0 ] || die "pool4 is not on a $len boundary"
 
 valid_name() { case $1 in *.ham) ;; *) return 1 ;; esac; case $1 in *[!a-z0-9.-]* | .* | *..* | -*) return 1 ;; esac; }
+
+# AREDN'"'"'s firewall (fw4) drops forwarded traffic from an interface that is in no zone to anything, which would stop every translated flow. These two
+# rules go into the head of its forward chain (an fw4 include, re-applied on every firewall reload): translated requests from the AREDN-side interface
+# to the mapped targets on the listed ports, and the replies (source = pool address, source port = listed port). Nothing else is opened.
+fw_include() {
+	if [ -n "${1:-}" ]; then
+		printf 'iifname "%s" ip6 daddr { %s } tcp dport { %s } accept\nip saddr { %s } tcp sport { %s } accept\n' "$iface" "$2" "$3" "$1" "$3" > "$fwf.new" && mv "$fwf.new" "$fwf"
+		uci -q set firewall.hams_pool=include
+		uci -q set firewall.hams_pool.type=nftables
+		uci -q set firewall.hams_pool.path="$fwf"
+		uci -q set firewall.hams_pool.position=chain-pre
+		uci -q set firewall.hams_pool.chain=forward
+	else
+		rm -f "$fwf"
+		uci -q delete firewall.hams_pool
+	fi
+	uci -q commit firewall
+	[ -x "${HAMS_NODE_INITD:-/etc/init.d}/firewall" ] && "${HAMS_NODE_INITD:-/etc/init.d}/firewall" reload
+	return 0
+}
 
 case ${1:-} in
 add)
@@ -59,9 +83,10 @@ list) [ ! -f "$map" ] || cat "$map" ;;
 clear)
 	while read -r name ip4 ip6; do
 		jool_siit -i "$inst" eamt remove "$ip4" "$ip6" 2>/dev/null
-		ip addr del "$ip4/32" dev lo 2>/dev/null
+		ip addr del "$ip4/32" dev "$iface" 2>/dev/null
 	done < "$map" 2>/dev/null
 	nft delete table inet hams_pool 2>/dev/null
+	fw_include
 	rm -f "$out"
 	[ -x "${HAMS_NODE_INITD:-/etc/init.d}/dnsmasq" ] && "${HAMS_NODE_INITD:-/etc/init.d}/dnsmasq" restart
 	exit 0
@@ -69,22 +94,24 @@ clear)
 apply)
 	[ -f "$map" ] || exit 0
 	rules= dns="# hams-node-pool: pool addresses for .ham names"
-	elems=
+	elems= targets=
 	while read -r name ip4 ip6; do
 		valid_name "$name" || continue
 		case $ip6 in "$pfx"*) ;; *) continue ;; esac
-		ip addr add "$ip4/32" dev lo 2>/dev/null
+		ip addr add "$ip4/32" dev "$iface" 2>/dev/null
 		jool_siit -i "$inst" eamt remove "$ip4" "$ip6" 2>/dev/null
 		jool_siit -i "$inst" eamt add "$ip4" "$ip6" || { echo "hams-node-pool: $name: Jool refused the mapping" >&2; continue; }
 		dns="$dns
 address=/$name/$ip4"
 		elems="$elems${elems:+, }$ip4"
+		targets="$targets${targets:+, }$ip6"
 	done < "$map"
 	mkdir -p "$(dirname "$out")"
 	printf '%s\n' "$dns" > "$out.new" && mv "$out.new" "$out"
 	nft delete table inet hams_pool 2>/dev/null
 	if [ -n "$elems" ]; then
 		plist=$(echo $ports | sed 's/ /, /g')
+		fw_include "$elems" "$targets" "${plist:-0}"
 		# only the listed TCP ports, only from the AREDN-side interface; anything else addressed to a pool address is dropped and counted
 		nft -f - <<NFT || die "nft refused the rules"
 table inet hams_pool {
@@ -95,6 +122,8 @@ table inet hams_pool {
 	}
 }
 NFT
+	else
+		fw_include
 	fi
 	[ -x "${HAMS_NODE_INITD:-/etc/init.d}/dnsmasq" ] && "${HAMS_NODE_INITD:-/etc/init.d}/dnsmasq" restart
 	exit 0

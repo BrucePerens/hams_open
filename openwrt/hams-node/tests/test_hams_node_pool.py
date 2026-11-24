@@ -30,11 +30,11 @@ class PoolTests(unittest.TestCase):
     def run_cmd(self, *args, **over):
         cfg = dict(GOOD, map=str(self.map), dns_out=str(self.dns), **over)
         lines = "\n".join('%s) echo "%s" ;;' % (k, v) for k, v in cfg.items())
-        self.tool("uci", 'k=${3#hams_node_pool.main.}\ncase $k in\n%s\n*) exit 1 ;;\nesac\n' % lines)
-        for t in ("jool_siit", "ip", "dnsmasq"):
+        self.tool("uci", '[ "$1" = -q ] && [ "$2" = get ] || { echo "uci $*" >> "%s"; exit 0; }\nk=${3#hams_node_pool.main.}\ncase $k in\n%s\n*) exit 1 ;;\nesac\n' % (self.log, lines))
+        for t in ("jool_siit", "ip", "dnsmasq", "firewall"):
             self.tool(t, 'echo "%s $*" >> "%s"\n' % (t, self.log))
         self.tool("nft", 'echo "nft $*" >> "%s"; cat >> "%s" 2>/dev/null\n' % (self.log, self.log))
-        env = dict(os.environ, PATH="%s:%s" % (self.root / "bin", os.environ["PATH"]), HAMS_NODE_INITD=str(self.root / "bin"))
+        env = dict(os.environ, HAMS_NODE_POOL_FW=str(self.root / "pool-fw.nft"), PATH="%s:%s" % (self.root / "bin", os.environ["PATH"]), HAMS_NODE_INITD=str(self.root / "bin"))
         return subprocess.run(["sh", str(SCRIPT), *args], env=env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
 
     def logtext(self):
@@ -59,7 +59,7 @@ class PoolTests(unittest.TestCase):
                      ("add", "a.ham", "fd00::1"), ("add", "a.ham", "10.1.2.3"), ("add", "a;b.ham", "2001:db8:ab01::1")):
             self.assertEqual(self.run_cmd(*args).returncode, 1, args)
         for over in ({"pool4": "8.8.8.0/28"}, {"pool4": "10.20.30.96/16"}, {"pool4": "10.20.30.97/28"}, {"pool4": "0.0.0.0/24"}, {"instance": ""},
-                     {"net_prefix": ""}, {"iface": ""}, {"port": "80;x"}):
+                     {"net_prefix": ""}, {"iface": ""}, {"port": "80;x"}, {"port": "80 443"}, {"port": "22"}, {"port": "8883"}):
             self.assertEqual(self.run_cmd("list", **over).returncode, 1, over)
         self.assertFalse(self.map.exists())
 
@@ -75,7 +75,7 @@ class PoolTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         log = self.logtext()
         self.assertIn("jool_siit -i m1 eamt add 10.20.30.97 2001:db8:ab01::10", log)
-        self.assertIn("ip addr add 10.20.30.97/32 dev lo", log)
+        self.assertIn("ip addr add 10.20.30.97/32 dev eth0.2", log)
         self.assertNotIn("10.20.30.99", log.split("table inet")[0])
         self.assertNotIn("fd00::9", log)
         self.assertIn("dnsmasq restart", log)
@@ -85,6 +85,19 @@ class PoolTests(unittest.TestCase):
         self.assertIn("tcp dport { 80, 8080 } accept", log)
         self.assertIn("counter drop", log.split("accept")[1])  # everything else to the pool is dropped
 
+    def test_apply_opens_only_the_translated_flows_in_the_firewall_and_clear_closes_them(self):
+        self.run_cmd("add", "a.ham", "2001:db8:ab01::10")
+        self.run_cmd("apply")
+        self.assertEqual((self.root / "pool-fw.nft").read_text(),
+                         'iifname "eth0.2" ip6 daddr { 2001:db8:ab01::10 } tcp dport { 80, 8080 } accept\nip saddr { 10.20.30.97 } tcp sport { 80, 8080 } accept\n')
+        log = self.logtext()
+        for want in ("uci -q set firewall.hams_pool=include", "uci -q set firewall.hams_pool.type=nftables", "uci -q set firewall.hams_pool.position=chain-pre",
+                     "uci -q set firewall.hams_pool.chain=forward", "uci -q commit firewall", "firewall reload"):
+            self.assertIn(want, log)
+        self.run_cmd("clear")
+        self.assertFalse((self.root / "pool-fw.nft").exists())
+        self.assertIn("uci -q delete firewall.hams_pool", self.logtext())
+
     def test_clear_removes_everything_it_added(self):
         self.run_cmd("add", "a.ham", "2001:db8:ab01::10")
         self.run_cmd("apply")
@@ -92,7 +105,7 @@ class PoolTests(unittest.TestCase):
         self.assertEqual(self.run_cmd("clear").returncode, 0)
         log = self.logtext()
         self.assertIn("jool_siit -i m1 eamt remove 10.20.30.97 2001:db8:ab01::10", log)
-        self.assertIn("ip addr del 10.20.30.97/32 dev lo", log)
+        self.assertIn("ip addr del 10.20.30.97/32 dev eth0.2", log)
         self.assertIn("nft delete table inet hams_pool", log)
         self.assertFalse(self.dns.exists())
 
