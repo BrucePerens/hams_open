@@ -42,7 +42,8 @@ Internals:
 
 A `.ham` server is identified by a DANE-EE TLSA record in the signed `.ham` zone, not by a CA. The resolver (the node's validating resolver) is given as `ip:port`.
 
-- [@ANCHOR: ham_proxy_resolve_tlsa] `resolve_tlsa(resolver, host, port)`: one UDP query to the resolver, 3 s timeout.
+- [@ANCHOR: ham_proxy_resolve_tlsa] `resolve_tlsa(resolver, host, port)`: one UDP query (random ID, AD requested, IPv4 or IPv6 socket to match the resolver), 3 s timeout.
+- [@ANCHOR: ham_proxy_authenticated_tlsa] Records count only from a reply with the query's ID, QR set and the validating resolver's AD bit; otherwise there are none and the `.ham` server is refused (DANE without DNSSEC proves nothing).
 - [@ANCHOR: ham_proxy_connect_ham_server] `connect_ham_server(tcp, host, port, resolver)`: integrity-only TLS client; refuses an encrypting suite, and refuses (`NotPinned`) a certificate that no TLSA record pins or a name with no records.
 - [@ANCHOR: ham_proxy_client_builder] The integrity-only client builder shared by `ham_connector` and `connect_ham_server`.
 

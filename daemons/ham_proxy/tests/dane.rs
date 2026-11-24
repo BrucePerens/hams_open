@@ -1,6 +1,9 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 //! DANE-EE for `.ham` servers: a stub resolver answers TLSA queries; the proxy accepts only a pinned certificate.
-use ham_proxy::dane::{connect_ham_server, parse_tlsa, tlsa_matches, tlsa_query, Tlsa};
+use ham_proxy::dane::{
+    authenticated_tlsa, connect_ham_server, parse_tlsa, resolve_tlsa, tlsa_matches, tlsa_query,
+    Tlsa,
+};
 use ham_proxy::{ham_acceptor, ProxyError};
 use openssl::hash::{hash, MessageDigest};
 use openssl::x509::X509;
@@ -59,6 +62,10 @@ fn tmpdir(n: &str) -> Scratch {
 
 /// Stub resolver: answers one query with the given TLSA records (none gives an empty NOERROR answer).
 fn start_dns(records: Vec<Tlsa>) -> String {
+    start_dns_flags(records, 0xA0) // RA + AD
+}
+
+fn start_dns_flags(records: Vec<Tlsa>, flags: u8) -> String {
     let s = UdpSocket::bind("127.0.0.1:0").unwrap();
     let addr = s.local_addr().unwrap().to_string();
     thread::spawn(move || {
@@ -69,7 +76,7 @@ fn start_dns(records: Vec<Tlsa>) -> String {
         let q = &buf[..n];
         let mut r = q.to_vec();
         r[2] = 0x81;
-        r[3] = 0x80;
+        r[3] = flags;
         r[6..8].copy_from_slice(&(records.len() as u16).to_be_bytes());
         for (u, sel, m, data) in records {
             r.extend_from_slice(&[0xC0, 0x0C, 0, 52, 0, 1, 0, 0, 0, 60]);
@@ -163,4 +170,53 @@ fn pinned_ham_server_is_accepted_and_others_refused() {
         try_connect(port, &start_dns(vec![])),
         Err(ProxyError::NotPinned(_))
     ));
+}
+
+#[test]
+fn an_answer_without_the_ad_bit_or_with_another_id_pins_nothing() {
+    // Tests [@ANCHOR: ham_proxy_resolve_tlsa]
+    // Tests [@ANCHOR: ham_proxy_authenticated_tlsa]
+    let d = tmpdir("ad");
+    let (c, k) = make_cert(&d.0, "good");
+    let port = start_ham_server(&c, &k);
+    let good = vec![(3, 0, 1, sha256(&der(&c)))];
+    // pinned correctly, but the resolver did not validate (no AD): fail closed
+    assert!(matches!(
+        try_connect(port, &start_dns_flags(good.clone(), 0x80)),
+        Err(ProxyError::NotPinned(_))
+    ));
+    let q = tlsa_query("node.ham", 443, 7);
+    let mut r = q.clone();
+    r[2] = 0x81;
+    r[3] = 0xA0;
+    r[7] = 1;
+    r.extend_from_slice(&[0xC0, 0x0C, 0, 52, 0, 1, 0, 0, 0, 60, 0, 6, 3, 0, 1, 9, 9, 9]);
+    assert_eq!(authenticated_tlsa(&q, &r).len(), 1);
+    let mut other_id = r.clone();
+    other_id[1] = 8;
+    assert!(authenticated_tlsa(&q, &other_id).is_empty());
+    let mut not_response = r.clone();
+    not_response[2] = 0x01;
+    assert!(authenticated_tlsa(&q, &not_response).is_empty());
+}
+
+#[test]
+fn an_ipv6_resolver_is_asked_over_ipv6() {
+    // Tests [@ANCHOR: ham_proxy_resolve_tlsa]
+    let Ok(s) = UdpSocket::bind("[::1]:0") else {
+        return; // no IPv6 on this box
+    };
+    let addr = s.local_addr().unwrap().to_string();
+    thread::spawn(move || {
+        let mut buf = [0u8; 512];
+        if let Ok((n, from)) = s.recv_from(&mut buf) {
+            let mut r = buf[..n].to_vec();
+            r[2] = 0x81;
+            r[3] = 0xA0;
+            r[7] = 1;
+            r.extend_from_slice(&[0xC0, 0x0C, 0, 52, 0, 1, 0, 0, 0, 60, 0, 6, 3, 0, 1, 9, 9, 9]);
+            let _ = s.send_to(&r, from);
+        }
+    });
+    assert_eq!(resolve_tlsa(&addr, "node.ham", 443).unwrap().len(), 1);
 }

@@ -16,16 +16,41 @@ pub fn tlsa_matches(cert_der: &[u8], records: &[Tlsa]) -> bool {
     hams_net_core::dane::tlsa_matches(&OpensslCrypto, cert_der, records)
 }
 
+// [@ANCHOR: ham_proxy_authenticated_tlsa]
+/// The TLSA records in `reply` to `query`, only if the reply is for that query (same ID, a response) and the validating
+/// resolver set the AD bit (it checked the DNSSEC chain). Anything else gives no records, so the server is refused.
+pub fn authenticated_tlsa(query: &[u8], reply: &[u8]) -> Vec<Tlsa> {
+    let ok = query.len() >= 12
+        && reply.len() >= 12
+        && reply[..2] == query[..2]
+        && reply[2] & 0x80 != 0
+        && reply[3] & 0x20 != 0;
+    if ok {
+        parse_tlsa(reply)
+    } else {
+        Vec::new()
+    }
+}
+
 // [@ANCHOR: ham_proxy_resolve_tlsa]
-/// Ask `resolver` (`ip:port`, UDP) for the TLSA records of `_port._tcp.host`; empty if none or no answer.
+/// Ask `resolver` (`ip:port` or `[v6]:port`, UDP) for the TLSA records of `_port._tcp.host` with a random ID and the AD bit
+/// requested; empty if none, no answer, or the answer is not DNSSEC-authenticated (see [`authenticated_tlsa`]).
 pub fn resolve_tlsa(resolver: &str, host: &str, port: u16) -> Result<Vec<Tlsa>, ProxyError> {
-    let sock = UdpSocket::bind("0.0.0.0:0")?;
+    let sock = UdpSocket::bind(if resolver.starts_with('[') {
+        "[::]:0"
+    } else {
+        "0.0.0.0:0"
+    })?;
     sock.set_read_timeout(Some(Duration::from_secs(3)))?;
     sock.connect(resolver)?;
-    sock.send(&tlsa_query(host, port, 0x4841))?;
+    let mut id = [0u8; 2];
+    openssl::rand::rand_bytes(&mut id)?;
+    let mut q = tlsa_query(host, port, u16::from_be_bytes(id));
+    q[3] |= 0x20; // AD: ask the resolver to report validation
+    sock.send(&q)?;
     let mut buf = [0u8; 4096];
     let n = sock.recv(&mut buf)?;
-    Ok(parse_tlsa(&buf[..n]))
+    Ok(authenticated_tlsa(&q, &buf[..n]))
 }
 
 // [@ANCHOR: ham_proxy_connect_ham_server]
