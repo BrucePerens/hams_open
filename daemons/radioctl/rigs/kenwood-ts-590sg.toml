@@ -22,6 +22,7 @@ stop = "ky0"
 attenuator_db = [12]
 attenuator_any_up_to_db = 0
 preamp_steps = 1
+antenna_ports = 2
 
 [timing]
 timeout_ms = 500
@@ -87,6 +88,11 @@ verified = { state = "unverified" }
 key = "levels.attenuator_db"
 provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 rigs/kenwood/ts590.c: rig_caps `.attenuator` of the TS-590SG (12)", note = "The guide says only ATT ON and OFF (RA); the 12 dB figure is Hamlib's, read for facts only." }
 verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.antenna_ports"
+provenance = { kind = "manual", reference = "Kenwood 'TS-590S_SG PC CONTROL COMMAND Reference Guide' (PDF dated 2019-01-15), file ts590_g_pc_command_en_rev3.pdf (in /storage/manuals/kenwood/TS-590SG), sha256 619f14667ddfa463c03068399be2f697570a4939c90beed7cf83a28e23a7e9a4: AN, 'TS-590S / TS-590SG common': ANp1p2p3; p1 1 ANT1, 2 ANT2, 9 no change; p2 receive antenna, p3 drive out, 9 no change; read AN;", note = "The older TS-590S guide numbers p1 0 and 1; this guide, which names the TS-590SG, numbers 1 and 2." }
+verified = { state = "manual-checked", reference = "AN, TS-590S_SG PC command guide" }
 
 [[facts]]
 key = "levels.*"
