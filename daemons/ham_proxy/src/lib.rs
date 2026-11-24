@@ -6,6 +6,7 @@
 pub mod crypto;
 pub mod dane;
 pub mod indicator;
+pub mod lan;
 pub mod login;
 pub mod policy;
 pub mod resolve;
@@ -388,6 +389,19 @@ pub fn serve_one_policed(
     let up_tcp = resolve::connect_upstream(site_addr)?;
     let mut up = site.connect(site_name, up_tcp)?;
     up.write_all(&request_identity(&head))?;
+    relay_response(&mut up, &mut ham, site_name, key)?;
+    ham.shutdown().ok();
+    Ok(())
+}
+
+// [@ANCHOR: ham_proxy_relay_response]
+/// Send the site's response to the ham side: HTML is buffered and passed through [`transform_html`], everything else is streamed byte for byte.
+pub(crate) fn relay_response<U: Read, H: Write>(
+    up: &mut U,
+    ham: &mut H,
+    site_name: &str,
+    key: Option<&PKey<Private>>,
+) -> Result<(), ProxyError> {
     let mut buf = Vec::new();
     let mut tmp = [0u8; 4096];
     let end = loop {
@@ -403,12 +417,11 @@ pub fn serve_one_policed(
     let head_txt = end.map(|e| String::from_utf8_lossy(&buf[..e - 4]).to_string());
     let Some((end, head_txt)) = end.zip(head_txt).filter(|(_, h)| is_html(h)) else {
         ham.write_all(&buf)?;
-        io::copy(&mut up, &mut ham)?;
-        ham.shutdown().ok();
+        io::copy(up, ham)?;
         return Ok(());
     };
     let mut body = buf[end..].to_vec();
-    (&mut up)
+    up.by_ref()
         .take((MAX_HTML + 1) as u64)
         .read_to_end(&mut body)?;
     let out = if body.len() > MAX_HTML {
@@ -417,6 +430,5 @@ pub fn serve_one_policed(
         transform_html(&head_txt, &body, site_name, key, now())
     };
     ham.write_all(&out)?;
-    ham.shutdown().ok();
     Ok(())
 }

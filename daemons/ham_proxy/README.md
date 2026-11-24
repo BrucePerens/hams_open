@@ -56,3 +56,11 @@ AREDN gateway, where the node's dnsmasq drops AAAA answers and answers `.ham` A 
 only goes to an address that is not loopback, unspecified, private (RFC 1918, 100.64/10), link-local, unique-local, multicast or IPv4-mapped, so no name
 (including a rebinding answer) leads the gateway to its operator's home LAN. `--allow-private-upstream` lifts that for a lab with a local site; it is for tests only.
 Tests: `tests/resolve.rs` (an IPv4 client loads a `.ham` page integrity-only, a non-whitelisted site is refused, a private answer is never connected).
+
+## LAN listener for browsers (`--lan`)
+
+`ham_proxy --lan --listen LANADDR:8443 --proxy-ca ca.pem --proxy-ca-key ca.key --whitelist FILE (or --signed-whitelist/--whitelist-key) --callsign CALL --log FILE --resolver IP:PORT (TLSA) [--ham-resolver IP:PORT] --upstream-gateway HOST:PORT --upstream-ca PEM [--sign-key PEM]`
+is the proxy the node's PAC file (`hams-node-proxyca`) points browsers at. `CONNECT` is terminated with a leaf certificate minted from the node CA
+(name-constrained to `.ham` and the whitelist); plain `http://` is accepted and upgraded. Upstream the request is integrity-only TLS only: a `.ham` server
+directly (DANE), a whitelisted site through the site gateway. The browser leg is ordinary TLS on the member's own LAN and must never be carried over RF.
+Code: `src/lan.rs`; tests: `tests/lan.rs`.

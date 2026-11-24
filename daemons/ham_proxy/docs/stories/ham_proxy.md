@@ -85,3 +85,21 @@ The login challenges, the signed-whitelist check and the DANE matching and parsi
 - [@ANCHOR: ham_proxy_login_issue] `login::Challenges` wraps the core's nonce table and adds the `sessions` table; `login::respond(target, site, ch, verifier, now)` calls the core's `respond` with those sessions (as its `SessionOpener`) and OpenSSL. `Verifier`, `audience`, `PATH` and `TTL_SECS` are re-exported unchanged.
 - `signed_list::verify_list(text, key, now)`, `parse_utc`, `unhex` and `ListError`, and `dane::tlsa_matches(cert_der, records)`, `tlsa_query`, `parse_tlsa` and `Tlsa` keep their old signatures, so callers and ham_proxy's tests are unchanged.
 - Still here: `HttpVerifier` (asks hams.com over verified TLS), `dane::resolve_tlsa` (one UDP query, 3 s timeout), `dane::connect_ham_server` (integrity-only handshake, refuses an encrypting suite or an unpinned certificate) and `session` (the key agreement and request MACs).
+
+## LAN-facing listener (`ham_proxy --lan`, `src/lan.rs`)
+
+For the browsers on the member's own LAN (never RF). Needs the node's proxy CA (`hams-node-proxyca`), a whitelist, `--callsign`/`--log`, `--resolver` and `--upstream-gateway HOST:PORT --upstream-ca PEM`.
+
+- [@ANCHOR: ham_proxy_lan_parse_target] The target is read from `CONNECT host:port`, `GET http://host[:port]/path` or origin form plus `Host`; only DNS names are accepted, and plain http (port 80 or none) is upgraded to port 443.
+- [@ANCHOR: ham_proxy_lan_leaf] A leaf certificate for the requested host (EC P-256, valid a day) is minted from the node CA; the CA's name constraints make a certificate for any other name fail in the browser.
+- [@ANCHOR: ham_proxy_lan_upstream_head] The upstream request is origin form with the real `Host`, proxy, connection and client `X-Ham-*` headers dropped and `Connection: close`.
+- [@ANCHOR: ham_proxy_lan_serve] A name off the whitelist gets 403 before any upstream connection; a permitted flow is written to the station-ID log with the upstream suite; CONNECT is answered 200 and the browser's TLS terminated with the leaf; the request leaves only as integrity-only TLS (a `.ham` server directly, verified by DANE; a whitelisted Internet site through the site gateway), and an upstream that would encrypt is refused.
+- [@ANCHOR: ham_proxy_relay_response] The response goes back through the same HTML indicator handling as the ham-side proxy (shared by both paths).
+- [@ANCHOR: ham_proxy_lan_ca] `Ca { cert, key }`: the node's proxy CA certificate and its private key, loaded from PEM files (`Ca::load`); the key is used only to sign leaf certificates and never leaves the process.
+- [@ANCHOR: ham_proxy_lan_upstream] `Upstream::Gateway { addr, name, connector }`: the site gateway for whitelisted Internet sites: `addr` is `host:port`, `name` the name in its certificate, `connector` an integrity-only client that trusts the gateway's CA.
+- [@ANCHOR: ham_proxy_lan_target] `Target { connect, host, port, path }`: `connect` is true for `CONNECT` (TLS follows), `host` the lower-case DNS name, `port` the upstream port, `path` the origin-form path for plain HTTP (empty for `CONNECT`).
+- [@ANCHOR: ham_proxy_lan_refuse] A refused browser request gets a short plain-text page (400 for an unreadable target, 403 for a name off the whitelist) and nothing reaches upstream.
+- [@ANCHOR: ham_proxy_lan_connect_upstream] The upstream leg is opened through `resolve::connect_upstream` (never a private address), then integrity-only TLS; the negotiated suite must be integrity-only.
+- [@ANCHOR: ham_proxy_load_signed] The binary reads `--signed-whitelist` with `--whitelist-key` (one without the other is an error).
+- [@ANCHOR: ham_proxy_load_policy] The binary builds the whitelist policy from `--whitelist` or the signed list; it needs `--callsign` and `--log`.
+- [@ANCHOR: ham_proxy_run_lan] `--lan` runs the browser-facing listener of `lan.rs` as the binary (thread per connection); it refuses to start without a whitelist.
