@@ -113,7 +113,7 @@ Builds a newcat engine; takes ownership of the description. It requires `desc.fa
 
 ### `fn has_antenna_ports(&self) -> bool` [@ANCHOR: radioctl:radioctl_yaesu_engine_has_antenna_ports]
 
-True only for the FTDX101D and FTDX101MP (`yaesu.model_id` 681 or 682) and the FTDX3000 (462), each with `levels.antenna_ports = 3`, and the FTDX1200 (583), FT-950 (310) and FT-2000 (251) with 2: the only Yaesu models whose `AN` command has been read (CAT manuals, `AN`). Selects `ANp1p2;` (p1 0 main band, p2 1 to the port count) and reads `AN0;`, answered `ANp1p2p4;`. Any other Yaesu gets `Unsupported` for the antenna level. Pure.
+True only for the FTDX101D and FTDX101MP (`yaesu.model_id` 681 or 682) and the FTDX3000 (462), each with `levels.antenna_ports = 3`, and the FTDX1200 (583), FT-950 (310) and FT-2000 (251) with 2, and the FTDX5000 (362) and FTDX9000 (101) with 4: the only Yaesu models whose `AN` command has been read (CAT manuals, `AN`). Selects `ANp1p2;` (p1 0 main band, p2 1 to the port count) and reads `AN0;`, answered `ANp1p2p4;`. Any other Yaesu gets `Unsupported` for the antenna level. Pure.
 
 ### `fn decode_front_end(&self, name: &str, digits: &str) -> Option<Observation>` [@ANCHOR: radioctl:radioctl_yaesu_engine_decode_front_end]
 
