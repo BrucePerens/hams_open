@@ -95,7 +95,7 @@ class TestKeyRegistryRefusals(RealTransactionCase):
         # register_daemon via with_user(<service uid>) hit it), so the check must not use has_group().
         portal = self.env.ref("base.group_portal")
         outsider = self.env["res.users"].create(
-            {"name": "Refusal Outsider", "login": "refusal_outsider", "group_ids": [(6, 0, [portal.id])]}
+            {"name": "Refusal Outsider", "login": "refusal_outsider", "group_ids": [(6, 0, [portal.id, self.env.ref("daemon_key_manager.group_daemon_key_manager").id])]}
         )
         self.addCleanup(outsider.unlink)
         self.row.with_user(outsider.id)._assert_account_may_hold_key()
