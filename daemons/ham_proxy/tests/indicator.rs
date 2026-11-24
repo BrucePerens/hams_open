@@ -271,6 +271,35 @@ fn end_to_end_non_html_is_byte_identical() {
 }
 
 #[test]
+fn password_detector_reads_attributes_not_substrings() {
+    // Tests [@ANCHOR: ham_proxy_has_unhandled_password]
+    // Tests [@ANCHOR: ham_proxy_parse_attrs]
+    // Tests [@ANCHOR: ham_proxy_decode_refs]
+    let pw = |h: &str| indicator::has_unhandled_password(h.as_bytes());
+    // a quoted '>' used to end the tag early and hide the type
+    assert!(pw(r#"<input value=">" type=password>"#));
+    assert!(pw(r#"<input title='a>b' type = "PASSWORD" name=p>"#));
+    assert!(pw(r#"<INPUT/type=password>"#));
+    assert!(pw("<input\ntype\n=\npassword>"));
+    // character references the browser decodes
+    assert!(pw("<input type=pass&#119;ord>"));
+    assert!(pw("<input type=\"&#x70;assword\">"));
+    // the marker must be an attribute, not text inside another value
+    assert!(pw(r#"<input type=password value="data-ham-login">"#));
+    assert!(pw(r#"<input type=password placeholder=data-ham-login>"#));
+    // the first type wins, as in a browser
+    assert!(!pw(r#"<input type=text type=password>"#));
+    // handled and ordinary inputs pass
+    assert!(!pw(r#"<input type=password data-ham-login>"#));
+    assert!(!pw(r#"<input type="password" DATA-HAM-LOGIN="1">"#));
+    assert!(!pw(r#"<input type=text name=password>"#));
+    assert!(
+        pw("<input type=password"),
+        "an unterminated tag is still checked"
+    );
+}
+
+#[test]
 fn huge_chunk_size_is_refused_not_a_panic() {
     // Tests [@ANCHOR: ham_proxy_dechunk]
     // A size of usize::MAX - 1 made `n + 2` wrap to 0 and the slice panic (the release build aborts the whole daemon).

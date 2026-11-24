@@ -11,6 +11,8 @@ A ham client connects with integrity-only TLS; the proxy relays one request to a
 - [@ANCHOR: ham_proxy_inject] Banner insertion after `<body>`; idempotent.
 - [@ANCHOR: ham_proxy_find_ci] Case-insensitive byte search used by the HTML scans.
 - [@ANCHOR: ham_proxy_has_unhandled_password] Detects `type=password` inputs (any quoting or case) lacking `data-ham-login`.
+- [@ANCHOR: ham_proxy_decode_refs] Numeric character references in attribute values are decoded before comparing.
+- [@ANCHOR: ham_proxy_parse_attrs] The password check reads each `<input>` tag's attributes (quoted values, `>` inside quotes, character references, first `type` wins); the login marker counts only as an attribute name.
 - [@ANCHOR: ham_proxy_dechunk] Decodes a chunked body so the HTML can be rewritten.
 - [@ANCHOR: ham_proxy_sign_header] Builds the `X-Ham-Integrity` value (Ed25519 over version, ts, host, body sha256).
 - [@ANCHOR: ham_proxy_verify_header] Verifies it: signature, body hash, host, age.
