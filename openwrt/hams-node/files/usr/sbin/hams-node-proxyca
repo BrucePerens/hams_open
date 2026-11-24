@@ -36,7 +36,8 @@ do_ca() {
 		printf '[ext]\nbasicConstraints=critical,CA:TRUE,pathlen:0\nkeyUsage=critical,keyCertSign,cRLSign\nnameConstraints=critical,@nc\n[nc]\npermitted;DNS.0=ham\n'
 		i=1
 		for d in $(domains); do printf 'permitted;DNS.%s=%s\n' $i "$d"; i=$((i + 1)); done
-		if [ -n "$cidr" ]; then printf 'permitted;IP.0=%s/%s\n' "${cidr%/*}" "$(mask6 "${cidr#*/}")"; fi
+		if [ -n "$cidr" ]; then printf 'permitted;IP.0=%s/%s\n' "${cidr%/*}" "$(mask6 "${cidr#*/}")"
+		else printf 'excluded;IP.0=0.0.0.0/0.0.0.0\nexcluded;IP.1=::/::\n'; fi # a type with no constraint is unconstrained: without a network, no IP address at all
 	} > "$dir/ca.cnf" || exit 1
 	openssl ecparam -name prime256v1 -genkey -noout -out "$dir/ca.key.new" &&
 		openssl req -new -x509 -key "$dir/ca.key.new" -days 3650 -config "$dir/ca.cnf" -out "$dir/ca.pem.new" &&

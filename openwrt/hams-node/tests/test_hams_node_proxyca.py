@@ -55,6 +55,13 @@ class Node:
 
 @unittest.skipUnless(shutil.which("openssl"), "needs the openssl command line tool")
 class CaTests(unittest.TestCase):
+    def test_without_a_ham_network_the_ca_signs_no_ip_address_certificate(self):
+        n = Node(self, net_cidr="", net_prefix="")
+        self.assertEqual(n.run_cmd("ca").returncode, 0)
+        for ip in ("8.8.8.8", "2001:db8::1"):
+            self.assertNotEqual(n.leaf("x", ip=ip).returncode, 0, ip)
+        self.assertEqual(n.leaf("anything.ham").returncode, 0)
+
     def test_ca_signs_only_ham_and_whitelisted_names_and_the_ham_network(self):
         n = Node(self)
         self.assertEqual(n.run_cmd("ca").returncode, 0)
