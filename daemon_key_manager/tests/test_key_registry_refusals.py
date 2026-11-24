@@ -7,6 +7,7 @@ lifetime or rotate a key, what a self-rotating daemon must send, which paths a k
 rotation cron does when a rotation fails in an unexpected way."""
 import datetime
 import os
+from unittest.mock import patch
 
 from odoo import fields
 from odoo.exceptions import AccessError, UserError
@@ -89,18 +90,23 @@ class TestKeyRegistryRefusals(RealTransactionCase):
         with self.assertRaisesRegex(UserError, "__system__ user ID cannot be used"):
             self.row.with_user(self.manager.id)._assert_account_may_hold_key()
 
-    def test_the_system_group_check_works_when_the_caller_is_not_an_internal_user(self):
+    def test_the_system_group_check_never_asks_has_group_about_another_user(self):
         # Tests [@ANCHOR: COMM_rotation_safety_archived_user]
         # Odoo 18 refuses user.has_group() on another user for a caller that is not an internal user (the upgrade rehearsal's
-        # register_daemon via with_user(<service uid>) hit it on a production copy), so the check must not use has_group().
-        caller = self.env["res.users"].create(
-            {"name": "Refusal Caller", "login": "refusal_caller", "is_service_account": True}
-        )
-        caller.group_ids = [(4, self.env.ref("daemon_key_manager.group_daemon_key_manager").id)]
-        caller.group_ids = [(3, self.env.ref("base.group_user").id)]
-        self.addCleanup(caller.unlink)
-        self.assertFalse(caller._has_group("base.group_user"))
-        self.row.with_user(caller.id)._assert_account_may_hold_key()
+        # register_daemon via with_user(<service uid>) hit it on a production copy: "You can ony call user.has_group() with your
+        # current user"). Reproduce that refusal for every caller, so the check must use _has_group().
+        real_has_group = type(self.env["res.users"]).has_group
+
+        def has_group_own_user_only(user, group_ext_id):
+            if user != user.env.user:
+                raise AccessError("You can ony call user.has_group() with your current user.")
+            return real_has_group(user, group_ext_id)
+
+        with patch.object(type(self.env["res.users"]), "has_group", has_group_own_user_only):
+            self.row.with_user(self.manager.id)._assert_account_may_hold_key()
+            self.service.group_ids = [(4, self.env.ref("base.group_system").id)]
+            with self.assertRaisesRegex(UserError, "__system__ user ID cannot be used"):
+                self.row.with_user(self.manager.id)._assert_account_may_hold_key()
 
     def test_a_key_file_is_refused_outside_the_key_directory(self):
         # Tests [@ANCHOR: COMM_write_secure_env_file_logic]
