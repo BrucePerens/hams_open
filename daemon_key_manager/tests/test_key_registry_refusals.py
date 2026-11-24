@@ -7,9 +7,8 @@ lifetime or rotate a key, what a self-rotating daemon must send, which paths a k
 rotation cron does when a rotation fails in an unexpected way."""
 import datetime
 import os
-from unittest.mock import patch
 
-from odoo import fields
+from odoo import _, fields
 from odoo.exceptions import AccessError, UserError
 from odoo.tests import tagged
 
@@ -99,14 +98,14 @@ class TestKeyRegistryRefusals(RealTransactionCase):
 
         def has_group_own_user_only(user, group_ext_id):
             if user != user.env.user:
-                raise AccessError("You can ony call user.has_group() with your current user.")
+                raise AccessError(_("You can ony call user.has_group() with your current user."))
             return real_has_group(user, group_ext_id)
 
-        with patch.object(type(self.env["res.users"]), "has_group", has_group_own_user_only):
+        self.safe_patch_object(type(self.env["res.users"]), "has_group", has_group_own_user_only)
+        self.row.with_user(self.manager.id)._assert_account_may_hold_key()
+        self.service.group_ids = [(4, self.env.ref("base.group_system").id)]
+        with self.assertRaisesRegex(UserError, "__system__ user ID cannot be used"):
             self.row.with_user(self.manager.id)._assert_account_may_hold_key()
-            self.service.group_ids = [(4, self.env.ref("base.group_system").id)]
-            with self.assertRaisesRegex(UserError, "__system__ user ID cannot be used"):
-                self.row.with_user(self.manager.id)._assert_account_may_hold_key()
 
     def test_a_key_file_is_refused_outside_the_key_directory(self):
         # Tests [@ANCHOR: COMM_write_secure_env_file_logic]
