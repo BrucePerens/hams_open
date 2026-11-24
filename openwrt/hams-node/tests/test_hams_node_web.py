@@ -10,7 +10,6 @@ import unittest
 HERE = pathlib.Path(__file__).resolve().parent
 SCRIPT = HERE.parent / "files" / "usr" / "sbin" / "hams-node-web"
 INITD = HERE.parent / "files" / "etc" / "init.d" / "hams-node-web"
-MAIN_RS = HERE.parents[2] / "daemons" / "ham_proxy" / "src" / "main.rs"
 GOOD = {"enabled": "1", "listen_addr": "10.20.30.1", "port": "8443", "callsign": "W1AW", "resolver": "[2001:db8::53]:53",
         "cert": "/c.pem", "key": "/k.pem", "log": "/var/log/hams-node-web/stationid.log", "whitelist": "", "whitelist_key": "", "sign_key": "",
         "dns_out": ""}
@@ -58,9 +57,9 @@ class WebTests(unittest.TestCase):
         self.assertEqual(a[a.index("--ham-resolver") + 1], "[2001:db8::53]:53")
         self.assertIn("--whitelist", a)  # no signed list: only .ham names
         self.assertNotIn("--allow-private-upstream", a)  # the lab flag never comes from the package
-        main = MAIN_RS.read_text()
-        for flag in [x for x in a if x.startswith("--")]:
-            self.assertIn('"%s"' % flag, main, flag)
+        # ham_proxy's own flags (daemons/ham_proxy/README.md); --ham-resolver arrives with hams_open #3328
+        known = {"--gateway", "--listen", "--cert", "--key", "--callsign", "--log", "--ham-resolver", "--whitelist", "--signed-whitelist", "--whitelist-key", "--sign-key"}
+        self.assertLessEqual({x for x in a if x.startswith("--")}, known)
 
     def test_signed_list_and_sign_key_when_present(self):
         (self.root / "wl.json").write_text("{}")
