@@ -4,6 +4,7 @@
     python3 pager_duty/daemon/test_served_cert.py
 """
 # Tests [@ANCHOR: pager_duty:served_cert_problem]
+# Tests [@ANCHOR: pager_duty:certbot_probe_name]
 import os
 import socket
 import ssl
@@ -45,7 +46,6 @@ def serve_once(days, tmp):
 
 
 class WildcardProbeTests(unittest.TestCase):
-    # Tests [@ANCHOR: pager_duty:certbot_probe_name]
     def test_wildcard_is_probed_under_a_fixed_label(self):
         self.assertEqual(gm.certbot_probe_name("*.hams.com"), "hams-cert-check.hams.com")
         self.assertEqual(gm.certbot_probe_name("w7com.hams.com"), "w7com.hams.com")
