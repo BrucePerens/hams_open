@@ -127,3 +127,4 @@ With `--verify HOST:PORT` the proxy checks `/.ham/login` with hams.com first; wi
 - [@ANCHOR: ham_proxy_local_dates_ok] Dates are accepted 30 days either side of notBefore/notAfter, so a wrong clock or an outage past expiry locks nobody out.
 - [@ANCHOR: ham_proxy_local_remember] A certificate hams.com vouched for is cached as `SERIAL.pem` only when its serial matches and it chains to the pinned CA (temp file, then rename).
 - [@ANCHOR: ham_proxy_local_forget] A certificate hams.com refuses is deleted from the cache so it cannot log in later while offline.
+- [@ANCHOR: ham_proxy_login_answer_from_reply] `answer_from_reply` turns hams.com's HTTP reply into an answer: only no reply or a 502/503/504 is `Unreachable` (the offline check may run); every other reply that is not a clean success, including errors and garbage, is `Refused`, so a client cannot reach the offline check by making hams.com answer badly.
