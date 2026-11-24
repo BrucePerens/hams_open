@@ -1,4 +1,4 @@
-//! `ham_proxy --listen ADDR --cert PEM --key PEM --site HOST:PORT [--ca PEM] [--verify HOST:PORT [--member-certs DIR --member-ca PEM [--deprecation FILE]]]
+//! `ham_proxy --listen ADDR --cert PEM --key PEM --site HOST:PORT [--ca PEM] [--verify HOST:PORT [--member-certs DIR --member-ca PEM [--deprecation FILE] [--crl PEM]]]
 //! [--sign-key ED25519.pem] [--whitelist FILE | --signed-whitelist FILE --whitelist-key HEXFILE] [--gateway] [--ham-resolver IP:PORT] [--allow-private-upstream]
 //! [--callsign CALL --log FILE]`: thread per connection. `--lan` instead runs the browser-facing listener (`run_lan`).
 use ham_proxy::lan::{serve_lan, Ca, Upstream};
@@ -173,12 +173,13 @@ fn run() -> Result<(), ProxyError> {
                         addr,
                         host,
                     },
-                    // `--member-certs DIR --member-ca PEM [--deprecation FILE]`: also check offline when hams.com is unreachable.
+                    // `--member-certs DIR --member-ca PEM [--deprecation FILE] [--crl PEM]`: also check offline when hams.com is unreachable.
                     local: match (arg(&args, "--member-certs"), arg(&args, "--member-ca")) {
                         (Some(d), Some(c)) => Some(local_from(
                             &PathBuf::from(d),
                             &PathBuf::from(c),
                             arg(&args, "--deprecation").map(PathBuf::from).as_deref(),
+                            arg(&args, "--crl").map(PathBuf::from).as_deref(),
                         )),
                         _ => None,
                     },

@@ -96,6 +96,7 @@ fn fixture() -> Fixture {
         dir: dir.path().join("certs"),
         ca_pem: dir.path().join("ca.pem"),
         deprecation: Some(dir.path().join("deprecated")),
+        crl: None,
     };
     std::fs::create_dir(&local.dir).unwrap();
     Fixture {
@@ -249,6 +250,7 @@ fn with_hams_com_unreachable_the_fallback_uses_the_local_check() {
             dir: f.local.dir.clone(),
             ca_pem: f.local.ca_pem.clone(),
             deprecation: None,
+            crl: None,
         }),
     };
     assert_eq!(
@@ -308,4 +310,84 @@ fn only_an_outage_counts_as_unreachable_every_other_reply_is_an_answer() {
             "{down}"
         );
     }
+}
+
+/// A CRL signed by the fixture CA listing serial 0xab12 (`revoked`) or nothing, valid for `days` days (negative: already stale).
+fn write_crl(f: &Fixture, revoked: bool, days: i64) -> std::path::PathBuf {
+    let d = f.dir.path().join("ca_db");
+    std::fs::create_dir_all(&d).unwrap();
+    std::fs::write(
+        d.join("ca.key"),
+        f.ca_key.private_key_to_pem_pkcs8().unwrap(),
+    )
+    .unwrap();
+    let index = if revoked {
+        "R\t991231235959Z\t261101000000Z\tAB12\tunknown\t/CN=member\n"
+    } else {
+        ""
+    };
+    std::fs::write(d.join("index.txt"), index).unwrap();
+    std::fs::write(d.join("crlnumber"), "01\n").unwrap();
+    let cnf = format!(
+        "[ca]\ndefault_ca=c\n[c]\ndatabase={0}/index.txt\ncrlnumber={0}/crlnumber\ndefault_md=sha256\ndefault_crl_days=1\n",
+        d.display()
+    );
+    std::fs::write(d.join("ca.cnf"), cnf).unwrap();
+    let crl = f.dir.path().join("identity.crl");
+    let startdate = if days < 0 {
+        "20250101000000Z"
+    } else {
+        "20260101000000Z"
+    };
+    let enddate = if days < 0 {
+        "20250102000000Z"
+    } else {
+        "20991231000000Z"
+    };
+    let out = std::process::Command::new("openssl")
+        .args(["ca", "-gencrl", "-config"])
+        .arg(d.join("ca.cnf"))
+        .arg("-keyfile")
+        .arg(d.join("ca.key"))
+        .arg("-cert")
+        .arg(f.dir.path().join("ca.pem"))
+        .args([
+            "-crl_lastupdate",
+            startdate,
+            "-crl_nextupdate",
+            enddate,
+            "-out",
+        ])
+        .arg(&crl)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    crl
+}
+
+// Tests [@ANCHOR: ham_proxy_local_crl_revoked]
+#[test]
+fn a_certificate_on_a_fresh_crl_is_refused_a_stale_crl_is_ignored() {
+    let mut f = fixture();
+    f.install(&f.member(-10, 300));
+    f.local.crl = Some(write_crl(&f, false, 1));
+    assert_eq!(
+        f.login().as_deref(),
+        Some("W1AW"),
+        "a CRL that lists nothing"
+    );
+    f.local.crl = Some(write_crl(&f, true, 1));
+    assert_eq!(f.login(), None, "listed on a fresh CRL");
+    f.local.crl = Some(write_crl(&f, true, -1));
+    assert_eq!(
+        f.login().as_deref(),
+        Some("W1AW"),
+        "a stale CRL is not used"
+    );
+    f.local.crl = Some(f.dir.path().join("missing.crl"));
+    assert_eq!(f.login().as_deref(), Some("W1AW"), "no CRL file");
 }
