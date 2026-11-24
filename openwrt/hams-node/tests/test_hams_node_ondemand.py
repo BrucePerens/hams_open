@@ -78,6 +78,19 @@ class OnDemandTests(unittest.TestCase):
         self.assertEqual(len(h.wg_calls()), 1)
         self.assertEqual(len(h.lookups()), 1)
 
+    def test_scan_looks_up_only_new_busy_prefixes(self):
+        h = Harness(self)
+        h.set_lookup({"2001:db8:1:20::": record("2001:db8:1:20::/60"), "2001:db8:1:40::": record("2001:db8:1:40::/60", KEY_B)})
+        h.set_active(["2001:db8:1:20::", "2001:db8:1:30::"])
+        self.assertEqual(h.run("scan").returncode, 0)
+        self.assertEqual(len(h.wg_calls()), 1)  # :20 made a peer, :30 (unknown) none
+        self.assertEqual(len(h.lookups()), 2)
+        h.now += 10
+        h.set_active(["2001:db8:1:20::", "2001:db8:1:30::", "2001:db8:1:40::"])
+        h.run("scan")
+        self.assertEqual(len(h.lookups()), 3)  # only :40 is new: :20 has its peer, :30 was refused 10 s ago
+        self.assertEqual(len(h.wg_calls()), 2)
+
     def test_unknown_or_suspended_creates_nothing_and_is_not_asked_again_for_a_minute(self):
         h = Harness(self)
         self.assertEqual(h.run("packet", "2001:db8:1:30::1").returncode, 0)
