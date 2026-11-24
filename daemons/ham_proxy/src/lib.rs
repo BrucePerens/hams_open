@@ -9,6 +9,7 @@ pub mod indicator;
 pub mod lan;
 pub mod login;
 pub mod policy;
+pub mod resolve;
 pub mod session;
 pub mod signed_list;
 
@@ -385,7 +386,7 @@ pub fn serve_one_policed(
             }
         }
     }
-    let up_tcp = TcpStream::connect(site_addr)?;
+    let up_tcp = resolve::connect_upstream(site_addr)?;
     let mut up = site.connect(site_name, up_tcp)?;
     up.write_all(&request_identity(&head))?;
     relay_response(&mut up, &mut ham, site_name, key)?;

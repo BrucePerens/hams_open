@@ -1,0 +1,14 @@
+# SYNTHETIC chain listing in openFPGALoader's documented format (not recorded from a board): one Cyclone 10 LP and one MAX 10.
+Jtag frequency : requested 6.00MHz   -> real 6.00MHz
+index 0:
+	idcode 0x20f10dd
+	manufacturer altera
+	family cyclone 10 lp
+	model  10CL025
+	irlength 10
+index 1:
+	idcode 0x31810dd
+	manufacturer altera
+	family max 10
+	model  10M08
+	irlength 10

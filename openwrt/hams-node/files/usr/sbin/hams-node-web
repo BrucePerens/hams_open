@@ -1,0 +1,49 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-web args | dns [OUTFILE]
+# Reads uci hams_node_web and refuses (exit 1) anything that would expose more than the gateway: the listen address must be a private IPv4 address
+# of this node (not 0.0.0.0, not a public address) and a callsign and a .ham resolver are required.
+#   args  prints the ham_proxy command line (one argument per line) that serves AREDN's IPv4 clients.
+#   dns   writes the dnsmasq line that answers A queries for .ham with the listen address, so a client on the mesh reaches the gateway by name.
+set -u
+get() { uci -q get "hams_node_web.main.$1" 2>/dev/null; }
+[ "$(get enabled)" = 1 ] || exit 0
+listen=$(get listen_addr) port=$(get port) call=$(get callsign) resolver=$(get resolver)
+[ -n "$port" ] || port=8443
+die() { echo "hams-node-web: $1" >&2; exit 1; }
+# a private dotted quad: 10/8, 172.16/12 or 192.168/16 (AREDN's own space is 10/8); never 0.0.0.0 or a public address
+case $listen in
+10.*.*.* | 172.1[6-9].*.* | 172.2?.*.* | 172.3[01].*.* | 192.168.*.*) ;;
+*) die "listen_addr must be this node's private IPv4 address" ;;
+esac
+case $listen in *[!0-9.]* | *..* | .* | *.) die "bad listen_addr" ;; esac
+case $port in '' | *[!0-9]*) die "bad port" ;; esac
+case $call in '' | *[!A-Za-z0-9/-]*) die "a callsign (letters, digits, / and -) is required" ;; esac
+case $resolver in '' | *[!A-Fa-f0-9:.\[\]]*) die "resolver (ip:port) is required" ;; esac
+case $1 in
+args)
+	cert=$(get cert) key=$(get key) log=$(get log)
+	[ -n "$cert" ] && [ -n "$key" ] && [ -n "$log" ] || die "cert, key and log are required"
+	for a in --gateway --listen "$listen:$port" --cert "$cert" --key "$key" --callsign "$call" --log "$log" --ham-resolver "$resolver"; do echo "$a"; done
+	ca=$(get ca)
+	[ -z "$ca" ] || { echo --ca; echo "$ca"; }
+	wl=$(get whitelist) wk=$(get whitelist_key) sk=$(get sign_key)
+	# the signed list is optional; without it a gateway still needs a whitelist argument, so an empty plain one (only .ham names) is used
+	if [ -n "$wl" ] && [ -n "$wk" ] && [ -f "$wl" ] && [ -f "$wk" ]; then
+		echo --signed-whitelist; echo "$wl"; echo --whitelist-key; echo "$wk"
+	else
+		echo --whitelist; echo "${HAMS_NODE_WEB_EMPTY:-/etc/hams-node/web/empty-whitelist.txt}"
+	fi
+	[ -z "$sk" ] || { echo --sign-key; echo "$sk"; }
+	;;
+dns)
+	out=${2:-$(get dns_out)}
+	[ -n "$out" ] || out=/tmp/dnsmasq.d/hams-web.conf
+	mkdir -p "$(dirname "$out")"
+	{
+		echo "# hams-node-web: .ham names on the mesh resolve to this gateway (A only; the gateway looks the real address up itself)"
+		echo "address=/ham/$listen"
+	} > "$out.new" && mv "$out.new" "$out"
+	;;
+*) echo "usage: hams-node-web args | dns [OUTFILE]" >&2; exit 2 ;;
+esac

@@ -34,6 +34,7 @@ mod serial_guard;
 mod spectrum;
 #[cfg(test)]
 mod testdir;
+mod usb_blaster;
 mod usb_hub;
 mod vna;
 mod vna_time;
@@ -224,6 +225,12 @@ const MODULES: &[Module] = &[
         call: glasgow::call,
         tool_defs: glasgow::tool_defs,
         sample: r#""glasgow":{"driver":"glasgow","tier":"full"}"#,
+    },
+    Module {
+        prefix: "bench_jtag_",
+        call: usb_blaster::call,
+        tool_defs: usb_blaster::tool_defs,
+        sample: r#""jtag":{"driver":"usb_blaster","tier":"full","allow_flash":true}"#,
     },
     Module {
         prefix: "bench_proc_",

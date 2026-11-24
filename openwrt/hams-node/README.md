@@ -30,7 +30,7 @@ timeout = idle minutes, refreshed by every forwarded packet to `ham_prefix`) is 
 the daemon asks the members-only directory lookup (member certificate), checks the record is for that /60, and adds a WireGuard peer
 (`AllowedIPs` = the /60). A peer whose /60 has left the set (10 idle minutes) is removed. Unknown, suspended or stale answers create
 nothing and are not asked again for 60 s. At most `max_peers` (256) peers; the oldest idle one goes first. An `rf` link is refused.
-Not exercised on a real device or in the AREDN VM; the nft ruleset and `nft monitor` parsing are untested here.
+Run in the QEMU test image with real peers (`image/tools/ondemand_test.py`, see `image/README.md`). The set is polled once a second (`nft monitor` sends no event for an element a packet adds to a dynamic set), so a first packet waits at most a second for its peer. Memory limit: all `hams-node-ondemand` processes together stay under 8 MB RSS with 256 peers (measured about 2 MB).
 
 Adding a subpackage: create `pkg/<name>.mk` with its `define Package/<name>`, `/description`, `/conffiles` and `/install` blocks
 (copy `pkg/hams-node-report.mk`; the file name is the package name). Do not edit `Makefile`: it includes `pkg/*.mk` in sorted order
@@ -245,8 +245,13 @@ Once the node is enrolled (`hams-node-enroll` runs `hams-node-ssh apply` after e
 holds at least one key, dropbear's `PasswordAuth` and `RootPasswordAuth` are set to off on every instance. With no key installed nothing
 changes, so the owner cannot lock themselves out; add the key in LuCI (System > Administration > SSH-Keys), which `hams-node-mtls` limits
 to the owner's member certificate. `unenroll` (or `hams-node-ssh off`) restores the saved settings. Recovery after losing the key: physical
-reset, then enrol again. OpenSSH user certificates issued from the member identity are a separate decision for Bruce
-(`night_shift_todo/medium/router-ssh-openssh-certificates-option-4dafb623.md`).
+reset, then enrol again. The owner's exported member certificates also sign in over SSH (Bruce, 2026-11-23: no separate SSH CA; design
+`docs/proposals/SSH_CERTIFICATES.md`, option A): in My certificates the member exports a certificate ("Advanced: use as a TLS client
+certificate"), whose ECDSA P-256 key is `ssh -i hams-member-certificate.pem root@router` (`ssh-keygen -y -f` prints the public key). The
+signed router configuration lists the owner's active exported keys (`ssh_keys`); `hams-node-enroll` stores them in `STATE/ssh_keys` and
+`hams-node-ssh apply` keeps them in a marked block of `/etc/dropbear/authorized_keys` (other lines stay). A certificate on the signed deprecation
+list (`cert:ISSUER:SERIAL`) is left out at once (`hams-node-status` re-runs `hams-node-ssh apply`), an expired or revoked one drops out at the next
+configuration fetch. When the last key goes, SSH refuses every login and password login STAYS off (recovery is a physical reset, then enrol again). The browser's own key is non-extractable and cannot be used.
 
 ## Key rotation (`hams-node-key`, in the hams-node-enroll package)
 
@@ -299,6 +304,28 @@ to the stock OpenWrt router form). Results:
   a plain dnsmasq with `--filter-AAAA` and the same forward behaves the same). So through the node's resolver the SIIT AAAA of a .ham name is never
   seen. IPv6 clients must ask the hams.com Net resolvers directly (second gateway form: the stock OpenWrt router's dnsmasq has no such filter).
   The forward still serves the non-AAAA types (service-ad CNAME targets, TXT, PTR). The filter is firmware configuration and is not changed here.
+- **AAAA for IPv6 clients (final rule, tested 2026-11-23).** The filter is not only a setting: a second dnsmasq of AREDN's own binary (no
+  `filter-AAAA`, `-C /dev/null`) also answers every forwarded AAAA with NODATA (`config ... is NODATA` in its log; a local `host-record` AAAA is
+  answered), and that build has no DHCPv6/RA. So `hams-node-dns` offers `option v6_addr ADDR` (and `v6_iface`, default `br-lan`): the init script
+  adds ADDR/128 to the interface and an nft nat table `hams_dns6` sends port 53 (udp and tcp) of ADDR to the first IPv6 resolver of the `resolver`
+  list (`ADDR#PORT` allowed), with masquerade. No process runs; AREDN's dnsmasq is untouched (the DNAT precedes local delivery, so its own socket on
+  that address never sees the queries; the node's own address still answers without AAAA). IPv6 clients get ADDR as resolver from whatever sends
+  their router advertisements (RDNSS) or DHCPv6; all their queries reach that resolver. The firewall zone toward the resolver must allow the
+  forward (AREDN's fw4 only forwards lan to its wifi zone; the test added one accept rule).
+  Tested on stock 4.26.10.0 x86-64, two QEMU VMs (client and node on one segment, a stub resolver on the host): from the client `AAAA foo.n0call.ham`
+  at ADDR returned `2001:db8:5::1`, A returned the A record, the same AAAA at the node's own address stayed empty, `stop` removed the table and AREDN's
+  dnsmasq kept running. Router advertisement of ADDR is not tested.
+- **AAAA for IPv6 clients (final rule, tested 2026-11-23).** The filter is not a setting of our snippet: a second dnsmasq of AREDN's own binary
+  (no `filter-AAAA` in its config, `-C /dev/null`) also answers every forwarded AAAA with NODATA (`config ... is NODATA` in its log; a local
+  `host-record` AAAA is answered), and that build has no DHCPv6/RA. So `hams-node-dns` offers `option v6_addr ADDR` (and `v6_iface`, default
+  `br-lan`): the init script adds ADDR/128 to the interface and an nft nat table `hams_dns6` sends port 53 (udp and tcp) of ADDR to the first
+  IPv6 resolver of the `resolver` list (`ADDR#PORT` allowed), with masquerade. No process runs; AREDN's dnsmasq is untouched (the DNAT precedes
+  local delivery, so its own socket on that address never sees the queries; the node's own address still answers without AAAA). IPv6 clients get
+  ADDR as their resolver from whatever sends their router advertisements (RDNSS) or DHCPv6; the client's other queries reach that resolver too.
+  Forwarding toward the resolver must be allowed by the firewall zone it is reached through (AREDN's fw4 only forwards lan to its wifi zone).
+  Tested on the stock 4.26.10.0 x86-64 image, two QEMU VMs (client and node on one segment, a stub resolver on the host): from the client
+  `AAAA foo.n0call.ham` at ADDR returned `2001:db8:5::1` and A returned the A record; the same AAAA at the node's own address stays empty;
+  `stop` removes the table and AREDN's dnsmasq kept running.
 
 ## hams-node-proxyca: the browser side of the proxy
 
@@ -308,3 +335,66 @@ name-constrained to `.ham`, the whitelisted domains (`/etc/hams-node/whitelist`,
 `/www/wpad.dat`: `.ham` names, ham-network addresses (`net_prefix`) and whitelisted sites get `PROXY`, everything else `DIRECT` (tested by evaluating the
 PAC in node). The LuCI page offers "Download CA certificate" (the `proxy_ca` ubus method returns the certificate only); `INSTALL_CA.md` has the install steps
 for Windows, macOS, Linux, Firefox, Chrome and Android. Changing the whitelist needs `ca --renew` and a new install. Tests: `tests/test_hams_node_proxyca.py`.
+
+## Web access for AREDN users (`hams-node-web` and `ham-proxy`, separate packages)
+
+AREDN is IPv4-only, so an IPv4 client on the mesh cannot reach a `.ham` name directly. `hams-node-web` (off by default, `/etc/config/hams_node_web`) runs
+`ham_proxy --gateway` on the node's own private mesh/LAN IPv4 address and makes the node's dnsmasq answer A queries for `.ham` with that address
+(`address=/ham/ADDR`, written to `/tmp/dnsmasq.d/hams-web.conf`). The client then connects to the gateway with integrity-only TLS (authenticated, never
+encrypted: Part 97), which looks the name up at the Hams.com Net resolver itself (`resolver`, because AREDN's dnsmasq drops AAAA), connects over the
+node's IPv6 path (SIIT/WireGuard on the Internet link) and relays the page, adding the signed integrity indicator when `sign_key` is set. Sites that are not `.ham` are
+served only if on the hams.com signed whitelist (`whitelist`, `whitelist_key`); everything else is refused before any upstream connection, and each flow is
+written to the station-ID log with the callsign.
+
+Limits that protect the operator: `hams-node-web` refuses to start unless the listen address is a private IPv4 address (never 0.0.0.0 or a public one),
+a callsign and a resolver are set; `ham_proxy` never connects to a loopback, private, link-local or unique-local address, so no name leads the gateway to the
+operator's home LAN; nothing is added to the node's firewall and the mesh-to-WAN setting is not touched. The client needs a ham-aware browser or the relay
+(a stock browser cannot speak an integrity-only suite); a plain-HTTPS client is refused by design.
+
+`ham-proxy` is the binary package: `openwrt/ham-proxy/Makefile` builds it with the host's cargo (`--features vendored`) for the node's musl Rust target
+using the SDK's cross compiler; the SDK has no rust. Verified 2026-11-23 (25.12.6 SDKs, `--locked`):
+
+    make package/feeds/hams/ham-proxy/compile NO_DEPS=1 HAMS_OPEN_TREE=<repo> RUST_TARGET=x86_64-unknown-linux-musl
+    make package/feeds/hams/ham-proxy/compile NO_DEPS=1 HAMS_OPEN_TREE=<repo> RUST_TARGET=mipsel-unknown-linux-musl RUST_BUILD_STD=1
+
+`RUST_BUILD_STD=1` (targets without a prebuilt std, such as the mt7621) uses `rustup toolchain install nightly --component rust-src` and `-Z build-std`
+under the build user. The x86-64 apk is 6.2 MB static (depends on `libc`); the ramips-mt7621 apk is 1.9 MB, a PIE binary that needs `libgcc` and
+`libatomic` (both installed on stock AREDN). The mt7621 package was built but not run (no device or MIPS emulator here). In an SDK that has not built
+`libgcc`/`libatomic` the package's library check fails ("missing dependencies"); give the SDK's `staging_dir/target-*/pkginfo/libgcc.provides`
+(`libgcc_s.so.1`) and `libatomic.provides` (`libatomic.so.1`) files.
+
+Boot test on the stock AREDN 4.26.10.0 x86-64 image (QEMU, second NIC at 10.0.2.15 for the client): `apk add --allow-untrusted --no-network` of the
+Jool apks, `hams-node`, `hams-node-dns`, `hams-node-web`, `ham-proxy`; `hams_node_web` enabled with `listen_addr 10.0.2.15`, a callsign, the resolver
+(a stub answering AAAA at the host) and `ca`; the site was uhttpd with TLS on an address of `lo`. From the host (an IPv4 client, `openssl s_client -tls1_2 -cipher
+NULL-SHA256:@SECLEVEL=0`) a request for `gw.ham:8444` returned the page with the integrity banner, `example.org` got no reply (refused before any upstream
+connection), a client offering only encrypting suites got a handshake failure, and the station-ID log held `W1AW -> gw.ham NULL-SHA256`. The node's dnsmasq
+answered `foo.ham` with 10.0.2.15; AREDN's own services kept running.
+
+`ham-proxy` is the static binary: `openwrt/ham-proxy/Makefile` builds it with the host's cargo (`--features vendored`) for the node's musl Rust target using the
+SDK's cross compiler (`make package/ham-proxy/compile RUST_TARGET=x86_64-unknown-linux-musl`); the SDK has no rust, and mips needs a nightly `build-std`
+toolchain. The x86-64 musl build was measured earlier (6.1 MB, 4.5 MB RSS). The `ham-proxy` Makefile itself has not been run in an SDK yet; `ham_proxy`
+and the shell script are tested (`tests/test_hams_node_web.py`, `daemons/ham_proxy/tests/resolve.rs`).
+
+## IPv4 pool for AREDN clients (`hams-node-pool`, separate package)
+
+Beyond web pages: a small IPv4 pool on the AREDN side that maps chosen `.ham` names to pool addresses (`/etc/config/hams_node_pool`, off by default).
+`hams-node-pool add NAME.ham IP6` takes the next free address of `pool4` (a /24 to /30 of the node's private space) and records it in
+`/etc/hams-node/pool.map`; `apply` (the init script at boot) adds the address to the AREDN-side interface (the node answers ARP for it; AREDN sets `arp_ignore=1`, so an address on `lo` is never answered on the LAN), adds a Jool SIIT explicit address
+mapping to the SIIT instance (`jool_siit -i INSTANCE eamt add IP4 IP6`; the client's own source address maps through the domain's /96 as before), has
+dnsmasq answer the name with it (`address=/NAME/IP4`, a longer match than the web gateway's `address=/ham/`), and installs an nft table `inet hams_pool`:
+only TCP ports listed in `port` (default 80; unencrypted ports only, because the answers go onto RF, Part 97) from the configured AREDN-side interface
+reach a pool address, everything else to the pool is dropped and counted. Targets must start with `net_prefix` (the member /40), so the pool cannot lead to
+the member's LAN or the mesh; names must end in `.ham`. `clear` (init stop) removes mapping, addresses, table and dnsmasq line.
+
+Tested (`tests/test_hams_node_pool.py`: allocation, exhaustion, refusals, output with recording stand-ins) and run on the stock AREDN 4.26.10.0 x86-64 VM with the
+real Jool, nft and dnsmasq: `apply` showed the mapping in `jool_siit eamt display`, the `hams_pool` table, `gw.ham` answered with the pool address and other
+`.ham` names with the gateway's; `/etc/init.d/hams-node-pool stop` removed all of it. Traffic test (2026-11-23, stock AREDN 4.26.10.0 x86-64 under QEMU, user networking; the pool address was reached by QEMU's own host forward, the target was
+QEMU's IPv6 host address answering for services on the dev box): an IPv4 client got a page through the pool address on the allowed port; a port not in the
+list and an encrypted port (8883) got no answer, the target saw no connection, and the drop counter in `hams_pool` counted them; configuring an encrypted port
+(22, 443, 853, 993, 995, 465, 8883, 1194; the list `ham_boundary` uses) is refused at `apply`. The test found two faults, both fixed here: the pool address on `lo`
+was never answered for on the LAN (`arp_ignore=1`), and AREDN's firewall (fw4) drops forwarded traffic from an interface that is in no zone, so every
+translated flow was dropped. `apply` now writes `/etc/hams-node/pool-fw.nft` (the translated requests from the AREDN-side interface to the mapped targets on the
+listed ports, and the replies from the pool addresses on those ports) and registers it as an fw4 include at the head of the forward chain; `clear` removes it.
+The same drop affects the web gateway's own path only if its clients are routed through the node (they connect to the node itself, which is input, not forward).
+The test needed an address map entry for the client (its translated source had to be an address the QEMU network accepts); real traffic uses the domain's /96.
+remote target over WireGuard were not available in the VM).

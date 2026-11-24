@@ -1,0 +1,2 @@
+# openFPGALoader 0.13.1 `-c usb-blaster --detect` on the same cable with the target board unpowered or not connected (2026-11-23).
+JTAG init failed with: TDO is stuck at 0

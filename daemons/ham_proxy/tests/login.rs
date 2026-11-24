@@ -216,6 +216,7 @@ fn login_works_over_the_integrity_only_link() {
     let addr = l.local_addr().unwrap().to_string();
     let ch = std::sync::Arc::new(Challenges::default());
     let ch2 = ch.clone();
+    ham_proxy::resolve::allow_private_upstream(); // the test site is on loopback
     thread::spawn(move || {
         for s in l.incoming().flatten() {
             let _ = serve_one_login(s, &acc, &conn, "127.0.0.1:1", SITE, None, Some((&ch2, &v)));

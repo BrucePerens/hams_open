@@ -87,6 +87,56 @@ class SshTests(unittest.TestCase):
         self.assertEqual(len((self.state / "ssh.orig").read_text().splitlines()), 2)
         self.assertIn("cfg01 on on", (self.state / "ssh.orig").read_text())
 
+    def member_keys(self, text):
+        (self.state / "device_token").write_text("tok\n")
+        (self.state / "ssh_keys").write_text(text)
+
+    def test_exported_member_certificate_keys_are_authorized_and_make_ssh_key_only(self):
+        self.member_keys("1a2b ecdsa-sha2-nistp256 AAAAE2VjZHNh\nBEEF ecdsa-sha2-nistp256 BBBB\n")
+        self.keys.write_text("ssh-ed25519 OWNKEY mine\n")
+        self.assertEqual(self.run_script("apply").returncode, 0)
+        lines = self.keys.read_text().splitlines()
+        self.assertEqual(lines[0], "ssh-ed25519 OWNKEY mine")
+        self.assertIn("ecdsa-sha2-nistp256 AAAAE2VjZHNh hams-cert-1a2b", lines)
+        self.assertIn("set dropbear.cfg01.PasswordAuth=off", self.uci())
+
+    def test_member_keys_alone_are_enough_and_other_key_types_or_junk_are_ignored(self):
+        self.member_keys("1 ssh-rsa AAAAB3\n2 ecdsa-sha2-nistp256 CCCC\n3 ecdsa-sha2-nistp256 DD;DD\n")
+        self.assertEqual(self.run_script("apply").returncode, 0)
+        text = self.keys.read_text()
+        self.assertIn("ecdsa-sha2-nistp256 CCCC hams-cert-2", text)
+        self.assertNotIn("ssh-rsa", text)
+        self.assertNotIn("DD;DD", text)
+        self.assertIn("set dropbear.cfg01.PasswordAuth=off", self.uci())
+
+    def test_a_revoked_certificate_on_the_deprecation_list_is_left_out_and_reapplying_replaces_the_block(self):
+        self.member_keys("1a2b ecdsa-sha2-nistp256 AAAA\n3c ecdsa-sha2-nistp256 BBBB\n")
+        self.run_script("apply")
+        (self.state / "deprecation_list").write_text("cert:ISSUERHASH:0001A2B \n")
+        self.run_script("apply")
+        text = self.keys.read_text()
+        self.assertNotIn("AAAA", text)
+        self.assertIn("BBBB hams-cert-3c", text)
+        self.assertEqual(text.count("# hams-node begin"), 1)
+
+    def test_revoking_the_last_key_leaves_password_login_off_and_ssh_refusing_every_login(self):
+        self.member_keys("1a2b ecdsa-sha2-nistp256 AAAA\n")
+        self.run_script("apply")
+        (self.root / "uci").unlink()
+        (self.state / "deprecation_list").write_text("cert:ISSUERHASH:1a2b \n")
+        self.assertEqual(self.run_script("apply").returncode, 0)
+        self.assertNotIn("PasswordAuth=on", self.uci())
+        self.assertNotIn("ecdsa", self.keys.read_text())
+        self.assertTrue((self.state / "ssh.orig").exists(), "passwords stay off; only `off` (unenrol) restores them")
+
+    def test_off_removes_the_block_but_keeps_the_owners_own_keys(self):
+        self.member_keys("1a2b ecdsa-sha2-nistp256 AAAA\n")
+        self.keys.write_text("ssh-ed25519 OWNKEY mine\n")
+        self.run_script("apply")
+        self.assertEqual(self.run_script("off").returncode, 0)
+        self.assertEqual(self.keys.read_text(), "ssh-ed25519 OWNKEY mine\n")
+        self.assertFalse((self.state / "ssh_keys").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

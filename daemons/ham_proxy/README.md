@@ -49,9 +49,17 @@ by normal TLS. The list file is re-read and verified (Ed25519 under the 64-hex-c
 modified, unsigned or expired list permits only `.ham` names. `--gateway` refuses to start without a whitelist. Place it at a member or club with a routable /48,
 never at hams.com. Deployment files: `deploy/` (systemd service, whitelist refresh timer, env example); runbook `hams_com/docs/runbooks/SITE_GATEWAY_DEPLOYMENT.md`.
 
+## `.ham` lookups and never a private address (`--ham-resolver`, `--allow-private-upstream`)
+
+`--ham-resolver IP:PORT` looks `.ham` names up (AAAA, UDP) at the Hams.com Net resolver instead of the system resolver (`src/resolve.rs`). It exists for the
+AREDN gateway, where the node's dnsmasq drops AAAA answers and answers `.ham` A queries with the gateway itself. Every upstream connection, `.ham` or not,
+only goes to an address that is not loopback, unspecified, private (RFC 1918, 100.64/10), link-local, unique-local, multicast or IPv4-mapped, so no name
+(including a rebinding answer) leads the gateway to its operator's home LAN. `--allow-private-upstream` lifts that for a lab with a local site; it is for tests only.
+Tests: `tests/resolve.rs` (an IPv4 client loads a `.ham` page integrity-only, a non-whitelisted site is refused, a private answer is never connected).
+
 ## LAN listener for browsers (`--lan`)
 
-`ham_proxy --lan --listen LANADDR:8443 --proxy-ca ca.pem --proxy-ca-key ca.key --whitelist FILE (or --signed-whitelist/--whitelist-key) --callsign CALL --log FILE --resolver IP:PORT --upstream-gateway HOST:PORT --upstream-ca PEM [--sign-key PEM]`
+`ham_proxy --lan --listen LANADDR:8443 --proxy-ca ca.pem --proxy-ca-key ca.key --whitelist FILE (or --signed-whitelist/--whitelist-key) --callsign CALL --log FILE --resolver IP:PORT (TLSA) [--ham-resolver IP:PORT] --upstream-gateway HOST:PORT --upstream-ca PEM [--sign-key PEM]`
 is the proxy the node's PAC file (`hams-node-proxyca`) points browsers at. `CONNECT` is terminated with a leaf certificate minted from the node CA
 (name-constrained to `.ham` and the whitelist); plain `http://` is accepted and upgraded. Upstream the request is integrity-only TLS only: a `.ham` server
 directly (DANE), a whitelisted site through the site gateway. The browser leg is ordinary TLS on the member's own LAN and must never be carried over RF.

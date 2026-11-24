@@ -1,0 +1,12 @@
+#!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Applies the IPv4 pool for AREDN clients (hams-node-pool) at boot and removes it on stop. Needs the Jool instance (hams-node start) first.
+START=98
+USE_PROCD=1
+
+start_service() { /usr/sbin/hams-node-pool apply; }
+stop_service() { /usr/sbin/hams-node-pool clear; }
+
+service_triggers() {
+	procd_add_reload_trigger hams_node_pool
+}

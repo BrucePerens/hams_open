@@ -7,6 +7,7 @@
 
 use crate::dane::connect_ham_server;
 use crate::policy::Policy;
+use crate::resolve;
 use crate::{
     ham_connector, now, read_head, relay_response, request_identity, require_integrity_only,
     ProxyError,
@@ -220,7 +221,7 @@ fn connect_upstream(
     resolver: &str,
 ) -> Result<SslStream<TcpStream>, ProxyError> {
     if t.host == "ham" || t.host.ends_with(".ham") {
-        let tcp = TcpStream::connect((t.host.as_str(), t.port))?;
+        let tcp = resolve::connect_upstream(&format!("{}:{}", t.host, t.port))?;
         return connect_ham_server(tcp, &t.host, t.port, resolver);
     }
     let Upstream::Gateway {
@@ -228,7 +229,7 @@ fn connect_upstream(
         name,
         connector,
     } = up;
-    let s = connector.connect(name, TcpStream::connect(addr.as_str())?)?;
+    let s = connector.connect(name, resolve::connect_upstream(addr)?)?;
     require_integrity_only(&s)?;
     Ok(s)
 }

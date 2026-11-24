@@ -41,3 +41,11 @@ deprecation-list entry still keeps a key out of WireGuard (`hams-node-wg`), and 
 no GPS, spoofed GPS alone, spoofed GPS against a good source). About 6 minutes:
 
     agent_procs.py run owrt-gone --timeout 1800 --mem-max 6G -- python3 -I -u openwrt/image/tools/internet_gone_test.py WORKDIR/hams-test.img
+
+`tools/ondemand_test.py IMAGE` (stock image, QEMU, no root; the guest needs the host's internet once for `wireguard-tools`, `kmod-wireguard`, `ip-full`): the on-demand
+tunnel daemon with real WireGuard peers. Inside the one guest, network namespaces `lan` (a client of the router's /60) and `far` (a member's router with WireGuard) are
+joined by veth links; `hams-node-ondemand` and its init script run unchanged (real nft ruleset, `wg`), only the directory lookup is a stand-in `uclient-fetch`. Checks: an rf link
+is refused; the first packets from the LAN client to a member /60 make the peer and are delivered through it; a suspended and an unknown /60 create nothing; idle expiry
+(1 minute) removes the peer and new traffic makes it again; 256 more members fill the table, which stays at 256; the RSS of all daemon processes stays under 8 MB. About 10 minutes:
+
+    agent_procs.py run owrt-ondemand --timeout 2400 --mem-max 4G -- python3 -I -u openwrt/image/tools/ondemand_test.py WORKDIR/stock-25.12.5.img

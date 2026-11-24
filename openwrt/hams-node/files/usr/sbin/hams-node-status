@@ -106,6 +106,8 @@ apply_list() {
 	cp "$1" "$listfile"
 	# revoked member certificates are enforced by the management front end (hams-node-mtls), which reads the list when it is applied
 	if [ -f "$state/mtls/nginx.conf" ] && command -v hams-node-mtls > /dev/null 2>&1; then hams-node-mtls -s "$state" apply; fi
+	# and the same revoked certificate leaves the SSH authorized keys (hams-node-ssh package)
+	if [ -f "$state/ssh_keys" ] && command -v hams-node-ssh > /dev/null 2>&1; then hams-node-ssh -s "$state" apply; fi
 }
 
 # entries PATH-PREFIX (add or entries): "KEY prefixes" lines from the payload.

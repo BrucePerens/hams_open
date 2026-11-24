@@ -73,6 +73,7 @@ fn start_proxy(c: &Path, k: &Path, site_addr: String) -> String {
     let conn = site_connector(Some(c)).unwrap();
     let l = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = l.local_addr().unwrap().to_string();
+    ham_proxy::resolve::allow_private_upstream(); // the test site is on loopback
     thread::spawn(move || {
         for s in l.incoming().flatten() {
             let _ = serve_one(s, &acc, &conn, &site_addr, "localhost");
@@ -202,6 +203,7 @@ fn binary_serves_a_request() {
         .unwrap()
         .port();
     let mut child = Command::new(env!("CARGO_BIN_EXE_ham_proxy"))
+        .arg("--allow-private-upstream")
         .args([
             "--listen",
             &format!("127.0.0.1:{port}"),

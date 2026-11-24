@@ -13,6 +13,9 @@ use std::sync::{Arc, Mutex};
 
 uniffi::setup_scaffolding!();
 
+mod wg;
+pub use wg::*;
+
 /// Every failure the core reports, with its message.
 #[derive(Debug, uniffi::Error)]
 pub enum NetError {

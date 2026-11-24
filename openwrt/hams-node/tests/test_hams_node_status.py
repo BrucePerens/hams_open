@@ -95,7 +95,7 @@ class StatusTests(unittest.TestCase):
         bindir.mkdir()
         initdir.mkdir()
         for name, text in (("uclient-fetch", FETCH), ("usign", USIGN), ("wg", LOGGER), ("ip", LOGGER), ("ifdown", LOGGER), ("ifup", LOGGER),
-                           ("nc", NC), ("timeout", TIMEOUT), ("hams-node-report", LOGGER), ("hams-node-traffic", LOGGER), ("hams-node-mtls", LOGGER)):
+                           ("nc", NC), ("timeout", TIMEOUT), ("hams-node-report", LOGGER), ("hams-node-traffic", LOGGER), ("hams-node-mtls", LOGGER), ("hams-node-ssh", LOGGER)):
             (bindir / name).write_text(text)
             (bindir / name).chmod(0o755)
         for name in ("hams-node-bird", "hams-node-ondemand"):
@@ -216,6 +216,16 @@ class StatusTests(unittest.TestCase):
         self.assertEqual(self.run_script().returncode, 0)
         self.assertIn("hams-node-mtls -s %s apply" % self.state, self.actions(), "the front end is told to re-read the list")
         self.assertEqual(self.listed(), ["%s 2001:db8:ab00:30::/60" % ENTRY_A["key"]], "a delta removal lifts the certificate entry")
+
+    def test_a_revoked_member_certificate_tells_hams_node_ssh_to_drop_its_key_but_only_when_ssh_keys_are_kept(self):
+        cert = {"type": "revoked_member_cert", "key": "abcdef", "issuer_sha256": "a1" * 32, "revoked_at": "2026-11-20T12:00:00Z", "reason": "key_compromise"}
+        self.queue(self.status(list_seq=2), self.full(2, cert))
+        self.assertEqual(self.run_script().returncode, 0)
+        self.assertNotIn("hams-node-ssh -s %s apply" % self.state, self.actions())
+        (self.state / "ssh_keys").write_text("abcdef ecdsa-sha2-nistp256 AAAA\n")
+        self.queue(self.status(list_seq=3), self.delta(2, 3, add=[dict(cert, key="123456")]))
+        self.assertEqual(self.run_script().returncode, 0)
+        self.assertIn("hams-node-ssh -s %s apply" % self.state, self.actions())
 
     def test_a_gap_a_replay_and_a_bad_signature_are_refused_and_a_gap_asks_for_the_full_list(self):
         self.queue(self.status(list_seq=2), self.full(2, ENTRY_A))

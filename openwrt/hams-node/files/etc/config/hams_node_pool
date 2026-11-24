@@ -1,0 +1,15 @@
+# hams-node-pool: a small IPv4 pool on the AREDN side that maps AREDN clients' IPv4 to chosen Hams.com Net hosts (Jool SIIT address map). Off by default.
+config pool 'main'
+	option enabled '0'
+	# the Jool SIIT instance (the mesh domain name, see hams-node-siit); required
+	option instance ''
+	# the pool: a CIDR of this node's own private IPv4 space (/24 to /30, 10/8, 172.16/12 or 192.168/16); required
+	option pool4 ''
+	# the Hams.com Net prefix every target must lie in, as the leading text of the address (for a /40: '2001:db8:ab'); required
+	option net_prefix ''
+	# the AREDN-side interface the clients are on (nft: only traffic from it to the pool is allowed on the listed ports)
+	option iface ''
+	# TCP ports a pool address may be used on. Only ports that are not encrypted: what comes back from the Internet goes onto RF (Part 97).
+	list port '80'
+	option map '/etc/hams-node/pool.map'
+	option dns_out '/tmp/dnsmasq.d/hams-pool.conf'

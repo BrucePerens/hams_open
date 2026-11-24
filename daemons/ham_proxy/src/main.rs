@@ -1,5 +1,5 @@
 //! `ham_proxy --listen ADDR --cert PEM --key PEM --site HOST:PORT [--ca PEM] [--verify HOST:PORT]
-//! [--sign-key ED25519.pem] [--whitelist FILE | --signed-whitelist FILE --whitelist-key HEXFILE] [--gateway]
+//! [--sign-key ED25519.pem] [--whitelist FILE | --signed-whitelist FILE --whitelist-key HEXFILE] [--gateway] [--ham-resolver IP:PORT] [--allow-private-upstream]
 //! [--callsign CALL --log FILE]`: thread per connection. `--lan` instead runs the browser-facing listener (`run_lan`).
 use ham_proxy::lan::{serve_lan, Ca, Upstream};
 use ham_proxy::login::{Challenges, HttpVerifier};
@@ -120,6 +120,14 @@ fn run_lan(args: &[String]) -> Result<(), ProxyError> {
 // [@ANCHOR: ham_proxy_run]
 fn run() -> Result<(), ProxyError> {
     let args: Vec<String> = std::env::args().collect();
+
+    // `--ham-resolver IP:PORT`: where `.ham` names are looked up (AAAA), instead of the system resolver.
+    if let Some(r) = arg(&args, "--ham-resolver") {
+        ham_proxy::resolve::set_ham_resolver(&r);
+    }
+    if args.iter().any(|a| a == "--allow-private-upstream") {
+        ham_proxy::resolve::allow_private_upstream();
+    }
     if args.iter().any(|a| a == "--lan") {
         return run_lan(&args);
     }

@@ -122,6 +122,7 @@ impl Write for Sink {
 
 /// `encrypting`: the gateway offers an ordinary encrypting TLS server instead of an integrity-only one.
 fn start_lan(encrypting: bool) -> Lan {
+    ham_proxy::resolve::allow_private_upstream(); // the stand-in gateway is on loopback
     let dir = tempfile::Builder::new()
         .prefix("ham_proxy_lan_")
         .tempdir()

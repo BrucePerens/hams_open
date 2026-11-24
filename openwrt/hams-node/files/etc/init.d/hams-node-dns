@@ -28,15 +28,52 @@ ensure_confdir() {
 	}
 }
 
+# AAAA for IPv6 clients: AREDN's dnsmasq (also one of our own, same binary) answers every forwarded AAAA query with NODATA, so IPv6 clients cannot
+# get .ham AAAA through it. With v6_addr set, port 53 of that one extra address (added to v6_iface, default br-lan) is sent by nft straight to the
+# first IPv6 resolver of the list: no process runs and AREDN's dnsmasq is untouched (the DNAT happens before local delivery, so its own socket on
+# that address never sees the queries). Point the IPv6 clients at v6_addr (router advertisement or DHCPv6 of the router that sends them; AREDN's
+# dnsmasq has no DHCPv6/RA).
+start_v6() {
+	local addr iface r res port
+	addr=$(uci -q get hams_node_dns.main.v6_addr)
+	[ -n "$addr" ] || return 0
+	iface=$(uci -q get hams_node_dns.main.v6_iface); [ -n "$iface" ] || iface=br-lan
+	for r in $(uci -q get hams_node_dns.main.resolver); do
+		case $r in *:*) res=${r%%#*}; port=53; case $r in *#*) port=${r#*#} ;; esac; break ;; esac
+	done
+	case $addr in *[!A-Fa-f0-9:]*) echo "hams-node-dns: bad v6_addr" >&2; return 1 ;; esac
+	[ -n "$res" ] || { echo "hams-node-dns: v6_addr needs an IPv6 resolver" >&2; return 1; }
+	ip -6 addr add "$addr/128" dev "$iface" 2>/dev/null
+	nft -f - <<EOF
+table inet hams_dns6 {
+	chain pre {
+		type nat hook prerouting priority dstnat; policy accept;
+		ip6 daddr $addr meta l4proto { udp, tcp } th dport 53 dnat ip6 to [$res]:$port
+	}
+	chain post {
+		type nat hook postrouting priority srcnat; policy accept;
+		ip6 daddr $res meta l4proto { udp, tcp } th dport $port ct status dnat masquerade
+	}
+}
+EOF
+}
+
+stop_v6() {
+	nft delete table inet hams_dns6 2>/dev/null
+}
+
 start_service() {
 	ensure_confdir
 	rm -f "$OUT"
+	stop_v6
 	hams-node-dns render "$OUT" || return 1
 	reload_dnsmasq
+	start_v6
 }
 
 stop_service() {
 	rm -f "$OUT"
+	stop_v6
 	reload_dnsmasq
 }
 

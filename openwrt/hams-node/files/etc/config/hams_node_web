@@ -1,0 +1,22 @@
+# hams-node-web: the Hams.com Net web gateway for AREDN users (IPv4 clients on the mesh load .ham pages). Off by default.
+config web 'main'
+	option enabled '0'
+	# the node's own AREDN LAN or mesh IPv4 address the gateway listens on (never 0.0.0.0, never a WAN address); required
+	option listen_addr ''
+	option port '8443'
+	# the operator's callsign, written to the station-ID log with every flow (Part 97); required
+	option callsign ''
+	# integrity-only TLS certificate and key of the gateway (no encrypting suite is ever negotiated toward the mesh)
+	option cert '/etc/hams-node/web/cert.pem'
+	option key '/etc/hams-node/web/key.pem'
+	# Hams.com Net resolver (ip:port, UDP) used for .ham names; required, because AREDN's dnsmasq drops AAAA answers
+	option resolver ''
+	# optional: CA file the sites' certificates are checked against (default: the node's own CA store; a node without one needs this)
+	option ca ''
+	# optional: signed whitelist of non-.ham sites (and the hams.com key that signs it); without them only .ham names are served
+	option whitelist '/etc/hams-node/web/whitelist.json'
+	option whitelist_key '/etc/hams-node/web/whitelist_key.hex'
+	# optional Ed25519 key: HTML gets the signed integrity indicator
+	option sign_key ''
+	option log '/var/log/hams-node-web/stationid.log'
+	option dns_out '/tmp/dnsmasq.d/hams-web.conf'

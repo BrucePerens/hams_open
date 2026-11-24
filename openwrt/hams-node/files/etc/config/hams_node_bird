@@ -6,12 +6,13 @@ config bird 'main'
 	option prefix ''
 	option prefix60 ''
 	option serial ''
-	# root-only file holding the BGP password (never put it in this file)
-	option secret_file '/etc/hams-node/bird.secret'
 	# set to 1 only while the node has a live RF link: its routes are then tagged with the RF community
 	option rf_live '0'
 	# route server addresses
 	# list server '2001:db8::1'
-	# direct RF neighbours, "ASN,ADDRESS,INTERFACE[,PREFIX]": plain BGP sessions over the radio link, no route server and no internet needed;
-	# their routes win over the route servers'. No password on RF (Part 97).
-	# list neighbor '4200000007,fe80::7,rf0'
+	# direct RF neighbours, "ASN,ADDRESS,INTERFACE,PREFIX60[,SIIT96]": BGP over the radio link, no route server or internet needed. Each
+	# session is authenticated with IPsec AH (integrity only, nothing encrypted: Part 97; the kernel has no TCP-MD5) using a key derived from
+	# rf_secret_dir/ASN.secret (root-only, from enrolment); the address must be link-local;
+	# the neighbour may announce only its own /60 (and SIIT /96); their routes win over the route servers'.
+	# option rf_secret_dir '/etc/hams-node/rf.d'
+	# list neighbor '4200000007,fe80::7,rf0,2001:db8:ab00:70::/60'
