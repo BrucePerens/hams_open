@@ -1,95 +1,84 @@
 package com.hams.net
 
+import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.ProxyInfo
+import android.net.Uri
 import android.net.VpnService
-import android.content.Intent
+import android.os.Build
 import android.os.ParcelFileDescriptor
 import com.hams.net.core.Blocklist
 import com.hams.net.core.DeprecationRuntime
 import com.hams.net.core.DirectoryClient
-import com.hams.net.core.Enrolment
 import com.hams.net.core.HamRouting
-import com.hams.net.core.JvmCrypto
-import com.hams.net.core.PeerTable
-import com.hams.net.core.WgBackend
+import com.hams.net.core.HamResolver
 import com.hams.net.core.Ipv6Prefix
+import com.hams.net.core.JvmCrypto
 import com.hams.net.core.LinkGuard
 import com.hams.net.core.LinkType
-
-/** The portal over https (hams.com): the JSON-RPC body in, the response body out, null on any failure. */
-object Portal {
-    fun post(path: String, body: String): String? = try {
-        val conn = java.net.URL("https://hams.com$path").openConnection() as java.net.HttpURLConnection
-        conn.requestMethod = "POST"
-        conn.connectTimeout = 10_000
-        conn.readTimeout = 10_000
-        conn.doOutput = true
-        conn.setRequestProperty("Content-Type", "application/json")
-        conn.outputStream.use { it.write(body.toByteArray()) }
-        if (conn.responseCode == 200) conn.inputStream.use { it.readBytes().toString(Charsets.UTF_8) } else null
-    } catch (e: java.io.IOException) {
-        null
-    }
-}
-
-/** Where the enrolment result is kept: the token and the deprecation key, in the app's private preferences. */
-object EnrolmentStore {
-    fun save(context: android.content.Context, e: Enrolment) {
-        context.getSharedPreferences("enrolment", 0).edit()
-            .putString("token", e.token).putString("deprecation_key", e.deprecationKey).putString("prefix60", e.prefix60).apply()
-    }
-
-    fun load(context: android.content.Context): Enrolment? {
-        val p = context.getSharedPreferences("enrolment", 0)
-        val token = p.getString("token", null) ?: return null
-        val key = p.getString("deprecation_key", null) ?: return null
-        return Enrolment(token, key, p.getString("prefix60", "") ?: "")
-    }
-}
+import com.hams.net.core.LocalProxy
+import com.hams.net.core.PacketSink
+import com.hams.net.core.PeerTable
+import com.hams.net.core.TunLoop
+import com.hams.net.core.TunnelEngine
+import com.hams.net.core.UdpDatagrams
+import java.io.FileInputStream
+import java.io.FileOutputStream
 
 /**
- * The WireGuard peers of the tunnel. The GoBackend-backed implementation is the remaining device-side step (it needs a device or
- * KVM emulator); until then the peer set is only tracked, which is all eviction needs.
- */
-object TunnelPeers : WgBackend {
-    val peers = java.util.concurrent.ConcurrentHashMap<String, String>()
-    override fun addPeer(publicKey: String, endpoint: String, allowedIp: String) { peers[publicKey] = endpoint }
-    override fun removePeer(publicKey: String) { peers.remove(publicKey) }
-}
-
-/**
- * Only the ham-network prefix is routed into the tunnel (HamRouting.vpnRoutes), so all other traffic never enters it.
- * Refuses to start when the active network is not a plain internet link. The WireGuard peers are made on demand by PeerTable
- * through a GoBackend-backed WgBackend (wiring to the portal enrolment is not in this skeleton).
+ * The on-demand tunnel. Only the ham-network prefix is routed into the interface (HamRouting.vpnRoutes), so all other traffic never
+ * enters it; `.ham` names and whitelisted sites reach the app's local proxy through a PAC (Android 10 and later). The first packet
+ * (or the first proxy request) toward a member /60 makes the WireGuard peer ([PeerTable] over [TunnelEngine], userspace WireGuard in the
+ * shared Rust core). Refuses to start without an enrolment or when the active network is not a plain internet link.
  */
 class HamsVpnService : VpnService() {
     private var tun: ParcelFileDescriptor? = null
     private var deprecation: DeprecationRuntime? = null
+    private var proxy: LocalProxy? = null
+    private var udp: UdpDatagrams? = null
+    private var loop: TunLoop? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (activeLink() != LinkType.INTERNET) {
-            stopSelf()
-            return START_NOT_STICKY
+        val enrolment = EnrolmentStore.load(this)
+        if (enrolment == null || activeLink() != LinkType.INTERNET || tun != null) {
+            if (tun == null) stopSelf()
+            return if (tun == null) START_NOT_STICKY else START_STICKY
         }
-        val routing = HamRouting(Ipv6Prefix.parse(HAM_NETWORK)!!, WHITELIST)
-        val builder = Builder().setSession("Hams.com Net").addAddress(LOCAL_ADDRESS, 128)
+        val network = Ipv6Prefix.parse(enrolment.hamPrefix) ?: return START_NOT_STICKY.also { stopSelf() }
+        val own = Ipv6Prefix.parse(enrolment.prefix60) ?: return START_NOT_STICKY.also { stopSelf() }
+        val routing = HamRouting(network, WHITELIST)
+
+        val datagrams = UdpDatagrams { socket -> protect(socket) }
+        udp = datagrams
+        val toTun = object : PacketSink {
+            override fun write(packet: ByteArray) { loop?.sink?.write(packet) }
+        }
+        val engine = TunnelEngine(KeyVault.privateKey(this), datagrams, toTun)
+        val blocklist = Blocklist()
+        val directory = DirectoryClient(Portal::post)
+        val table = PeerTable({ directory.lookup(it) }, engine, LinkType.INTERNET, { System.currentTimeMillis() / 1000 }, blocklist = blocklist)
+        engine.table = table
+        val localProxy = LocalProxy(routing, HamResolver(directory, table)).also { it.start() }
+        proxy = localProxy
+        proxyPort = localProxy.port
+
+        val builder = Builder().setSession("Hams.com Net").addAddress(own.host(2), 128)
         for (route in routing.vpnRoutes()) {
             val (address, length) = route.split("/")
             builder.addRoute(address, length.toInt())
         }
-        tun = builder.establish()
-        startDeprecationChannel()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            builder.setHttpProxy(ProxyInfo.buildPacProxy(Uri.parse("http://127.0.0.1:${localProxy.port}/proxy.pac")))
+        }
+        val fd = builder.establish() ?: return START_NOT_STICKY.also { stopSelf() }
+        tun = fd
+        val tunLoop = TunLoop(FileInputStream(fd.fileDescriptor), FileOutputStream(fd.fileDescriptor), engine)
+        loop = tunLoop
+        Thread(tunLoop::run, "hams-tun").start()
+        Thread({ datagrams.receiveLoop(engine) }, "hams-udp").start()
+        deprecation = DeprecationRuntime(enrolment, JvmCrypto, Portal::post, table, blocklist, own.host(2)).also { it.start() }
         return START_STICKY
-    }
-
-    // The status poll, gossip and enforcement need the enrolment (device token and deprecation_key); without it nothing is routed to peers either.
-    private fun startDeprecationChannel() {
-        val enrolment = EnrolmentStore.load(this) ?: return
-        val blocklist = Blocklist()
-        val directory = DirectoryClient(Portal::post)
-        val table = PeerTable({ directory.lookup(it) }, TunnelPeers, LinkType.INTERNET, { System.currentTimeMillis() / 1000 }, blocklist = blocklist)
-        deprecation = DeprecationRuntime(enrolment, JvmCrypto, Portal::post, table, blocklist, LOCAL_ADDRESS).also { it.start() }
     }
 
     private fun activeLink(): LinkType {
@@ -105,14 +94,19 @@ class HamsVpnService : VpnService() {
 
     override fun onDestroy() {
         deprecation?.stop()
+        loop?.stop()
+        proxy?.stop()
+        proxyPort = 0
+        udp?.close()
         tun?.close()
+        tun = null
         super.onDestroy()
     }
 
     companion object {
-        // Placeholders until the ARIN allocation and the member's own /128 come from enrolment.
-        const val HAM_NETWORK = "2001:db8:1200::/40"
-        const val LOCAL_ADDRESS = "2001:db8:1200::1"
         val WHITELIST = setOf("hams.com")
+
+        /** The local proxy port while the tunnel is up (read by the emulator test). */
+        @Volatile var proxyPort = 0
     }
 }
