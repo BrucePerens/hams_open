@@ -32,7 +32,7 @@ printf '%s' "$esc" | awk 'BEGIN { h = "0123456789ABCDEF" }
 [ "$(grep -c 'BEGIN CERTIFICATE' "$work/leaf.pem")" = 1 ] || deny "no certificate"
 openssl x509 -in "$work/leaf.pem" -noout > /dev/null 2>&1 || deny "unreadable certificate"
 
-# chain to the pinned CA; the validity period is checked below with the grace
+# chain to the pinned CA, for client authentication (nginx used to enforce that purpose itself); the validity period is checked below with the grace
 crl=''
 if [ -s "$dir/identity.crl" ] && [ -s "$dir/crls.pem" ]; then
 	nu=$(openssl crl -in "$dir/identity.crl" -noout -nextupdate -dateopt iso_8601 2>/dev/null | cut -d= -f2)
@@ -40,7 +40,7 @@ if [ -s "$dir/identity.crl" ] && [ -s "$dir/crls.pem" ]; then
 	[ -n "$nu" ] && [ "$(date -u -d "$nu" +%s 2>/dev/null || echo 0)" -gt "$(date -u +%s)" ] && crl="-crl_check_all -CRLfile $dir/crls.pem"
 fi
 # shellcheck disable=SC2086
-openssl verify -no_check_time -CAfile "$ca" $crl "$work/leaf.pem" > /dev/null 2>&1 || deny "does not chain to the member CA, or revoked"
+openssl verify -no_check_time -purpose sslclient -CAfile "$ca" $crl "$work/leaf.pem" > /dev/null 2>&1 || deny "does not chain to the member CA, or revoked"
 
 # the enrolled owner
 openssl x509 -in "$work/leaf.pem" -noout -subject -nameopt oid,sep_multiline,utf8 2> /dev/null |
