@@ -204,6 +204,8 @@ pub fn upstream_head(head: &str, t: &Target, path: &str) -> Vec<u8> {
     request_identity(&out)
 }
 
+// [@ANCHOR: ham_proxy_lan_refuse]
+/// Answer a browser with `status` and a short plain-text body.
 fn refuse<W: Write>(w: &mut W, status: &str) -> Result<(), ProxyError> {
     let body = b"hams.com Net: this site is not available through the ham proxy\n";
     write!(

@@ -268,6 +268,7 @@ fn plain_http_is_accepted_and_upgraded_upstream() {
 
 #[test]
 // Tests [@ANCHOR: ham_proxy_lan_serve]
+// Tests [@ANCHOR: ham_proxy_lan_refuse]
 fn a_site_off_the_whitelist_is_refused_before_any_upstream_connection() {
     let lan = start_lan(false);
     let (answer, page) = browse_connect(&lan, "evil.com");
@@ -296,6 +297,7 @@ fn a_site_off_the_whitelist_is_refused_before_any_upstream_connection() {
 #[test]
 // Tests [@ANCHOR: ham_proxy_lan_serve]
 // Tests [@ANCHOR: ham_proxy_lan_upstream]
+// Tests [@ANCHOR: ham_proxy_lan_connect_upstream]
 fn an_upstream_that_would_encrypt_is_never_used() {
     let lan = start_lan(true);
     let out = browse_plain(
