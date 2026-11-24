@@ -81,46 +81,16 @@ class MtlsTests(unittest.TestCase):
         result = self.run_script("apply")
         self.assertEqual(result.returncode, 0, result.stderr)
         conf = self.conf()
-        self.assertIn("ssl_verify_client on;", conf)
-        self.assertNotIn("optional", conf)
+        self.assertIn("ssl_verify_client optional_no_ca;", conf, "the verify CGI is the check, so the dates get a grace")
+        self.assertIn("auth_request /hams-verify;", conf)
+        self.assertIn("proxy_set_header X-Client-Cert $ssl_client_escaped_cert;", conf)
         self.assertIn("ssl_client_certificate %s;" % (self.state / "member-ca.pem"), conf)
-        self.assertIn("66926\\.1\\.1=N0CALL(/|$)", conf)
-        self.assertIn("if ($hams_owner = 0) { return 403; }", conf)
         self.assertIn("proxy_pass http://127.0.0.1:8080;", conf)  # burn-ignore-ssrf-test-value: expected config text on the router, nothing connects
         uci = self.uci()
         self.assertIn("add_list uhttpd.main.listen_http=127.0.0.1:8080", uci)  # burn-ignore-ssrf-test-value: expected config text on the router, nothing connects
         self.assertNotIn("0.0.0.0", uci.split("add_list")[1])
         self.assertTrue((self.state / "mtls" / "server.key").stat().st_size > 0)
         self.assertIn("hams-node-mtls crl", self.cron.read_text())
-
-    def ca_fingerprint(self):
-        out = subprocess.run(["openssl", "x509", "-in", str(self.state / "member-ca.pem"), "-noout", "-fingerprint", "-sha256"], capture_output=True, text=True, check=True).stdout
-        return out.split("=", 1)[1].strip().replace(":", "").lower()
-
-    def test_a_certificate_on_the_deprecation_list_is_refused_without_the_crl(self):
-        self.enrolled()
-        fingerprint = self.ca_fingerprint()
-        (self.state / "deprecation_list").write_text("KEYB64== 2001:db8::/60\ncert:%s:abcdef \ncert:%s:1f \ncert:%s:77 \ncert:%s:zz;rm \n" % (fingerprint, fingerprint, "00" * 32, fingerprint))
-        self.assertEqual(self.run_script("apply").returncode, 0)
-        conf = self.conf()
-        self.assertIn("map $ssl_client_serial $hams_revoked {", conf)
-        self.assertIn('"ABCDEF" 1;', conf)
-        self.assertIn('"1F" 1;', conf, "an odd number of digits is padded as nginx prints it")
-        self.assertNotIn('"77"', conf, "an entry of another issuer is not ours")
-        self.assertNotIn("zz", conf)
-        self.assertIn("if ($hams_revoked) { return 403; }", conf)
-        self.assertNotIn("ssl_crl", conf, "no CRL was needed")
-
-    def test_without_a_list_nothing_is_refused_and_a_removal_lifts_the_block(self):
-        self.enrolled()
-        self.assertEqual(self.run_script("apply").returncode, 0)
-        self.assertNotIn('" 1;', self.conf().split("$hams_revoked {")[1].split("}")[0])
-        (self.state / "deprecation_list").write_text("cert:%s:abcdef \n" % self.ca_fingerprint())
-        self.run_script("apply")
-        self.assertIn('"ABCDEF" 1;', self.conf())
-        (self.state / "deprecation_list").write_text("")
-        self.run_script("apply")
-        self.assertNotIn("ABCDEF", self.conf())
 
     def test_apply_sets_up_single_sign_on_and_keeps_the_stock_logins_until_the_first_sign_in(self):
         self.enrolled()
@@ -170,17 +140,36 @@ class MtlsTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertFalse((self.state / "mtls" / "nginx.conf").exists())
 
-    def test_slash_callsigns_are_escaped_for_the_regex(self):
+    def test_the_owner_and_the_deprecation_list_are_read_by_the_verifier_not_baked_into_the_config(self):
         self.enrolled("K6BP/W7")
+        (self.state / "deprecation_list").write_text("cert:%s:abcdef \n" % ("00" * 32))
+        self.assertEqual(self.run_script("apply").returncode, 0)
+        before = self.conf()
+        for gone in ("K6BP", "66926", "hams_owner", "hams_revoked", "ABCDEF", "ssl_crl", "ssl_verify_client on"):
+            self.assertNotIn(gone, before)
+        (self.state / "deprecation_list").write_text("")
         self.run_script("apply")
-        self.assertIn("K6BP\\/W7", self.conf())
+        self.assertEqual(self.conf(), before, "a list change needs no nginx reload: the verify CGI reads the list on every request")
+
+    def test_the_verify_location_is_internal_and_passes_only_the_certificate_not_the_body(self):
+        self.enrolled()
+        self.run_script("apply")
+        location = self.conf().split("location = /hams-verify {")[1].split("}")[0]
+        for line in ("internal;", "auth_request off;", "proxy_pass http://127.0.0.1:8081/cgi-bin/verify;", "proxy_pass_request_body off;"):  # burn-ignore-ssrf-test-value: expected config text on the router, nothing connects
+            self.assertIn(line, location)
+
+    def test_a_slash_callsign_is_accepted_and_a_callsign_with_other_characters_is_not(self):
+        self.enrolled("K6BP/W7")
+        self.assertEqual(self.run_script("apply").returncode, 0)
+        self.enrolled("k6bp;touch x")
+        self.assertNotEqual(self.run_script("apply").returncode, 0, "the verify CGI compares this text, so only callsign characters are allowed")
 
     def test_a_fresh_identity_crl_signed_by_the_pinned_ca_is_used(self):
         self.enrolled()
         (self.fake / "crl.der").write_bytes(gencrl(self.root / "ca"))
         result = self.run_script("crl")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("ssl_crl %s;" % (self.state / "mtls" / "crls.pem"), self.conf())
+        self.assertTrue((self.state / "mtls" / "crls.pem").stat().st_size > 0, "the verify CGI reads it")
 
     def test_an_expired_crl_is_not_accepted(self):
         self.enrolled()

@@ -1,0 +1,69 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Member-certificate check for nginx auth_request (hams-node-mtls), on 127.0.0.1:8081, reachable only through nginx. nginx passes the
+# client certificate it was shown in the X-Client-Cert header (URL-escaped PEM) and does NOT verify it (ssl_verify_client optional_no_ca);
+# this script is the whole check, so a wrong clock cannot lock the owner out. Answers 200 (allow) or 403. It requires:
+#  - the certificate chains to the pinned member CA (openssl verify, and the CRLs while they are fresh, as before);
+#  - it carries the enrolled owner's callsign (Subject attribute 1.3.6.1.4.1.66926.1.1);
+#  - it is not on the signed deprecation list (cert:ISSUER_SHA256:SERIAL lines of the pinned CAs) - revocation stays strict;
+#  - its dates are right within GRACE_SECONDS (30 days) either side of notBefore/notAfter, so an outage that outlasts the certificate, or
+#    a clock far behind or ahead, does not lock the owner out.
+# HAMS_NODE_STATE (default /etc/hams-node) is for the tests only: a CGI environment does not carry it from a client.
+state=${HAMS_NODE_STATE:-/etc/hams-node}
+dir=$state/mtls ca=$state/member-ca.pem deplist=$state/deprecation_list grace=2592000
+reply() { printf 'Status: %s\r\nContent-Type: text/plain\r\n\r\n%s\n' "$1" "$2"; exit 0; }
+deny() { reply "403 Forbidden" "$1"; }
+work=$(mktemp -d) || deny "no scratch space"
+trap 'rm -rf "$work"' EXIT
+owner=$(cat "$state/owner" 2>/dev/null)
+case $owner in '' | *[!A-Z0-9/]*) deny "not enrolled" ;; esac
+esc=${HTTP_X_CLIENT_CERT:-}
+case $esc in '' | *[!A-Za-z0-9%._~-]*) deny "no certificate" ;; esac
+printf '%s' "$esc" | awk 'BEGIN { h = "0123456789ABCDEF" }
+	{ s = $0; out = ""
+	  while (s != "") {
+		if (substr(s, 1, 1) == "%" && length(s) >= 3) {
+			v = (index(h, toupper(substr(s, 2, 1))) - 1) * 16 + index(h, toupper(substr(s, 3, 1))) - 1
+			out = out sprintf("%c", v); s = substr(s, 4)
+		} else { out = out substr(s, 1, 1); s = substr(s, 2) }
+	  }
+	  printf "%s", out }' > "$work/leaf.pem" 2> /dev/null
+[ "$(grep -c 'BEGIN CERTIFICATE' "$work/leaf.pem")" = 1 ] || deny "no certificate"
+openssl x509 -in "$work/leaf.pem" -noout > /dev/null 2>&1 || deny "unreadable certificate"
+
+# chain to the pinned CA; the validity period is checked below with the grace
+crl=''
+if [ -s "$dir/identity.crl" ] && [ -s "$dir/crls.pem" ]; then
+	nu=$(openssl crl -in "$dir/identity.crl" -noout -nextupdate -dateopt iso_8601 2>/dev/null | cut -d= -f2)
+	nu=${nu%Z}
+	[ -n "$nu" ] && [ "$(date -u -d "$nu" +%s 2>/dev/null || echo 0)" -gt "$(date -u +%s)" ] && crl="-crl_check_all -CRLfile $dir/crls.pem"
+fi
+# shellcheck disable=SC2086
+openssl verify -no_check_time -CAfile "$ca" $crl "$work/leaf.pem" > /dev/null 2>&1 || deny "does not chain to the member CA, or revoked"
+
+# the enrolled owner
+openssl x509 -in "$work/leaf.pem" -noout -subject -nameopt oid,sep_multiline,utf8 2> /dev/null |
+	sed -n 's/^ *1\.3\.6\.1\.4\.1\.\(66926\|12348\)\.1\.1 *= *//p' | grep -qx "$owner" || deny "not the owner's certificate"
+
+# the signed deprecation list: strict, no grace
+if [ -r "$deplist" ]; then
+	awk -v d="$work" '/BEGIN CERTIFICATE/ { n++ } n { print > (d "/ca_" n ".pem") }' "$ca"
+	fps=''
+	for f in "$work"/ca_*.pem; do
+		[ -f "$f" ] && fps="$fps
+$(openssl x509 -in "$f" -noout -fingerprint -sha256 2> /dev/null | cut -d= -f2 | tr -d : | tr A-F a-f)"
+	done
+	serial=$(openssl x509 -in "$work/leaf.pem" -noout -serial | cut -d= -f2 | tr a-f A-F | sed 's/^0*//')
+	grep '^cert:' "$deplist" | while IFS=: read -r _ issuer s; do
+		s=$(printf '%s' "${s% }" | tr a-f A-F | sed 's/^0*//')
+		[ -n "$s" ] && [ "$s" = "$serial" ] && printf '%s\n' "$fps" | grep -qx "$issuer" && echo hit
+	done | grep -q hit && deny "on the deprecation list"
+fi
+
+# dates, with the grace either side
+now=$(date -u +%s)
+nb=$(openssl x509 -in "$work/leaf.pem" -noout -startdate -dateopt iso_8601 | cut -d= -f2)
+na=$(openssl x509 -in "$work/leaf.pem" -noout -enddate -dateopt iso_8601 | cut -d= -f2)
+nb=$(date -u -d "${nb%Z}" +%s 2> /dev/null) && na=$(date -u -d "${na%Z}" +%s 2> /dev/null) || deny "unreadable dates"
+[ "$now" -ge $((nb - grace)) ] && [ "$now" -le $((na + grace)) ] || deny "certificate dates are more than 30 days out"
+reply "200 OK" ok
