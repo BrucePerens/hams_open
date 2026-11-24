@@ -7,13 +7,9 @@ import android.hardware.usb.UsbManager
 import com.hams.net.core.StreamSerialPort
 import com.hams.net.core.UsbLine
 import com.hams.net.core.UsbSerialPort
-import com.hams.net.core.SerialPort
+import com.hams.net.core.OpenTnc
 import com.hoho.android.usbserial.driver.UsbSerialProber
-import java.io.InputStream
 import java.util.UUID
-
-/** A TNC opened over some transport: the port to write KISS to, the stream to read it from, and how to close it. */
-class OpenTnc(val port: SerialPort, val input: InputStream, val close: () -> Unit)
 
 object RfSerial {
     private val SPP: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
