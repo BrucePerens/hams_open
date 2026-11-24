@@ -52,8 +52,10 @@ fn sign_key_adds_a_verifiable_integrity_header() {
         "-out",
         &cert,
     ]);
-    openssl(&["genpkey", "-algorithm", "ed25519", "-out", &sign]);
-    openssl(&["pkey", "-in", &sign, "-pubout", "-out", &public]);
+    // not the openssl tool: macOS ships LibreSSL 3.3, which cannot make ed25519 keys
+    let ed = PKey::generate_ed25519().unwrap();
+    std::fs::write(&sign, ed.private_key_to_pem_pkcs8().unwrap()).unwrap();
+    std::fs::write(&public, ed.public_key_to_pem().unwrap()).unwrap();
     // the site: verified TLS, one HTML page
     let mut b = SslAcceptor::mozilla_intermediate_v5(SslMethod::tls_server()).unwrap();
     b.set_certificate_chain_file(&cert).unwrap();
