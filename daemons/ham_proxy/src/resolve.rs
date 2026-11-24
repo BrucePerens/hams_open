@@ -147,7 +147,10 @@ pub fn connect_upstream(addr: &str) -> Result<TcpStream, ProxyError> {
         .filter(|i| ALLOW_PRIVATE.load(Ordering::Relaxed) || address_allowed(i))
     {
         match TcpStream::connect_timeout(&SocketAddr::new(*ip, port), Duration::from_secs(10)) {
-            Ok(s) => return Ok(s),
+            Ok(s) => {
+                crate::limit_idle(&s)?;
+                return Ok(s);
+            }
             Err(e) => last = e,
         }
     }

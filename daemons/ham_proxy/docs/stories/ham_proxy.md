@@ -103,3 +103,5 @@ For the browsers on the member's own LAN (never RF). Needs the node's proxy CA (
 - [@ANCHOR: ham_proxy_load_signed] The binary reads `--signed-whitelist` with `--whitelist-key` (one without the other is an error).
 - [@ANCHOR: ham_proxy_load_policy] The binary builds the whitelist policy from `--whitelist` or the signed list; it needs `--callsign` and `--log`.
 - [@ANCHOR: ham_proxy_run_lan] `--lan` runs the browser-facing listener of `lan.rs` as the binary (thread per connection); it refuses to start without a whitelist.
+- [@ANCHOR: ham_proxy_set_idle_timeout] and [@ANCHOR: ham_proxy_limit_idle] A connection (browser, ham or upstream) that moves no byte for the idle time (60 s by default) is dropped, so a stalled peer cannot hold a thread forever.
+- [@ANCHOR: ham_proxy_try_slot] The listeners serve at most `MAX_CONNECTIONS` (256) connections at once and drop the rest.

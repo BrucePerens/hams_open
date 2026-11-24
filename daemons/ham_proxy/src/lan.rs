@@ -250,6 +250,7 @@ pub fn serve_lan(
     resolver: &str,
     key: Option<&PKey<Private>>,
 ) -> Result<(), ProxyError> {
+    crate::limit_idle(&tcp)?;
     let head = String::from_utf8_lossy(&read_head(&mut tcp)?).to_string();
     let Some(t) = parse_target(&head) else {
         return refuse(&mut tcp, "400 Bad Request");
