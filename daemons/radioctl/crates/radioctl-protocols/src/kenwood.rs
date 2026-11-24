@@ -162,6 +162,8 @@ enum AntennaForm {
     /// The TS-990S `AN0p1p2p3p4;`: p1 the band (0 main), p2 1 to 4 the connector, p3 and p4 the
     /// receive antenna and drive out (9 on a set leaves them alone).
     Four,
+    /// The TS-590SG's `ANp1p2p3;` in its own guide: p1 1 or 2.
+    ThreeFromOne,
 }
 
 /// The Kenwood-style client engine for one rig.
@@ -254,12 +256,13 @@ impl KenwoodEngine {
     /// reference, `AN`, PDF p. 4), and so does the TS-2000 (ID 19; its instruction manual's PC
     /// control command table, `AN`, p. 116); the TS-590S (ID 21) takes `ANp1p2p3;` with p1 0 or 1 (its PC
     /// command reference, `AN`, PDF p. 4). Any other model, or a description with no port count,
-    /// is refused: no other Kenwood guide has been read. The TS-990S (ID 22) takes `AN0p1p2p3p4;` with four connectors (its PC command reference, `AN0`, PDF p. 4).
+    /// is refused: no other Kenwood guide has been read. The TS-590SG (ID 23) takes `ANp1p2p3;` with p1 1 or 2 in the TS-590S_SG guide. The TS-990S (ID 22) takes `AN0p1p2p3p4;` with four connectors (its PC command reference, `AN0`, PDF p. 4).
     fn antenna_form(&self) -> Result<AntennaForm, RigError> {
         let id = self.desc.kenwood.as_ref().map(|k| k.model_id);
         match (self.desc.levels.antenna_ports, id) {
             (2, Some(19 | 20)) => Ok(AntennaForm::One),
             (2, Some(21)) => Ok(AntennaForm::Three),
+            (2, Some(23)) => Ok(AntennaForm::ThreeFromOne),
             (4, Some(22)) => Ok(AntennaForm::Four),
             _ => Err(Self::unsupported("no antenna port list on this model")),
         }
@@ -517,6 +520,9 @@ impl KenwoodEngine {
                     (AntennaForm::One, [p @ (b'1' | b'2')]) => p - b'0',
                     (AntennaForm::Three, [p @ (b'0' | b'1'), b'0' | b'1', b'0' | b'1']) => {
                         p - b'0' + 1
+                    }
+                    (AntennaForm::ThreeFromOne, [p @ (b'1' | b'2'), b'0' | b'1', b'0' | b'1']) => {
+                        p - b'0'
                     }
                     // `AN0p1p2p3p4;`: the main band's answer only.
                     (
@@ -955,6 +961,7 @@ impl ProtocolEngine for KenwoodEngine {
                     // P1 0 or 1, P2 and P3 9 (no change): the receive antenna and the drive
                     // output are left alone.
                     (AntennaForm::Three, 1 | 2) => format!("AN{}99;", port - 1),
+                    (AntennaForm::ThreeFromOne, 1 | 2) => format!("AN{port}99;"),
                     (AntennaForm::Four, 1..=4) => format!("AN00{port}99;"),
                     _ => return Err(Self::unsupported("no such antenna port on this model")),
                 };
@@ -1292,6 +1299,30 @@ mod tests {
             Inbound::Unrecognised(_)
         ));
 
+        // The TS-590SG's own guide numbers the connectors 1 and 2.
+        let mut sg = KenwoodEngine::new(shipped("kenwood-ts-590sg")).expect("ts590sg");
+        assert_eq!(
+            sg.encode(&Op::GetLevel(Level::Antenna)).unwrap().bytes,
+            b"AN;"
+        );
+        assert_eq!(
+            sg.encode(&Op::SetLevel(Level::Antenna, 1)).unwrap().bytes,
+            b"AN199;"
+        );
+        assert_eq!(
+            sg.encode(&Op::SetLevel(Level::Antenna, 2)).unwrap().bytes,
+            b"AN299;"
+        );
+        assert!(sg.encode(&Op::SetLevel(Level::Antenna, 3)).is_err());
+        assert_eq!(
+            sg.feed(b"AN201;", Duration::ZERO),
+            vec![Inbound::Observation(Observation::Level(Level::Antenna, 2))]
+        );
+        assert!(matches!(
+            sg.feed(b"AN001;", Duration::ZERO)[0],
+            Inbound::Unrecognised(_)
+        ));
+
         // The TS-2000 takes the TS-480's form (instruction manual, appendix 21, `AN`, p. 116).
         let mut ts2000 = KenwoodEngine::new(shipped("kenwood-ts-2000")).expect("ts2000");
         assert_eq!(
@@ -1306,9 +1337,9 @@ mod tests {
             vec![Inbound::Observation(Observation::Level(Level::Antenna, 1))]
         );
 
-        // No guide has been read for the TS-590SG: it lists no ports and is refused.
-        let mut sg = KenwoodEngine::new(shipped("kenwood-ts-590sg")).expect("ts590sg");
-        assert!(sg.encode(&Op::GetLevel(Level::Antenna)).is_err());
+        // A model with no port count (the TS-870S) is refused.
+        let mut other = KenwoodEngine::new(shipped("kenwood-ts-870s")).expect("ts870s");
+        assert!(other.encode(&Op::GetLevel(Level::Antenna)).is_err());
     }
 
     // Tests [@ANCHOR: radioctl_kenwood_parse_if_offset]
