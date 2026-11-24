@@ -357,7 +357,7 @@ and the shell script are tested (`tests/test_hams_node_web.py`, `daemons/ham_pro
 
 Beyond web pages: a small IPv4 pool on the AREDN side that maps chosen `.ham` names to pool addresses (`/etc/config/hams_node_pool`, off by default).
 `hams-node-pool add NAME.ham IP6` takes the next free address of `pool4` (a /24 to /30 of the node's private space) and records it in
-`/etc/hams-node/pool.map`; `apply` (the init script at boot) adds the address to `lo` (the node answers ARP for it), adds a Jool SIIT explicit address
+`/etc/hams-node/pool.map`; `apply` (the init script at boot) adds the address to the AREDN-side interface (the node answers ARP for it; AREDN sets `arp_ignore=1`, so an address on `lo` is never answered on the LAN), adds a Jool SIIT explicit address
 mapping to the SIIT instance (`jool_siit -i INSTANCE eamt add IP4 IP6`; the client's own source address maps through the domain's /96 as before), has
 dnsmasq answer the name with it (`address=/NAME/IP4`, a longer match than the web gateway's `address=/ham/`), and installs an nft table `inet hams_pool`:
 only TCP ports listed in `port` (default 80; unencrypted ports only, because the answers go onto RF, Part 97) from the configured AREDN-side interface
@@ -366,5 +366,13 @@ the member's LAN or the mesh; names must end in `.ham`. `clear` (init stop) remo
 
 Tested (`tests/test_hams_node_pool.py`: allocation, exhaustion, refusals, output with recording stand-ins) and run on the stock AREDN 4.26.10.0 x86-64 VM with the
 real Jool, nft and dnsmasq: `apply` showed the mapping in `jool_siit eamt display`, the `hams_pool` table, `gw.ham` answered with the pool address and other
-`.ham` names with the gateway's; `/etc/init.d/hams-node-pool stop` removed all of it. Not tested: packets through the pool (a client behind the node and a
+`.ham` names with the gateway's; `/etc/init.d/hams-node-pool stop` removed all of it. Traffic test (2026-11-23, stock AREDN 4.26.10.0 x86-64 under QEMU, user networking; the pool address was reached by QEMU's own host forward, the target was
+QEMU's IPv6 host address answering for services on the dev box): an IPv4 client got a page through the pool address on the allowed port; a port not in the
+list and an encrypted port (8883) got no answer, the target saw no connection, and the drop counter in `hams_pool` counted them; configuring an encrypted port
+(22, 443, 853, 993, 995, 465, 8883, 1194; the list `ham_boundary` uses) is refused at `apply`. The test found two faults, both fixed here: the pool address on `lo`
+was never answered for on the LAN (`arp_ignore=1`), and AREDN's firewall (fw4) drops forwarded traffic from an interface that is in no zone, so every
+translated flow was dropped. `apply` now writes `/etc/hams-node/pool-fw.nft` (the translated requests from the AREDN-side interface to the mapped targets on the
+listed ports, and the replies from the pool addresses on those ports) and registers it as an fw4 include at the head of the forward chain; `clear` removes it.
+The same drop affects the web gateway's own path only if its clients are routed through the node (they connect to the node itself, which is input, not forward).
+The test needed an address map entry for the client (its translated source had to be an address the QEMU network accepts); real traffic uses the domain's /96.
 remote target over WireGuard were not available in the VM).
