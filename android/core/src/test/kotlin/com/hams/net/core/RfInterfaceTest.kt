@@ -20,7 +20,7 @@ class RfInterfaceTest {
     @Test fun kissFramesPassBothWaysWithEscapes() {
         val tnc = VirtualTnc()
         var allowed = true
-        val rf = RfInterface(tnc, "N0CALL", TxGate { allowed })
+        val rf = RfInterface(tnc, "N0CALL", TxGate { send -> if (allowed) { send(); true } else false })
         rf.enable()
         assertTrue(rf.send(packet))
         assertEquals(1, tnc.received.size)
@@ -36,7 +36,7 @@ class RfInterfaceTest {
     @Test fun nothingKeysUnlessEnabledAndGateAllows() {
         val tnc = VirtualTnc()
         var allowed = false
-        val rf = RfInterface(tnc, "N0CALL", TxGate { allowed })
+        val rf = RfInterface(tnc, "N0CALL", TxGate { send -> if (allowed) { send(); true } else false })
         assertFalse(rf.send(packet))
         rf.enable()
         assertFalse(rf.send(packet))
@@ -48,7 +48,7 @@ class RfInterfaceTest {
     }
 
     @Test fun rfRefusesWireGuardAndEveryEncryptingSuite() {
-        val rf = RfInterface(VirtualTnc(), "N0CALL", TxGate { true })
+        val rf = RfInterface(VirtualTnc(), "N0CALL", TxGate { send -> send(); true })
         rf.attach(LinkSuite.NONE)
         assertFailsWith<RfRefused> { rf.attach(LinkSuite.WIREGUARD) }
         assertFailsWith<RfRefused> { rf.attach(LinkSuite.ENCRYPTED_OTHER) }
@@ -62,10 +62,10 @@ class RfInterfaceTest {
     }
 
     @Test fun enablingShowsTheStationIdReminder() {
-        val rf = RfInterface(VirtualTnc(), "N0CALL", TxGate { true })
+        val rf = RfInterface(VirtualTnc(), "N0CALL", TxGate { send -> send(); true })
         val text = rf.enable()
         assertTrue(text.contains("N0CALL") && text.contains("97.119") && text.contains("No encryption"))
-        assertFailsWith<IllegalArgumentException> { RfInterface(VirtualTnc(), " ", TxGate { true }).enable() }
+        assertFailsWith<IllegalArgumentException> { RfInterface(VirtualTnc(), " ", TxGate { send -> send(); true }).enable() }
     }
 
     @Test fun badEscapeDropsOnlyThatFrame() {
