@@ -380,7 +380,7 @@ class TestMonitorExhaustive(HamsTransactionCase):
             "odoo.addons.pager_duty.daemon.generalized_monitor.shutil.which"
         )
         mock_which.return_value = "/usr/bin/certbot"
-        mock_run = self.safe_patch(
+        self.safe_patch(
             "odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run"
         )
         mock_urlopen = self.safe_patch(
