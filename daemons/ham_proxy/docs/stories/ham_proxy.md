@@ -74,6 +74,7 @@ A `.ham` server is identified by a DANE-EE TLSA record in the signed `.ham` zone
 Site gateway (`--gateway`, tests `tests/gateway.rs`):
 
 - [@ANCHOR: ham_proxy_policy_permits] and [@ANCHOR: ham_proxy_policy_replace] are the policy's host-and-path check and the swap-in of a freshly verified list; [@ANCHOR: ham_proxy_request_target] reads host, port and path from the request head in gateway mode, where `serve_one_policed` takes the site from the request and refuses (before any upstream connection) a site or path that is not permitted.
+- [@ANCHOR: ham_proxy_unambiguous_head] Gateway mode accepts only `METHOD /path HTTP/1.x` with CRLF line ends, token header names and exactly one `Host`; absolute-form and `CONNECT` targets, duplicate or folded `Host` headers get `BadRequest`.
 - [@ANCHOR: ham_proxy_load_key] and [@ANCHOR: ham_proxy_load_list] are the binary's key file and per-connection list loading (a bad list gives the empty whitelist).
 
 Upstream lookup for the AREDN gateway (`--ham-resolver`, `--allow-private-upstream`, tests `tests/resolve.rs`):

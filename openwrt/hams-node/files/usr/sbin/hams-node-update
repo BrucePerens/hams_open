@@ -80,6 +80,8 @@ rollback() {
 	exit 1
 }
 
+# --allow-untrusted is only about the packages having no signature of their own: `apk fetch` has already checked each file against the index
+# that apk verified with the feed key ("ADB integrity error" otherwise; tested), and the stage directory is root-only (umask 077).
 # shellcheck disable=SC2046
 apk add --allow-untrusted "$stage"/*.apk > /dev/null 2>&1 || rollback "install failed"
 for n in $new; do

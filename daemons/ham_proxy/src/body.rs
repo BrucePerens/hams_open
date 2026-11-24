@@ -170,6 +170,10 @@ mod tests {
         let (head, rest) = read_request(&mut &raw[..]).unwrap();
         assert!(head.ends_with(b"\r\n\r\n") && rest == b"abc");
         assert!(read_request(&mut &b"GET / HTTP/1.1\r\nHost"[..]).is_err());
+        // a second request in the same segment is never part of the head that is forwarded
+        let raw = b"GET /ok HTTP/1.1\r\nHost: a\r\n\r\nGET /secret HTTP/1.1\r\nHost: a\r\n\r\n";
+        let (head, _) = read_request(&mut &raw[..]).unwrap();
+        assert!(!String::from_utf8_lossy(&crate::request_identity(&head)).contains("secret"));
     }
 
     #[test]
