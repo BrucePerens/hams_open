@@ -24,8 +24,8 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 
 | Verification level | Models |
 |---|---:|
-| unverified | 249 |
-| manual-checked | 63 |
+| unverified | 247 |
+| manual-checked | 65 |
 | transcript-checked | 0 |
 | hardware-verified | 1 |
 
@@ -379,7 +379,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 1002 | Yaesu | FT-1000 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-1000` | - | unverified | - | described |
 | 1003 | Yaesu | FT-1000D | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-1000d` | - | unverified | - | described |
 | 1024 | Yaesu | FT-1000MP | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-1000mp` | - | unverified | - | described |
-| 1029 | Yaesu | FT-2000 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-2000` | - | unverified | - | described |
+| 1029 | Yaesu | FT-2000 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-2000` | - | manual-checked | - | described |
 | 1027 | Yaesu | FT-450 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-450` | - | manual-checked | - | described |
 | 1046 | Yaesu | FT-450D | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-450d` | - | manual-checked | - | described |
 | 1039 | Yaesu | FT-600 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-600` | - | unverified | - | described |
@@ -402,7 +402,7 @@ Columns: **Tier** and **Family** are this tool's planning hints (not a statement
 | 1043 | Yaesu | FT-897D | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-897d` | - | manual-checked | - | described |
 | 1013 | Yaesu | FT-900 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-900` | - | unverified | - | described |
 | 1014 | Yaesu | FT-920 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-920` | - | unverified | - | described |
-| 1028 | Yaesu | FT-950 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-950` | - | unverified | - | described |
+| 1028 | Yaesu | FT-950 | A | yaesu_newcat_ascii | yaesu | `yaesu-ft-950` | - | manual-checked | - | described |
 | 1031 | Yaesu | FT-980 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-980` | - | unverified | - | described |
 | 1016 | Yaesu | FT-990 | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-990` | - | unverified | - | described |
 | 1048 | Yaesu | FT-990 Old Rom | B | yaesu_legacy | yaesu_legacy | `yaesu-ft-990-oldrom` | - | unverified | - | described |

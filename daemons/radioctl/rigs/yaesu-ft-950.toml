@@ -17,6 +17,12 @@ model_id = 310
 frequency_digits = 8
 levels = { mic-gain = [0, 255] }
 
+[levels]
+attenuator_db = []
+attenuator_any_up_to_db = 0
+preamp_steps = 0
+antenna_ports = 2
+
 [timing]
 timeout_ms = 2000
 retries = 3
@@ -65,6 +71,11 @@ code = "9"
 [[modes]]
 mode = "data"
 code = "C"
+
+[[facts]]
+key = "levels.*"
+provenance = { kind = "manual", reference = "Yaesu 'FT-950 CAT Operation Reference Book (2007)', file FT-950_CAT_Manual_ENG.pdf (in /storage/manuals/yaesu), sha256 8a3e89671ac9e2a62fdd8645eeb0ca42ee6340156a4d2976acaa38fde81dea89: AN ANTENNA NUMBER: ANp1p2; p1 0 fixed, p2 1 ANT1, 2 ANT2; read ANp1; answers ANp1p3p4; (p3 the antenna)", note = "Only the antenna connector is declared; no attenuator or preamp step is read for this model." }
+verified = { state = "manual-checked", reference = "AN command table" }
 
 [[facts]]
 key = "rig.*"

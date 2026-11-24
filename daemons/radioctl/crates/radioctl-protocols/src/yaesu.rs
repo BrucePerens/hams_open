@@ -271,12 +271,12 @@ impl YaesuEngine {
     // [@ANCHOR: radioctl_yaesu_engine_has_antenna_ports]
     /// True for the models whose `AN` command has been read: the FTDX101D and FTDX101MP (IDs 681
     /// and 682, three connectors, CAT Operation Reference Manual, `AN`, PDF p. 7), the FTDX3000
-    /// (462, three) and the FTDX1200 (583, two): all `ANp1p2;` with p1 0 and p2 the connector.
+    /// (462, three) the FTDX1200 (583, two), the FT-950 (310, two) and the FT-2000 (251, two): all `ANp1p2;` with p1 0 and p2 the connector.
     fn has_antenna_ports(&self) -> bool {
         self.desc.yaesu.as_ref().is_some_and(|y| {
             matches!(
                 (y.model_id, self.desc.levels.antenna_ports),
-                (681 | 682 | 462, 3) | (583, 2)
+                (681 | 682 | 462, 3) | (583 | 310 | 251, 2)
             )
         })
     }
@@ -405,7 +405,7 @@ impl YaesuEngine {
                 .map(Observation::DcsCode),
             // `ANp1p2p4;`: main band (p1 0), connector 1 to 3, p4 a fixed 0.
             (Some("AN"), Some(rest)) if self.has_antenna_ports() => match rest.as_bytes() {
-                [b'0', port @ b'1'..=b'3', b'0']
+                [b'0', port @ b'1'..=b'3', b'0' | b'1']
                     if u16::from(port - b'0') <= u16::from(self.desc.levels.antenna_ports) =>
                 {
                     Some(Observation::Level(Level::Antenna, u16::from(port - b'0')))
@@ -819,8 +819,21 @@ mod tests {
             e.feed(b"AN030;", Duration::ZERO)[0],
             Inbound::Unrecognised(_)
         ));
+        // The FT-950 and FT-2000 (two connectors; the FT-2000's p4 is the receive antenna flag).
+        for id in ["yaesu-ft-950", "yaesu-ft-2000"] {
+            let mut e = YaesuEngine::new(shipped(id)).expect("engine");
+            assert_eq!(
+                e.encode(&Op::SetLevel(Level::Antenna, 2)).unwrap().bytes,
+                b"AN02;"
+            );
+            assert!(e.encode(&Op::SetLevel(Level::Antenna, 3)).is_err());
+            assert_eq!(
+                e.feed(b"AN010;", Duration::ZERO),
+                vec![Inbound::Observation(Observation::Level(Level::Antenna, 1))]
+            );
+        }
         // No other Yaesu has had its AN command read: refused.
-        let mut other = YaesuEngine::new(shipped("yaesu-ft-950")).expect("engine");
+        let mut other = YaesuEngine::new(shipped("yaesu-ft-991a")).expect("engine");
         assert!(other.encode(&Op::GetLevel(Level::Antenna)).is_err());
     }
 
