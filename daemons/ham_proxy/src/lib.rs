@@ -138,14 +138,18 @@ pub fn require_integrity_only<S>(s: &SslStream<S>) -> Result<String, ProxyError>
 fn read_head<R: Read>(r: &mut R) -> Result<Vec<u8>, ProxyError> {
     let mut head = Vec::new();
     let mut buf = [0u8; 4096];
-    while !head.windows(4).any(|w| w == b"\r\n\r\n") {
+    loop {
+        if let Some(i) = head.windows(4).position(|w| w == b"\r\n\r\n") {
+            // Bytes after the blank line (a pipelined request or a body) are not part of the head: never forward them.
+            head.truncate(i + 4);
+            return Ok(head);
+        }
         let n = r.read(&mut buf)?;
         if n == 0 || head.len() + n > MAX_HEAD {
             return Err(ProxyError::BadRequest);
         }
         head.extend_from_slice(&buf[..n]);
     }
-    Ok(head)
 }
 
 // [@ANCHOR: ham_proxy_request_target]
@@ -431,4 +435,19 @@ pub(crate) fn relay_response<U: Read, H: Write>(
     };
     ham.write_all(&out)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn read_head_stops_at_the_blank_line() {
+        // Tests [@ANCHOR: ham_proxy_read_head]
+        // A second request in the same segment was forwarded upstream behind the checked head (request smuggling past the path whitelist).
+        let raw = b"GET /ok HTTP/1.1\r\nHost: a.example\r\n\r\nGET /secret HTTP/1.1\r\nHost: a.example\r\n\r\n";
+        let head = read_head(&mut &raw[..]).unwrap();
+        assert!(head.ends_with(b"\r\n\r\n") && !String::from_utf8_lossy(&head).contains("secret"));
+        assert!(!String::from_utf8_lossy(&request_identity(&head)).contains("secret"));
+    }
 }
