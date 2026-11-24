@@ -56,3 +56,9 @@ namespace `six` is an IPv6 host inside the mesh /96, namespace `four` the AREDN 
 on both hosts (offload off) shows every packet with a correct checksum; an address of another domain and 64:ff9b::/96 are not translated. About 3 minutes (passed 2026-11-24):
 
     agent_procs.py run owrt-siit --timeout 1500 --mem-max 4G -- python3 -I -u openwrt/image/tools/siit_netns_test.py WORKDIR/stock-25.12.5.img
+
+`tools/siit_aredn_test.py AREDN_IMAGE HOST_IMAGE APKDIR` runs the same checks with the gateway on the STOCK AREDN 4.26.10.0 x86-64 image (the AREDN kernel has no network namespaces, so the two hosts are
+OpenWrt VMs on QEMU socket links). The Jool apks of `openwrt/aredn-jool` (x86-64) are served to the gateway over loopback HTTP; the real `hams-node-siit` loads the instance. Passed 3 of 3 runs
+on 2026-11-24 (one earlier run lost the link because the hosts connected before the gateway listened; fixed with a 3 s wait). About 6 minutes:
+
+    agent_procs.py run owrt-siit-aredn --timeout 1800 --mem-max 6G -- python3 -I -u openwrt/image/tools/siit_aredn_test.py WORKDIR/aredn-4.26.10.0-x86-64.img WORKDIR/stock-25.12.5.img ~/workspace/tmp/aredn_jool_apks/x86-64
