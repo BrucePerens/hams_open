@@ -32,6 +32,12 @@ impl Policy {
             .is_ok_and(|w| w.permits_path(host, path))
     }
 
+    // [@ANCHOR: ham_proxy_policy_permits_host]
+    /// Whether `host` is on the current whitelist at all (some path may be permitted); for a check made before the path is known.
+    pub fn permits_host(&self, host: &str) -> bool {
+        self.whitelist.read().is_ok_and(|w| w.permits(host))
+    }
+
     // [@ANCHOR: ham_proxy_policy_replace]
     /// Swap in a new whitelist (a refreshed signed list); flows already running are not affected.
     pub fn replace(&self, whitelist: Whitelist) {

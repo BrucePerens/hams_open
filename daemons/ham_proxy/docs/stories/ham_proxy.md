@@ -103,6 +103,7 @@ For the browsers on the member's own LAN (never RF). Needs the node's proxy CA (
 - [@ANCHOR: ham_proxy_lan_upstream] `Upstream::Gateway { addr, name, connector }`: the site gateway for whitelisted Internet sites: `addr` is `host:port`, `name` the name in its certificate, `connector` an integrity-only client that trusts the gateway's CA.
 - [@ANCHOR: ham_proxy_lan_target] `Target { connect, host, port, path }`: `connect` is true for `CONNECT` (TLS follows), `host` the lower-case DNS name, `port` the upstream port, `path` the origin-form path for plain HTTP (empty for `CONNECT`).
 - [@ANCHOR: ham_proxy_lan_refuse] A refused browser request gets a short plain-text page (400 for an unreadable target, 403 for a name off the whitelist) and nothing reaches upstream.
+- [@ANCHOR: ham_proxy_policy_permits_host] The LAN listener checks only the host before it opens a tunnel or relays a request (a name with path limits has no permitted `/`), then each request's path; a path outside the limits gets 403.
 - [@ANCHOR: ham_proxy_lan_connect_upstream] The upstream leg is opened through `resolve::connect_upstream` (never a private address), then integrity-only TLS; the negotiated suite must be integrity-only.
 - [@ANCHOR: ham_proxy_load_signed] The binary reads `--signed-whitelist` with `--whitelist-key` (one without the other is an error).
 - [@ANCHOR: ham_proxy_load_policy] The binary builds the whitelist policy from `--whitelist` or the signed list; it needs `--callsign` and `--log`.
