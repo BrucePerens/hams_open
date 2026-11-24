@@ -41,6 +41,7 @@ fn private_loopback_and_mapped_addresses_are_refused() {
 fn aaaa_query_and_response_round_trip() {
     // Tests [@ANCHOR: ham_proxy_aaaa_query]
     // Tests [@ANCHOR: ham_proxy_parse_aaaa]
+    // Tests [@ANCHOR: ham_proxy_resolve_skip_name]
     let q = aaaa_query("n0call.ham", 7);
     assert_eq!(&q[..2], &[0, 7]);
     assert_eq!(&q[q.len() - 4..], &[0, 28, 0, 1]);
@@ -191,6 +192,7 @@ fn site(c: &Path, k: &Path) -> u16 {
 #[test]
 fn ipv4_client_loads_a_ham_page_integrity_only_and_other_sites_are_refused() {
     // Tests [@ANCHOR: ham_proxy_connect_upstream]
+    // Tests [@ANCHOR: ham_proxy_resolve_lookup]
     // Tests [@ANCHOR: ham_proxy_set_ham_resolver]
     // Tests [@ANCHOR: ham_proxy_allow_private_upstream]
     let dir = tempfile::tempdir().unwrap();

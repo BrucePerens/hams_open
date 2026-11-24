@@ -39,6 +39,7 @@ pub fn aaaa_query(host: &str, id: u16) -> Vec<u8> {
     q
 }
 
+// [@ANCHOR: ham_proxy_resolve_skip_name]
 fn skip_name(p: &[u8], mut i: usize) -> Option<usize> {
     loop {
         let l = *p.get(i)? as usize;
@@ -115,6 +116,7 @@ pub fn address_allowed(ip: &IpAddr) -> bool {
     }
 }
 
+// [@ANCHOR: ham_proxy_resolve_lookup]
 fn lookup(resolver: &str, host: &str) -> Result<Vec<Ipv6Addr>, ProxyError> {
     let sock = UdpSocket::bind(if resolver.starts_with('[') {
         "[::]:0"
