@@ -29,6 +29,48 @@ pub const INTEGRITY_ONLY_SUITES: [&str; 3] =
 const TLS13_SUITES: &str = "TLS_SHA256_SHA256:TLS_SHA384_SHA384";
 const TLS12_CIPHERS: &str = "NULL-SHA256:@SECLEVEL=0";
 const MAX_HEAD: usize = 65536;
+/// Most connections served at once; the listeners drop the rest (a thread each is the cost).
+pub const MAX_CONNECTIONS: usize = 256;
+static IDLE_SECS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(60);
+static OPEN: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+// [@ANCHOR: ham_proxy_set_idle_timeout]
+/// Seconds a connection may sit without a byte arriving or leaving before it is dropped (default 60).
+pub fn set_idle_timeout(secs: u64) {
+    IDLE_SECS.store(secs.max(1), std::sync::atomic::Ordering::Relaxed);
+}
+
+// [@ANCHOR: ham_proxy_limit_idle]
+/// Put the idle timeout on both directions of `tcp`, so a client or site that stalls cannot hold a thread forever.
+pub(crate) fn limit_idle(tcp: &TcpStream) -> io::Result<()> {
+    let d = Some(std::time::Duration::from_secs(
+        IDLE_SECS.load(std::sync::atomic::Ordering::Relaxed),
+    ));
+    tcp.set_read_timeout(d)?;
+    tcp.set_write_timeout(d)
+}
+
+/// One of the [`MAX_CONNECTIONS`] connection slots; given back on drop.
+pub struct Slot(());
+
+impl Drop for Slot {
+    fn drop(&mut self) {
+        OPEN.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+// [@ANCHOR: ham_proxy_try_slot]
+/// A connection slot, or `None` when [`MAX_CONNECTIONS`] connections are already being served.
+pub fn try_slot() -> Option<Slot> {
+    use std::sync::atomic::Ordering::Relaxed;
+    (OPEN.fetch_add(1, Relaxed) < MAX_CONNECTIONS)
+        .then_some(())
+        .map(|()| Slot(()))
+        .or_else(|| {
+            OPEN.fetch_sub(1, Relaxed);
+            None
+        })
+}
 /// Pass as `site_addr` to serve any site the whitelist permits, taken from each request's `Host` (port 443): the central site gateway.
 pub const GATEWAY: &str = "*";
 
@@ -384,6 +426,7 @@ pub fn serve_one_policed(
     login: Option<Login<'_>>,
     policy: Option<&policy::Policy>,
 ) -> Result<(), ProxyError> {
+    limit_idle(&tcp)?;
     let mut ham = acceptor.accept(tcp)?;
     let suite = require_integrity_only(&ham)?;
     let gateway = site_addr == GATEWAY;
