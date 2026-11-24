@@ -1,0 +1,69 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-proxyca ca [--renew] | cert | pac [FILE]
+# Browser side of the ham-legal SSL proxy. The per-node CA is made here and its private key never leaves this directory (mode 600); only
+# `cert` (the certificate) is ever offered for download. The CA is name-constrained to .ham, the whitelisted domains and (when set) the
+# ham network's address block, so a certificate it signs for any other name fails in a validating client. `pac` writes the PAC/WPAD file:
+# .ham names, ham-network addresses and whitelisted sites go to the proxy, everything else DIRECT. Regenerate the CA (--renew) only when
+# the whitelist changes; the members then install the new certificate.
+set -u
+dir=${HAMS_PROXY_DIR:-/etc/hams-node/proxy}
+get() { uci -q get "hams_node_proxyca.main.$1" 2>/dev/null; }
+proxy=$(get proxy) wl=$(get whitelist) prefix=$(get net_prefix) cidr=$(get net_cidr)
+wl=${wl:-/etc/hams-node/whitelist}
+case $proxy in '' | *[!A-Za-z0-9.:\[\]-]*) echo "hams-node-proxyca: bad or missing proxy address" >&2; exit 1 ;; esac
+case $prefix in *[!A-Fa-f0-9:]*) echo "hams-node-proxyca: bad net_prefix" >&2; exit 1 ;; esac
+case $cidr in *[!A-Fa-f0-9:/]*) echo "hams-node-proxyca: bad net_cidr" >&2; exit 1 ;; esac
+
+domains() { # whitelisted domains, wildcard stripped, nothing but DNS-name characters
+	[ -r "$wl" ] || return 0
+	sed 's/#.*//; s/^[ \t]*//; s/[ \t]*$//; s/^\*\.//' "$wl" | tr 'A-Z' 'a-z' | grep -E '^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$' | sort -u
+}
+
+mask6() { # prefix length -> IPv6 netmask in hex groups
+	awk -v n="$1" 'BEGIN { for (g = 0; g < 8; g++) { b = n - g * 16; b = b < 0 ? 0 : (b > 16 ? 16 : b); v = 0
+		for (i = 0; i < b; i++) v += 2 ^ (15 - i); printf "%s%x", (g ? ":" : ""), v } }'
+}
+
+do_ca() {
+	if [ "${1:-}" != --renew ] && [ -s "$dir/ca.pem" ] && [ -s "$dir/ca.key" ]; then exit 0; fi
+	umask 077
+	mkdir -p "$dir" || exit 1
+	{
+		printf '[req]\ndistinguished_name=dn\nx509_extensions=ext\nprompt=no\n[dn]\nCN=hams-node proxy CA\n'
+		printf '[ext]\nbasicConstraints=critical,CA:TRUE,pathlen:0\nkeyUsage=critical,keyCertSign,cRLSign\nnameConstraints=critical,@nc\n[nc]\npermitted;DNS.0=ham\n'
+		i=1
+		for d in $(domains); do printf 'permitted;DNS.%s=%s\n' $i "$d"; i=$((i + 1)); done
+		[ -n "$cidr" ] && printf 'permitted;IP.0=%s/%s\n' "${cidr%/*}" "$(mask6 "${cidr#*/}")"
+	} > "$dir/ca.cnf" || exit 1
+	openssl ecparam -name prime256v1 -genkey -noout -out "$dir/ca.key.new" &&
+		openssl req -new -x509 -key "$dir/ca.key.new" -days 3650 -config "$dir/ca.cnf" -out "$dir/ca.pem.new" &&
+		mv "$dir/ca.key.new" "$dir/ca.key" && mv "$dir/ca.pem.new" "$dir/ca.pem" && chmod 600 "$dir/ca.key"
+}
+
+do_cert() { [ -s "$dir/ca.pem" ] || exit 1; cat "$dir/ca.pem"; }
+
+do_pac() {
+	out=${1:-/www/hams.pac}
+	{
+		echo 'function FindProxyForURL(url, host) {'
+		echo '  host = host.toLowerCase().replace(/^\[|\]$/g, "");'
+		echo '  var via = "PROXY '"$proxy"'";'
+		echo '  if (host == "ham" || /\.ham$/.test(host)) return via;'
+		[ -n "$prefix" ] && echo '  if (host.indexOf("'"$prefix"'") == 0) return via;'
+		echo '  var sites = ['
+		for d in $(domains); do printf '    "%s",\n' "$d"; done
+		echo '  ];'
+		echo '  for (var i = 0; i < sites.length; i++)'
+		echo '    if (host == sites[i] || host.slice(-sites[i].length - 1) == "." + sites[i]) return via;'
+		echo '  return "DIRECT";'
+		echo '}'
+	} > "$out.new" && mv "$out.new" "$out" && { [ "$out" != /www/hams.pac ] || cp "$out" /www/wpad.dat; }
+}
+
+case ${1:-} in
+ca) do_ca "${2:-}" ;;
+cert) do_cert ;;
+pac) do_pac "${2:-}" ;;
+*) echo "usage: hams-node-proxyca ca [--renew] | cert | pac [FILE]" >&2; exit 2 ;;
+esac

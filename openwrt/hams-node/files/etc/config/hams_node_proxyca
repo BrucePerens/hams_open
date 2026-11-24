@@ -1,0 +1,9 @@
+# hams-node: browser side of the ham-legal SSL proxy (per-node CA and PAC file).
+config proxyca 'main'
+	# where the browsers on the LAN reach the proxy (the router's LAN address and the ham_proxy port)
+	option proxy '192.168.1.1:8443'
+	# one domain per line, `example.org` or `*.example.org` (same file format as the ham_proxy whitelist)
+	option whitelist '/etc/hams-node/whitelist'
+	# the ham network's address block: its hosts go through the proxy, and the CA may name them
+	# option net_prefix '2001:db8:ab00:'
+	# option net_cidr '2001:db8:ab00::/40'

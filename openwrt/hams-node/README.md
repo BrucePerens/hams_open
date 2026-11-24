@@ -299,3 +299,12 @@ to the stock OpenWrt router form). Results:
   a plain dnsmasq with `--filter-AAAA` and the same forward behaves the same). So through the node's resolver the SIIT AAAA of a .ham name is never
   seen. IPv6 clients must ask the hams.com Net resolvers directly (second gateway form: the stock OpenWrt router's dnsmasq has no such filter).
   The forward still serves the non-AAAA types (service-ad CNAME targets, TXT, PTR). The filter is firmware configuration and is not changed here.
+
+## hams-node-proxyca: the browser side of the proxy
+
+`hams-node-proxyca ca` makes the node's own CA (EC P-256, key `/etc/hams-node/proxy/ca.key` mode 600, never read by the LuCI plugin or any download),
+name-constrained to `.ham`, the whitelisted domains (`/etc/hams-node/whitelist`, same format as ham_proxy's) and the ham network's address block
+(`net_cidr`); a certificate it signs for any other name fails `openssl verify` (tested). `hams-node-proxyca pac` writes `/www/hams.pac` and
+`/www/wpad.dat`: `.ham` names, ham-network addresses (`net_prefix`) and whitelisted sites get `PROXY`, everything else `DIRECT` (tested by evaluating the
+PAC in node). The LuCI page offers "Download CA certificate" (the `proxy_ca` ubus method returns the certificate only); `INSTALL_CA.md` has the install steps
+for Windows, macOS, Linux, Firefox, Chrome and Android. Changing the whitelist needs `ca --renew` and a new install. Tests: `tests/test_hams_node_proxyca.py`.
