@@ -22,5 +22,6 @@ define Package/hams-node-time/install
 	$(INSTALL_BIN) ./files/usr/sbin/hams-node-time $(1)/usr/sbin/
 	$(INSTALL_CONF) ./files/etc/config/hams_node_time $(1)/etc/config/
 	$(INSTALL_BIN) ./files/usr/libexec/hams-time/ntp $(1)/usr/libexec/hams-time/
+	$(INSTALL_BIN) ./files/usr/libexec/hams-time/gps ./files/usr/libexec/hams-time/rtc ./files/usr/libexec/hams-time/wwv $(1)/usr/libexec/hams-time/
 	$(LN) ntp $(1)/usr/libexec/hams-time/hamnet-ntp
 endef
