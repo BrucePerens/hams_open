@@ -40,6 +40,7 @@ fn load_list(file: &std::path::Path, key: &[u8]) -> Whitelist {
         .unwrap_or_default()
 }
 
+// [@ANCHOR: ham_proxy_load_signed]
 /// `--signed-whitelist FILE --whitelist-key HEXFILE` (the hams.com list, re-read and verified on every connection), if given.
 fn load_signed(args: &[String]) -> Result<Option<(PathBuf, Vec<u8>)>, ProxyError> {
     match (
@@ -54,6 +55,7 @@ fn load_signed(args: &[String]) -> Result<Option<(PathBuf, Vec<u8>)>, ProxyError
     }
 }
 
+// [@ANCHOR: ham_proxy_load_policy]
 /// The whitelist policy from `--whitelist FILE` or the signed list; either needs `--callsign` and `--log`.
 fn load_policy(args: &[String], signed: bool) -> Result<Option<Arc<Policy>>, ProxyError> {
     let plain = arg(args, "--whitelist");
@@ -75,6 +77,7 @@ fn load_policy(args: &[String], signed: bool) -> Result<Option<Arc<Policy>>, Pro
     Ok(Some(Arc::new(p)))
 }
 
+// [@ANCHOR: ham_proxy_run_lan]
 /// `--lan`: the browser-facing listener for the member's LAN (see `ham_proxy::lan`). Needs `--proxy-ca`, `--proxy-ca-key`, a whitelist,
 /// `--callsign`, `--log`, `--resolver IP:PORT` (the node's `.ham` resolver) and, for whitelisted Internet sites, `--upstream-gateway HOST:PORT --upstream-ca PEM`.
 fn run_lan(args: &[String]) -> Result<(), ProxyError> {

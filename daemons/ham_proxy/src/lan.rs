@@ -217,6 +217,8 @@ fn refuse<W: Write>(w: &mut W, status: &str) -> Result<(), ProxyError> {
     Ok(())
 }
 
+// [@ANCHOR: ham_proxy_lan_connect_upstream]
+/// Open the integrity-only TLS leg for `t`: a `.ham` server directly (DANE), anything else through the gateway; only permitted addresses are tried.
 fn connect_upstream(
     t: &Target,
     up: &Upstream,

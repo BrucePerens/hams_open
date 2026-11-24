@@ -371,3 +371,78 @@ fn targets_are_read_from_connect_absolute_uri_and_host_header() {
     assert_eq!(t("GET ftp://x/ HTTP/1.1\r\n\r\n"), None);
     assert_eq!(t("CONNECT bad_host:443 HTTP/1.1\r\n\r\n"), None);
 }
+
+struct Killed(std::process::Child);
+impl Drop for Killed {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+#[test]
+// Tests [@ANCHOR: ham_proxy_run_lan]
+// Tests [@ANCHOR: ham_proxy_load_policy]
+// Tests [@ANCHOR: ham_proxy_load_signed]
+fn the_binary_runs_the_lan_listener_from_its_flags() {
+    let dir = tempfile::tempdir().unwrap();
+    let (ca_pem, ca_key) = node_ca(dir.path());
+    let (gc, gk) = gateway_cert(dir.path());
+    let (gw, seen) = start_gateway(ham_acceptor(&gc, &gk).unwrap());
+    let wl = dir.path().join("whitelist");
+    std::fs::write(&wl, "example.org\n").unwrap();
+    let log = dir.path().join("station.log");
+    let port = TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let listen = format!("127.0.0.1:{port}");
+    let s = |p: &Path| p.to_str().unwrap().to_string();
+    let child = Command::new(env!("CARGO_BIN_EXE_ham_proxy"))
+        .args([
+            "--lan",
+            "--listen",
+            &listen,
+            "--proxy-ca",
+            &s(&ca_pem),
+            "--proxy-ca-key",
+            &s(&ca_key),
+            "--whitelist",
+            &s(&wl),
+        ])
+        .args([
+            "--callsign",
+            "W1AW",
+            "--log",
+            &s(&log),
+            "--resolver",
+            "127.0.0.1:1",
+            "--upstream-gateway",
+            &gw,
+        ])
+        .args(["--upstream-ca", &s(&gc), "--allow-private-upstream"])
+        .spawn()
+        .unwrap();
+    let _guard = Killed(child);
+    let mut tcp = None;
+    for _ in 0..50 {
+        if let Ok(t) = TcpStream::connect(&listen) {
+            tcp = Some(t);
+            break;
+        }
+        thread::sleep(std::time::Duration::from_millis(100));
+    }
+    let mut tcp = tcp.expect("the listener started");
+    tcp.write_all(b"GET http://example.org/q HTTP/1.1\r\nHost: example.org\r\n\r\n")
+        .unwrap();
+    assert!(read_all(&mut tcp).contains("site-body-xyz"));
+    assert!(seen.lock().unwrap()[0].starts_with("GET /q HTTP/1.1"));
+    assert!(std::fs::read_to_string(&log)
+        .unwrap()
+        .contains("W1AW -> example.org"));
+    let mut tcp = TcpStream::connect(&listen).unwrap();
+    tcp.write_all(b"GET http://evil.com/ HTTP/1.1\r\nHost: evil.com\r\n\r\n")
+        .unwrap();
+    assert!(read_all(&mut tcp).starts_with("HTTP/1.1 403"));
+}
