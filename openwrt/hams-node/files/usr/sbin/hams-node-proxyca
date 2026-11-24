@@ -1,11 +1,13 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-or-later
-# hams-node-proxyca ca [--renew] | cert | pac [FILE]
+# hams-node-proxyca ca [--renew] | cert | pac [FILE] | args
 # Browser side of the ham-legal SSL proxy. The per-node CA is made here and its private key never leaves this directory (mode 600); only
 # `cert` (the certificate) is ever offered for download. The CA is name-constrained to .ham, the whitelisted domains and (when set) the
 # ham network's address block, so a certificate it signs for any other name fails in a validating client. `pac` writes the PAC/WPAD file:
 # .ham names, ham-network addresses and whitelisted sites go to the proxy, everything else DIRECT. Regenerate the CA (--renew) only when
 # the whitelist changes; the members then install the new certificate.
+# `args` prints the `ham_proxy --lan` command line (one argument per line) for the init script; it prints nothing while `enabled` is not 1 and refuses
+# (exit 1) a listen address that is not a private LAN address of this node (never a wildcard or a public address), or a missing callsign/gateway.
 set -u
 dir=${HAMS_PROXY_DIR:-/etc/hams-node/proxy}
 get() { uci -q get "hams_node_proxyca.main.$1" 2>/dev/null; }
@@ -34,7 +36,7 @@ do_ca() {
 		printf '[ext]\nbasicConstraints=critical,CA:TRUE,pathlen:0\nkeyUsage=critical,keyCertSign,cRLSign\nnameConstraints=critical,@nc\n[nc]\npermitted;DNS.0=ham\n'
 		i=1
 		for d in $(domains); do printf 'permitted;DNS.%s=%s\n' $i "$d"; i=$((i + 1)); done
-		[ -n "$cidr" ] && printf 'permitted;IP.0=%s/%s\n' "${cidr%/*}" "$(mask6 "${cidr#*/}")"
+		if [ -n "$cidr" ]; then printf 'permitted;IP.0=%s/%s\n' "${cidr%/*}" "$(mask6 "${cidr#*/}")"; fi
 	} > "$dir/ca.cnf" || exit 1
 	openssl ecparam -name prime256v1 -genkey -noout -out "$dir/ca.key.new" &&
 		openssl req -new -x509 -key "$dir/ca.key.new" -days 3650 -config "$dir/ca.cnf" -out "$dir/ca.pem.new" &&
@@ -44,7 +46,8 @@ do_ca() {
 do_cert() { [ -s "$dir/ca.pem" ] || exit 1; cat "$dir/ca.pem"; }
 
 do_pac() {
-	out=${1:-/www/hams.pac}
+	www=${HAMS_PAC_DIR:-/www}
+	out=${1:-$www/hams.pac}
 	{
 		echo 'function FindProxyForURL(url, host) {'
 		echo '  host = host.toLowerCase().replace(/^\[|\]$/g, "");'
@@ -58,12 +61,36 @@ do_pac() {
 		echo '    if (host == sites[i] || host.slice(-sites[i].length - 1) == "." + sites[i]) return via;'
 		echo '  return "DIRECT";'
 		echo '}'
-	} > "$out.new" && mv "$out.new" "$out" && { [ "$out" != /www/hams.pac ] || cp "$out" /www/wpad.dat; }
+	} > "$out.new" && mv "$out.new" "$out" && { [ "$out" != "$www/hams.pac" ] || cp "$out" "$www/wpad.dat"; }
+}
+
+do_args() {
+	[ "$(get enabled)" = 1 ] || exit 0
+	call=$(get callsign) res=$(get resolver) gw=$(get gateway) gca=$(get gateway_ca) log=$(get log) hres=$(get ham_resolver) sk=$(get sign_key)
+	die() { echo "hams-node-proxyca: $1" >&2; exit 1; }
+	host=${proxy%:*}
+	# a private IPv4 (10/8, 172.16/12, 192.168/16) or a unique-local IPv6 address in brackets; never 0.0.0.0, [::] or a public address
+	case $host in
+	10.*.*.* | 172.1[6-9].*.* | 172.2?.*.* | 172.3[01].*.* | 192.168.*.* | \[[fF][cdCD]*\]) ;;
+	*) die "proxy must be this node's private LAN address and port" ;;
+	esac
+	case $proxy in *:[0-9]*) ;; *) die "proxy needs a port" ;; esac
+	case $call in '' | *[!A-Za-z0-9/-]*) die "a callsign (letters, digits, / and -) is required" ;; esac
+	case $res in '' | *[!A-Fa-f0-9:.\[\]]*) die "resolver (ip:port, for the .ham TLSA records) is required" ;; esac
+	case $gw in '' | *[!A-Za-z0-9.:\[\]-]*) die "gateway (host:port of the site gateway) is required" ;; esac
+	[ -n "$gca" ] && [ -n "$log" ] || die "gateway_ca and log are required"
+	[ -s "$dir/ca.pem" ] && [ -s "$dir/ca.key" ] || die "no CA yet (hams-node-proxyca ca)"
+	[ -r "$wl" ] || die "whitelist file missing"
+	for a in --lan --listen "$proxy" --proxy-ca "$dir/ca.pem" --proxy-ca-key "$dir/ca.key" --whitelist "$wl" --callsign "$call" --log "$log" \
+		--resolver "$res" --upstream-gateway "$gw" --upstream-ca "$gca"; do echo "$a"; done
+	[ -z "$hres" ] || { echo --ham-resolver; echo "$hres"; }
+	[ -z "$sk" ] || { echo --sign-key; echo "$sk"; }
 }
 
 case ${1:-} in
+args) do_args ;;
 ca) do_ca "${2:-}" ;;
 cert) do_cert ;;
 pac) do_pac "${2:-}" ;;
-*) echo "usage: hams-node-proxyca ca [--renew] | cert | pac [FILE]" >&2; exit 2 ;;
+*) echo "usage: hams-node-proxyca ca [--renew] | cert | pac [FILE] | args" >&2; exit 2 ;;
 esac

@@ -1,0 +1,26 @@
+#!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: GPL-2.0-or-later
+# Runs the LAN listener for browsers (ham_proxy --lan) with the node's proxy CA, and keeps the PAC file current. Does nothing until
+# /etc/config/hams_node_proxyca is enabled and complete (see hams-node-proxyca args); it listens only on the node's private LAN address.
+START=98
+USE_PROCD=1
+
+start_service() {
+	local args
+	[ "$(uci -q get hams_node_proxyca.main.enabled)" = 1 ] || return 0
+	hams-node-proxyca ca || return 1
+	hams-node-proxyca pac || return 1
+	args=$(hams-node-proxyca args) || return 1
+	[ -n "$args" ] || return 0
+	mkdir -p "$(dirname "$(uci -q get hams_node_proxyca.main.log)")"
+	set -- $args
+	procd_open_instance
+	procd_set_param command /usr/sbin/ham_proxy "$@"
+	procd_set_param respawn
+	procd_set_param stderr 1
+	procd_close_instance
+}
+
+service_triggers() {
+	procd_add_reload_trigger hams_node_proxyca
+}
