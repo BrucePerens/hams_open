@@ -163,6 +163,16 @@ class EnrollTests(unittest.TestCase):
         self.assertEqual(result.returncode, 4)
         self.assertTrue((self.state / "device_token").exists())
 
+    def test_an_answer_that_is_not_the_explicit_refusal_keeps_the_token_and_the_cron_line(self):
+        self.assertEqual(self.enroll().returncode, 0)
+        for answer in (reply(status="error", message="rate_limited"), reply(status="maintenance"), reply(status="error"), "<html>502 Bad Gateway</html>"):
+            self.queue("config", answer)
+            result = self.run_script("fetch")
+            self.assertEqual(result.returncode, 4, (answer, result.stderr))
+            self.assertTrue((self.state / "device_token").exists(), answer)
+            self.assertIn("hams-node-enroll fetch", self.cron.read_text(), answer)
+            self.assertNotEqual((self.state / "status").read_text().strip(), "revoked", answer)
+
     def test_unenroll_revokes_server_side_then_removes_peers_key_uci_and_cron(self):
         self.assertEqual(self.enroll().returncode, 0)
         (self.fake / "uci").unlink()
