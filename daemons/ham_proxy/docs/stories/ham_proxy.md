@@ -113,3 +113,17 @@ For the browsers on the member's own LAN (never RF). Needs the node's proxy CA (
 - [@ANCHOR: ham_proxy_run_lan] `--lan` runs the browser-facing listener of `lan.rs` as the binary (thread per connection); it refuses to start without a whitelist.
 - [@ANCHOR: ham_proxy_set_idle_timeout] and [@ANCHOR: ham_proxy_limit_idle] A connection (browser, ham or upstream) that moves no byte for the idle time (60 s by default) is dropped, so a stalled peer cannot hold a thread forever.
 - [@ANCHOR: ham_proxy_try_slot] The listeners serve at most `MAX_CONNECTIONS` (256) connections at once and drop the rest.
+
+## Member login with hams.com unreachable
+
+With `--verify HOST:PORT` the proxy checks `/.ham/login` with hams.com first; with `--member-certs DIR --member-ca PEM [--deprecation FILE]` it falls back to a local check when hams.com cannot be reached, so an internet outage never locks a member out of a ham-hosted site. Code in `src/member_local.rs` and `src/login.rs`, tests in `tests/member_local.rs`.
+
+- [@ANCHOR: ham_proxy_login_http_ask] `HttpVerifier::ask` asks hams.com and tells an answer (`Member` with callsign and public certificate, or `Refused`) from no answer (`Unreachable`).
+- [@ANCHOR: ham_proxy_login_http_try_ask] The fallible body of `ask`: connect, send the JSON-RPC request, parse the reply; any failure is `None`, treated as unreachable.
+- [@ANCHOR: ham_proxy_fallback_verify] `FallbackVerifier`: hams.com first and authoritative (a success caches the member's certificate, a refusal deletes it); the local check only when hams.com is unreachable; with no local check configured a refusal as before.
+- [@ANCHOR: ham_proxy_local_verify] `LocalVerifier`: the audience must start with `ham-login:`; the cached certificate must chain to the member CA, not be on the deprecation list and be in date; the P-256 signature over `hams-member-cert-possession-v1\n<audience>\n<nonce>` must verify under its key; answers the callsign from Subject attribute 1.3.6.1.4.1.66926.1.1.
+- [@ANCHOR: ham_proxy_local_chain_ok] The cached certificate must chain to the pinned member CA; dates are not part of this check.
+- [@ANCHOR: ham_proxy_local_deprecated] A certificate listed in the signed deprecation list (`cert:ISSUER_SHA256:SERIAL`) is refused: revocation stays strict offline; serials compare without leading zeros or case.
+- [@ANCHOR: ham_proxy_local_dates_ok] Dates are accepted 30 days either side of notBefore/notAfter, so a wrong clock or an outage past expiry locks nobody out.
+- [@ANCHOR: ham_proxy_local_remember] A certificate hams.com vouched for is cached as `SERIAL.pem` only when its serial matches and it chains to the pinned CA (temp file, then rename).
+- [@ANCHOR: ham_proxy_local_forget] A certificate hams.com refuses is deleted from the cache so it cannot log in later while offline.
