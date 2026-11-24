@@ -116,7 +116,7 @@ tmp="$out.new"
 		[ $# -eq 5 ] && siit=" || net = $5"
 		printf 'filter hams_in_rf%d {\n    if net ~ [%s{60,64}]%s then {\n        bgp_local_pref = 300;\n        accept;\n    }\n    reject;\n}\n' "$j" "$4" "$siit"
 		printf 'protocol bgp hams_rf%d {\n    local as %d;\n    neighbor %s%%%s as %d;\n' "$j" "$asn" "$2" "$3" "$1"
-		printf '    hold time 90;\n    keepalive time 30;\n    ipv6 {\n        import filter hams_in_rf%d;\n        export filter hams_out_rf;\n    };\n}\n' "$j"
+		printf '    hold time 90;\n    keepalive time 30;\n    connect retry time 15;\n    ipv6 {\n        import filter hams_in_rf%d;\n        export filter hams_out_rf;\n    };\n}\n' "$j"
 	done
 	i=0
 	for s in $servers; do

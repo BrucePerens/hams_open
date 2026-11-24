@@ -111,6 +111,7 @@ class BirdTests(unittest.TestCase):
     def test_rf_sessions_are_authenticated_with_ipsec_ah_never_encrypted(self):
         _, conf, _ = self.render(neighbor="%s %s" % (self.N1, self.N2))
         block = conf.split("protocol bgp hams_rf1 {")[1].split("\n}\n")[0]
+        self.assertIn("connect retry time 15;", block)
         self.assertNotIn("password", block)  # the kernel has no TCP-MD5; AH below carries the authentication
         result, lines = self.ah()
         self.assertEqual(result.returncode, 0, result.stderr)
