@@ -8,13 +8,19 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.hams.net.core.CaGuidance
+import com.hams.net.core.EnrolClient
+import com.hams.net.core.EnrolPoll
 
-/** Skeleton UI: connect button and the CA install guidance screen text. */
+/** Enrol (shows the code to approve at hams.com/my/ipv6), connect, and the CA install guidance. */
 class MainActivity : Activity() {
+    private lateinit var status: TextView
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val layout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(32, 32, 32, 32) }
-        layout.addView(TextView(this).apply { text = CaGuidance.text() })
+        status = TextView(this).apply { text = if (EnrolmentStore.load(this@MainActivity) != null) "Enrolled." else "Not enrolled." }
+        layout.addView(status)
+        layout.addView(Button(this).apply { text = "Enrol this phone"; setOnClickListener { enrol() } })
         layout.addView(Button(this).apply {
             text = "Connect"
             setOnClickListener {
@@ -22,6 +28,7 @@ class MainActivity : Activity() {
                 if (consent != null) startActivityForResult(consent, 1) else startVpn()
             }
         })
+        layout.addView(TextView(this).apply { text = CaGuidance.text() })
         setContentView(layout)
     }
 
@@ -31,5 +38,30 @@ class MainActivity : Activity() {
 
     private fun startVpn() {
         startService(Intent(this, HamsVpnService::class.java))
+    }
+
+    private fun enrol() {
+        Thread {
+            val flow = EnrolFlow(applicationContext)
+            val result = flow.run { code -> runOnUiThread { status.text = "Approve code $code at hams.com/my/ipv6" } }
+            runOnUiThread { status.text = if (result) "Enrolled." else "Enrolment failed or timed out." }
+        }.start()
+    }
+}
+
+/** The enrolment dance: ask for a code, wait for the member to approve it, keep the token. Blocking; call off the main thread. */
+class EnrolFlow(private val context: android.content.Context, private val client: EnrolClient = EnrolClient(Portal::post), private val pause: (Long) -> Unit = Thread::sleep) {
+    fun run(showCode: (String) -> Unit): Boolean {
+        val start = client.start() ?: return false
+        showCode(start.userCode)
+        val publicKey = KeyVault.publicKeyBase64(context)
+        repeat(120) {
+            when (val r = client.poll(start.deviceCode, publicKey)) {
+                is EnrolPoll.Done -> { EnrolmentStore.save(context, r.enrolment); return true }
+                EnrolPoll.Refused -> return false
+                EnrolPoll.Pending -> pause(start.intervalSeconds * 1000L)
+            }
+        }
+        return false
     }
 }

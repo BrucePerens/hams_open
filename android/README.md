@@ -14,6 +14,14 @@ The app packages `libhams_net_ffi.so` for arm64-v8a: the `:app:buildNativeArm64`
 Build: JDK 21, Gradle 8.10, Android SDK (platform 35, build-tools 35.0.0), `ANDROID_HOME` set:
 `gradle :core:test` and `gradle :app:assembleDebug`.
 
-Not done (needs the portal enrolment flow, an emulator with KVM or a device): enrolling a test node against the stub portal,
-the GoBackend-backed `WgBackend`, the DNS/packet hook that calls `PeerTable.onPacket`, the .ham resolver, passkey login, Keystore
-key storage, and the emulator test.
+Tunnel (no GoBackend: it owns its own tun, which leaves no packet hook for on-demand peers and no `setHttpProxy`): the app keeps its `VpnService`
+interface and runs WireGuard itself through the shared core (`WgSession`, boringtun). `TunnelEngine` is the `WgBackend` of `PeerTable` and the packet
+hook (the first packet toward a member /60 makes the peer), `HamResolver` + `LocalProxy` serve `.ham` names and the PAC (Android 10+ via `setHttpProxy`;
+on 8 to 9 set the PAC by hand), `EnrolClient`/`EnrolFlow` enrol with a code the member approves at hams.com/my/ipv6 (only the public key is sent),
+`KeyVault` seals the WireGuard private key and the device token with a Keystore AES key.
+
+Emulator test (KVM): `sdkmanager "emulator" "system-images;android-34;default;x86_64"`, an AVD, `emulator -no-window -no-audio -gpu swiftshader_indirect`,
+then `ANDROID_SERIAL=emulator-5554 gradle :app:connectedDebugAndroidTest` (`EnrolAndTunnelTest`: enrol against a stub portal on loopback, tunnel up, a
+`.ham` request makes the WireGuard peer and the handshake arrives; other hosts are refused). The cargo build covers arm64-v8a and x86_64.
+
+Not done: passkey login (needs Google Play services or a real authenticator), RF links (refused by design), iOS.

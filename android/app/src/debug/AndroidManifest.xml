@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Debug builds only: the emulator test talks to a stub portal on loopback over plain http. -->
+    <application android:networkSecurityConfig="@xml/network_security_config" />
+</manifest>

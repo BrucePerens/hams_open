@@ -60,6 +60,6 @@ class DeprecationRuntimeTest {
     }
 
     @Test fun firstHostOfAPrefix() {
-        assertEquals("2001:db8:1230:0:0:0:0:1", Ipv6Prefix.parse("2001:db8:1230::/60")!!.firstHost())
+        assertEquals(java.net.InetAddress.getByName("2001:db8:1230::1"), java.net.InetAddress.getByName(Ipv6Prefix.parse("2001:db8:1230::/60")!!.firstHost()))
     }
 }
