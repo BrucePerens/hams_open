@@ -245,8 +245,13 @@ Once the node is enrolled (`hams-node-enroll` runs `hams-node-ssh apply` after e
 holds at least one key, dropbear's `PasswordAuth` and `RootPasswordAuth` are set to off on every instance. With no key installed nothing
 changes, so the owner cannot lock themselves out; add the key in LuCI (System > Administration > SSH-Keys), which `hams-node-mtls` limits
 to the owner's member certificate. `unenroll` (or `hams-node-ssh off`) restores the saved settings. Recovery after losing the key: physical
-reset, then enrol again. OpenSSH user certificates issued from the member identity are a separate decision for Bruce
-(`night_shift_todo/medium/router-ssh-openssh-certificates-option-4dafb623.md`).
+reset, then enrol again. The owner's exported member certificates also sign in over SSH (Bruce, 2026-11-23: no separate SSH CA; design
+`docs/proposals/SSH_CERTIFICATES.md`, option A): in My certificates the member exports a certificate ("Advanced: use as a TLS client
+certificate"), whose ECDSA P-256 key is `ssh -i hams-member-certificate.pem root@router` (`ssh-keygen -y -f` prints the public key). The
+signed router configuration lists the owner's active exported keys (`ssh_keys`); `hams-node-enroll` stores them in `STATE/ssh_keys` and
+`hams-node-ssh apply` keeps them in a marked block of `/etc/dropbear/authorized_keys` (other lines stay). A certificate on the signed deprecation
+list (`cert:ISSUER:SERIAL`) is left out at once (`hams-node-status` re-runs `hams-node-ssh apply`), an expired or revoked one drops out at the next
+configuration fetch, and with no key left password login is restored. The browser's own key is non-extractable and cannot be used.
 
 ## Key rotation (`hams-node-key`, in the hams-node-enroll package)
 
