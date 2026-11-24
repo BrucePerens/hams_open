@@ -30,6 +30,7 @@ fn log_line_needs_a_callsign() {
 }
 
 // Tests [@ANCHOR: hams_net_core_policy_whitelist_permits_path]
+// Tests [@ANCHOR: hams_net_core_policy_climbs]
 #[test]
 fn path_prefix_cannot_be_climbed_out_of() {
     let mut w = Whitelist::default();

@@ -13,6 +13,7 @@ pub struct Whitelist {
     sites: Vec<(String, Vec<String>)>,
 }
 
+// [@ANCHOR: hams_net_core_policy_climbs]
 /// Whether `path` could leave the prefix it starts with once the site decodes it: a `..` (or `.`) segment, also written
 /// with percent escapes, a backslash or `;` parameters, or a NUL.
 fn climbs(path: &str) -> bool {
