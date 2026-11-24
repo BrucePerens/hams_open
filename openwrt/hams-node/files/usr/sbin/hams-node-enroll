@@ -136,7 +136,11 @@ do_fetch() {
 	post config "{\"token\":\"$token\"}" || { status "hams.com unreachable"; exit 4; }
 	case $(field status) in
 	success) apply_config && status "configuration renewed $(field prefix60)" ;;
-	*) drop_cron; rm -f "$tokenfile"; status revoked; exit 3 ;;
+	# Only hams.com's explicit refusal ends the enrolment; any other answer (an error page, a rate limit, a maintenance reply) keeps the
+	# token and the last good configuration, like an unreachable portal (the internet-gone rule: no information never disables).
+	error) [ "$(field message)" = refused ] || { status "hams.com gave no usable answer"; exit 4; }
+		drop_cron; rm -f "$tokenfile"; status revoked; exit 3 ;;
+	*) status "hams.com gave no usable answer"; exit 4 ;;
 	esac
 }
 
