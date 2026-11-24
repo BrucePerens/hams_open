@@ -308,3 +308,23 @@ name-constrained to `.ham`, the whitelisted domains (`/etc/hams-node/whitelist`,
 `/www/wpad.dat`: `.ham` names, ham-network addresses (`net_prefix`) and whitelisted sites get `PROXY`, everything else `DIRECT` (tested by evaluating the
 PAC in node). The LuCI page offers "Download CA certificate" (the `proxy_ca` ubus method returns the certificate only); `INSTALL_CA.md` has the install steps
 for Windows, macOS, Linux, Firefox, Chrome and Android. Changing the whitelist needs `ca --renew` and a new install. Tests: `tests/test_hams_node_proxyca.py`.
+
+## Web access for AREDN users (`hams-node-web` and `ham-proxy`, separate packages)
+
+AREDN is IPv4-only, so an IPv4 client on the mesh cannot reach a `.ham` name directly. `hams-node-web` (off by default, `/etc/config/hams_node_web`) runs
+`ham_proxy --gateway` on the node's own private mesh/LAN IPv4 address and makes the node's dnsmasq answer A queries for `.ham` with that address
+(`address=/ham/ADDR`, written to `/tmp/dnsmasq.d/hams-web.conf`). The client then connects to the gateway with integrity-only TLS (authenticated, never
+encrypted: Part 97), which looks the name up at the Hams.com Net resolver itself (`resolver`, because AREDN's dnsmasq drops AAAA), connects over the
+node's IPv6 path (SIIT/WireGuard on the Internet link) and relays the page, adding the signed integrity indicator when `sign_key` is set. Sites that are not `.ham` are
+served only if on the hams.com signed whitelist (`whitelist`, `whitelist_key`); everything else is refused before any upstream connection, and each flow is
+written to the station-ID log with the callsign.
+
+Limits that protect the operator: `hams-node-web` refuses to start unless the listen address is a private IPv4 address (never 0.0.0.0 or a public one),
+a callsign and a resolver are set; `ham_proxy` never connects to a loopback, private, link-local or unique-local address, so no name leads the gateway to the
+operator's home LAN; nothing is added to the node's firewall and the mesh-to-WAN setting is not touched. The client needs a ham-aware browser or the relay
+(a stock browser cannot speak an integrity-only suite); a plain-HTTPS client is refused by design.
+
+`ham-proxy` is the static binary: `openwrt/ham-proxy/Makefile` builds it with the host's cargo (`--features vendored`) for the node's musl Rust target using the
+SDK's cross compiler (`make package/ham-proxy/compile RUST_TARGET=x86_64-unknown-linux-musl`); the SDK has no rust, and mips needs a nightly `build-std`
+toolchain. The x86-64 musl build was measured earlier (6.1 MB, 4.5 MB RSS). The `ham-proxy` Makefile itself has not been run in an SDK yet; `ham_proxy`
+and the shell script are tested (`tests/test_hams_node_web.py`, `daemons/ham_proxy/tests/resolve.rs`).
