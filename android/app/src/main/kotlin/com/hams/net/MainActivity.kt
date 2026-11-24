@@ -5,15 +5,25 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.Bundle
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.hams.net.core.CaGuidance
 import com.hams.net.core.EnrolClient
 import com.hams.net.core.EnrolPoll
+import com.hams.net.core.RfController
+import com.hams.net.core.RfStart
+import com.hams.net.core.Blocklist
+import com.hams.net.core.DemoLock
+import com.hams.net.core.OwnedTxGate
+import com.hams.net.core.TxHolds
 
 /** Enrol (shows the code to approve at hams.com/my/ipv6), connect, and the CA install guidance. */
 class MainActivity : Activity() {
     private lateinit var status: TextView
+    private lateinit var rfStatus: TextView
+    private val holds = TxHolds()
+    private val rfController = RfController(OwnedTxGate(DemoLock(false, holds), holds, Blocklist())) {}
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,11 +39,27 @@ class MainActivity : Activity() {
             }
         })
         layout.addView(TextView(this).apply { text = CaGuidance.text() })
+        val callsign = EditText(this).apply { hint = "Your callsign (for RF)" }
+        rfStatus = TextView(this).apply { text = "RF interface off." }
+        layout.addView(callsign)
+        layout.addView(Button(this).apply {
+            text = "Enable RF (USB TNC)"
+            setOnClickListener { enableRf(callsign.text.toString()) }
+        })
+        layout.addView(Button(this).apply { text = "Disable RF"; setOnClickListener { rfController.disable(); rfStatus.text = "RF interface off." } })
+        layout.addView(rfStatus)
         setContentView(layout)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         if (requestCode == 1 && resultCode == RESULT_OK) startVpn()
+    }
+
+    private fun enableRf(callsign: String) {
+        rfStatus.text = when (val r = rfController.enable(callsign) { RfSerial.openUsb(this) }) {
+            is RfStart.On -> r.reminder
+            is RfStart.Failed -> r.message
+        }
     }
 
     private fun startVpn() {
