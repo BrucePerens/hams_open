@@ -48,3 +48,11 @@ hams.com signed whitelist (the file at `https://www.hams.com/ipv6/whitelist.json
 by normal TLS. The list file is re-read and verified (Ed25519 under the 64-hex-character raw public key in HEXFILE, not expired) for every connection; a missing,
 modified, unsigned or expired list permits only `.ham` names. `--gateway` refuses to start without a whitelist. Place it at a member or club with a routable /48,
 never at hams.com. Deployment files: `deploy/` (systemd service, whitelist refresh timer, env example); runbook `hams_com/docs/runbooks/SITE_GATEWAY_DEPLOYMENT.md`.
+
+## LAN listener for browsers (`--lan`)
+
+`ham_proxy --lan --listen LANADDR:8443 --proxy-ca ca.pem --proxy-ca-key ca.key --whitelist FILE (or --signed-whitelist/--whitelist-key) --callsign CALL --log FILE --resolver IP:PORT --upstream-gateway HOST:PORT --upstream-ca PEM [--sign-key PEM]`
+is the proxy the node's PAC file (`hams-node-proxyca`) points browsers at. `CONNECT` is terminated with a leaf certificate minted from the node CA
+(name-constrained to `.ham` and the whitelist); plain `http://` is accepted and upgraded. Upstream the request is integrity-only TLS only: a `.ham` server
+directly (DANE), a whitelisted site through the site gateway. The browser leg is ordinary TLS on the member's own LAN and must never be carried over RF.
+Code: `src/lan.rs`; tests: `tests/lan.rs`.
