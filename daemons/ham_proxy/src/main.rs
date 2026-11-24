@@ -100,6 +100,9 @@ fn run_lan(args: &[String]) -> Result<(), ProxyError> {
     };
     for conn in TcpListener::bind(need("--listen")?)?.incoming() {
         let Ok(tcp) = conn else { continue };
+        let Some(slot) = ham_proxy::try_slot() else {
+            continue;
+        };
         let (ca, up, policy, resolver, sign, signed) = (
             ca.clone(),
             up.clone(),
@@ -109,6 +112,7 @@ fn run_lan(args: &[String]) -> Result<(), ProxyError> {
             signed.clone(),
         );
         thread::spawn(move || {
+            let _slot = slot;
             if let Some((file, key)) = signed.as_ref() {
                 policy.replace(load_list(file, key));
             }
@@ -183,6 +187,9 @@ fn run() -> Result<(), ProxyError> {
     }
     for conn in TcpListener::bind(&listen)?.incoming() {
         let Ok(tcp) = conn else { continue };
+        let Some(slot) = ham_proxy::try_slot() else {
+            continue;
+        };
         let (a, c, s, n, l, p, k) = (
             acceptor.clone(),
             connector.clone(),
@@ -194,6 +201,7 @@ fn run() -> Result<(), ProxyError> {
         );
         let sg = signed.clone();
         thread::spawn(move || {
+            let _slot = slot;
             if let (Some((file, key)), Some(p)) = (sg.as_ref(), p.as_ref()) {
                 p.replace(load_list(file, key));
             }
