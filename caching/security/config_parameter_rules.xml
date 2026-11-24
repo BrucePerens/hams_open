@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: AGPL-3.0-or-later -->
+<odoo>
+    <data noupdate="1">
+    <!-- Each service group named below reads and writes only its own ir.config_parameter keys (no service account has table-wide access). get_param/set_param go through
+         ham_base's override and the config service account, which is the one table-wide group, so these rules limit only direct ORM access. -->
+    <record id="rule_config_parameter_caching_service_read" model="ir.rule">
+        <field name="name">ir.config_parameter: caching service reads its own keys</field>
+        <field name="model_id" ref="base.model_ir_config_parameter"/>
+        <field name="groups" eval="[(4, ref('caching.group_caching_service'))]"/>
+        <field name="domain_force">[('key', '=like', 'caching.%')]</field>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+    </data>
+</odoo>

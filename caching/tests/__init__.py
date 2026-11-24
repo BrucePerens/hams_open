@@ -8,3 +8,5 @@ from . import test_caching_hoot
 from . import test_rpc_exposure
 from . import test_sw_unit
 from . import test_layout_seo
+
+from . import test_config_parameter_allowlist

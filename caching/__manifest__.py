@@ -11,6 +11,7 @@
         "data/security_data.xml",
         "data/pwa_offline_template.xml",
         "security/ir.model.access.csv",
+        "security/config_parameter_rules.xml",
         "views/res_config_settings_views.xml",
     ],
     "assets": {
