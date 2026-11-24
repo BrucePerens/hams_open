@@ -4,7 +4,7 @@ define Package/hams-node-time
   CATEGORY:=Network
   TITLE:=Cross-checked clock sources for hams-node (NTP, ham-network NTP, GPS, WWV/WWVB, RTC)
   URL:=https://hams.com
-  DEPENDS:=+hams-node +uci
+  DEPENDS:=+hams-node +uci +busybox
   PKGARCH:=all
 endef
 
@@ -18,7 +18,9 @@ define Package/hams-node-time/conffiles
 endef
 
 define Package/hams-node-time/install
-	$(INSTALL_DIR) $(1)/usr/sbin $(1)/etc/config
+	$(INSTALL_DIR) $(1)/usr/sbin $(1)/etc/config $(1)/usr/libexec/hams-time
 	$(INSTALL_BIN) ./files/usr/sbin/hams-node-time $(1)/usr/sbin/
 	$(INSTALL_CONF) ./files/etc/config/hams_node_time $(1)/etc/config/
+	$(INSTALL_BIN) ./files/usr/libexec/hams-time/ntp $(1)/usr/libexec/hams-time/
+	$(LN) ntp $(1)/usr/libexec/hams-time/hamnet-ntp
 endef

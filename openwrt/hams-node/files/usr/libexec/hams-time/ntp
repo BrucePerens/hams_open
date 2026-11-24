@@ -1,0 +1,30 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-time source: a one-shot SNTP query. Prints "EPOCH ERROR_SECONDS" or fails. Installed as `ntp` (servers from uci
+# hams_node_time.main list ntp_server) and `hamnet-ntp` (list hamnet_ntp_server: nodes on the ham network with a good clock; reached over
+# the Hams.com Net, so it works with no internet). A server is HOST or HOST:PORT. The first server that gives a sane answer wins.
+# It only reads the time; hams-node-time decides whether to use it. Plain NTP over UDP: no encryption (Part 97 on RF links).
+set -u
+name=$(basename "$0")
+key=$(echo "$name" | tr - _)_server
+tmp=$(mktemp -d) || exit 1
+trap 'rm -rf "$tmp"' EXIT
+for server in $(uci -q get "hams_node_time.main.$key" 2>/dev/null); do
+	host=${server%:*} port=${server##*:}
+	[ "$host" = "$server" ] && port=123
+	case $host$port in '' | *[!A-Za-z0-9.:_-]*) continue ;; esac
+	case $port in '' | *[!0-9]*) continue ;; esac
+	{ printf '\043'; head -c 47 /dev/zero; } | timeout 4 nc -u -w 1 "$host" "$port" 2> /dev/null | head -c 48 > "$tmp/reply"
+	[ "$(wc -c < "$tmp/reply")" -eq 48 ] || continue
+	# shellcheck disable=SC2046
+	set -- $(od -An -tu1 -v "$tmp/reply")
+	# $1 LI/VN/mode, $2 stratum; transmit time seconds are bytes 41 to 44 ($41..$44)
+	[ $(($1 & 7)) -eq 4 ] || continue
+	[ $(($1 >> 6)) -ne 3 ] || continue
+	[ "$2" -ge 1 ] && [ "$2" -le 15 ] || continue
+	secs=$(( (${41} << 24) + (${42} << 16) + (${43} << 8) + ${44} - 2208988800 ))
+	[ "$secs" -gt 1700000000 ] || continue
+	echo "$secs 1" # whole-second SNTP: about a second of error
+	exit 0
+done
+exit 1
