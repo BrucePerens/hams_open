@@ -1,0 +1,3 @@
+# openFPGALoader 0.13.1 `--scan-usb` on a real USB-Blaster (2026-11-23); serial number scrubbed (SN-0000).
+Bus device vid:pid       probe type      manufacturer serial               product
+003 003    0x09fb:0x6001 usb-blaster     Altera       SN-0000             USB-Blaster
