@@ -169,6 +169,16 @@ class OnDemandTests(unittest.TestCase):
         h.run("expire")
         self.assertEqual(h.wg_calls()[1:], ["set wg-hams peer %s remove" % KEY_A])
 
+    def test_record_with_characters_outside_key_endpoint_and_prefix_makes_no_peer(self):
+        for field, value in (("endpoint", "1.2.3.4:51820 allowed-ips ::/0"), ("endpoint", "[2001:db8::9]:51820;x"), ("public_key", KEY_A + "x y")):
+            with self.subTest(field, value=value):
+                h = Harness(self)
+                rec = record("2001:db8:1:20::/60")
+                rec["result"][field] = value
+                h.set_lookup({"2001:db8:1:20::5": rec})
+                self.assertEqual(h.run("packet", "2001:db8:1:20::5").returncode, 0)
+                self.assertEqual(h.wg_calls(), [])
+
     def test_record_for_a_different_prefix_is_refused(self):
         h = Harness(self)
         h.set_lookup({"2001:db8:1:20::5": record("2001:db8:9:90::/60")})

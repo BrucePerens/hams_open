@@ -82,7 +82,7 @@ lookup() {
 	rst=$(jsonfilter -i "$state/reply.json" -e '@.result.status' 2>/dev/null)
 	rpk=$(jsonfilter -i "$state/reply.json" -e '@.result.public_key') && rep=$(jsonfilter -i "$state/reply.json" -e '@.result.endpoint') \
 		&& rpfx=$(jsonfilter -i "$state/reply.json" -e '@.result.prefix60')
-	case "${rpk:-}${rep:-}${rpfx:-}" in *[!A-Za-z0-9+/=.:_[]/-]*) rpk='' ;; esac
+	case "${rpk:-}${rep:-}${rpfx:-}" in *[!]A-Za-z0-9+/=.:_[-]*) rpk='' ;; esac
 }
 
 # valid_record K60: the looked-up record is a usable one for that /60.
