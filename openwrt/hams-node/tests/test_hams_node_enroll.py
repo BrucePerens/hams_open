@@ -236,6 +236,17 @@ class EnrollTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertEqual(self.calls(), [])
 
+    def test_a_reply_with_characters_outside_its_fields_is_refused_before_any_setting_is_written(self):
+        for field, value in (("ham_prefix", "2001:db8::/40; } flush ruleset"), ("prefix60", "2001:db8:ab00:10::/60 x"), ("asn", "42; reboot"),
+                             ("server_key", KEY + "\n$(id)"), ("callsign", "N0CALL\nroot")):
+            with self.subTest(field):
+                self.setUp()
+                self.queue("poll", reply(status="success", token="tok_en-1", **dict(CONFIG, **{field: value})))
+                result = self.run_script("enroll", "tok")
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn("refusing the configuration", result.stderr)
+                self.assertFalse((self.fake / "uci").exists(), "nothing reaches uci")
+
 
 if __name__ == "__main__":
     unittest.main()
