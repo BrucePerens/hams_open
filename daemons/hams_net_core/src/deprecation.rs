@@ -149,11 +149,10 @@ impl DeprecationList {
                 let mut next: Vec<Entry> = self
                     .entries
                     .values()
+                    // a removal names the entry's whole key: a WireGuard key, or `cert:ISSUER:SERIAL` (a bare serial would
+                    // also clear another issuer's certificate with the same serial)
                     .filter(|e| {
-                        let serial = e.key.rsplit(':').next().unwrap_or("");
-                        !removes.contains(&serial)
-                            && !removes.contains(&e.key.as_str())
-                            && !added.iter().any(|a| a.key == e.key)
+                        !removes.contains(&e.key.as_str()) && !added.iter().any(|a| a.key == e.key)
                     })
                     .cloned()
                     .collect();

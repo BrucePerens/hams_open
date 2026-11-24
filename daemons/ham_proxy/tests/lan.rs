@@ -122,6 +122,10 @@ impl Write for Sink {
 
 /// `encrypting`: the gateway offers an ordinary encrypting TLS server instead of an integrity-only one.
 fn start_lan(encrypting: bool) -> Lan {
+    start_lan_with(encrypting, Whitelist::parse("example.org\n"))
+}
+
+fn start_lan_with(encrypting: bool, whitelist: Whitelist) -> Lan {
     ham_proxy::resolve::allow_private_upstream(); // the stand-in gateway is on loopback
     let dir = tempfile::Builder::new()
         .prefix("ham_proxy_lan_")
@@ -143,14 +147,7 @@ fn start_lan(encrypting: bool) -> Lan {
     let ca = Arc::new(Ca::load(&ca_pem, &ca_key).unwrap());
     let up = Arc::new(Upstream::gateway(&gw, &gc).unwrap());
     let log = Arc::new(Mutex::new(Vec::new()));
-    let policy = Arc::new(
-        Policy::new(
-            Whitelist::parse("example.org\n"),
-            "W1AW",
-            Box::new(Sink(log.clone())),
-        )
-        .unwrap(),
-    );
+    let policy = Arc::new(Policy::new(whitelist, "W1AW", Box::new(Sink(log.clone()))).unwrap());
     let l = TcpListener::bind("127.0.0.1:0").unwrap();
     let addr = l.local_addr().unwrap().to_string();
     let result = Arc::new(Mutex::new(Vec::new()));
@@ -469,6 +466,37 @@ fn a_posted_form_goes_upstream_over_plain_http_and_connect() {
     let out = browse_plain(&lan, "POST /form HTTP/1.1\r\nHost: example.org\r\nContent-Length: 3\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n");
     assert!(!out.contains("site-body-xyz"), "{out}");
     assert_eq!(lan.seen.lock().unwrap().len(), before);
+}
+
+#[test]
+// Tests [@ANCHOR: ham_proxy_lan_serve]
+// Tests [@ANCHOR: ham_proxy_policy_permits_host]
+fn a_path_limited_site_is_reachable_on_its_paths_only() {
+    let mut w = Whitelist::default();
+    w.add_site("paths.example.org", vec!["/ok".into()]);
+    let lan = start_lan_with(false, w);
+    let out = browse_plain(
+        &lan,
+        "GET /ok/x HTTP/1.1\r\nHost: paths.example.org\r\n\r\n",
+    );
+    assert!(out.contains("site-body-xyz"), "{out}");
+    let out = browse_plain(
+        &lan,
+        "GET /other HTTP/1.1\r\nHost: paths.example.org\r\n\r\n",
+    );
+    assert!(out.starts_with("HTTP/1.1 403"), "{out}");
+    assert_eq!(
+        lan.seen.lock().unwrap().len(),
+        1,
+        "only the permitted path went upstream"
+    );
+    // CONNECT: the host is enough to open the tunnel, each request's path is checked inside it
+    let (answer, page) = browse_connect(&lan, "paths.example.org");
+    assert!(answer.starts_with("HTTP/1.1 200"), "{answer}");
+    assert!(
+        page.unwrap().starts_with("HTTP/1.1 403"),
+        "/page is outside /ok"
+    );
 }
 
 #[test]
