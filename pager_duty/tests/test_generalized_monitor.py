@@ -375,12 +375,12 @@ class TestMonitorExhaustive(HamsTransactionCase):
 
     def test_10_certbot_check(self):
         # Tests [@ANCHOR: daemon_verify_dependencies]
-        """Verify the Certbot 3-stage readiness pipeline (API, DNS IP Match, Dry-Run)."""
+        """Verify the Certbot readiness pipeline (API, DNS IP Match, certificate expiry)."""
         mock_which = self.safe_patch(
             "odoo.addons.pager_duty.daemon.generalized_monitor.shutil.which"
         )
         mock_which.return_value = "/usr/bin/certbot"
-        mock_run = self.safe_patch(
+        self.safe_patch(
             "odoo.addons.pager_duty.daemon.generalized_monitor.subprocess.run"
         )
         mock_urlopen = self.safe_patch(
@@ -392,19 +392,22 @@ class TestMonitorExhaustive(HamsTransactionCase):
         mock_api_resp.status = 200
         mock_urlopen.return_value.__enter__.return_value = mock_api_resp
 
-        # Pass Dry Run
-        mock_run.return_value.returncode = 0
-
+        # No domains to check: passes without asking any server.
         success, msg = generalized_monitor.execute_check({"type": "certbot"})
         self.assertTrue(success)
 
-        # Fail Dry Run
-        mock_run.return_value.returncode = 1
-        mock_run.return_value.stdout = "Challenge failed for domain"
-        mock_run.return_value.stderr = ""
-        success, msg = generalized_monitor.execute_check({"type": "certbot"})
+        # A domain whose served certificate is bad fails the check.
+        self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.certbot_domain_problem", return_value=None
+        )
+        self.safe_patch(
+            "odoo.addons.pager_duty.daemon.generalized_monitor.served_cert_problem",
+            return_value="The certificate served for a.test expires in under 14 days",
+        )
+        mock_urlopen.return_value.__enter__.return_value.read.return_value = b"198.51.100.1"
+        success, msg = generalized_monitor.execute_check({"type": "certbot", "target": "a.test"})
         self.assertFalse(success)
-        self.assertIn("Challenge failed", msg)
+        self.assertIn("a.test", msg)
 
     def test_11_smtp_dryrun(self):
         """Verify SMTP pre-flight handshake."""

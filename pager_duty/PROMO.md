@@ -12,7 +12,7 @@ No more guessing who is on call when disaster strikes. The Pager Duty module nat
 
 ### 🔎 Pre-Flight & Dry-Run Simulators
 Don't wait for a 3:00 AM failure. The daemon continuously simulates critical maintenance tasks to ensure your environment is healthy:
-* **Certbot Readiness:** Validates your domain's DNS routing and runs `certbot --dry-run` to prove Let's Encrypt can renew your certificate long before it actually expires.
+* **Certbot Readiness:** Validates your domain's DNS routing and checks that your certificates still have enough life left, so a renewal that has stopped working is caught long before the certificate expires.
 * **PostgreSQL Backups:** Executes schema-only `pg_dump` commands to verify your backup user still has the correct disk I/O permissions.
 * **Nginx Syntax:** Runs `nginx -t` to catch fatal typos in your reverse proxy config before a restart takes the whole site offline.
 
