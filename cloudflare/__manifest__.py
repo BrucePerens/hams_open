@@ -27,6 +27,7 @@
     "data": [
         "security/security_data.xml",
         "security/ir.model.access.csv",
+        "security/config_parameter_rules.xml",
         "data/cron.xml",
         "data/republish_trusted_ip_ranges.xml",
         "views/tunnel_wizard_views.xml",
