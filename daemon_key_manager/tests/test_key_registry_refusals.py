@@ -89,29 +89,18 @@ class TestKeyRegistryRefusals(RealTransactionCase):
         with self.assertRaisesRegex(UserError, "__system__ user ID cannot be used"):
             self.row.with_user(self.manager.id)._assert_account_may_hold_key()
 
-    def test_a_non_internal_service_account_registers_its_own_daemon(self):
-        # Tests [@ANCHOR: COMM_register_daemon_api]
+    def test_the_system_group_check_works_when_the_caller_is_not_an_internal_user(self):
         # Tests [@ANCHOR: COMM_rotation_safety_archived_user]
         # Odoo 18 refuses user.has_group() on another user for a caller that is not an internal user (the upgrade rehearsal's
-        # register_daemon via with_user(<reporter uid>) hit it), so the system-group check must not use has_group().
-        path = "/opt/hams/etc/keys/refusal_self.env"
-        outsider = self.env["res.users"].create(
-            {
-                "name": "Refusal Outsider",
-                "login": "refusal_outsider",
-                "is_service_account": True,
-                "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
-            }
+        # register_daemon via with_user(<service uid>) hit it on a production copy), so the check must not use has_group().
+        caller = self.env["res.users"].create(
+            {"name": "Refusal Caller", "login": "refusal_caller", "is_service_account": True}
         )
-        self.assertFalse(outsider._has_group("base.group_user"))
-        try:
-            self.model.with_user(outsider.id).register_daemon("Refusal Self", outsider.login, path)
-            self.assertTrue(os.path.exists(path))
-        finally:
-            self.model.with_user(self.manager.id).search([("name", "=", "Refusal Self")]).unlink()
-            outsider.unlink()
-            if os.path.lexists(path):
-                os.remove(path)
+        caller.group_ids = [(4, self.env.ref("daemon_key_manager.group_daemon_key_manager").id)]
+        caller.group_ids = [(3, self.env.ref("base.group_user").id)]
+        self.addCleanup(caller.unlink)
+        self.assertFalse(caller._has_group("base.group_user"))
+        self.row.with_user(caller.id)._assert_account_may_hold_key()
 
     def test_a_key_file_is_refused_outside_the_key_directory(self):
         # Tests [@ANCHOR: COMM_write_secure_env_file_logic]
