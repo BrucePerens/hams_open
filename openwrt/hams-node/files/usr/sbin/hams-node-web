@@ -25,6 +25,8 @@ args)
 	cert=$(get cert) key=$(get key) log=$(get log)
 	[ -n "$cert" ] && [ -n "$key" ] && [ -n "$log" ] || die "cert, key and log are required"
 	for a in --gateway --listen "$listen:$port" --cert "$cert" --key "$key" --callsign "$call" --log "$log" --ham-resolver "$resolver"; do echo "$a"; done
+	ca=$(get ca)
+	[ -z "$ca" ] || { echo --ca; echo "$ca"; }
 	wl=$(get whitelist) wk=$(get whitelist_key) sk=$(get sign_key)
 	# the signed list is optional; without it a gateway still needs a whitelist argument, so an empty plain one (only .ham names) is used
 	if [ -n "$wl" ] && [ -n "$wk" ] && [ -f "$wl" ] && [ -f "$wk" ]; then

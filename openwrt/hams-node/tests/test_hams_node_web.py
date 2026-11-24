@@ -11,7 +11,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 SCRIPT = HERE.parent / "files" / "usr" / "sbin" / "hams-node-web"
 INITD = HERE.parent / "files" / "etc" / "init.d" / "hams-node-web"
 GOOD = {"enabled": "1", "listen_addr": "10.20.30.1", "port": "8443", "callsign": "W1AW", "resolver": "[2001:db8::53]:53",
-        "cert": "/c.pem", "key": "/k.pem", "log": "/var/log/hams-node-web/stationid.log", "whitelist": "", "whitelist_key": "", "sign_key": "",
+        "cert": "/c.pem", "key": "/k.pem", "log": "/var/log/hams-node-web/stationid.log", "whitelist": "", "whitelist_key": "", "sign_key": "", "ca": "/ca.pem",
         "dns_out": ""}
 HARNESS = """
 procd_open_instance() { echo "procd_open_instance" >> "$FAKE/log"; }
@@ -55,10 +55,11 @@ class WebTests(unittest.TestCase):
         self.assertIn("--gateway", a)
         self.assertEqual(a[a.index("--callsign") + 1], "W1AW")
         self.assertEqual(a[a.index("--ham-resolver") + 1], "[2001:db8::53]:53")
+        self.assertEqual(a[a.index("--ca") + 1], "/ca.pem")
         self.assertIn("--whitelist", a)  # no signed list: only .ham names
         self.assertNotIn("--allow-private-upstream", a)  # the lab flag never comes from the package
         # ham_proxy's own flags (daemons/ham_proxy/README.md); --ham-resolver arrives with hams_open #3328
-        known = {"--gateway", "--listen", "--cert", "--key", "--callsign", "--log", "--ham-resolver", "--whitelist", "--signed-whitelist", "--whitelist-key", "--sign-key"}
+        known = {"--gateway", "--listen", "--cert", "--key", "--callsign", "--log", "--ham-resolver", "--whitelist", "--signed-whitelist", "--whitelist-key", "--sign-key", "--ca"}
         self.assertLessEqual({x for x in a if x.startswith("--")}, known)
 
     def test_signed_list_and_sign_key_when_present(self):
