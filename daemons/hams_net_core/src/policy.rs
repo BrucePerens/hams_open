@@ -13,6 +13,35 @@ pub struct Whitelist {
     sites: Vec<(String, Vec<String>)>,
 }
 
+/// Whether `path` could leave the prefix it starts with once the site decodes it: a `..` (or `.`) segment, also written
+/// with percent escapes, a backslash or `;` parameters, or a NUL.
+fn climbs(path: &str) -> bool {
+    let b = path.as_bytes();
+    let mut dec = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        let hex = |c: u8| (c as char).to_digit(16);
+        match (
+            b[i],
+            b.get(i + 1).and_then(|&c| hex(c)),
+            b.get(i + 2).and_then(|&c| hex(c)),
+        ) {
+            (b'%', Some(h), Some(l)) => {
+                dec.push((h * 16 + l) as u8);
+                i += 3;
+            }
+            (c, _, _) => {
+                dec.push(c);
+                i += 1;
+            }
+        }
+    }
+    dec.contains(&0)
+        || dec
+            .split(|&c| c == b'/' || c == b'\\')
+            .any(|seg| matches!(seg.split(|&c| c == b';').next(), Some(b"..") | Some(b".")))
+}
+
 impl Whitelist {
     // [@ANCHOR: hams_net_core_policy_whitelist_parse]
     /// Parse the whitelist file text.
@@ -42,6 +71,7 @@ impl Whitelist {
         let h = host.to_lowercase();
         let h = h.trim_end_matches('.');
         let path = path.split(['?', '#']).next().unwrap_or("");
+        let safe = !climbs(path);
         let mut listed = false;
         for (_, paths) in self.sites.iter().filter(|(s, _)| s == h) {
             listed = true;
@@ -49,7 +79,7 @@ impl Whitelist {
                 let root = p.trim_end_matches('/');
                 path == root || path.strip_prefix(root).is_some_and(|r| r.starts_with('/'))
             };
-            if paths.is_empty() || paths.iter().any(root_ok) {
+            if paths.is_empty() || (safe && paths.iter().any(root_ok)) {
                 return true;
             }
         }
