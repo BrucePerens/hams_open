@@ -9,6 +9,7 @@ pub mod dane;
 pub mod indicator;
 pub mod lan;
 pub mod login;
+pub mod member_local;
 pub mod policy;
 pub mod resolve;
 pub mod session;
