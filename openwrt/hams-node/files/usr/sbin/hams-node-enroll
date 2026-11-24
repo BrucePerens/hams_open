@@ -61,6 +61,14 @@ apply_config() { # the reply in $tmp -> the package's own settings
 	owner=$(field callsign)
 	[ -n "$owner" ] && echo "$owner" > "$state/owner"  # the member whose certificate may manage this router
 	[ -x /usr/sbin/hams-node-mtls ] && /usr/sbin/hams-node-mtls -s "$state" -u "$base" apply  # hams-node-mtls package: management only with that member certificate
+	: > "$state/ssh_keys.new"  # the owner's exported member-certificate keys: "SERIAL KEYLINE" per line (hams-node-ssh keeps them in the authorized keys)
+	i=0
+	while sk=$(field "ssh_keys[$i].serial"); do
+		kl=$(field "ssh_keys[$i].key")
+		case $sk$kl in *[!A-Za-z0-9+/=\ -]*) ;; *) echo "$sk $kl" >> "$state/ssh_keys.new" ;; esac
+		i=$((i + 1))
+	done
+	mv "$state/ssh_keys.new" "$state/ssh_keys"
 	[ -x /usr/sbin/hams-node-ssh ] && /usr/sbin/hams-node-ssh -s "$state" apply  # hams-node-ssh package: key-only SSH once a key exists
 	depkey=$(field deprecation_key)  # the key that signs switch-off and deprecation documents (hams-node-status package)
 	case $depkey in '' | *[!A-Za-z0-9+/=]*) ;; *) printf '%s\n' "$depkey" > "$state/deprecation.pub" ;; esac
@@ -144,7 +152,7 @@ do_unenroll() {
 	[ -x /usr/sbin/hams-node-ssh ] && /usr/sbin/hams-node-ssh -s "$state" off
 	[ -x /usr/sbin/hams-node-status ] && /usr/sbin/hams-node-status -s "$state" stop
 	rm -f "$state/deprecation.pub" "$state/disabled" "$state/deprecation_seq" "$state/deprecation_list" "$state/status_seq"
-	rm -f "$tokenfile" "$keyfile" "$statusfile" "$tmp" "$state/owner"
+	rm -f "$tokenfile" "$keyfile" "$statusfile" "$tmp" "$state/owner" "$state/ssh_keys"
 	echo "hams-node-enroll: unenrolled" >&2
 }
 
