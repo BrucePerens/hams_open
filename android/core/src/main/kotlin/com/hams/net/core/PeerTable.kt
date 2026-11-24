@@ -36,7 +36,7 @@ class PeerTable(
     }
 
     /** The peer's public key for traffic toward `destination`, or null when the directory has no current record. */
-    fun onPacket(destination: String): String? {
+    @Synchronized fun onPacket(destination: String): String? {
         val now = clock()
         if (blocklist.disabled || blocklist.blocksDestination(destination)) return null
         for ((key, entry) in peers) {
@@ -59,19 +59,22 @@ class PeerTable(
     }
 
     /** Removes the peer with this public key now (a rogue router named by the signed deprecation list); true if there was one. */
-    fun evict(publicKey: String): Boolean {
+    @Synchronized fun evict(publicKey: String): Boolean {
         if (peers.remove(publicKey) == null) return false
         wg.removePeer(publicKey)
         return true
     }
 
+    /** The /60 of every current peer: its router answers gossip at the prefix's `::1`. */
+    @Synchronized fun peerNetworks(): List<Ipv6Prefix> = peers.values.map { it.network }
+
     /** Removes every peer. */
-    fun evictAll() {
+    @Synchronized fun evictAll() {
         for (key in peers.keys.toList()) evict(key)
     }
 
     /** Removes every peer idle for longer than the idle time; returns their public keys. */
-    fun expire(): List<String> {
+    @Synchronized fun expire(): List<String> {
         val now = clock()
         val gone = peers.filter { now - it.value.last > idle }.keys.toList()
         for (key in gone) {
