@@ -207,7 +207,10 @@ pub fn session_head(head: &str, who: Option<&str>) -> Vec<u8> {
     let mut lines: Vec<String> = head
         .trim_end_matches("\r\n")
         .split("\r\n")
-        .filter(|l| !l.to_ascii_lowercase().starts_with("x-ham-"))
+        .filter(|l| {
+            let name = l.split(':').next().unwrap_or("").trim();
+            !name.to_ascii_lowercase().starts_with("x-ham-")
+        })
         .map(str::to_string)
         .collect();
     if let Some(c) = who {
@@ -385,6 +388,10 @@ pub fn serve_one_policed(
                 return Ok(());
             }
         }
+    }
+    if login.is_none() {
+        // No login service: still no client X-Ham-* header may reach the site, or it could pose as a member.
+        head = session_head(&String::from_utf8_lossy(&head), None);
     }
     let up_tcp = resolve::connect_upstream(site_addr)?;
     let mut up = site.connect(site_name, up_tcp)?;
