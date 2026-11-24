@@ -93,6 +93,7 @@ impl HttpVerifier {
             .unwrap_or(HttpAnswer::Unreachable)
     }
 
+    // [@ANCHOR: ham_proxy_login_http_try_ask]
     fn try_ask(
         &self,
         serial: &str,

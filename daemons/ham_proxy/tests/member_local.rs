@@ -128,6 +128,9 @@ impl Fixture {
     }
 }
 
+// Tests [@ANCHOR: ham_proxy_local_verify]
+// Tests [@ANCHOR: ham_proxy_local_chain_ok]
+// Tests [@ANCHOR: ham_proxy_local_dates_ok]
 #[test]
 fn a_valid_cached_certificate_logs_in_with_no_hams_com() {
     let f = fixture();
@@ -135,6 +138,7 @@ fn a_valid_cached_certificate_logs_in_with_no_hams_com() {
     assert_eq!(f.login().as_deref(), Some("W1AW"));
 }
 
+// Tests [@ANCHOR: ham_proxy_local_dates_ok]
 #[test]
 fn ten_days_past_expiry_still_logs_in_forty_days_does_not() {
     let f = fixture();
@@ -178,6 +182,7 @@ fn a_certificate_from_another_ca_is_refused() {
     assert_eq!(f.login(), None);
 }
 
+// Tests [@ANCHOR: ham_proxy_local_deprecated]
 #[test]
 fn a_certificate_on_the_deprecation_list_is_refused() {
     let f = fixture();
@@ -202,6 +207,8 @@ fn a_certificate_on_the_deprecation_list_is_refused() {
     assert_eq!(f.login().as_deref(), Some("W1AW"));
 }
 
+// Tests [@ANCHOR: ham_proxy_local_remember]
+// Tests [@ANCHOR: ham_proxy_local_forget]
 #[test]
 fn remember_keeps_only_the_right_certificate_and_forget_removes_it() {
     let f = fixture();
@@ -219,6 +226,9 @@ fn remember_keeps_only_the_right_certificate_and_forget_removes_it() {
     assert_eq!(f.login(), None);
 }
 
+// Tests [@ANCHOR: ham_proxy_fallback_verify]
+// Tests [@ANCHOR: ham_proxy_login_http_ask]
+// Tests [@ANCHOR: ham_proxy_login_http_try_ask]
 #[test]
 fn with_hams_com_unreachable_the_fallback_uses_the_local_check() {
     let f = fixture();

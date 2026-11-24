@@ -57,6 +57,7 @@ impl LocalVerifier {
         X509::stack_from_pem(&std::fs::read(&self.ca_pem).ok()?).ok()
     }
 
+    // [@ANCHOR: ham_proxy_local_chain_ok]
     /// Chain to the pinned CA (dates are checked separately, with the grace); the CA's fingerprint is the deprecation issuer.
     fn chain_ok(&self, cert: &X509, cas: &[X509]) -> bool {
         let Ok(mut b) = X509StoreBuilder::new() else {
@@ -78,6 +79,7 @@ impl LocalVerifier {
             .unwrap_or(false)
     }
 
+    // [@ANCHOR: ham_proxy_local_deprecated]
     fn deprecated(&self, cert: &X509, cas: &[X509]) -> bool {
         let Some(text) = self
             .deprecation
@@ -109,6 +111,7 @@ impl LocalVerifier {
         })
     }
 
+    // [@ANCHOR: ham_proxy_local_dates_ok]
     fn dates_ok(cert: &X509) -> bool {
         let t = now();
         let (Ok(early), Ok(late)) = (
@@ -129,6 +132,7 @@ impl LocalVerifier {
         })
     }
 
+    // [@ANCHOR: ham_proxy_local_remember]
     /// Accept `pem` into the cache as certificate `serial` when it is that certificate and chains to the pinned CA.
     pub fn remember(&self, serial: &str, pem: &str) {
         if !serial_ok(serial) {
@@ -156,6 +160,7 @@ impl LocalVerifier {
         }
     }
 
+    // [@ANCHOR: ham_proxy_local_forget]
     /// hams.com refused this certificate: forget it so it cannot log in later while offline.
     pub fn forget(&self, serial: &str) {
         if serial_ok(serial) {
