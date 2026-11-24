@@ -16,6 +16,7 @@ use openssl::x509::store::X509StoreBuilder;
 use openssl::x509::verify::X509VerifyFlags;
 use openssl::x509::{X509StoreContext, X509};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// How far outside the certificate's dates the local check still accepts (30 days, as the node's mTLS gate does).
@@ -31,6 +32,8 @@ pub struct LocalVerifier {
     pub ca_pem: PathBuf,
     /// The signed deprecation list (`cert:ISSUER_SHA256:SERIAL` lines), if the node has one.
     pub deprecation: Option<PathBuf>,
+    /// The identity CA's CRL (PEM) as the node's mTLS gate keeps it; used only while its nextUpdate is in the future.
+    pub crl: Option<PathBuf>,
 }
 
 fn serial_ok(serial: &str) -> bool {
@@ -112,6 +115,56 @@ impl LocalVerifier {
     }
 
     // [@ANCHOR: ham_proxy_local_dates_ok]
+    // [@ANCHOR: ham_proxy_local_crl_revoked]
+    /// True when a fresh CRL lists the cached certificate. A stale or missing CRL is not used (nobody is locked out by an old CRL);
+    /// the CRL is checked with `openssl verify`, the crate having no CRL support.
+    fn crl_revoked(&self, serial: &str) -> bool {
+        let Some(crl) = self.crl.as_ref().filter(|c| c.is_file()) else {
+            return false;
+        };
+        let next = Command::new("openssl")
+            .args([
+                "crl",
+                "-noout",
+                "-nextupdate",
+                "-dateopt",
+                "iso_8601",
+                "-in",
+            ])
+            .arg(crl)
+            .output();
+        let fresh = next.ok().filter(|o| o.status.success()).is_some_and(|o| {
+            let digits: String = String::from_utf8_lossy(&o.stdout)
+                .split_once('=')
+                .map(|x| x.1.chars().filter(char::is_ascii_digit).collect())
+                .unwrap_or_default();
+            Asn1Time::from_str(&format!("{digits}Z"))
+                .ok()
+                .zip(Asn1Time::from_unix(now()).ok())
+                .is_some_and(|(n, t)| n > t)
+        });
+        if !fresh {
+            return false;
+        }
+        let checked = Command::new("openssl")
+            .args(["verify", "-no_check_time", "-crl_check_all", "-CAfile"])
+            .arg(&self.ca_pem)
+            .arg("-CRLfile")
+            .arg(crl)
+            .arg(self.cert_path(serial))
+            .output();
+        // An unusable CRL (wrong issuer, unreadable) must not lock anybody out, but a listed certificate is refused.
+        checked.is_ok_and(|o| {
+            !o.status.success()
+                && format!(
+                    "{}{}",
+                    String::from_utf8_lossy(&o.stdout),
+                    String::from_utf8_lossy(&o.stderr)
+                )
+                .contains("certificate revoked")
+        })
+    }
+
     fn dates_ok(cert: &X509) -> bool {
         let t = now();
         let (Ok(early), Ok(late)) = (
@@ -177,7 +230,11 @@ impl Verifier for LocalVerifier {
         }
         let cert = X509::from_pem(&std::fs::read(self.cert_path(serial)).ok()?).ok()?;
         let cas = self.cas()?;
-        if !self.chain_ok(&cert, &cas) || self.deprecated(&cert, &cas) || !Self::dates_ok(&cert) {
+        if !self.chain_ok(&cert, &cas)
+            || self.deprecated(&cert, &cas)
+            || !Self::dates_ok(&cert)
+            || self.crl_revoked(serial)
+        {
             return None;
         }
         let raw = openssl::base64::decode_block(sig_b64).ok()?;
@@ -232,10 +289,16 @@ impl Verifier for FallbackVerifier {
 
 /// Where the cache lives, for the command line.
 #[must_use]
-pub fn local_from(dir: &Path, ca: &Path, deprecation: Option<&Path>) -> LocalVerifier {
+pub fn local_from(
+    dir: &Path,
+    ca: &Path,
+    deprecation: Option<&Path>,
+    crl: Option<&Path>,
+) -> LocalVerifier {
     LocalVerifier {
         dir: dir.to_path_buf(),
         ca_pem: ca.to_path_buf(),
         deprecation: deprecation.map(Path::to_path_buf),
+        crl: crl.map(Path::to_path_buf),
     }
 }
