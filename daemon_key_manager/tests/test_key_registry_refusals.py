@@ -8,7 +8,7 @@ rotation cron does when a rotation fails in an unexpected way."""
 import datetime
 import os
 
-from odoo import fields
+from odoo import _, fields
 from odoo.exceptions import AccessError, UserError
 from odoo.tests import tagged
 
@@ -85,6 +85,24 @@ class TestKeyRegistryRefusals(RealTransactionCase):
 
     def test_an_account_in_the_system_group_cannot_hold_a_daemon_key(self):
         # Tests [@ANCHOR: COMM_rotation_safety_archived_user]
+        self.service.group_ids = [(4, self.env.ref("base.group_system").id)]
+        with self.assertRaisesRegex(UserError, "__system__ user ID cannot be used"):
+            self.row.with_user(self.manager.id)._assert_account_may_hold_key()
+
+    def test_the_system_group_check_never_asks_has_group_about_another_user(self):
+        # Tests [@ANCHOR: COMM_rotation_safety_archived_user]
+        # Odoo 18 refuses user.has_group() on another user for a caller that is not an internal user (the upgrade rehearsal's
+        # register_daemon via with_user(<service uid>) hit it on a production copy: "You can ony call user.has_group() with your
+        # current user"). Reproduce that refusal for every caller, so the check must use _has_group().
+        real_has_group = type(self.env["res.users"]).has_group
+
+        def has_group_own_user_only(user, group_ext_id):
+            if not user.env.su and user != user.env.user:
+                raise AccessError(_("You can ony call user.has_group() with your current user."))
+            return real_has_group(user, group_ext_id)
+
+        self.safe_patch_object(type(self.env["res.users"]), "has_group", has_group_own_user_only)
+        self.row.with_user(self.manager.id)._assert_account_may_hold_key()
         self.service.group_ids = [(4, self.env.ref("base.group_system").id)]
         with self.assertRaisesRegex(UserError, "__system__ user ID cannot be used"):
             self.row.with_user(self.manager.id)._assert_account_may_hold_key()
