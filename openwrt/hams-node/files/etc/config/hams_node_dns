@@ -6,3 +6,6 @@ config dns 'main'
 	# where dnsmasq reads extra configuration
 	option out '/tmp/dnsmasq.d/hams-ham.conf'
 	# list resolver '2001:db8:ab00::53'
+	# AAAA for IPv6 clients (AREDN's dnsmasq drops AAAA): port 53 of this extra address goes to the first IPv6 resolver above (set to enable)
+	# option v6_addr 'fd00:db8:1::53'
+	# option v6_iface 'br-lan'
