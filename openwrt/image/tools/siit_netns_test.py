@@ -7,8 +7,8 @@ The guest is the gateway (root namespace, Jool SIIT instance made by the real `h
 format of ham.ipv6.siit.domain._gateway_config()); namespace "six" is an IPv6 host whose address is also inside the mesh /96, namespace "four" is
 the AREDN host 10.1.2.3. Checks: ICMP, TCP and UDP both ways with the payload intact, the packets the hosts receive carry correct checksums
 (tcpdump -vv with offload off), and addresses outside the loaded /96 (another domain, 64:ff9b::/96) are not translated.
-The guest needs the host's internet once, for kmod-jool-netfilter, jool-tools-netfilter, ip-full, tcpdump, socat and ethtool (the stock-AREDN
-build of the same Jool is tested separately, see openwrt/hams-node/README.md)."""
+The guest needs the host's internet once, for kmod-jool-netfilter, jool-tools-netfilter, ip-full, tcpdump, socat and ethtool (the AREDN kernel has no
+network namespaces: siit_aredn_test.py runs the same checks on the stock AREDN image with three VMs)."""
 
 import argparse
 import json
