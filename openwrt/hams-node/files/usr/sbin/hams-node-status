@@ -223,7 +223,8 @@ case $1 in
 run) do_run ;;
 gossip) do_gossip ;;
 serve) do_serve ;;
-listen) exec nc -ll -p "$gossip_port" -e "/usr/sbin/hams-node-status -s $state serve" ;;
+# busybox nc runs the words after -e (not one quoted string); timeout ends a neighbour that connects and never sends its line
+listen) exec nc -ll -p "$gossip_port" -e timeout 10 /usr/sbin/hams-node-status -s "$state" serve ;;
 start) grep -qF "$job" "$cron" 2>/dev/null || echo "*/2 * * * * $job" >> "$cron"
 	grep -qF "$job_gossip" "$cron" 2>/dev/null || echo "*/2 * * * * $job_gossip" >> "$cron" ;;
 stop) [ -f "$cron" ] && { grep -vF "hams-node-status " "$cron" > "$cron.new"; mv "$cron.new" "$cron"; } ;;
