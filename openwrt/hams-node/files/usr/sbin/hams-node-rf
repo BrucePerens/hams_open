@@ -7,7 +7,7 @@
 # WireGuard on it and no encrypted-service port opens toward it (Part 97: no encryption over RF). While at least one RF interface is up,
 # hams_node_bird.main.rf_live is 1 (the node's routes carry the RF community), the station ID reminder is written to
 # $STATE/station_id_reminder (and the system log), and the AREDN neighbours seen on those interfaces (IPv6 neighbour table, link-local,
-# reachable) are listed in $STATE/rf_neighbours as "INTERFACE ADDRESS". /etc/hams-node/gossip_neighbours is not touched.
+# reachable) are listed in $STATE/rf_neighbours as "INTERFACE ADDRESS". /etc/hams-node/gossip_neighbours is not touched here (hams-node-bird writes the BGP-session RF neighbours there).
 # `list` prints the neighbours file. Exit 0 when the scan ran.
 set -u
 STATE=${HAMS_NODE_RF_STATE:-/var/run/hams-node}

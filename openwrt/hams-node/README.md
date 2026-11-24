@@ -42,7 +42,7 @@ and calls `BuildPackage` for each, so parallel subpackage changes never touch th
 setting) or when `iw dev` reports it as a mesh point or IBSS. It goes into zone `hamrf` (WireGuard and encrypted-service ports refused,
 Part 97), `hams_node_bird.main.rf_live` becomes 1 while one is up (routes carry the RF community), a station ID reminder is written to
 `/var/run/hams-node/station_id_reminder` and the system log, and the link-local neighbours seen on RF interfaces are listed in
-`/var/run/hams-node/rf_neighbours` (`hams-node-rf list`). `/etc/hams-node/gossip_neighbours` is left alone.
+`/var/run/hams-node/rf_neighbours` (`hams-node-rf list`). The RF neighbours that have a direct BGP session (`hams-node-bird`) are written to `/etc/hams-node/gossip_neighbours` for the deprecation-list gossip; `hams-node-rf` itself leaves that file alone.
 
 ## Firewall: the home LAN is outbound-only (hams-node-fw)
 
