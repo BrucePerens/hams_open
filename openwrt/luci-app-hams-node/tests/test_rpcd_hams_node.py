@@ -172,7 +172,7 @@ class AclTests(unittest.TestCase):
 
     def test_write_grants_only_this_app(self):
         self.assertEqual(self.acl["write"]["ubus"]["hams-node"], ["enroll_start"])
-        self.assertEqual(sorted(self.acl["write"]["uci"]), ["hams_node", "hams_node_ondemand"])
+        self.assertNotIn("uci", self.acl["write"], "the view never writes uci; a write grant would let any holder change prefix60, server_key or lookup_url")
         self.assertNotIn("file", self.acl["read"])
         self.assertNotIn("file", self.acl["write"])
 
