@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Tests for hams-node-proxyca: the name-constrained CA, the private key staying put, and the PAC file (evaluated with node)."""
 
-import json
 import os
 import pathlib
 import shutil
