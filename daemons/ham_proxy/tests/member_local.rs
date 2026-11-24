@@ -261,3 +261,51 @@ fn with_hams_com_unreachable_the_fallback_uses_the_local_check() {
         None
     );
 }
+
+fn reply(status: &str, body: &str) -> String {
+    format!("HTTP/1.1 {status}\r\nContent-Type: application/json\r\n\r\n{body}")
+}
+
+// Tests [@ANCHOR: ham_proxy_login_answer_from_reply]
+#[test]
+fn only_an_outage_counts_as_unreachable_every_other_reply_is_an_answer() {
+    use ham_proxy::login::{answer_from_reply, HttpAnswer};
+    let ok = reply(
+        "200 OK",
+        r#"{"result":{"status":"success","callsign":"W1AW"}}"#,
+    );
+    assert!(matches!(answer_from_reply(&ok), HttpAnswer::Member { .. }));
+    let refused = reply(
+        "200 OK",
+        r#"{"result":{"status":"refused","code":"bad_proof"}}"#,
+    );
+    assert!(matches!(answer_from_reply(&refused), HttpAnswer::Refused));
+    // hams.com answered, so a client must not be able to push the proxy onto the offline check with a reply that is not a clean answer
+    for bad in [
+        reply(
+            "200 OK",
+            r#"{"error":{"code":200,"message":"Odoo Server Error"}}"#,
+        ),
+        reply("500 Internal Server Error", "<html>boom</html>"),
+        reply("200 OK", "not json"),
+        reply("200 OK", r#"{"result":{"status":"success"}}"#),
+        reply("200 OK", r#"{"result":{}}"#),
+    ] {
+        assert!(
+            matches!(answer_from_reply(&bad), HttpAnswer::Refused),
+            "{bad}"
+        );
+    }
+    // a gateway saying hams.com is down, or nothing at all, is an outage
+    for down in [
+        reply("502 Bad Gateway", ""),
+        reply("503 Service Unavailable", "x"),
+        reply("504 Gateway Timeout", "x"),
+        String::new(),
+    ] {
+        assert!(
+            matches!(answer_from_reply(&down), HttpAnswer::Unreachable),
+            "{down}"
+        );
+    }
+}

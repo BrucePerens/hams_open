@@ -115,20 +115,44 @@ Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
         s.write_all(req.as_bytes()).ok()?;
         let mut out = Vec::new();
         s.take(65536).read_to_end(&mut out).ok()?;
-        let text = String::from_utf8_lossy(&out);
-        let reply: serde_json::Value = serde_json::from_str(text.split_once("\r\n\r\n")?.1).ok()?;
-        let r = reply.get("result")?;
-        Some(if r.get("status")?.as_str()? == "success" {
-            HttpAnswer::Member {
-                callsign: r.get("callsign")?.as_str()?.to_string(),
-                certificate_pem: r
-                    .get("certificate_pem")
-                    .and_then(|c| c.as_str())
-                    .map(str::to_string),
-            }
-        } else {
-            HttpAnswer::Refused
-        })
+        Some(answer_from_reply(&String::from_utf8_lossy(&out)))
+    }
+}
+
+// [@ANCHOR: ham_proxy_login_answer_from_reply]
+/// Turns hams.com's raw HTTP reply into an answer. Only no reply, or a gateway saying hams.com is down (502/503/504), is
+/// `Unreachable`; any other reply that is not a clean success is `Refused`, so nobody can reach the offline check by making hams.com
+/// answer badly.
+#[must_use]
+pub fn answer_from_reply(text: &str) -> HttpAnswer {
+    let status = text
+        .lines()
+        .next()
+        .and_then(|l| l.split_whitespace().nth(1))
+        .unwrap_or("");
+    if matches!(status, "" | "502" | "503" | "504") {
+        return HttpAnswer::Unreachable;
+    }
+    let parsed = text
+        .split_once("\r\n\r\n")
+        .and_then(|(_, body)| serde_json::from_str::<serde_json::Value>(body).ok());
+    let result = parsed.as_ref().and_then(|v| v.get("result"));
+    match (
+        result
+            .and_then(|r| r.get("status"))
+            .and_then(|x| x.as_str()),
+        result
+            .and_then(|r| r.get("callsign"))
+            .and_then(|x| x.as_str()),
+    ) {
+        (Some("success"), Some(callsign)) => HttpAnswer::Member {
+            callsign: callsign.to_string(),
+            certificate_pem: result
+                .and_then(|r| r.get("certificate_pem"))
+                .and_then(|c| c.as_str())
+                .map(str::to_string),
+        },
+        _ => HttpAnswer::Refused,
     }
 }
 
