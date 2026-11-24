@@ -72,6 +72,7 @@ fn loads(f: &Fake) -> usize {
 }
 
 // Tests [@ANCHOR: usb_blaster_config]
+// Tests [@ANCHOR: bench_mcp_usb_blaster_types]
 #[test]
 fn config_has_safe_defaults_and_refuses_bad_values() {
     let v = bench("");
