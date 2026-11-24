@@ -205,7 +205,7 @@ fn a_revoked_member_certificate_is_listed_by_issuer_and_serial_and_a_delta_can_r
         "malformed serials and issuers are not listed"
     );
     assert!(l.entries()[0].prefixes.is_empty());
-    let rm = r#"{"add":[],"from":1,"kind":"delta","remove":["0a1b"],"seq":2}"#;
+    let rm = r#"{"add":[],"from":1,"kind":"delta","remove":["cert:abcd:0a1b"],"seq":2}"#;
     let ch = apply(&mut l, &c, rm).unwrap();
     assert_eq!((ch.removed.len(), l.entries().len()), (1, 0));
 }
@@ -227,4 +227,24 @@ fn a_new_full_list_replaces_the_stored_chain_and_a_same_number_reply_is_no_chang
     assert_eq!(b.accept_gossip(&c, &reply).len(), 1);
     assert!(b.accept_gossip(&c, &reply).is_empty());
     assert_eq!(b.seq(), 5);
+}
+
+// Tests [@ANCHOR: hams_net_core_deprecation_apply]
+#[test]
+fn a_delta_removes_a_revoked_certificate_only_by_issuer_and_serial_never_by_a_bare_serial() {
+    let c = fake_ok();
+    let mut l = DeprecationList::new(&c, &pubkey()).unwrap();
+    let doc = format!(
+        r#"{{"entries":[{},{}],"kind":"full","seq":1}}"#,
+        cert_entry("0a1b", "aaaa"),
+        cert_entry("0a1b", "bbbb"),
+    );
+    apply(&mut l, &c, &doc).unwrap();
+    let bare = r#"{"add":[],"from":1,"kind":"delta","remove":["0a1b"],"seq":2}"#;
+    apply(&mut l, &c, bare).unwrap();
+    assert_eq!(l.entries().len(), 2, "a bare serial names no certificate");
+    let one = r#"{"add":[],"from":2,"kind":"delta","remove":["cert:aaaa:0a1b"],"seq":3}"#;
+    apply(&mut l, &c, one).unwrap();
+    let keys: Vec<String> = l.entries().into_iter().map(|e| e.key).collect();
+    assert_eq!(keys, ["cert:bbbb:0a1b"]);
 }
