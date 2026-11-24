@@ -37,6 +37,8 @@ esac
 feed=$(opt feed_url) pub=$(opt public_key) pkgs=$(opt packages) health=$(opt health_cmd)
 [ -n "$feed" ] && [ -n "$pub" ] || exit 0
 : "${pkgs:=hams-node hams-node-enroll hams-node-report}"
+# userinfo (http://127.0.0.1:x@evil.example) would make the host something else
+case $feed in http://*@*) feed="(userinfo is not allowed) $feed" ;; esac
 case $feed in
 https://?*) ;;
 http://127.0.0.1 | http://127.0.0.1/* | http://127.0.0.1:* | http://localhost | http://localhost/* | http://localhost:*) ;;
@@ -78,6 +80,8 @@ rollback() {
 	exit 1
 }
 
+# --allow-untrusted is only about the packages having no signature of their own: `apk fetch` has already checked each file against the index
+# that apk verified with the feed key ("ADB integrity error" otherwise; tested), and the stage directory is root-only (umask 077).
 # shellcheck disable=SC2046
 apk add --allow-untrusted "$stage"/*.apk > /dev/null 2>&1 || rollback "install failed"
 for n in $new; do

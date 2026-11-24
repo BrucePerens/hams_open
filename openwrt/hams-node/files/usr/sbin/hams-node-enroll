@@ -20,6 +20,8 @@ shift $((OPTIND - 1))
 [ $# -ge 1 ] || { echo "usage: hams-node-enroll [-u URL] [-s DIR] enroll [TOKEN] | fetch | unenroll" >&2; exit 2; }
 [ -n "$base" ] || base=$(uci -q get hams_node_enroll.main.url 2>/dev/null)
 [ -n "$base" ] || base=https://hams.com
+# userinfo (http://127.0.0.1:x@evil.example) would make the host something else
+case $base in http://*@*) base="(userinfo is not allowed) $base" ;; esac
 case $base in
 https://?*) ;;
 http://127.0.0.1 | http://127.0.0.1/* | http://127.0.0.1:* | http://localhost | http://localhost/* | http://localhost:*) ;;
@@ -49,6 +51,14 @@ clean() { case $1 in '' | *[!A-Za-z0-9_=/+-]*) return 1 ;; esac; }
 apply_config() { # the reply in $tmp -> the package's own settings
 	prefix60=$(field prefix60) ham=$(field ham_prefix) asn=$(field asn) serverkey=$(field server_key)
 	[ -n "$prefix60" ] || return 1
+	# These values reach nft rule text, bird and firewall scripts later: refuse the whole reply unless each is only its own characters.
+	owner=$(field callsign)
+	case $prefix60 in *[!0-9A-Fa-f:/]*) bad=prefix60 ;; *) bad= ;; esac
+	case $ham in *[!0-9A-Fa-f:/]*) bad=ham_prefix ;; esac
+	case $asn in *[!0-9]*) bad=asn ;; esac
+	case $serverkey in *[!A-Za-z0-9+/=]*) bad=server_key ;; esac
+	case $owner in *[!A-Za-z0-9/-]*) bad=callsign ;; esac
+	[ -z "$bad" ] || { echo "hams-node-enroll: refusing the configuration: bad $bad" >&2; return 1; }
 	uci set hams_node.main=gateway
 	uci set hams_node.main.prefix60="$prefix60"
 	uci set hams_node.main.asn="$asn"
@@ -58,7 +68,6 @@ apply_config() { # the reply in $tmp -> the package's own settings
 	uci set hams_node_ondemand.main.lookup_url="$base/api/ipv6/directory/lookup"
 	uci commit hams_node
 	uci commit hams_node_ondemand
-	owner=$(field callsign)
 	[ -n "$owner" ] && echo "$owner" > "$state/owner"  # the member whose certificate may manage this router
 	[ -x /usr/sbin/hams-node-mtls ] && /usr/sbin/hams-node-mtls -s "$state" -u "$base" apply  # hams-node-mtls package: management only with that member certificate
 	: > "$state/ssh_keys.new"  # the owner's exported member-certificate keys: "SERIAL KEYLINE" per line (hams-node-ssh keeps them in the authorized keys)

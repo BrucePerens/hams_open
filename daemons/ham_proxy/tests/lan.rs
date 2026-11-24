@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 //! The LAN-facing listener: CONNECT terminated with leaf certificates from the node CA, plain http:// upgraded, policy before any upstream
 //! connection, and the upstream leg only ever integrity-only TLS.
-use ham_proxy::lan::{parse_target, serve_lan, Ca, Target, Upstream};
+use ham_proxy::lan::{parse_target, serve_lan, upstream_head, Ca, Target, Upstream};
 use ham_proxy::policy::{Policy, Whitelist};
 use ham_proxy::{ham_acceptor, ProxyError};
 use openssl::ssl::{SslConnector, SslMethod};
@@ -472,5 +472,29 @@ fn a_path_limited_site_is_reachable_on_its_paths_only() {
     assert!(
         page.unwrap().starts_with("HTTP/1.1 403"),
         "/page is outside /ok"
+    );
+}
+
+#[test]
+fn upstream_head_drops_disguised_and_body_headers() {
+    // Tests [@ANCHOR: ham_proxy_lan_upstream_head]
+    let head = "POST /a HTTP/1.1\r\nHost: ok.example\r\nHost : evil.example\r\nHOST\t: evil2.example\r\n X-Ham-Callsign: W1AW\r\nX-Ham-Callsign : W1AW\r\nProxy-Authorization: x\r\nContent-Length: 5\r\nTransfer-Encoding: chunked\r\nAccept-Encoding : gzip\r\nUser-Agent: t\r\n\r\n";
+    let t = parse_target(head).unwrap();
+    let out = String::from_utf8(upstream_head(head, &t, "/a")).unwrap();
+    let lower = out.to_lowercase();
+    assert_eq!(lower.matches("host").count(), 1, "{out}");
+    for gone in [
+        "evil",
+        "x-ham",
+        "proxy-",
+        "content-length",
+        "transfer-encoding",
+        "gzip",
+    ] {
+        assert!(!lower.contains(gone), "{gone}: {out}");
+    }
+    assert!(
+        out.contains("User-Agent: t") && out.contains("Host: ok.example"),
+        "{out}"
     );
 }

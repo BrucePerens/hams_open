@@ -29,6 +29,48 @@ pub const INTEGRITY_ONLY_SUITES: [&str; 3] =
 const TLS13_SUITES: &str = "TLS_SHA256_SHA256:TLS_SHA384_SHA384";
 const TLS12_CIPHERS: &str = "NULL-SHA256:@SECLEVEL=0";
 const MAX_HEAD: usize = 65536;
+/// Most connections served at once; the listeners drop the rest (a thread each is the cost).
+pub const MAX_CONNECTIONS: usize = 256;
+static IDLE_SECS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(60);
+static OPEN: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+// [@ANCHOR: ham_proxy_set_idle_timeout]
+/// Seconds a connection may sit without a byte arriving or leaving before it is dropped (default 60).
+pub fn set_idle_timeout(secs: u64) {
+    IDLE_SECS.store(secs.max(1), std::sync::atomic::Ordering::Relaxed);
+}
+
+// [@ANCHOR: ham_proxy_limit_idle]
+/// Put the idle timeout on both directions of `tcp`, so a client or site that stalls cannot hold a thread forever.
+pub(crate) fn limit_idle(tcp: &TcpStream) -> io::Result<()> {
+    let d = Some(std::time::Duration::from_secs(
+        IDLE_SECS.load(std::sync::atomic::Ordering::Relaxed),
+    ));
+    tcp.set_read_timeout(d)?;
+    tcp.set_write_timeout(d)
+}
+
+/// One of the [`MAX_CONNECTIONS`] connection slots; given back on drop.
+pub struct Slot(());
+
+impl Drop for Slot {
+    fn drop(&mut self) {
+        OPEN.fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+// [@ANCHOR: ham_proxy_try_slot]
+/// A connection slot, or `None` when [`MAX_CONNECTIONS`] connections are already being served.
+pub fn try_slot() -> Option<Slot> {
+    use std::sync::atomic::Ordering::Relaxed;
+    (OPEN.fetch_add(1, Relaxed) < MAX_CONNECTIONS)
+        .then_some(())
+        .map(|()| Slot(()))
+        .or_else(|| {
+            OPEN.fetch_sub(1, Relaxed);
+            None
+        })
+}
 /// Pass as `site_addr` to serve any site the whitelist permits, taken from each request's `Host` (port 443): the central site gateway.
 pub const GATEWAY: &str = "*";
 
@@ -138,19 +180,66 @@ pub fn require_integrity_only<S>(s: &SslStream<S>) -> Result<String, ProxyError>
 fn read_head<R: Read>(r: &mut R) -> Result<Vec<u8>, ProxyError> {
     let mut head = Vec::new();
     let mut buf = [0u8; 4096];
-    while !head.windows(4).any(|w| w == b"\r\n\r\n") {
+    loop {
+        if let Some(i) = head.windows(4).position(|w| w == b"\r\n\r\n") {
+            // Bytes after the blank line (a pipelined request or a body) are not part of the head: never forward them.
+            head.truncate(i + 4);
+            return Ok(head);
+        }
         let n = r.read(&mut buf)?;
         if n == 0 || head.len() + n > MAX_HEAD {
             return Err(ProxyError::BadRequest);
         }
         head.extend_from_slice(&buf[..n]);
     }
-    Ok(head)
+}
+
+// [@ANCHOR: ham_proxy_unambiguous_head]
+/// Whether every party will read `head` the same way: `METHOD /origin-form HTTP/1.x` (no absolute-form or `CONNECT` target), CRLF
+/// line ends only, header names that are plain tokens (no `Host : x`, no folded lines) and exactly one `Host`. Anything else could
+/// make the site see a different host or path than the whitelist checked.
+fn unambiguous_head(head: &str) -> bool {
+    let mut lines = head.trim_end_matches("\r\n").split("\r\n");
+    let mut first = lines.next().unwrap_or("").split(' ');
+    let (Some(method), Some(target), Some(version), None) =
+        (first.next(), first.next(), first.next(), first.next())
+    else {
+        return false;
+    };
+    if method.is_empty()
+        || !method.bytes().all(|c| c.is_ascii_uppercase())
+        || !target.starts_with('/')
+        || !version.starts_with("HTTP/1.")
+    {
+        return false;
+    }
+    let mut hosts = 0;
+    for l in lines {
+        let Some((name, _)) = l.split_once(':') else {
+            return false;
+        };
+        if name.is_empty()
+            || !name
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
+        {
+            return false;
+        }
+        hosts += usize::from(name.eq_ignore_ascii_case("host"));
+    }
+    hosts == 1
+        && !head
+            .trim_end_matches("\r\n")
+            .replace("\r\n", "")
+            .contains(['\r', '\n'])
 }
 
 // [@ANCHOR: ham_proxy_request_target]
 /// (lower-case host without port, port (default 443), path) of a request head; `None` unless the host is a plain DNS name.
 fn request_target(head: &str) -> Option<(String, String, String)> {
+    if !unambiguous_head(head) {
+        return None;
+    }
     let path = head.lines().next()?.split(' ').nth(1)?.to_string();
     let auth = indicator::header(head, "host")?.trim().to_lowercase();
     let (host, port) = auth.rsplit_once(':').unwrap_or((auth.as_str(), "443"));
@@ -164,6 +253,9 @@ fn request_target(head: &str) -> Option<(String, String, String)> {
     (plain && port.bytes().all(|c| c.is_ascii_digit()) && !port.is_empty())
         .then_some((host, port, path))
 }
+
+#[cfg(test)]
+mod head_tests;
 
 // [@ANCHOR: ham_proxy_serve_one]
 /// Serve one ham connection without signing (see [`serve_one_signed`]).
@@ -207,7 +299,10 @@ pub fn session_head(head: &str, who: Option<&str>) -> Vec<u8> {
     let mut lines: Vec<String> = head
         .trim_end_matches("\r\n")
         .split("\r\n")
-        .filter(|l| !l.to_ascii_lowercase().starts_with("x-ham-"))
+        .filter(|l| {
+            let name = l.split(':').next().unwrap_or("").trim();
+            !name.to_ascii_lowercase().starts_with("x-ham-")
+        })
         .map(str::to_string)
         .collect();
     if let Some(c) = who {
@@ -334,6 +429,7 @@ pub fn serve_one_policed(
     login: Option<Login<'_>>,
     policy: Option<&policy::Policy>,
 ) -> Result<(), ProxyError> {
+    limit_idle(&tcp)?;
     let mut ham = acceptor.accept(tcp)?;
     let suite = require_integrity_only(&ham)?;
     let gateway = site_addr == GATEWAY;
@@ -386,6 +482,10 @@ pub fn serve_one_policed(
             }
         }
     }
+    if login.is_none() {
+        // No login service: still no client X-Ham-* header may reach the site, or it could pose as a member.
+        head = session_head(&String::from_utf8_lossy(&head), None);
+    }
     let up_tcp = resolve::connect_upstream(site_addr)?;
     let mut up = site.connect(site_name, up_tcp)?;
     up.write_all(&request_identity(&head))?;
@@ -431,4 +531,19 @@ pub(crate) fn relay_response<U: Read, H: Write>(
     };
     ham.write_all(&out)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn read_head_stops_at_the_blank_line() {
+        // Tests [@ANCHOR: ham_proxy_read_head]
+        // A second request in the same segment was forwarded upstream behind the checked head (request smuggling past the path whitelist).
+        let raw = b"GET /ok HTTP/1.1\r\nHost: a.example\r\n\r\nGET /secret HTTP/1.1\r\nHost: a.example\r\n\r\n";
+        let head = read_head(&mut &raw[..]).unwrap();
+        assert!(head.ends_with(b"\r\n\r\n") && !String::from_utf8_lossy(&head).contains("secret"));
+        assert!(!String::from_utf8_lossy(&request_identity(&head)).contains("secret"));
+    }
 }

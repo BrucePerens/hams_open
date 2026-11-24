@@ -57,18 +57,101 @@ pub fn inject(html: &[u8]) -> Vec<u8> {
 pub fn has_unhandled_password(html: &[u8]) -> bool {
     let mut pos = 0;
     while let Some(i) = find_ci(html, "<input", pos) {
-        let end = html[i..]
-            .iter()
-            .position(|&b| b == b'>')
-            .map_or(html.len(), |j| i + j);
-        let tag = String::from_utf8_lossy(&html[i..end]).to_ascii_lowercase();
-        let compact: String = tag.chars().filter(|c| !" \t\r\n'\"".contains(*c)).collect();
-        if compact.contains("type=password") && !tag.contains(LOGIN_ATTR) {
+        let (attrs, end) = parse_attrs(html, i + 6);
+        let first = |n: &str| attrs.iter().find(|(k, _)| k == n).map(|(_, v)| v.as_str());
+        if first("type").is_some_and(|t| t.trim().eq_ignore_ascii_case("password"))
+            && !attrs.iter().any(|(k, _)| k == LOGIN_ATTR)
+        {
             return true;
         }
         pos = end.max(i + 1);
     }
     false
+}
+
+// [@ANCHOR: ham_proxy_decode_refs]
+/// A character reference (`&#119;`, `&#x77;`) decoded; text otherwise unchanged. Enough for attribute values a browser would read as another word.
+fn decode_refs(v: &[u8]) -> String {
+    let t = String::from_utf8_lossy(v);
+    let mut out = String::new();
+    let mut rest: &str = &t;
+    while let Some(i) = rest.find("&#") {
+        out.push_str(&rest[..i]);
+        let r = &rest[i + 2..];
+        let (digits, radix) = match r.strip_prefix(['x', 'X']) {
+            Some(h) => (h, 16),
+            None => (r, 10),
+        };
+        let n = digits.chars().take_while(|c| c.is_digit(radix)).count();
+        let ch = u32::from_str_radix(&digits[..n], radix)
+            .ok()
+            .and_then(char::from_u32);
+        match ch {
+            Some(c) if n > 0 => {
+                out.push(c);
+                let used = i + 2 + (r.len() - digits.len()) + n;
+                rest = rest[used..].strip_prefix(';').unwrap_or(&rest[used..]);
+            }
+            _ => {
+                out.push_str("&#");
+                rest = r;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+// [@ANCHOR: ham_proxy_parse_attrs]
+/// The (lower-case name, decoded value) attributes of the tag whose attribute text starts at `from`, and the index of its closing `>`
+/// (a `>` inside a quoted value does not close it).
+fn parse_attrs(h: &[u8], from: usize) -> (Vec<(String, String)>, usize) {
+    let mut out = Vec::new();
+    let mut i = from;
+    let blank = |c: u8| c.is_ascii_whitespace() || c == b'/';
+    while i < h.len() && h[i] != b'>' {
+        if blank(h[i]) {
+            i += 1;
+            continue;
+        }
+        let s = i;
+        while i < h.len() && !blank(h[i]) && h[i] != b'=' && h[i] != b'>' {
+            i += 1;
+        }
+        let name = String::from_utf8_lossy(&h[s..i]).to_ascii_lowercase();
+        let mut j = i;
+        while j < h.len() && h[j].is_ascii_whitespace() {
+            j += 1;
+        }
+        let mut value = String::new();
+        if h.get(j) == Some(&b'=') {
+            j += 1;
+            while j < h.len() && h[j].is_ascii_whitespace() {
+                j += 1;
+            }
+            match h.get(j) {
+                Some(&q) if q == b'"' || q == b'\'' => {
+                    let vs = j + 1;
+                    let ve = h[vs..]
+                        .iter()
+                        .position(|&c| c == q)
+                        .map_or(h.len(), |p| vs + p);
+                    value = decode_refs(&h[vs..ve]);
+                    j = (ve + 1).min(h.len());
+                }
+                _ => {
+                    let vs = j;
+                    while j < h.len() && !h[j].is_ascii_whitespace() && h[j] != b'>' {
+                        j += 1;
+                    }
+                    value = decode_refs(&h[vs..j]);
+                }
+            }
+            i = j;
+        }
+        out.push((name, value));
+    }
+    (out, i)
 }
 
 fn hex(b: &[u8]) -> String {
@@ -184,7 +267,7 @@ pub fn dechunk(mut b: &[u8]) -> Option<Vec<u8>> {
         if n == 0 {
             return Some(out);
         }
-        if b.len() < n + 2 {
+        if n.checked_add(2).is_none_or(|m| b.len() < m) {
             return None;
         }
         out.extend_from_slice(&b[..n]);

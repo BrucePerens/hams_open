@@ -11,6 +11,8 @@ A ham client connects with integrity-only TLS; the proxy relays one request to a
 - [@ANCHOR: ham_proxy_inject] Banner insertion after `<body>`; idempotent.
 - [@ANCHOR: ham_proxy_find_ci] Case-insensitive byte search used by the HTML scans.
 - [@ANCHOR: ham_proxy_has_unhandled_password] Detects `type=password` inputs (any quoting or case) lacking `data-ham-login`.
+- [@ANCHOR: ham_proxy_decode_refs] Numeric character references in attribute values are decoded before comparing.
+- [@ANCHOR: ham_proxy_parse_attrs] The password check reads each `<input>` tag's attributes (quoted values, `>` inside quotes, character references, first `type` wins); the login marker counts only as an attribute name.
 - [@ANCHOR: ham_proxy_dechunk] Decodes a chunked body so the HTML can be rewritten.
 - [@ANCHOR: ham_proxy_sign_header] Builds the `X-Ham-Integrity` value (Ed25519 over version, ts, host, body sha256).
 - [@ANCHOR: ham_proxy_verify_header] Verifies it: signature, body hash, host, age.
@@ -42,7 +44,8 @@ Internals:
 
 A `.ham` server is identified by a DANE-EE TLSA record in the signed `.ham` zone, not by a CA. The resolver (the node's validating resolver) is given as `ip:port`.
 
-- [@ANCHOR: ham_proxy_resolve_tlsa] `resolve_tlsa(resolver, host, port)`: one UDP query to the resolver, 3 s timeout.
+- [@ANCHOR: ham_proxy_resolve_tlsa] `resolve_tlsa(resolver, host, port)`: one UDP query (random ID, AD requested, IPv4 or IPv6 socket to match the resolver), 3 s timeout.
+- [@ANCHOR: ham_proxy_authenticated_tlsa] Records count only from a reply with the query's ID, QR set and the validating resolver's AD bit; otherwise there are none and the `.ham` server is refused (DANE without DNSSEC proves nothing).
 - [@ANCHOR: ham_proxy_connect_ham_server] `connect_ham_server(tcp, host, port, resolver)`: integrity-only TLS client; refuses an encrypting suite, and refuses (`NotPinned`) a certificate that no TLSA record pins or a name with no records.
 - [@ANCHOR: ham_proxy_client_builder] The integrity-only client builder shared by `ham_connector` and `connect_ham_server`.
 
@@ -71,6 +74,7 @@ A `.ham` server is identified by a DANE-EE TLSA record in the signed `.ham` zone
 Site gateway (`--gateway`, tests `tests/gateway.rs`):
 
 - [@ANCHOR: ham_proxy_policy_permits] and [@ANCHOR: ham_proxy_policy_replace] are the policy's host-and-path check and the swap-in of a freshly verified list; [@ANCHOR: ham_proxy_request_target] reads host, port and path from the request head in gateway mode, where `serve_one_policed` takes the site from the request and refuses (before any upstream connection) a site or path that is not permitted.
+- [@ANCHOR: ham_proxy_unambiguous_head] Gateway mode accepts only `METHOD /path HTTP/1.x` with CRLF line ends, token header names and exactly one `Host`; absolute-form and `CONNECT` targets, duplicate or folded `Host` headers get `BadRequest`.
 - [@ANCHOR: ham_proxy_load_key] and [@ANCHOR: ham_proxy_load_list] are the binary's key file and per-connection list loading (a bad list gives the empty whitelist).
 
 Upstream lookup for the AREDN gateway (`--ham-resolver`, `--allow-private-upstream`, tests `tests/resolve.rs`):
@@ -104,3 +108,5 @@ For the browsers on the member's own LAN (never RF). Needs the node's proxy CA (
 - [@ANCHOR: ham_proxy_load_signed] The binary reads `--signed-whitelist` with `--whitelist-key` (one without the other is an error).
 - [@ANCHOR: ham_proxy_load_policy] The binary builds the whitelist policy from `--whitelist` or the signed list; it needs `--callsign` and `--log`.
 - [@ANCHOR: ham_proxy_run_lan] `--lan` runs the browser-facing listener of `lan.rs` as the binary (thread per connection); it refuses to start without a whitelist.
+- [@ANCHOR: ham_proxy_set_idle_timeout] and [@ANCHOR: ham_proxy_limit_idle] A connection (browser, ham or upstream) that moves no byte for the idle time (60 s by default) is dropped, so a stalled peer cannot hold a thread forever.
+- [@ANCHOR: ham_proxy_try_slot] The listeners serve at most `MAX_CONNECTIONS` (256) connections at once and drop the rest.

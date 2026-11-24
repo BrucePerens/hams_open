@@ -28,3 +28,30 @@ fn log_line_needs_a_callsign() {
     );
     assert!(log_line(0, " ", "a.ham", "NULL").is_none());
 }
+
+// Tests [@ANCHOR: hams_net_core_policy_whitelist_permits_path]
+// Tests [@ANCHOR: hams_net_core_policy_climbs]
+#[test]
+fn path_prefix_cannot_be_climbed_out_of() {
+    let mut w = Whitelist::default();
+    w.add_site("news.com", vec!["/ham".into()]);
+    w.add_site("open.com", vec![]);
+    assert!(
+        w.permits_path("news.com", "/ham/a.b/c") && w.permits_path("news.com", "/ham/x?next=/../")
+    );
+    for p in [
+        "/ham/../secret",
+        "/ham/%2e%2e/secret",
+        "/ham/.%2E/secret",
+        "/ham/%2e./secret",
+        "/ham/..%2fsecret",
+        "/ham/..\\secret",
+        "/ham/..;x=1/secret",
+        "/ham/./../secret",
+        "/ham/a%00",
+    ] {
+        assert!(!w.permits_path("news.com", p), "{p}");
+    }
+    // a host with no path limit is unaffected
+    assert!(w.permits_path("open.com", "/a/../b"));
+}

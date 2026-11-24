@@ -164,3 +164,67 @@ fn a_neighbour_hands_over_the_chain_only_when_newer_and_it_is_verified_again() {
         .is_empty());
     assert_eq!(z.seq(), 0);
 }
+
+// Tests [@ANCHOR: hams_net_core_deprecation_verified]
+// Tests [@ANCHOR: hams_net_core_deprecation_apply]
+#[test]
+fn a_document_whose_payload_was_changed_after_signing_is_refused_even_with_the_right_key_number() {
+    let c = fake_ok();
+    let mut l = DeprecationList::new(&c, &pubkey()).unwrap();
+    // the signature of one document attached to the body of another: key number and layout are right, the signature is not
+    let (_, sig_of_other) = signed(&full(2, &[KEY_A]), 9);
+    let (tampered_body, _) = signed(&full(3, &[KEY_B]), 9);
+    assert!(l.apply(&c, &tampered_body, &sig_of_other).is_none());
+    assert_eq!((l.seq(), l.entries().len()), (0, 0));
+}
+
+fn cert_entry(serial: &str, issuer: &str) -> String {
+    format!(
+        r#"{{"type":"revoked_member_cert","key":"{serial}","issuer_sha256":"{issuer}","revoked_at":"x","reason":"keyCompromise"}}"#
+    )
+}
+
+// Tests [@ANCHOR: hams_net_core_deprecation_entries_of]
+// Tests [@ANCHOR: hams_net_core_deprecation_apply]
+#[test]
+fn a_revoked_member_certificate_is_listed_by_issuer_and_serial_and_a_delta_can_reverse_it() {
+    let c = fake_ok();
+    let mut l = DeprecationList::new(&c, &pubkey()).unwrap();
+    let doc = format!(
+        r#"{{"entries":[{},{},{},{}],"kind":"full","seq":1}}"#,
+        cert_entry("0a1b", "abcd"),
+        cert_entry("0a:1b", "abcd"),
+        cert_entry("0a1b", "ab:cd"),
+        cert_entry("", "abcd"),
+    );
+    apply(&mut l, &c, &doc).unwrap();
+    let keys: Vec<String> = l.entries().into_iter().map(|e| e.key).collect();
+    assert_eq!(
+        keys,
+        ["cert:abcd:0a1b"],
+        "malformed serials and issuers are not listed"
+    );
+    assert!(l.entries()[0].prefixes.is_empty());
+    let rm = r#"{"add":[],"from":1,"kind":"delta","remove":["0a1b"],"seq":2}"#;
+    let ch = apply(&mut l, &c, rm).unwrap();
+    assert_eq!((ch.removed.len(), l.entries().len()), (1, 0));
+}
+
+// Tests [@ANCHOR: hams_net_core_deprecation_gossip_reply]
+// Tests [@ANCHOR: hams_net_core_deprecation_accept_gossip]
+#[test]
+fn a_new_full_list_replaces_the_stored_chain_and_a_same_number_reply_is_no_change() {
+    let c = fake_ok();
+    let mut a = DeprecationList::new(&c, &pubkey()).unwrap();
+    apply(&mut a, &c, &full(2, &[KEY_A])).unwrap();
+    apply(&mut a, &c, &delta(2, 3, &[KEY_B], &[])).unwrap();
+    apply(&mut a, &c, &full(5, &[KEY_B])).unwrap();
+    let reply = a.gossip_reply("HAMS-GOSSIP 0\n");
+    assert_eq!(reply.lines().count(), 1, "only the last full list");
+    assert!(reply.starts_with("full 0 "));
+    // a neighbour that already holds seq 5 gets no change from the same document
+    let mut b = DeprecationList::new(&c, &pubkey()).unwrap();
+    assert_eq!(b.accept_gossip(&c, &reply).len(), 1);
+    assert!(b.accept_gossip(&c, &reply).is_empty());
+    assert_eq!(b.seq(), 5);
+}
