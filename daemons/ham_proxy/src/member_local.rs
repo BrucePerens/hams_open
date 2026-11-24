@@ -114,7 +114,6 @@ impl LocalVerifier {
         })
     }
 
-    // [@ANCHOR: ham_proxy_local_dates_ok]
     // [@ANCHOR: ham_proxy_local_crl_revoked]
     /// True when a fresh CRL lists the cached certificate. A stale or missing CRL is not used (nobody is locked out by an old CRL);
     /// the CRL is checked with `openssl verify`, the crate having no CRL support.
@@ -165,6 +164,7 @@ impl LocalVerifier {
         })
     }
 
+    // [@ANCHOR: ham_proxy_local_dates_ok]
     fn dates_ok(cert: &X509) -> bool {
         let t = now();
         let (Ok(early), Ok(late)) = (
