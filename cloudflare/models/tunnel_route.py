@@ -57,6 +57,14 @@ class CloudflareTunnelRoute(models.Model):
         help="e.g. http://localhost:8070, tcp://localhost:22, or http_status:404"  # burn-ignore-cloudflared-ingress
     )
 
+    # The Host header cloudflared sends to the service (ingress originRequest.httpHostHeader). The origin for custom
+    # hostnames (hams.perens.com) is served by the site that answers as hams.com, so a push that dropped this would
+    # break it. Empty: cloudflared's default (the requested hostname).
+    http_host_header = fields.Char(
+        string="Host header sent to the service",
+        help="Optional: the Host header cloudflared sends to the service, e.g. hams.com. Leave empty to send the requested hostname.",
+    )
+
     @api.depends("hostname", "path", "service_url")
     # [@ANCHOR: cloudflare:COMM_tunnel_route_compute_name]
     def _compute_name(self):

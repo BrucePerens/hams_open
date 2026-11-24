@@ -93,6 +93,7 @@
                 <field name="hostname" placeholder="e.g. api.hams.com"/>
                 <field name="path" placeholder="e.g. ^/adif$"/>
                 <field name="service_url" placeholder="e.g. http://localhost:8070"/>
+                <field name="http_host_header" optional="hide"/>
             </list>
         </field>
     </record>
