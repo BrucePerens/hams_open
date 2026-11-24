@@ -267,7 +267,7 @@ pub fn dechunk(mut b: &[u8]) -> Option<Vec<u8>> {
         if n == 0 {
             return Some(out);
         }
-        if b.len() < n + 2 {
+        if n.checked_add(2).is_none_or(|m| b.len() < m) {
             return None;
         }
         out.extend_from_slice(&b[..n]);

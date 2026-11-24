@@ -157,6 +157,21 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(done.returncode, 4, done.stderr)
         self.assertEqual(self.installed(), "ht-1.0-r1")
 
+    def test_a_package_that_does_not_match_the_signed_index_is_refused(self):
+        self.install("1.0-r1")
+        self.make_feed("1.0-r1", "1.1-r1")
+        evil = self.make_pkg("1.1-r1")  # same name and version, different contents, never listed in the signed index
+        (self.root / "src" / "usr/bin/ht").write_text("echo evil\n")
+        done = sh(APK, "mkpkg", "--info", "name:ht", "--info", "version:1.1-r1", "--info", "arch:noarch", "--info", "description:t",
+                  "--info", "license:GPL-2.0-or-later", "--files", str(self.root / "src"), "--output", str(self.feed / "ht-1.1-r1.apk"))
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertNotEqual(evil, None)
+        done = self.update()
+        self.assertEqual(done.returncode, 4, done.stderr + self.status())  # apk fetch checks the download against the signed index
+        self.assertIn("download failed", self.status())
+        self.assertEqual(self.installed(), "ht-1.0-r1")
+        self.assertNotIn("evil", (self.root / "apkroot" / "usr/bin/ht").read_text())
+
     def test_a_download_that_fails_changes_nothing(self):
         self.install("1.0-r1")
         self.make_feed("1.0-r1", "1.1-r1")

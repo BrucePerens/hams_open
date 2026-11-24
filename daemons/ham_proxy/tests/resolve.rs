@@ -221,3 +221,26 @@ fn a_ham_name_resolving_to_a_private_address_is_never_connected() {
     let g2 = gateway(dir.path(), &c, &k, &resolver("fd00::5"), false);
     assert!(!get(&g2, &format!("gw.ham:{port}")).contains("ham-page"));
 }
+
+#[test]
+fn private_ipv4_inside_nat64_6to4_and_compatible_addresses_is_refused() {
+    // Tests [@ANCHOR: ham_proxy_address_allowed]
+    for a in [
+        "64:ff9b::a00:1",    // NAT64 of 10.0.0.1
+        "64:ff9b::7f00:1",   // 127.0.0.1
+        "64:ff9b::c0a8:101", // 192.168.1.1
+        "2002:a00:1::1",     // 6to4 of 10.0.0.1
+        "2002:c0a8:101::",   // 6to4 of 192.168.1.1
+        "::7f00:1",          // IPv4-compatible 127.0.0.1
+        "::a00:1",
+        "240.0.0.1",
+        "255.255.255.254",
+        "198.18.0.1",
+        "192.0.0.8",
+    ] {
+        assert!(!address_allowed(&a.parse::<IpAddr>().unwrap()), "{a}");
+    }
+    for a in ["64:ff9b::808:808", "2002:808:808::1"] {
+        assert!(address_allowed(&a.parse::<IpAddr>().unwrap()), "{a}");
+    }
+}

@@ -138,19 +138,66 @@ pub fn require_integrity_only<S>(s: &SslStream<S>) -> Result<String, ProxyError>
 fn read_head<R: Read>(r: &mut R) -> Result<Vec<u8>, ProxyError> {
     let mut head = Vec::new();
     let mut buf = [0u8; 4096];
-    while !head.windows(4).any(|w| w == b"\r\n\r\n") {
+    loop {
+        if let Some(i) = head.windows(4).position(|w| w == b"\r\n\r\n") {
+            // Bytes after the blank line (a pipelined request or a body) are not part of the head: never forward them.
+            head.truncate(i + 4);
+            return Ok(head);
+        }
         let n = r.read(&mut buf)?;
         if n == 0 || head.len() + n > MAX_HEAD {
             return Err(ProxyError::BadRequest);
         }
         head.extend_from_slice(&buf[..n]);
     }
-    Ok(head)
+}
+
+// [@ANCHOR: ham_proxy_unambiguous_head]
+/// Whether every party will read `head` the same way: `METHOD /origin-form HTTP/1.x` (no absolute-form or `CONNECT` target), CRLF
+/// line ends only, header names that are plain tokens (no `Host : x`, no folded lines) and exactly one `Host`. Anything else could
+/// make the site see a different host or path than the whitelist checked.
+fn unambiguous_head(head: &str) -> bool {
+    let mut lines = head.trim_end_matches("\r\n").split("\r\n");
+    let mut first = lines.next().unwrap_or("").split(' ');
+    let (Some(method), Some(target), Some(version), None) =
+        (first.next(), first.next(), first.next(), first.next())
+    else {
+        return false;
+    };
+    if method.is_empty()
+        || !method.bytes().all(|c| c.is_ascii_uppercase())
+        || !target.starts_with('/')
+        || !version.starts_with("HTTP/1.")
+    {
+        return false;
+    }
+    let mut hosts = 0;
+    for l in lines {
+        let Some((name, _)) = l.split_once(':') else {
+            return false;
+        };
+        if name.is_empty()
+            || !name
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_')
+        {
+            return false;
+        }
+        hosts += usize::from(name.eq_ignore_ascii_case("host"));
+    }
+    hosts == 1
+        && !head
+            .trim_end_matches("\r\n")
+            .replace("\r\n", "")
+            .contains(['\r', '\n'])
 }
 
 // [@ANCHOR: ham_proxy_request_target]
 /// (lower-case host without port, port (default 443), path) of a request head; `None` unless the host is a plain DNS name.
 fn request_target(head: &str) -> Option<(String, String, String)> {
+    if !unambiguous_head(head) {
+        return None;
+    }
     let path = head.lines().next()?.split(' ').nth(1)?.to_string();
     let auth = indicator::header(head, "host")?.trim().to_lowercase();
     let (host, port) = auth.rsplit_once(':').unwrap_or((auth.as_str(), "443"));
@@ -164,6 +211,9 @@ fn request_target(head: &str) -> Option<(String, String, String)> {
     (plain && port.bytes().all(|c| c.is_ascii_digit()) && !port.is_empty())
         .then_some((host, port, path))
 }
+
+#[cfg(test)]
+mod head_tests;
 
 // [@ANCHOR: ham_proxy_serve_one]
 /// Serve one ham connection without signing (see [`serve_one_signed`]).
@@ -431,4 +481,19 @@ pub(crate) fn relay_response<U: Read, H: Write>(
     };
     ham.write_all(&out)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn read_head_stops_at_the_blank_line() {
+        // Tests [@ANCHOR: ham_proxy_read_head]
+        // A second request in the same segment was forwarded upstream behind the checked head (request smuggling past the path whitelist).
+        let raw = b"GET /ok HTTP/1.1\r\nHost: a.example\r\n\r\nGET /secret HTTP/1.1\r\nHost: a.example\r\n\r\n";
+        let head = read_head(&mut &raw[..]).unwrap();
+        assert!(head.ends_with(b"\r\n\r\n") && !String::from_utf8_lossy(&head).contains("secret"));
+        assert!(!String::from_utf8_lossy(&request_identity(&head)).contains("secret"));
+    }
 }
