@@ -398,3 +398,11 @@ listed ports, and the replies from the pool addresses on those ports) and regist
 The same drop affects the web gateway's own path only if its clients are routed through the node (they connect to the node itself, which is input, not forward).
 The test needed an address map entry for the client (its translated source had to be an address the QEMU network accepts); real traffic uses the domain's /96.
 remote target over WireGuard were not available in the VM).
+
+### Starting the LAN listener (`/etc/init.d/hams-node-proxyca`)
+
+`hams-node-proxyca` depends on `ham-proxy` and ships a procd init script that makes the CA and PAC file and runs `ham_proxy --lan` (respawned). Off by default
+(`option enabled '0'` in `/etc/config/hams_node_proxyca`). To use it set `enabled '1'`, `callsign`, `resolver` (TLSA/.ham resolver, ip:port), `gateway` (host:port of the
+site gateway) and `gateway_ca`, and `proxy` to this node's own private LAN address and port; then `/etc/init.d/hams-node-proxyca restart`. `hams-node-proxyca args`
+refuses anything else: it listens only on a private IPv4 (10/8, 172.16/12, 192.168/16) or unique-local IPv6 address, never a wildcard or a public address, and
+refuses to start without a callsign. Tests: `tests/test_hams_node_initd_proxyca.py`.

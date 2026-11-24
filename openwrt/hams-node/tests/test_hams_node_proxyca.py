@@ -69,6 +69,12 @@ class CaTests(unittest.TestCase):
         r = n.leaf("x", ip="2001:db8:ff00::1")
         self.assertNotEqual(r.returncode, 0, "an address outside the ham network was accepted")
 
+    def test_ca_is_made_without_a_ham_network_block_in_the_config(self):
+        n = Node(self, net_cidr="", net_prefix="")
+        r = n.run_cmd("ca")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(n.leaf("w1aw.ham").returncode, 0)
+
     def test_the_private_key_is_private_and_never_in_the_certificate_output(self):
         n = Node(self)
         r = n.run_cmd("ca")
