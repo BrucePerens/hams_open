@@ -125,6 +125,14 @@ fn samples() -> Vec<(String, Vec<Op>)> {
     );
     add("SelectReceiver", vec![Op::SelectReceiver(Receiver::Sub)]);
     add("GetReceiver", vec![Op::GetReceiver]);
+    add(
+        "GetReceiverFrequency",
+        vec![Op::GetReceiverFrequency(Receiver::Sub)],
+    );
+    add(
+        "GetReceiverSignal",
+        vec![Op::GetReceiverSignal(Receiver::Sub)],
+    );
     add("SetTxReceiver", vec![Op::SetTxReceiver(Receiver::Sub)]);
     add("GetTxReceiver", vec![Op::GetTxReceiver]);
     add("SetDualWatch", vec![Op::SetDualWatch(true)]);
