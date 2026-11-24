@@ -4,7 +4,7 @@ define Package/hams-node-bird
   CATEGORY:=Network
   TITLE:=hams.com Net BIRD 2 sessions for hams-node (multi-hop)
   URL:=https://hams.com
-  DEPENDS:=+hams-node +bird2 +uci
+  DEPENDS:=+hams-node +bird2 +uci +ip-full +kmod-ipsec6 +kmod-crypto-hmac +kmod-crypto-sha512
   PKGARCH:=all
 endef
 

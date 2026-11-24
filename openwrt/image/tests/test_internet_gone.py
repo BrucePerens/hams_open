@@ -17,7 +17,7 @@ class ScenarioTests(unittest.TestCase):
         self.assertTrue((scenario.SBIN.parents[1] / "etc" / "init.d" / "hams-node-bird").is_file())
 
     def test_guest_scripts_have_lines_the_serial_console_accepts(self):
-        for text in (scenario.ONLINE, scenario.BIRD_SETUP, scenario.ZONE_SETUP, scenario.DEPRECATION_CHECK):
+        for text in (scenario.ONLINE, scenario.BIRD_SETUP, scenario.ZONE_SETUP, scenario.DEPRECATION_CHECK, scenario.ROGUE, scenario.ROGUE_CHECK):
             for line in text.splitlines():
                 self.assertLess(len(line), 200, line)
 
