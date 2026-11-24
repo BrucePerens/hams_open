@@ -124,6 +124,8 @@ fn the_worked_file_claims_no_verification_it_does_not_have() {
         "yaesu-ftdx10",
         "yaesu-ftdx101d",
         "yaesu-ftdx-101mp",
+        "yaesu-ft-950",
+        "yaesu-ft-2000",
         "yaesu-ftdx-1200",
         "yaesu-ftdx-3000",
         "yaesu-ftdx-5000",
