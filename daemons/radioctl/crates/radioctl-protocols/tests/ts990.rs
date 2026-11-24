@@ -138,7 +138,8 @@ fn the_engine_and_the_virtual_ts990s_agree() {
     let desc = description();
     assert!(!desc.capabilities.has(Capability::ReadPtt));
     assert!(!desc.capabilities.has(Capability::Split));
-    assert!(!desc.capabilities.has(Capability::Levels));
+    // `levels` is claimed for the antenna connector only (`AN0`); every other level is listed absent.
+    assert!(desc.capabilities.has(Capability::Levels));
     let mut engine = KenwoodEngine::new(desc.clone()).expect("engine");
     let mut rig = VirtualRig::from_description(&desc).expect("rig");
     assert_seen(
