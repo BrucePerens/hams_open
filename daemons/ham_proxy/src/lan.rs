@@ -5,12 +5,12 @@
 //! a `.ham` server is reached directly and verified by DANE; a whitelisted Internet site goes through the site gateway named by the
 //! operator, which verifies the real site. Nothing here ever offers an encrypting suite on the ham side.
 
+use crate::body::{read_body, read_request, with_body};
 use crate::dane::connect_ham_server;
 use crate::policy::Policy;
 use crate::resolve;
 use crate::{
-    ham_connector, now, read_head, relay_response, request_identity, require_integrity_only,
-    ProxyError,
+    ham_connector, now, relay_response, request_identity, require_integrity_only, ProxyError,
 };
 use openssl::asn1::Asn1Time;
 use openssl::bn::{BigNum, MsbOption};
@@ -256,7 +256,9 @@ pub fn serve_lan(
     key: Option<&PKey<Private>>,
 ) -> Result<(), ProxyError> {
     crate::limit_idle(&tcp)?;
-    let head = String::from_utf8_lossy(&read_head(&mut tcp)?).to_string();
+    let (head, start) = read_request(&mut tcp)?;
+    let head = String::from_utf8_lossy(&head).to_string();
+    let body = read_body(&mut tcp, &head, start)?;
     let Some(t) = parse_target(&head) else {
         return refuse(&mut tcp, "400 Bad Request");
     };
@@ -267,7 +269,10 @@ pub fn serve_lan(
     if !t.connect {
         let mut upstream = connect_upstream(&t, up, resolver)?;
         policy.record(now(), &t.host, &require_integrity_only(&upstream)?)?;
-        upstream.write_all(&upstream_head(&head, &t, &t.path))?;
+        upstream.write_all(&with_body(
+            &upstream_head(&head, &t, &t.path),
+            body.as_deref(),
+        ))?;
         relay_response(&mut upstream, &mut tcp, &t.host, key)?;
         return Ok(());
     }
@@ -277,7 +282,9 @@ pub fn serve_lan(
     a.set_certificate(&cert)?;
     a.set_private_key(&leaf_key)?;
     let mut browser = a.build().accept(tcp)?;
-    let inner = String::from_utf8_lossy(&read_head(&mut browser)?).to_string();
+    let (inner, start) = read_request(&mut browser)?;
+    let inner = String::from_utf8_lossy(&inner).to_string();
+    let body = read_body(&mut browser, &inner, start)?;
     let path = inner
         .lines()
         .next()
@@ -291,7 +298,10 @@ pub fn serve_lan(
     }
     let mut upstream = connect_upstream(&t, up, resolver)?;
     policy.record(now(), &t.host, &require_integrity_only(&upstream)?)?;
-    upstream.write_all(&upstream_head(&inner, &t, &path))?;
+    upstream.write_all(&with_body(
+        &upstream_head(&inner, &t, &path),
+        body.as_deref(),
+    ))?;
     relay_response(&mut upstream, &mut browser, &t.host, key)?;
     browser.shutdown().ok();
     Ok(())
