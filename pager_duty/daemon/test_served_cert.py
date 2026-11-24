@@ -12,6 +12,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import generalized_monitor as gm  # noqa: E402
@@ -41,6 +42,25 @@ def serve_once(days, tmp):
 
     threading.Thread(target=run, daemon=True).start()
     return srv.getsockname()[1]
+
+
+class WildcardProbeTests(unittest.TestCase):
+    # Tests [@ANCHOR: pager_duty:certbot_probe_name]
+    def test_wildcard_is_probed_under_a_fixed_label(self):
+        self.assertEqual(gm.certbot_probe_name("*.hams.com"), "hams-cert-check.hams.com")
+        self.assertEqual(gm.certbot_probe_name("w7com.hams.com"), "w7com.hams.com")
+
+    def test_wildcard_target_checks_the_probe_name(self):
+        seen = []
+        with mock.patch.object(gm.urllib.request, "urlopen") as urlopen, \
+                mock.patch.object(gm, "certbot_domain_problem", side_effect=lambda d, ip: seen.append(d)), \
+                mock.patch.object(gm, "served_cert_problem", side_effect=lambda d: seen.append(d) or "soon") as served:
+            urlopen.return_value.__enter__.return_value.status = 200
+            urlopen.return_value.__enter__.return_value.read.return_value = b"198.51.100.1"
+            ok, msg = gm.execute_check({"type": "certbot", "target": "*.hams.com"})
+        self.assertFalse(ok)
+        self.assertEqual(seen, ["hams-cert-check.hams.com", "hams-cert-check.hams.com"])
+        served.assert_called_once_with("hams-cert-check.hams.com")
 
 
 class ServedCertTests(unittest.TestCase):
