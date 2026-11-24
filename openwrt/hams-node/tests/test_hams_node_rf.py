@@ -47,7 +47,7 @@ class RfTests(unittest.TestCase):
         (self.root / "owner").write_text("W1AW\n")
         self.env = dict(os.environ, PATH="%s:%s" % (self.root / "bin", os.environ["PATH"]), FAKE=str(self.root),
                         HAMS_NODE_RF_STATE=str(self.root / "state"), HAMS_NODE_OWNER=str(self.root / "owner"),
-                        HAMS_NODE_INITD=str(self.root / "initd"))
+                        HAMS_NODE_INITD=str(self.root / "initd"), HAMS_NODE_LINKS=str(self.root / "links.yaml"))
 
     def sh(self, *args):
         return subprocess.run(["sh", *map(str, args)], env=self.env, capture_output=True, text=True)
@@ -78,6 +78,14 @@ class RfTests(unittest.TestCase):
         self.assertIn("hams_node_fw.main.rf_iface=wlan0", self.uci())
         self.assertNotIn("wlan1", self.uci())
         self.assertEqual(self.sh(SBIN / "hams-node-rf", "list").stdout.splitlines(), ["wlan0 fe80::1", "wlan0 fe80::2"])
+
+    def test_links_yaml_rf_links_are_rf_and_internet_links_are_not(self):
+        (self.root / "links.yaml").write_text("links:\n- name: wg0\n  type: internet\n- name: rf0\n  type: rf\n")
+        (self.root / "link_rf0").write_text(UP % "rf0")
+        self.assertEqual(self.sh(SBIN / "hams-node-rf", "scan").returncode, 0)
+        self.assertIn("hams_node_fw.main.rf_iface=rf0", self.uci())
+        self.assertNotIn("wg0", self.uci())
+        self.assertIn("hams_node_bird.main.rf_live=1", self.uci())
 
     def test_no_rf_means_no_flag_reminder_or_neighbours(self):
         (self.root / "uci").write_text(self.uci() + "hams_node_fw.main.rf_iface=rf0\n")

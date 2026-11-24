@@ -3,7 +3,7 @@
 # hams-node-rf scan | list
 # Finds the node's radio interfaces and its AREDN neighbours; nothing else needs configuring.
 # An interface is RF if the member listed it ("uci add_list hams_node_fw.main.rf_iface=IF", the one setting) or if `iw dev` reports it as a
-# mesh point or IBSS (the AREDN modes). Each RF interface goes into firewall zone hamrf (hams-node-fw ensure -r), so hams-node-wg refuses
+# mesh point or IBSS (the AREDN modes) or if links.yaml (the router configuration download, /etc/hams-node/links.yaml) declares it type rf. Each RF interface goes into firewall zone hamrf (hams-node-fw ensure -r), so hams-node-wg refuses
 # WireGuard on it and no encrypted-service port opens toward it (Part 97: no encryption over RF). While at least one RF interface is up,
 # hams_node_bird.main.rf_live is 1 (the node's routes carry the RF community), the station ID reminder is written to
 # $STATE/station_id_reminder (and the system log), and the AREDN neighbours seen on those interfaces (IPv6 neighbour table, link-local,
@@ -12,6 +12,7 @@
 set -u
 STATE=${HAMS_NODE_RF_STATE:-/var/run/hams-node}
 OWNER=${HAMS_NODE_OWNER:-/etc/hams-node/owner}
+LINKS=${HAMS_NODE_LINKS:-/etc/hams-node/links.yaml}
 case ${1:-} in scan | list) ;; *) echo "usage: hams-node-rf scan | list" >&2; exit 2 ;; esac
 [ "$1" = list ] && { cat "$STATE/rf_neighbours" 2>/dev/null; exit 0; }
 mkdir -p "$STATE" || exit 1
@@ -21,6 +22,12 @@ ifaces=$(uci -q get hams_node_fw.main.rf_iface 2>/dev/null)
 for i in $(iw dev 2>/dev/null | awk '$1 == "Interface" { n = $2 } $1 == "type" && ($2 == "mesh" || $2 == "IBSS") { print n }'); do
 	case " $ifaces " in *" $i "*) ;; *) ifaces="$ifaces $i" ;; esac
 done
+# links the member's router configuration (links.yaml from the portal download) declares as type rf
+if [ -r "$LINKS" ]; then
+	for i in $(awk '$1 == "-" && $2 == "name:" { n = $3 } $1 == "type:" && $2 == "rf" { print n }' "$LINKS"); do
+		case " $ifaces " in *" $i "*) ;; *) ifaces="$ifaces $i" ;; esac
+	done
+fi
 
 live=0 nb=
 for i in $ifaces; do
