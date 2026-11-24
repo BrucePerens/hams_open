@@ -28,10 +28,14 @@ def make_ca(path, name):
     ssl("req", "-x509", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1", "-nodes", "-days", "30", "-config", "ca.cnf", "-keyout", "ca.key", "-out", "ca.pem", cwd=path)
 
 
-def make_leaf(ca, callsign, serial="0x1f"):
+def make_leaf(ca, callsign, serial="0x1f", eku=None):
     (ca / "leaf.cnf").write_text("oid_section=oids\n[oids]\nmembercall=%s\n[req]\ndistinguished_name=dn\nprompt=no\n[dn]\nmembercall=%s\nCN=member\n" % (OWNER_OID, callsign))
     ssl("req", "-new", "-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:prime256v1", "-nodes", "-config", "leaf.cnf", "-keyout", "leaf.key", "-out", "leaf.csr", cwd=ca)
-    ssl("x509", "-req", "-in", "leaf.csr", "-CA", "ca.pem", "-CAkey", "ca.key", "-days", "365", "-set_serial", serial, "-out", "leaf-%s.pem" % callsign.replace("/", "_"), cwd=ca)
+    ext = []
+    if eku:
+        (ca / "eku.cnf").write_text("extendedKeyUsage=%s\n" % eku)
+        ext = ["-extfile", "eku.cnf"]
+    ssl("x509", "-req", "-in", "leaf.csr", "-CA", "ca.pem", "-CAkey", "ca.key", "-days", "365", "-set_serial", serial, *ext, "-out", "leaf-%s.pem" % callsign.replace("/", "_"), cwd=ca)
     return (ca / ("leaf-%s.pem" % callsign.replace("/", "_"))).read_text()
 
 
@@ -85,6 +89,11 @@ class VerifyTests(unittest.TestCase):
     def test_another_members_certificate_is_refused(self):
         self.assertEqual(self.verify(make_leaf(self.root / "ca", "W1AW", "0x20")), "Status: 403 Forbidden")
         self.assertEqual(self.verify(make_leaf(self.root / "ca", "N0CALL2", "0x21")), "Status: 403 Forbidden")
+
+    def test_only_a_client_authentication_certificate_passes(self):
+        # nginx's own verification (before the CGI) enforced the client purpose; a certificate of the same CA for another use must not open the router
+        self.assertEqual(self.verify(make_leaf(self.root / "ca", "N0CALL", "0x30", "serverAuth")), "Status: 403 Forbidden")
+        self.assertEqual(self.verify(make_leaf(self.root / "ca", "N0CALL", "0x31", "clientAuth")), ALLOWED)
 
     def test_no_certificate_garbage_or_not_enrolled_are_refused(self):
         for pem in ("", "x", "-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n", self.leaf + self.leaf, "$(touch x)"):
