@@ -36,6 +36,14 @@ Adding a subpackage: create `pkg/<name>.mk` with its `define Package/<name>`, `/
 (copy `pkg/hams-node-report.mk`; the file name is the package name). Do not edit `Makefile`: it includes `pkg/*.mk` in sorted order
 and calls `BuildPackage` for each, so parallel subpackage changes never touch the same file.
 
+## RF detection (hams-node-rf)
+
+`hams-node-rf scan` runs at boot and on every interface up/down. An interface is RF when listed in `hams_node_fw.main.rf_iface` (the one
+setting) or when `iw dev` reports it as a mesh point or IBSS. It goes into zone `hamrf` (WireGuard and encrypted-service ports refused,
+Part 97), `hams_node_bird.main.rf_live` becomes 1 while one is up (routes carry the RF community), a station ID reminder is written to
+`/var/run/hams-node/station_id_reminder` and the system log, and the link-local neighbours seen on RF interfaces are listed in
+`/var/run/hams-node/rf_neighbours` (`hams-node-rf list`). `/etc/hams-node/gossip_neighbours` is left alone.
+
 ## Firewall: the home LAN is outbound-only (hams-node-fw)
 
 Safe by default: once the node is enrolled the zones are on (`option enabled '0'` in `/etc/config/hams_node_fw` switches them off). `hams-node-wg`
@@ -157,13 +165,9 @@ members can also opt out on `/my/ipv6`, after which hams.com drops their rows. E
   `jool_siit`); `hams-node` now depends on those (#3248). Build with the 25.12.5 SDK: add the `packages` feed to `feeds.conf`, install both,
   `make package/jool/compile`; the SDK feeds lack `libnl` and `argp-standalone` (copy `package/libs/libnl` and `package/libs/argp-standalone`
   from the openwrt tree at the SDK's commit).
-- Kernel match: AREDN builds its kernel without namespaces, cgroups, keys and seccomp (`config.buildinfo` next to the image). A kmod built in the
-  stock SDK loads only after those options are removed from the SDK's `autoconf.h` (otherwise `jool_common: Unknown symbol __put_net`), and
-  `apk add` refuses it because the kernel ABI hash differs; extracting the `.ko` by hand and `insmod` works. The module then loads but every
-  Jool netlink reply fails (`genlmsg_reply() failed. (errcode -111)`), also with a kmod built from a full OpenWrt tree configured with
-  AREDN's own `config.buildinfo`, so AREDN's firmware tree differs somewhere we cannot see. **Jool does not work on AREDN 4.26.10.0 with an
-  out-of-tree kmod.** Unblock: AREDN ships `kmod-jool-netfilter` in its own build (so kernel and module match), or a hams-node gateway runs
-  on a stock OpenWrt router on the LAN of the AREDN node (the second gateway form).
+- Kernel match (superseded 2026-11-23, see `openwrt/aredn-jool/README.md`): a kmod from the stock SDK fails every Jool netlink reply
+  (`genlmsg_reply() failed (errcode -111)`) because the SDK kernel has `CONFIG_NET_NS=y` and AREDN's has not, which shifts `struct genl_info`
+  under the inline `genlmsg_reply()`. Jool built from AREDN's own tree (`openwrt/aredn-jool/build_aredn_jool.sh`, per target) loads and works on the stock image.
 - Stock OpenWrt 25.12.5 x86-64 in QEMU: `apk add` pulls Jool from the feed, the real `jool_siit` accepts the files rendered by
   `hams-node-siit render` (`jool_siit -i mesh7 global display` shows `pool6: 2001:db8:ab01:7::/96`), `apply` replaces the instance and exits 1
   when an instance file is invalid.
@@ -189,8 +193,8 @@ and the six libnl packages (libnl200, -core200, -genl200, -cli200, -nf200, -rout
 `apk add --allow-untrusted ./*.apk` resolves all dependencies. The kmod depends on `kernel=6.12.94~5a659643ce3911a4604e3e1c36ff86d9-r1` (the node's
 `apk list -I kernel`); a rebuild gets a different hash (0fa03e...), so write the node's hash into `build_dir/.../linux-6.12.94/.vermagic` before building
 the kmods. Test: three QEMU VMs (v6 host, stock AREDN with Jool, v4 host; `-netdev socket`): `ping -6` and `wget` through pool6 `2001:db8:c::/96` worked, and
-`hams-node-siit render` + `apply` created the instance. The earlier SDK-built module (`genlmsg_reply -111`) stays unexplained; the tree-built one works.
-Each other target/release needs its own kmod build with the same recipe.
+`hams-node-siit render` + `apply` created the instance. The earlier SDK-built module (`genlmsg_reply -111`) is explained by the NET_NS mismatch (`openwrt/aredn-jool/README.md`); the tree-built one works.
+Each other target/release needs its own kmod build: `openwrt/aredn-jool/build_aredn_jool.sh -t TARGET` (it verifies kernel hash, config and module ABI against the release and refuses otherwise).
 
 ## /60 to the LANs (`hams-node-lan`, separate package)
 
@@ -266,3 +270,32 @@ held list (`deprecation_seq`, `deprecation_list`) the router asks for the delta 
 full list when the delta does not line up; documents are ordered by sequence number only, never by clock, and replayed, out-of-order or
 wrongly signed ones are refused. Each listed peer is evicted and each listed prefix gets an `unreachable` route. Format and endpoints:
 `docs/proposals/IPV6_DEPRECATION_LIST.md` in hams_com.
+
+Gossip (works with hams.com unreachable): the init script `hams-node-status` runs `hams-node-status listen` (busybox `nc` on tcp 5710, opened in
+`hams_node_fw`; it is not an encrypted service, so it may also face RF links). A neighbour sends `HAMS-GOSSIP SEQ`; when the held list is newer
+the router answers with the stored chain (`deprecation_chain`: the last full list and the deltas after it, exactly as hams.com signed them,
+one per line). The cron line `hams-node-status gossip` (every 2 minutes, with `run`) asks up to 8 neighbours (the on-demand peers' routers at
+the first address of their /60, plus any addresses in `/etc/hams-node/gossip_neighbours`, which RF-link setup may fill) and applies each
+returned document only if the signature verifies and it lines up (full: not older; delta: `from` equals the held number); forged, replayed and
+gapped documents are refused. Nothing but signed documents is relayed, and a router that is up to date is sent nothing. The documents are
+authenticated, not secret, so nothing is hidden on RF.
+
+## Whole package on stock AREDN 4.26.10.0, and .ham names through AREDN's dnsmasq (2026-11-23)
+
+QEMU VM from the unmodified official x86-64 image (recipe above). The apks: the `hams-node`, `-enroll`, `-dns` and `-report` packages built with
+the 25.12.5 SDK plus the nine Jool apks built from AREDN's own tree (`openwrt/aredn-jool`). `apk add --allow-untrusted --no-network` of all of them
+resolved with no AREDN or OpenWrt feed (the other subpackages need nginx-ssl, unbound, odhcpd, openssl-util, which stock AREDN lacks; they belong
+to the stock OpenWrt router form). Results:
+
+- `/etc/init.d/hams-node start` exits 0 ("active with no instances"); `jool`, `jool_siit`, `jool_common` are loaded; `jool_siit instance display` works.
+- babeld, arednlink, uhttpd, dropbear and dnsmasq stayed running through install, start, and `hams-node-dns` start/stop.
+- `hams-node-dns` (`enabled 1`, one resolver) writes `server=/ham/ADDR` into `/tmp/dnsmasq.d`, which AREDN's dnsmasq reads (`conf-dir`), and
+  sets `rebind_domain ham`. Queried through the node's own dnsmasq (a stub .ham resolver behind it): with the snippet a .ham A name and a PTR are
+  answered through the node and the same name is REFUSED without it; a `name.local.mesh` host from the arednlink hosts directory resolves the
+  same before and after.
+- A snippet that dnsmasq rejects stops AREDN's dnsmasq entirely (found by accident with a duplicated `log-facility`): only the renderer's own lines
+  go into that directory.
+- **AREDN's dnsmasq has `filter-AAAA`** (`/etc/dnsmasq.conf`): every AAAA answer, also a forwarded one, is dropped (A answered, AAAA `answers=0`;
+  a plain dnsmasq with `--filter-AAAA` and the same forward behaves the same). So through the node's resolver the SIIT AAAA of a .ham name is never
+  seen. IPv6 clients must ask the hams.com Net resolvers directly (second gateway form: the stock OpenWrt router's dnsmasq has no such filter).
+  The forward still serves the non-AAAA types (service-ad CNAME targets, TXT, PTR). The filter is firmware configuration and is not changed here.
