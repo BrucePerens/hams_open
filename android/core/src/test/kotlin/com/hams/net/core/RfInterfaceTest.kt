@@ -15,7 +15,7 @@ class VirtualTnc : SerialPort {
 }
 
 class RfInterfaceTest {
-    private val packet = byteArrayOf(0x60, 0, 0, 0, 0xC0.toByte(), 0xDB.toByte(), 1, 2, 0xC0.toByte())
+    private val packet = Pkt.readable
 
     @Test fun kissFramesPassBothWaysWithEscapes() {
         val tnc = VirtualTnc()
@@ -73,5 +73,18 @@ class RfInterfaceTest {
         val frames = d.feed(byteArrayOf(0xC0.toByte(), 0, 0xDB.toByte(), 5, 0xC0.toByte()) + Kiss.encode(byteArrayOf(7)))
         assertEquals(1, frames.size)
         assertContentEquals(byteArrayOf(7), frames[0].payload)
+    }
+}
+
+class RfInterfaceBoundaryTest {
+    @Test fun encryptedAndUnlistedPacketsNeverReachTheTnc() {
+        val tnc = VirtualTnc()
+        val rf = RfInterface(tnc, "N0CALL", TxGate { send -> send(); true })
+        rf.enable()
+        assertFalse(rf.send(Pkt.udp(51820)))
+        assertFalse(rf.send(Pkt.tcp(8080)))
+        assertEquals(0, tnc.received.size)
+        assertTrue(rf.send(Pkt.udp(53)))
+        assertEquals(1, tnc.received.size)
     }
 }
