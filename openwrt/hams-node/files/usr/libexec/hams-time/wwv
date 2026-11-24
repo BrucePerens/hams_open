@@ -9,7 +9,9 @@ max=$(uci -q get hams_node_time.main.wwv_max_age 2> /dev/null); : "${max:=600}"
 case $f in /*) ;; *) exit 1 ;; esac
 case $max in '' | *[!0-9]*) exit 1 ;; esac
 [ -r "$f" ] || exit 1
-set -- $(head -n1 "$f")
+line=$(head -n1 "$f")
+# shellcheck disable=SC2086
+set -- $line
 case ${1:-} in '' | *[!0-9]*) exit 1 ;; esac
 err=${2:-1}; case $err in *[!0-9.]*) err=1 ;; esac
 age=$(( $(date +%s) - $(date -r "$f" +%s) ))
