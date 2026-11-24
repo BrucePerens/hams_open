@@ -406,3 +406,12 @@ remote target over WireGuard were not available in the VM).
 site gateway) and `gateway_ca`, and `proxy` to this node's own private LAN address and port; then `/etc/init.d/hams-node-proxyca restart`. `hams-node-proxyca args`
 refuses anything else: it listens only on a private IPv4 (10/8, 172.16/12, 192.168/16) or unique-local IPv6 address, never a wildcard or a public address, and
 refuses to start without a callsign. Tests: `tests/test_hams_node_initd_proxyca.py`.
+
+## Clock (`hams-node-time`, separate package)
+
+`hams-node-time sync` (cron) sets the clock from the sources listed in `/etc/config/hams_node_time`, in order, cross-checked: a second live
+source must agree within `tolerance`, a backward step over `back_max` or a forward jump over `jump_max` needs one, and a disagreement
+(a spoofed GPS or a bad server) is flagged in the status file and leaves the clock alone. The package ships two sources, both the same
+one-shot SNTP query (`/usr/libexec/hams-time/ntp`, no encryption): `ntp` reads `list ntp_server` (internet servers) and `hamnet-ntp`
+reads `list hamnet_ntp_server` (nodes on the ham network with a good clock, so it works with no internet). GPS, WWV/WWVB and RTC
+sources are any executable that prints `EPOCH [ERROR]`. Security checks never depend on this clock (sequence numbers, wide tolerances).
