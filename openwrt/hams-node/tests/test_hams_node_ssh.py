@@ -119,14 +119,15 @@ class SshTests(unittest.TestCase):
         self.assertIn("BBBB hams-cert-3c", text)
         self.assertEqual(text.count("# hams-node begin"), 1)
 
-    def test_all_member_keys_gone_and_no_other_key_restores_password_login(self):
+    def test_revoking_the_last_key_leaves_password_login_off_and_ssh_refusing_every_login(self):
         self.member_keys("1a2b ecdsa-sha2-nistp256 AAAA\n")
         self.run_script("apply")
         (self.root / "uci").unlink()
-        (self.state / "ssh_keys").write_text("")
-        self.run_script("apply")
-        self.assertIn("set dropbear.cfg01.PasswordAuth=on", self.uci())
+        (self.state / "deprecation_list").write_text("cert:ISSUERHASH:1a2b \n")
+        self.assertEqual(self.run_script("apply").returncode, 0)
+        self.assertNotIn("PasswordAuth=on", self.uci())
         self.assertNotIn("ecdsa", self.keys.read_text())
+        self.assertTrue((self.state / "ssh.orig").exists(), "passwords stay off; only `off` (unenrol) restores them")
 
     def test_off_removes_the_block_but_keeps_the_owners_own_keys(self):
         self.member_keys("1a2b ecdsa-sha2-nistp256 AAAA\n")

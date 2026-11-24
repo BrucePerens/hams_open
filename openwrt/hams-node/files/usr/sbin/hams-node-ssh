@@ -55,7 +55,11 @@ sync_keys() {
 do_apply() {
 	[ -s "$state/device_token" ] || { echo "hams-node-ssh: not enrolled; SSH unchanged" >&2; return 0; }
 	sync_keys
-	grep -qE '^(ssh-|ecdsa-|sk-)' "$keys" 2>/dev/null || { do_off; echo "hams-node-ssh: no authorized key; password login kept (export a member certificate or add a key in LuCI)" >&2; return 0; }
+	grep -qE '^(ssh-|ecdsa-|sk-)' "$keys" 2>/dev/null || {
+		if [ -f "$orig" ]; then echo "hams-node-ssh: no authorized key left; SSH refuses every login (passwords stay off; recovery is a physical reset and enrolling again)" >&2
+		else echo "hams-node-ssh: no authorized key yet; password login kept until one exists (export a member certificate or add a key in LuCI)" >&2; fi
+		return 0
+	}
 	[ -f "$orig" ] || for s in $(sections); do
 		echo "$s $(uci -q get "dropbear.$s.PasswordAuth") $(uci -q get "dropbear.$s.RootPasswordAuth")" >> "$orig"
 	done
