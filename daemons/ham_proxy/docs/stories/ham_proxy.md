@@ -24,7 +24,10 @@ Internals:
 
 - [@ANCHOR: ham_proxy_null_only] Shared setup for both ends of a ham link: TLS 1.2 minimum, the `NULL-SHA256` cipher string at security level 0, and the two RFC 9150 TLS 1.3 suites.
 - [@ANCHOR: ham_proxy_ham_connector] `ham_connector(ca)` is the matching ham-side client (used by tests and the benchmark): same suites, verifies the proxy certificate against `ca`.
-- [@ANCHOR: ham_proxy_read_head] Reads from the ham until the blank line that ends a request head; fails with `BadRequest` after 64 KiB or an early close.
+- [@ANCHOR: ham_proxy_read_head] Reads from the ham until the blank line that ends a request head, returning the bytes that followed it (the start of a body) separately; fails with `BadRequest` after 64 KiB or an early close.
+- [@ANCHOR: ham_proxy_body_read] A request body framed by `Content-Length` or `Transfer-Encoding: chunked` (not both, not several lengths) is read up to 1 MiB, `Expect: 100-continue` is answered, and it is sent to the site with one `Content-Length`; anything else is refused with `BadRequest`.
+- [@ANCHOR: ham_proxy_body_with_body] The head sent upstream has its client framing and `Expect` headers replaced by the proxy's own `Content-Length`.
+- [@ANCHOR: ham_proxy_body_matches_mac] For a verified session the body must match the `X-Ham-Body-Sha256` the MAC covered (empty when the header is absent), else the request is refused.
 - [@ANCHOR: ham_proxy_main] The `ham_proxy` binary entry point: runs the proxy and exits 1 with the error printed if setup fails.
 - [@ANCHOR: ham_proxy_run] Parses `--listen --cert --key --site [--ca]`, binds, and serves each connection on its own thread.
 - [@ANCHOR: ham_proxy_arg] Looks up the value following a command-line flag.

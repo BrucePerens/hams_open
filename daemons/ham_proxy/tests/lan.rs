@@ -446,3 +446,27 @@ fn the_binary_runs_the_lan_listener_from_its_flags() {
         .unwrap();
     assert!(read_all(&mut tcp).starts_with("HTTP/1.1 403"));
 }
+
+#[test]
+// Tests [@ANCHOR: ham_proxy_lan_serve]
+// Tests [@ANCHOR: ham_proxy_body_read]
+fn a_posted_form_goes_upstream_over_plain_http_and_connect() {
+    let lan = start_lan(false);
+    let out = browse_plain(
+        &lan,
+        "POST /form HTTP/1.1\r\nHost: example.org\r\nContent-Length: 7\r\n\r\na=1&b=2",
+    );
+    assert!(out.contains("site-body-xyz"), "{out}");
+    let seen = lan.seen.lock().unwrap();
+    assert!(
+        seen[0].starts_with("POST /form HTTP/1.1\r\n") && seen[0].ends_with("\r\n\r\na=1&b=2"),
+        "{}",
+        seen[0]
+    );
+    drop(seen);
+    // both framings at once is a smuggling shape: refused, nothing goes upstream
+    let before = lan.seen.lock().unwrap().len();
+    let out = browse_plain(&lan, "POST /form HTTP/1.1\r\nHost: example.org\r\nContent-Length: 3\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n");
+    assert!(!out.contains("site-body-xyz"), "{out}");
+    assert_eq!(lan.seen.lock().unwrap().len(), before);
+}

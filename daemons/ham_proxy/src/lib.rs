@@ -3,6 +3,7 @@
 //! Half-duplex request/response relay: one request head (no body) is read from the ham, sent to the site, and the
 //! response is streamed back until the site closes. A prototype for measuring, not a finished proxy.
 
+mod body;
 pub mod crypto;
 pub mod dane;
 pub mod indicator;
@@ -28,7 +29,7 @@ pub const INTEGRITY_ONLY_SUITES: [&str; 3] =
     ["TLS_SHA256_SHA256", "TLS_SHA384_SHA384", "NULL-SHA256"];
 const TLS13_SUITES: &str = "TLS_SHA256_SHA256:TLS_SHA384_SHA384";
 const TLS12_CIPHERS: &str = "NULL-SHA256:@SECLEVEL=0";
-const MAX_HEAD: usize = 65536;
+pub(crate) const MAX_HEAD: usize = 65536;
 /// Pass as `site_addr` to serve any site the whitelist permits, taken from each request's `Host` (port 443): the central site gateway.
 pub const GATEWAY: &str = "*";
 
@@ -132,20 +133,6 @@ pub fn require_integrity_only<S>(s: &SslStream<S>) -> Result<String, ProxyError>
     } else {
         Err(ProxyError::EncryptedLink(name))
     }
-}
-
-// [@ANCHOR: ham_proxy_read_head]
-fn read_head<R: Read>(r: &mut R) -> Result<Vec<u8>, ProxyError> {
-    let mut head = Vec::new();
-    let mut buf = [0u8; 4096];
-    while !head.windows(4).any(|w| w == b"\r\n\r\n") {
-        let n = r.read(&mut buf)?;
-        if n == 0 || head.len() + n > MAX_HEAD {
-            return Err(ProxyError::BadRequest);
-        }
-        head.extend_from_slice(&buf[..n]);
-    }
-    Ok(head)
 }
 
 // [@ANCHOR: ham_proxy_request_target]
@@ -338,10 +325,11 @@ pub fn serve_one_policed(
     let suite = require_integrity_only(&ham)?;
     let gateway = site_addr == GATEWAY;
     let mut head = Vec::new();
+    let mut start = Vec::new();
     let (mut name, mut addr) = (site_name.to_string(), site_addr.to_string());
     if gateway {
         // Central site gateway: the site is the request's Host; the whitelist (host and path) is checked before any upstream connection.
-        head = read_head(&mut ham)?;
+        (head, start) = body::read_request(&mut ham)?;
         let (host, port, path) =
             request_target(&String::from_utf8_lossy(&head)).ok_or(ProxyError::BadRequest)?;
         // A gateway with no whitelist would be an open proxy: it permits nothing.
@@ -360,8 +348,9 @@ pub fn serve_one_policed(
     }
     let (site_name, site_addr) = (name.as_str(), addr.as_str());
     if !gateway {
-        head = read_head(&mut ham)?;
+        (head, start) = body::read_request(&mut ham)?;
     }
+    let body = body::read_body(&mut ham, &String::from_utf8_lossy(&head), start)?;
     if let Some((ch, v)) = login {
         let line = String::from_utf8_lossy(&head).to_string();
         let target = line.split(' ').nth(1).unwrap_or("");
@@ -370,9 +359,15 @@ pub fn serve_one_policed(
             ham.shutdown().ok();
             return Ok(());
         }
-        match ch.sessions.check(&line, now()) {
-            Ok(who) => head = session_head(&line, who.as_deref()),
-            Err(_) => {
+        // A verified session also covers the body (its hash is in the MAC), so a body that does not match is refused.
+        let checked = ch
+            .sessions
+            .check(&line, now())
+            .ok()
+            .filter(|who| who.is_none() || body::matches_mac(&line, body.as_deref()));
+        match checked {
+            Some(who) => head = session_head(&line, who.as_deref()),
+            None => {
                 let body = b"{\"error\":\"session proof refused\"}";
                 let mut out = format!(
                     "HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -388,7 +383,7 @@ pub fn serve_one_policed(
     }
     let up_tcp = resolve::connect_upstream(site_addr)?;
     let mut up = site.connect(site_name, up_tcp)?;
-    up.write_all(&request_identity(&head))?;
+    up.write_all(&body::with_body(&request_identity(&head), body.as_deref()))?;
     relay_response(&mut up, &mut ham, site_name, key)?;
     ham.shutdown().ok();
     Ok(())
