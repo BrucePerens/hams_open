@@ -204,6 +204,7 @@ fn via_proxy(tag: &str, resp: Vec<u8>, key: Option<PKey<Private>>) -> Vec<u8> {
     let conn = site_connector(Some(&c)).unwrap();
     let pl = TcpListener::bind("127.0.0.1:0").unwrap();
     let paddr = pl.local_addr().unwrap().to_string();
+    ham_proxy::resolve::allow_private_upstream(); // the test site is on loopback
     thread::spawn(move || {
         for s in pl.incoming().flatten() {
             let _ = serve_one_signed(s, &pacc, &conn, &site_addr, "localhost", key.as_ref());

@@ -172,6 +172,7 @@ fn gateway_flow(
     let conn: SslConnector = site_connector(trust_site.then_some(c.as_path())).unwrap();
     let pl = TcpListener::bind("127.0.0.1:0").unwrap();
     let paddr = pl.local_addr().unwrap();
+    ham_proxy::resolve::allow_private_upstream(); // the test site is on loopback
     let t = thread::spawn(move || {
         let (s, _) = pl.accept().unwrap();
         serve_one_policed(s, &acc, &conn, GATEWAY, "", None, None, Some(&policy))
@@ -261,6 +262,7 @@ fn gateway_without_a_whitelist_permits_nothing_and_encrypting_ham_clients_are_re
     let conn = site_connector(Some(&c)).unwrap();
     let pl = TcpListener::bind("127.0.0.1:0").unwrap();
     let paddr = pl.local_addr().unwrap();
+    ham_proxy::resolve::allow_private_upstream(); // the test site is on loopback
     let t = thread::spawn(move || {
         let (s, _) = pl.accept().unwrap();
         serve_one_policed(s, &acc, &conn, GATEWAY, "", None, None, None)
@@ -343,6 +345,7 @@ fn binary_gateway_reads_the_signed_file_each_connection() {
         .unwrap()
         .port();
     let mut child = Command::new(env!("CARGO_BIN_EXE_ham_proxy"))
+        .arg("--allow-private-upstream")
         .args([
             "--gateway",
             "--listen",

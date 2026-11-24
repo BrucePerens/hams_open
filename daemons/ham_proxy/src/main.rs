@@ -1,5 +1,5 @@
 //! `ham_proxy --listen ADDR --cert PEM --key PEM --site HOST:PORT [--ca PEM] [--verify HOST:PORT]
-//! [--sign-key ED25519.pem] [--whitelist FILE | --signed-whitelist FILE --whitelist-key HEXFILE] [--gateway]
+//! [--sign-key ED25519.pem] [--whitelist FILE | --signed-whitelist FILE --whitelist-key HEXFILE] [--gateway] [--ham-resolver IP:PORT] [--allow-private-upstream]
 //! [--callsign CALL --log FILE]`: thread per connection.
 use ham_proxy::login::{Challenges, HttpVerifier};
 use ham_proxy::policy::{Policy, Whitelist};
@@ -51,6 +51,13 @@ fn run() -> Result<(), ProxyError> {
     } else {
         need("--site")?
     };
+    // `--ham-resolver IP:PORT`: where `.ham` names are looked up (AAAA), instead of the system resolver.
+    if let Some(r) = arg(&args, "--ham-resolver") {
+        ham_proxy::resolve::set_ham_resolver(&r);
+    }
+    if args.iter().any(|a| a == "--allow-private-upstream") {
+        ham_proxy::resolve::allow_private_upstream();
+    }
     let acceptor = Arc::new(ham_acceptor(
         &PathBuf::from(need("--cert")?),
         &PathBuf::from(need("--key")?),
