@@ -28,7 +28,7 @@ Not done: passkey login (needs Google Play services or a real authenticator), RF
 
 ## RF node (USB-OTG or Bluetooth serial TNC)
 
-`core` holds the RF side: `Kiss` (KISS framing), `RfInterface` (unencrypted IP over KISS), `RfPolicy` (an RF link refuses WireGuard and every encrypting suite; `PeerTable` also refuses to be built on RF) and the station-ID reminder `enable()` returns, which the app shows when the interface is turned on. Every keying goes through the `TxGate`: it must allow only while this station owns TX and no demo lock is held. Tested against a virtual TNC (`RfInterfaceTest`).
+`core` holds the RF side (`RfController` is the screen logic; `OwnedTxGate` and `RfBoundary` port the relay's demo-lock, TX-ownership and readable-only rules; `SerialLines` has the USB and Bluetooth adapters): `Kiss` (KISS framing), `RfInterface` (unencrypted IP over KISS), `RfPolicy` (an RF link refuses WireGuard and every encrypting suite; `PeerTable` also refuses to be built on RF) and the station-ID reminder `enable()` returns, which the app shows when the interface is turned on. Every keying goes through the `TxGate`: it must allow only while this station owns TX and no demo lock is held. Tested against a virtual TNC (`RfInterfaceTest`).
 
 Bench step (needs a real TNC or radio, a licensed operator, a dummy load or a test frequency; agents never transmit):
 1. Implement `SerialPort` over `usb-serial-for-android` (USB-OTG TNC) or an RFCOMM socket (Bluetooth TNC such as a Mobilinkd), and a `TxGate` that returns true only while the operator has the TX-owner role and no demo lock is on.
