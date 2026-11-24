@@ -11,6 +11,8 @@ config web 'main'
 	option key '/etc/hams-node/web/key.pem'
 	# Hams.com Net resolver (ip:port, UDP) used for .ham names; required, because AREDN's dnsmasq drops AAAA answers
 	option resolver ''
+	# optional: CA file the sites' certificates are checked against (default: the node's own CA store; a node without one needs this)
+	option ca ''
 	# optional: signed whitelist of non-.ham sites (and the hams.com key that signs it); without them only .ham names are served
 	option whitelist '/etc/hams-node/web/whitelist.json'
 	option whitelist_key '/etc/hams-node/web/whitelist_key.hex'

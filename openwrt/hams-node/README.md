@@ -329,7 +329,21 @@ a callsign and a resolver are set; `ham_proxy` never connects to a loopback, pri
 operator's home LAN; nothing is added to the node's firewall and the mesh-to-WAN setting is not touched. The client needs a ham-aware browser or the relay
 (a stock browser cannot speak an integrity-only suite); a plain-HTTPS client is refused by design.
 
-`ham-proxy` is the static binary: `openwrt/ham-proxy/Makefile` builds it with the host's cargo (`--features vendored`) for the node's musl Rust target using the
-SDK's cross compiler (`make package/ham-proxy/compile RUST_TARGET=x86_64-unknown-linux-musl`); the SDK has no rust, and mips needs a nightly `build-std`
-toolchain. The x86-64 musl build was measured earlier (6.1 MB, 4.5 MB RSS). The `ham-proxy` Makefile itself has not been run in an SDK yet; `ham_proxy`
-and the shell script are tested (`tests/test_hams_node_web.py`, `daemons/ham_proxy/tests/resolve.rs`).
+`ham-proxy` is the binary package: `openwrt/ham-proxy/Makefile` builds it with the host's cargo (`--features vendored`) for the node's musl Rust target
+using the SDK's cross compiler; the SDK has no rust. Verified 2026-11-23 (25.12.6 SDKs, `--locked`):
+
+    make package/feeds/hams/ham-proxy/compile NO_DEPS=1 HAMS_OPEN_TREE=<repo> RUST_TARGET=x86_64-unknown-linux-musl
+    make package/feeds/hams/ham-proxy/compile NO_DEPS=1 HAMS_OPEN_TREE=<repo> RUST_TARGET=mipsel-unknown-linux-musl RUST_BUILD_STD=1
+
+`RUST_BUILD_STD=1` (targets without a prebuilt std, such as the mt7621) uses `rustup toolchain install nightly --component rust-src` and `-Z build-std`
+under the build user. The x86-64 apk is 6.2 MB static (depends on `libc`); the ramips-mt7621 apk is 1.9 MB, a PIE binary that needs `libgcc` and
+`libatomic` (both installed on stock AREDN). The mt7621 package was built but not run (no device or MIPS emulator here). In an SDK that has not built
+`libgcc`/`libatomic` the package's library check fails ("missing dependencies"); give the SDK's `staging_dir/target-*/pkginfo/libgcc.provides`
+(`libgcc_s.so.1`) and `libatomic.provides` (`libatomic.so.1`) files.
+
+Boot test on the stock AREDN 4.26.10.0 x86-64 image (QEMU, second NIC at 10.0.2.15 for the client): `apk add --allow-untrusted --no-network` of the
+Jool apks, `hams-node`, `hams-node-dns`, `hams-node-web`, `ham-proxy`; `hams_node_web` enabled with `listen_addr 10.0.2.15`, a callsign, the resolver
+(a stub answering AAAA at the host) and `ca`; the site was uhttpd with TLS on an address of `lo`. From the host (an IPv4 client, `openssl s_client -tls1_2 -cipher
+NULL-SHA256:@SECLEVEL=0`) a request for `gw.ham:8444` returned the page with the integrity banner, `example.org` got no reply (refused before any upstream
+connection), a client offering only encrypting suites got a handshake failure, and the station-ID log held `W1AW -> gw.ham NULL-SHA256`. The node's dnsmasq
+answered `foo.ham` with 10.0.2.15; AREDN's own services kept running.
