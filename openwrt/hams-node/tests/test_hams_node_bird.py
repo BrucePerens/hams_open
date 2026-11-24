@@ -129,8 +129,10 @@ class BirdTests(unittest.TestCase):
 
     def test_ah_down_removes_and_other_asn_gets_another_key(self):
         _, lines = self.ah("down")
-        self.assertTrue(lines and not any(" add " in ln for ln in lines))
-        self.assertTrue(any("state delete" in ln for ln in lines) and any("policy delete" in ln for ln in lines))
+        self.assertTrue(lines)
+        self.assertFalse(any(" add " in ln for ln in lines))
+        self.assertTrue(any("state delete" in ln for ln in lines))
+        self.assertTrue(any("policy delete" in ln for ln in lines))
 
     def test_rf_neighbours_are_the_gossip_neighbours_and_removed_on_down(self):
         self.ah("apply", neighbor="%s %s" % (self.N1, self.N2))
