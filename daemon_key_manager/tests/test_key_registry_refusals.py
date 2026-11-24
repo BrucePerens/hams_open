@@ -97,7 +97,7 @@ class TestKeyRegistryRefusals(RealTransactionCase):
         real_has_group = type(self.env["res.users"]).has_group
 
         def has_group_own_user_only(user, group_ext_id):
-            if user != user.env.user:
+            if not user.env.su and user != user.env.user:
                 raise AccessError(_("You can ony call user.has_group() with your current user."))
             return real_has_group(user, group_ext_id)
 
