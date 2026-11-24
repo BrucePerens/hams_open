@@ -98,6 +98,7 @@ fn flow(n: &str, white: &str, site_name: &str) -> (Result<(), ProxyError>, Strin
     let pl = TcpListener::bind("127.0.0.1:0").unwrap();
     let paddr = pl.local_addr().unwrap();
     let name = site_name.to_string();
+    ham_proxy::resolve::allow_private_upstream(); // the test site is on loopback
     let t = thread::spawn(move || {
         let (s, _) = pl.accept().unwrap();
         serve_one_policed(s, &acc, &conn, &site_addr, &name, None, None, Some(&policy))

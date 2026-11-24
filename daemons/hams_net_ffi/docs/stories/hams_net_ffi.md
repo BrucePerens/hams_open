@@ -14,5 +14,10 @@ UniFFI bindings over `hams_net_core` for the Android app (Kotlin) and iOS (Swift
 - [@ANCHOR: hams_net_ffi_deprecation_gossip_request] `gossipRequest()`: the line to send a neighbour on tcp 5710.
 - [@ANCHOR: hams_net_ffi_deprecation_gossip_reply] `gossipReply(request)`: the stored signed chain for a neighbour that is behind, else nothing.
 - [@ANCHOR: hams_net_ffi_deprecation_accept_gossip] `acceptGossip(reply)`: apply a neighbour's reply with the same checks as a document from hams.com.
+- [@ANCHOR: hams_net_ffi_wg_public_key] `wgPublicKey(privateKey)`: the WireGuard public key of a 32-byte private key.
+- [@ANCHOR: hams_net_ffi_wg_session_new] `WgSession(privateKey, peerPublic, index)`: a userspace WireGuard session (boringtun) with one peer; the app owns the VPN interface and a protected UDP socket.
+- [@ANCHOR: hams_net_ffi_wg_encapsulate] `encapsulate(packet)`: an IPv6 packet from the VPN interface to the datagrams to send (a handshake first when no session is up).
+- [@ANCHOR: hams_net_ffi_wg_decapsulate] `decapsulate(datagram)`: a datagram from the peer to the replies to send and the decrypted IPv6 packet, if any.
+- [@ANCHOR: hams_net_ffi_wg_tick] `tick()`: timers (handshake retry, keepalive, rekey), about every 250 ms.
 
 Swift: `tools/swift_bindings.sh [OUT_DIR]` generates `hams_net_ffi.swift` plus the C header and modulemap from the built library (any host), and on macOS builds the static library, compiles `swift/hello.swift` against the generated bindings with `swiftc` and runs it (SIIT round trip, refused address; verified on mac1 with the Command Line Tools only). With a full Xcode it also builds iOS and iOS-simulator static libraries and `HamsNetFfi.xcframework`; without Xcode it prints SKIP (mac1 has no Xcode, so the XCFramework step is untested).

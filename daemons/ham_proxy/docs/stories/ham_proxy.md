@@ -73,6 +73,10 @@ Site gateway (`--gateway`, tests `tests/gateway.rs`):
 - [@ANCHOR: ham_proxy_policy_permits] and [@ANCHOR: ham_proxy_policy_replace] are the policy's host-and-path check and the swap-in of a freshly verified list; [@ANCHOR: ham_proxy_request_target] reads host, port and path from the request head in gateway mode, where `serve_one_policed` takes the site from the request and refuses (before any upstream connection) a site or path that is not permitted.
 - [@ANCHOR: ham_proxy_load_key] and [@ANCHOR: ham_proxy_load_list] are the binary's key file and per-connection list loading (a bad list gives the empty whitelist).
 
+Upstream lookup for the AREDN gateway (`--ham-resolver`, `--allow-private-upstream`, tests `tests/resolve.rs`):
+
+- [@ANCHOR: ham_proxy_connect_upstream] opens the connection to the site: a `.ham` host through the Hams.com Net resolver ([@ANCHOR: ham_proxy_set_ham_resolver]; [@ANCHOR: ham_proxy_aaaa_query] builds the query, [@ANCHOR: ham_proxy_resolve_lookup] sends it, [@ANCHOR: ham_proxy_parse_aaaa] and [@ANCHOR: ham_proxy_resolve_skip_name] read the answer), anything else through the system resolver. Only addresses [@ANCHOR: ham_proxy_address_allowed] accepts are tried (no loopback, private, link-local, unique-local, multicast or IPv4-mapped address), so no name leads the gateway to its operator's home LAN; [@ANCHOR: ham_proxy_allow_private_upstream] lifts that for a lab.
+
 ## Binding to hams_net_core
 
 The login challenges, the signed-whitelist check and the DANE matching and parsing now live in `hams_net_core` (`login`, `signed_list`, `dane`; their stories and anchors are in that crate's story). ham_proxy keeps everything that needs a socket or a TLS library and calls the core with OpenSSL as the primitives:

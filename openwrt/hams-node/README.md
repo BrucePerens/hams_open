@@ -245,8 +245,13 @@ Once the node is enrolled (`hams-node-enroll` runs `hams-node-ssh apply` after e
 holds at least one key, dropbear's `PasswordAuth` and `RootPasswordAuth` are set to off on every instance. With no key installed nothing
 changes, so the owner cannot lock themselves out; add the key in LuCI (System > Administration > SSH-Keys), which `hams-node-mtls` limits
 to the owner's member certificate. `unenroll` (or `hams-node-ssh off`) restores the saved settings. Recovery after losing the key: physical
-reset, then enrol again. OpenSSH user certificates issued from the member identity are a separate decision for Bruce
-(`night_shift_todo/medium/router-ssh-openssh-certificates-option-4dafb623.md`).
+reset, then enrol again. The owner's exported member certificates also sign in over SSH (Bruce, 2026-11-23: no separate SSH CA; design
+`docs/proposals/SSH_CERTIFICATES.md`, option A): in My certificates the member exports a certificate ("Advanced: use as a TLS client
+certificate"), whose ECDSA P-256 key is `ssh -i hams-member-certificate.pem root@router` (`ssh-keygen -y -f` prints the public key). The
+signed router configuration lists the owner's active exported keys (`ssh_keys`); `hams-node-enroll` stores them in `STATE/ssh_keys` and
+`hams-node-ssh apply` keeps them in a marked block of `/etc/dropbear/authorized_keys` (other lines stay). A certificate on the signed deprecation
+list (`cert:ISSUER:SERIAL`) is left out at once (`hams-node-status` re-runs `hams-node-ssh apply`), an expired or revoked one drops out at the next
+configuration fetch, and with no key left password login is restored. The browser's own key is non-extractable and cannot be used.
 
 ## Key rotation (`hams-node-key`, in the hams-node-enroll package)
 
@@ -299,3 +304,32 @@ to the stock OpenWrt router form). Results:
   a plain dnsmasq with `--filter-AAAA` and the same forward behaves the same). So through the node's resolver the SIIT AAAA of a .ham name is never
   seen. IPv6 clients must ask the hams.com Net resolvers directly (second gateway form: the stock OpenWrt router's dnsmasq has no such filter).
   The forward still serves the non-AAAA types (service-ad CNAME targets, TXT, PTR). The filter is firmware configuration and is not changed here.
+
+## hams-node-proxyca: the browser side of the proxy
+
+`hams-node-proxyca ca` makes the node's own CA (EC P-256, key `/etc/hams-node/proxy/ca.key` mode 600, never read by the LuCI plugin or any download),
+name-constrained to `.ham`, the whitelisted domains (`/etc/hams-node/whitelist`, same format as ham_proxy's) and the ham network's address block
+(`net_cidr`); a certificate it signs for any other name fails `openssl verify` (tested). `hams-node-proxyca pac` writes `/www/hams.pac` and
+`/www/wpad.dat`: `.ham` names, ham-network addresses (`net_prefix`) and whitelisted sites get `PROXY`, everything else `DIRECT` (tested by evaluating the
+PAC in node). The LuCI page offers "Download CA certificate" (the `proxy_ca` ubus method returns the certificate only); `INSTALL_CA.md` has the install steps
+for Windows, macOS, Linux, Firefox, Chrome and Android. Changing the whitelist needs `ca --renew` and a new install. Tests: `tests/test_hams_node_proxyca.py`.
+
+## Web access for AREDN users (`hams-node-web` and `ham-proxy`, separate packages)
+
+AREDN is IPv4-only, so an IPv4 client on the mesh cannot reach a `.ham` name directly. `hams-node-web` (off by default, `/etc/config/hams_node_web`) runs
+`ham_proxy --gateway` on the node's own private mesh/LAN IPv4 address and makes the node's dnsmasq answer A queries for `.ham` with that address
+(`address=/ham/ADDR`, written to `/tmp/dnsmasq.d/hams-web.conf`). The client then connects to the gateway with integrity-only TLS (authenticated, never
+encrypted: Part 97), which looks the name up at the Hams.com Net resolver itself (`resolver`, because AREDN's dnsmasq drops AAAA), connects over the
+node's IPv6 path (SIIT/WireGuard on the Internet link) and relays the page, adding the signed integrity indicator when `sign_key` is set. Sites that are not `.ham` are
+served only if on the hams.com signed whitelist (`whitelist`, `whitelist_key`); everything else is refused before any upstream connection, and each flow is
+written to the station-ID log with the callsign.
+
+Limits that protect the operator: `hams-node-web` refuses to start unless the listen address is a private IPv4 address (never 0.0.0.0 or a public one),
+a callsign and a resolver are set; `ham_proxy` never connects to a loopback, private, link-local or unique-local address, so no name leads the gateway to the
+operator's home LAN; nothing is added to the node's firewall and the mesh-to-WAN setting is not touched. The client needs a ham-aware browser or the relay
+(a stock browser cannot speak an integrity-only suite); a plain-HTTPS client is refused by design.
+
+`ham-proxy` is the static binary: `openwrt/ham-proxy/Makefile` builds it with the host's cargo (`--features vendored`) for the node's musl Rust target using the
+SDK's cross compiler (`make package/ham-proxy/compile RUST_TARGET=x86_64-unknown-linux-musl`); the SDK has no rust, and mips needs a nightly `build-std`
+toolchain. The x86-64 musl build was measured earlier (6.1 MB, 4.5 MB RSS). The `ham-proxy` Makefile itself has not been run in an SDK yet; `ham_proxy`
+and the shell script are tested (`tests/test_hams_node_web.py`, `daemons/ham_proxy/tests/resolve.rs`).

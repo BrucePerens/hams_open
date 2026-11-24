@@ -7,6 +7,7 @@
 'require ui';
 
 var callStatus = rpc.declare({ object: 'hams-node', method: 'status' });
+var callCa = rpc.declare({ object: 'hams-node', method: 'proxy_ca' });
 var callEnroll = rpc.declare({ object: 'hams-node', method: 'enroll_start' });
 
 function row(label, value) {
@@ -63,6 +64,14 @@ return view.extend({
 		o.value('internet', _('Internet'));
 		o.value('rf', _('RF (no WireGuard)'));
 		o.default = 'internet';
-		return m.render().then(function(node) { return E([ box, node ]); });
+		var ca = E('div', { 'class': 'cbi-section' }, [ E('h3', _('Browser proxy certificate')),
+			E('p', _('Install this certificate in your browsers so the node can serve .ham and whitelisted sites. It only vouches for those names; its private key stays on this router. Instructions per system: /usr/share/doc/hams-node-proxyca/INSTALL_CA.md. PAC file: /hams.pac')),
+			E('button', { 'class': 'btn cbi-button cbi-button-action', 'click': ui.createHandlerFn(this, function() {
+				return callCa().then(function(r) {
+					var a = E('a', { 'href': 'data:application/x-pem-file;charset=utf-8,' + encodeURIComponent(r.pem || ''), 'download': 'hams-node-ca.pem' });
+					document.body.appendChild(a); a.click(); a.remove();
+				});
+			}) }, _('Download CA certificate')) ]);
+		return m.render().then(function(node) { return E([ box, ca, node ]); });
 	}
 });

@@ -66,7 +66,19 @@ class Harness:
 class StatusTests(unittest.TestCase):
     def test_list_names_the_methods(self):
         out = subprocess.run(["sh", str(PLUGIN), "list"], capture_output=True, text=True, check=True)
-        self.assertEqual(sorted(json.loads(out.stdout)), ["enroll_start", "status"])
+        self.assertEqual(sorted(json.loads(out.stdout)), ["enroll_start", "proxy_ca", "status"])
+
+    def test_proxy_ca_download_is_the_certificate_and_never_a_key(self):
+        h = Harness(self)
+        h.stub("hams-node-proxyca", 'echo "-----BEGIN CERTIFICATE-----"\necho "QUJD"\necho "-----END CERTIFICATE-----"\n'
+               'echo "-----BEGIN PRIVATE KEY-----"')
+        out = h.call("proxy_ca")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        pem = json.loads(out.stdout)["pem"]
+        self.assertTrue(pem.startswith("-----BEGIN CERTIFICATE-----\nQUJD\n"))
+        self.assertNotIn("PRIVATE", out.stdout)
+        acl = json.loads(ACL.read_text())["luci-app-hams-node"]
+        self.assertIn("proxy_ca", acl["read"]["ubus"]["hams-node"])
 
     def test_not_enrolled_by_default(self):
         s = Harness(self).status()
@@ -155,7 +167,7 @@ class AclTests(unittest.TestCase):
         self.acl = json.loads(ACL.read_text())["luci-app-hams-node"]
 
     def test_read_grants(self):
-        self.assertEqual(self.acl["read"]["ubus"]["hams-node"], ["status"])
+        self.assertEqual(self.acl["read"]["ubus"]["hams-node"], ["status", "proxy_ca"])
         self.assertEqual(sorted(self.acl["read"]["uci"]), ["hams_node", "hams_node_ondemand"])
 
     def test_write_grants_only_this_app(self):

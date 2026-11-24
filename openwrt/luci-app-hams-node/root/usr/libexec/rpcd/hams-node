@@ -3,6 +3,7 @@
 # rpcd exec plugin for luci-app-hams-node (ubus object "hams-node").
 #   status        read-only: enrolment state, /60, .ham name, active WireGuard peers, Part 97 boundary counters, whether hams.com has switched
 #                 the node off (and why), how many rogue routers/certificates the deprecation list names
+#   proxy_ca      the node CA certificate (PEM, public) for the browser-install page; the key file is never read here
 #   enroll_start  start `hams-node-enroll enroll` in the background; its code line is shown by `status`
 # The device token and the WireGuard private key are never read into the output, only tested for existence.
 state=${HAMS_STATE_DIR:-/etc/hams-node}
@@ -49,12 +50,18 @@ do_enroll_start() {
 	echo '{"started":true}'
 }
 
+do_proxy_ca() {
+	pem=$(hams-node-proxyca cert 2>/dev/null | grep -v PRIVATE | awk '{ printf "%s\\n", $0 }')
+	printf '{"pem":"%s"}\n' "$pem"
+}
+
 case ${1:-} in
-list) echo '{"status":{},"enroll_start":{}}' ;;
+list) echo '{"status":{},"enroll_start":{},"proxy_ca":{}}' ;;
 call)
 	case ${2:-} in
 	status) do_status ;;
 	enroll_start) do_enroll_start ;;
+	proxy_ca) do_proxy_ca ;;
 	*) echo '{"error":"unknown method"}'; exit 1 ;;
 	esac ;;
 *) exit 2 ;;

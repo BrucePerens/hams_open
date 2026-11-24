@@ -277,6 +277,7 @@ fn a_bad_session_proof_is_refused_over_the_link_before_the_site_is_contacted() {
     let v = Recorded(EcKey::from_public_key(&group(), keypair().public_key()).unwrap());
     let ch = std::sync::Arc::new(l.ch);
     let ch2 = ch.clone();
+    ham_proxy::resolve::allow_private_upstream(); // the test site is on loopback
     std::thread::spawn(move || {
         if let Some(s) = lis.incoming().flatten().next() {
             // Site address is closed: only a refusal before the relay can answer.
