@@ -4,6 +4,10 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+    <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
+
     <application android:label="Hams.com Net" android:allowBackup="false">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>

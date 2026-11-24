@@ -61,6 +61,7 @@ dependencies {
     androidTestImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.0.21")
     androidTestImplementation("net.java.dev.jna:jna:5.14.0@aar")
     implementation("net.java.dev.jna:jna:5.14.0@aar")
+    implementation("com.github.mik3y:usb-serial-for-android:3.8.1")
 }
 
 tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }.configureEach { dependsOn(buildNative) }
