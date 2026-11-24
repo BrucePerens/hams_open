@@ -8,9 +8,9 @@ interface SerialPort {
     fun write(data: ByteArray)
 }
 
-/** Whether this app may key the radio now: the TX owner is this station and no demo lock is held. All keying goes through it. */
+/** All keying goes through this: [key] runs `send` (the one thing that keys the TNC) only if the station may transmit now, and says whether it ran. */
 fun interface TxGate {
-    fun mayKey(): Boolean
+    fun key(send: () -> Unit): Boolean
 }
 
 class RfRefused(message: String) : IllegalStateException(message)
@@ -45,9 +45,8 @@ class RfInterface(private val port: SerialPort, private val callsign: String, pr
 
     /** Sends one packet; false (nothing written) unless enabled and the gate allows keying. */
     fun send(packet: ByteArray): Boolean {
-        if (!enabled || !gate.mayKey()) return false
-        port.write(Kiss.encode(packet))
-        return true
+        if (!enabled) return false
+        return gate.key { port.write(Kiss.encode(packet)) }
     }
 
     /** Serial bytes in; the data-frame payloads (packets from the air). */
