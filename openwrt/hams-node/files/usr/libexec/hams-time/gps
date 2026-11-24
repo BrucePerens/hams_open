@@ -1,0 +1,23 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-time source: GPS time from NMEA. Reads uci hams_node_time.main gps_device (a serial device or a file/fifo fed by gpsd or
+# gpspipe -r) for a few seconds and prints "EPOCH ERROR_SECONDS" from the first valid $..RMC sentence (status A: has a fix), or fails.
+# It only reads the time; hams-node-time cross-checks it against other sources, so a spoofed feed cannot move the clock alone.
+set -u
+dev=$(uci -q get hams_node_time.main.gps_device 2> /dev/null)
+case $dev in /*) ;; *) exit 1 ;; esac
+[ -r "$dev" ] || exit 1
+line=$(timeout 5 head -n 40 "$dev" 2> /dev/null | tr -d '\r' | grep -m1 '^\$..RMC,[0-9.]*,A,')
+[ -n "$line" ] || exit 1
+oldifs=$IFS; IFS=,
+# shellcheck disable=SC2086
+set -- $line
+IFS=$oldifs
+t=${2%%.*} d=${10:-}
+case $t$d in *[!0-9]*) exit 1 ;; esac
+[ ${#t} -eq 6 ] && [ ${#d} -eq 6 ] || exit 1
+hh=${t%????} mm=${t#??}; mm=${mm%??} ss=${t#????}
+dd=${d%????} mo=${d#??}; mo=${mo%??} yy=${d#????}
+secs=$(date -u -d "20$yy-$mo-$dd $hh:$mm:$ss" +%s 2> /dev/null) || exit 1
+[ "$secs" -gt 1700000000 ] || exit 1
+echo "$secs 1"

@@ -1,0 +1,11 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-time source: the battery-backed RTC (holdover when everything else is gone). Prints "EPOCH ERROR_SECONDS" or fails.
+# Reads the kernel's /sys/class/rtc/rtc0/since_epoch (uci hams_node_time.main rtc_file overrides). The error is a coarse allowance for
+# drift since the RTC was last set; list this source last.
+set -u
+f=$(uci -q get hams_node_time.main.rtc_file 2> /dev/null); : "${f:=/sys/class/rtc/rtc0/since_epoch}"
+secs=$(head -n1 "$f" 2> /dev/null)
+case $secs in '' | *[!0-9]*) exit 1 ;; esac
+[ "$secs" -gt 1700000000 ] || exit 1
+echo "$secs 60"

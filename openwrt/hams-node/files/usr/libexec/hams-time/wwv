@@ -1,0 +1,20 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-time source: a WWV/WWVB (not CHU: it no longer broadcasts) decoder. The decoder runs separately and writes one line
+# "EPOCH ERROR_SECONDS" to uci hams_node_time.main wwv_file whenever it has a lock. This source adds the age of that file to the epoch
+# and fails when the file is older than wwv_max_age seconds (default 600) or missing.
+set -u
+f=$(uci -q get hams_node_time.main.wwv_file 2> /dev/null)
+max=$(uci -q get hams_node_time.main.wwv_max_age 2> /dev/null); : "${max:=600}"
+case $f in /*) ;; *) exit 1 ;; esac
+case $max in '' | *[!0-9]*) exit 1 ;; esac
+[ -r "$f" ] || exit 1
+line=$(head -n1 "$f")
+# shellcheck disable=SC2086
+set -- $line
+case ${1:-} in '' | *[!0-9]*) exit 1 ;; esac
+err=${2:-1}; case $err in *[!0-9.]*) err=1 ;; esac
+age=$(( $(date +%s) - $(date -r "$f" +%s) ))
+[ "$age" -ge 0 ] && [ "$age" -le "$max" ] || exit 1
+[ "$1" -gt 1700000000 ] || exit 1
+echo "$(($1 + age)) $err"

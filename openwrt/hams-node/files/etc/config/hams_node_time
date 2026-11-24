@@ -10,6 +10,10 @@ config time 'main'
 	# servers for the ntp and hamnet-ntp sources (HOST or HOST:PORT; hamnet ones are nodes on the ham network with a good clock)
 	# list ntp_server 'pool.ntp.org'
 	# list hamnet_ntp_server 'ntp.example.ham'
+	# gps source: NMEA from a serial device or a gpsd feed file; wwv source: file a WWV/WWVB decoder keeps writing "EPOCH ERROR" to
+	# option gps_device '/dev/ttyUSB0'
+	# option wwv_file '/tmp/wwv.time'
+	# option wwv_max_age '600'
 	# list source 'ntp=/usr/libexec/hams-time/ntp'
 	# list source 'hamntp=/usr/libexec/hams-time/hamnet-ntp'
 	# list source 'gps=/usr/libexec/hams-time/gps'
