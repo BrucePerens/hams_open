@@ -57,6 +57,7 @@ android {
 dependencies {
     implementation(project(":core")) { exclude(group = "net.java.dev.jna") }
     androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:core:1.6.1")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("org.jetbrains.kotlin:kotlin-test-junit:2.0.21")
     androidTestImplementation("net.java.dev.jna:jna:5.14.0@aar")
