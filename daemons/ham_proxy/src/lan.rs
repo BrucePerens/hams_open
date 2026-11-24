@@ -254,7 +254,8 @@ pub fn serve_lan(
     let Some(t) = parse_target(&head) else {
         return refuse(&mut tcp, "400 Bad Request");
     };
-    if !policy.permits(&t.host, "/") {
+    // A name with path limits has no permitted "/": the host is checked now, the path once it is known.
+    if !policy.permits_host(&t.host) || (!t.connect && !policy.permits(&t.host, &t.path)) {
         return refuse(&mut tcp, "403 Forbidden");
     }
     if !t.connect {
@@ -277,6 +278,11 @@ pub fn serve_lan(
         .and_then(|l| l.split(' ').nth(1))
         .unwrap_or("/")
         .to_string();
+    if !policy.permits(&t.host, &path) {
+        refuse(&mut browser, "403 Forbidden")?;
+        browser.shutdown().ok();
+        return Ok(());
+    }
     let mut upstream = connect_upstream(&t, up, resolver)?;
     policy.record(now(), &t.host, &require_integrity_only(&upstream)?)?;
     upstream.write_all(&upstream_head(&inner, &t, &path))?;
