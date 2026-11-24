@@ -70,9 +70,36 @@ pub struct HttpVerifier {
     pub host: String,
 }
 
-impl Verifier for HttpVerifier {
-    // [@ANCHOR: ham_proxy_login_http_verify]
-    fn verify(&self, serial: &str, nonce: &str, audience: &str, sig_b64: &str) -> Option<String> {
+/// What hams.com answered to a login check.
+pub enum HttpAnswer {
+    /// hams.com could not be reached or did not answer sensibly.
+    Unreachable,
+    /// hams.com answered and refused.
+    Refused,
+    /// hams.com vouched for the member; `certificate_pem` is the member's public certificate when it sent one.
+    Member {
+        /// The member's callsign.
+        callsign: String,
+        /// The public member certificate, for the offline cache.
+        certificate_pem: Option<String>,
+    },
+}
+
+impl HttpVerifier {
+    // [@ANCHOR: ham_proxy_login_http_ask]
+    /// Ask hams.com; tells an answer apart from no answer.
+    pub fn ask(&self, serial: &str, nonce: &str, audience: &str, sig_b64: &str) -> HttpAnswer {
+        self.try_ask(serial, nonce, audience, sig_b64)
+            .unwrap_or(HttpAnswer::Unreachable)
+    }
+
+    fn try_ask(
+        &self,
+        serial: &str,
+        nonce: &str,
+        audience: &str,
+        sig_b64: &str,
+    ) -> Option<HttpAnswer> {
         let body = serde_json::json!({"jsonrpc": "2.0", "params": {
             "serial": serial, "nonce": nonce, "audience": audience, "signature_b64": sig_b64}})
         .to_string();
@@ -90,7 +117,26 @@ Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
         let text = String::from_utf8_lossy(&out);
         let reply: serde_json::Value = serde_json::from_str(text.split_once("\r\n\r\n")?.1).ok()?;
         let r = reply.get("result")?;
-        (r.get("status")?.as_str()? == "success")
-            .then(|| r.get("callsign")?.as_str().map(str::to_string))?
+        Some(if r.get("status")?.as_str()? == "success" {
+            HttpAnswer::Member {
+                callsign: r.get("callsign")?.as_str()?.to_string(),
+                certificate_pem: r
+                    .get("certificate_pem")
+                    .and_then(|c| c.as_str())
+                    .map(str::to_string),
+            }
+        } else {
+            HttpAnswer::Refused
+        })
+    }
+}
+
+impl Verifier for HttpVerifier {
+    // [@ANCHOR: ham_proxy_login_http_verify]
+    fn verify(&self, serial: &str, nonce: &str, audience: &str, sig_b64: &str) -> Option<String> {
+        match self.ask(serial, nonce, audience, sig_b64) {
+            HttpAnswer::Member { callsign, .. } => Some(callsign),
+            _ => None,
+        }
     }
 }

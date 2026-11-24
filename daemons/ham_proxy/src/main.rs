@@ -1,8 +1,9 @@
-//! `ham_proxy --listen ADDR --cert PEM --key PEM --site HOST:PORT [--ca PEM] [--verify HOST:PORT]
+//! `ham_proxy --listen ADDR --cert PEM --key PEM --site HOST:PORT [--ca PEM] [--verify HOST:PORT [--member-certs DIR --member-ca PEM [--deprecation FILE]]]
 //! [--sign-key ED25519.pem] [--whitelist FILE | --signed-whitelist FILE --whitelist-key HEXFILE] [--gateway] [--ham-resolver IP:PORT] [--allow-private-upstream]
 //! [--callsign CALL --log FILE]`: thread per connection. `--lan` instead runs the browser-facing listener (`run_lan`).
 use ham_proxy::lan::{serve_lan, Ca, Upstream};
 use ham_proxy::login::{Challenges, HttpVerifier};
+use ham_proxy::member_local::{local_from, FallbackVerifier};
 use ham_proxy::policy::{Policy, Whitelist};
 use ham_proxy::{ham_acceptor, serve_one_policed, site_connector, ProxyError};
 use openssl::pkey::{PKey, Private};
@@ -166,10 +167,21 @@ fn run() -> Result<(), ProxyError> {
                 .to_string();
             Some(Arc::new((
                 Challenges::default(),
-                HttpVerifier {
-                    connector: site_connector(ca.as_deref())?,
-                    addr,
-                    host,
+                FallbackVerifier {
+                    http: HttpVerifier {
+                        connector: site_connector(ca.as_deref())?,
+                        addr,
+                        host,
+                    },
+                    // `--member-certs DIR --member-ca PEM [--deprecation FILE]`: also check offline when hams.com is unreachable.
+                    local: match (arg(&args, "--member-certs"), arg(&args, "--member-ca")) {
+                        (Some(d), Some(c)) => Some(local_from(
+                            &PathBuf::from(d),
+                            &PathBuf::from(c),
+                            arg(&args, "--deprecation").map(PathBuf::from).as_deref(),
+                        )),
+                        _ => None,
+                    },
                 },
             )))
         }
