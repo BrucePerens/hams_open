@@ -271,12 +271,12 @@ impl YaesuEngine {
     // [@ANCHOR: radioctl_yaesu_engine_has_antenna_ports]
     /// True for the models whose `AN` command has been read: the FTDX101D and FTDX101MP (IDs 681
     /// and 682, three connectors, CAT Operation Reference Manual, `AN`, PDF p. 7), the FTDX3000
-    /// (462, three) the FTDX1200 (583, two), the FT-950 (310, two) and the FT-2000 (251, two): all `ANp1p2;` with p1 0 and p2 the connector.
+    /// (462, three), the FTDX1200 (583, two), the FT-950 (310, two), the FT-2000 (251, two) and the FTDX5000 and FTDX9000 (362 and 101, four): all `ANp1p2;` with p1 0 and p2 the connector.
     fn has_antenna_ports(&self) -> bool {
         self.desc.yaesu.as_ref().is_some_and(|y| {
             matches!(
                 (y.model_id, self.desc.levels.antenna_ports),
-                (681 | 682 | 462, 3) | (583 | 310 | 251, 2)
+                (681 | 682 | 462, 3) | (583 | 310 | 251, 2) | (362 | 101, 4)
             )
         })
     }
@@ -403,9 +403,9 @@ impl YaesuEngine {
                 .and_then(parse_digits)
                 .and_then(|n| tone_value(true, usize::try_from(n).ok()?))
                 .map(Observation::DcsCode),
-            // `ANp1p2p4;`: main band (p1 0), connector 1 to 3, p4 a fixed 0.
+            // `ANp1p2p4;`: main band (p1 0), connector 1 to 4, p4 a fixed 0 (a receive-antenna flag, 0 or 1, on the models that have one).
             (Some("AN"), Some(rest)) if self.has_antenna_ports() => match rest.as_bytes() {
-                [b'0', port @ b'1'..=b'3', b'0' | b'1']
+                [b'0', port @ b'1'..=b'4', b'0' | b'1']
                     if u16::from(port - b'0') <= u16::from(self.desc.levels.antenna_ports) =>
                 {
                     Some(Observation::Level(Level::Antenna, u16::from(port - b'0')))
@@ -584,7 +584,7 @@ impl ProtocolEngine for YaesuEngine {
             Op::GetLevel(Level::Antenna) if self.has_antenna_ports() => {
                 Self::command("AN0;".to_string(), observe(Field::Level(Level::Antenna)))
             }
-            Op::SetLevel(Level::Antenna, port @ 1..=3)
+            Op::SetLevel(Level::Antenna, port @ 1..=4)
                 if self.has_antenna_ports()
                     && *port <= u16::from(self.desc.levels.antenna_ports) =>
             {
@@ -831,6 +831,23 @@ mod tests {
                 e.feed(b"AN010;", Duration::ZERO),
                 vec![Inbound::Observation(Observation::Level(Level::Antenna, 1))]
             );
+        }
+        // The FTDX5000 and FTDX9000: four connectors, p4 the receive antenna flag.
+        for id in ["yaesu-ftdx-5000", "yaesu-ftdx-9000", "yaesu-ftdx-9000-old"] {
+            let mut e = YaesuEngine::new(shipped(id)).expect("engine");
+            assert_eq!(
+                e.encode(&Op::SetLevel(Level::Antenna, 4)).unwrap().bytes,
+                b"AN04;"
+            );
+            assert!(e.encode(&Op::SetLevel(Level::Antenna, 5)).is_err());
+            assert_eq!(
+                e.feed(b"AN041;", Duration::ZERO),
+                vec![Inbound::Observation(Observation::Level(Level::Antenna, 4))]
+            );
+            assert!(matches!(
+                e.feed(b"AN150;", Duration::ZERO)[0],
+                Inbound::Unrecognised(_)
+            ));
         }
         // No other Yaesu has had its AN command read: refused.
         let mut other = YaesuEngine::new(shipped("yaesu-ft-991a")).expect("engine");

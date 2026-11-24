@@ -5,7 +5,7 @@
 # Frequency fields are 8 digits (`yaesu.frequency_digits`); the IF answer is 27 characters with the semicolon.
 # Gaps and open questions: The guide gives ID 0101 for the FTDX9000D (Hamlib also lists 102 Contest and 103 MP, not told apart); This file is Hamlib's separate 'FTDX-9000 Old' model (1050, older firmware): Hamlib's caps are the FTDX-9000's minus the VFO select/read (VS), which the old firmware lacks; radioctl's engine does not use VS, so the two files are identical in content. The ID of the old firmware is assumed to be the same 0101 (the guide read is the FT DX 9000 Series CAT Operation Reference; no document for the old firmware was found), so the two models cannot be told apart by ID. Dual receiver: no split, no read-power (PO is RM 08), no levels (MG and PC are 000-255). Details: crates/radioctl-protocols/src/yaesu.rs.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "rit-xit", "identify"]
+capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "transceive", "rit-xit", "levels", "identify"]
 
 [rig]
 id = "yaesu-ftdx-9000-old"
@@ -15,6 +15,13 @@ family = "yaesu-newcat"
 [yaesu]
 model_id = 101
 frequency_digits = 8
+levels = { mic-gain = [0, 255], rf-power = [0, 255] }
+
+[levels]
+attenuator_db = []
+attenuator_any_up_to_db = 0
+preamp_steps = 0
+antenna_ports = 4
 
 [timing]
 timeout_ms = 2000
@@ -68,6 +75,16 @@ code = "9"
 [[modes]]
 mode = "data"
 code = "C"
+
+[[facts]]
+key = "yaesu.levels"
+provenance = { kind = "manual", reference = "Yaesu 'FT DX 9000 Series CAT Operation Reference' (Copyright 2008), file FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf, sha256 a0e20f4c5178755a9500d266b01f74e8e3df9edc6be42e9becedb9d624cff87e: AG p. 5, KS p. 12, MG p. 13, PC p. 15, RG p. 16", note = "AG and RG 000-255 (P1 0 main receiver), MG 000-255, PC 000-255, KS 004-060 WPM; MG and PC differ from the engine's default ranges. Where this block is silent the engine's default range applies." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "levels.*"
+provenance = { kind = "manual", reference = "Yaesu 'FT DX 9000 Series CAT Operation Reference', file FTDX9000_PEP9000_CAT_MANUAL_EH010H121.pdf (in /storage/manuals/yaesu), sha256 a0e20f4c5178755a9500d266b01f74e8e3df9edc6be42e9becedb9d624cff87e: AN ANTENNA NUMBER: ANp1p2; p1 0 main band, p2 1 to 4 = ANT1 to ANT4 (5 = RX antenna, not used); read ANp1; answers ANp1p3p4; (p3 the antenna, p4 the RX antenna flag)", note = "Only the antenna connector is declared; no attenuator or preamp step is read for this model." }
+verified = { state = "manual-checked", reference = "AN command table" }
 
 [[facts]]
 key = "rig.*"
