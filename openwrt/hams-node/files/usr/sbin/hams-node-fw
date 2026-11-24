@@ -87,7 +87,7 @@ render() {
 	fi
 	remove_batch | grep -E 'firewall\.hams_hl_|network\.hamlan'
 	echo "delete firewall.hams_zone"; echo "delete firewall.hams_rf_zone"; echo "delete firewall.hams_fwd_lan_ham"
-	echo "delete firewall.hams_drop_ham_lan"; echo "delete firewall.hams_drop_hamrf_lan"
+	echo "delete firewall.hams_drop_ham_lan"; echo "delete firewall.hams_drop_hamrf_lan"; echo "delete firewall.hams_rf_in_ah"
 	for o in $opens; do p=${o%%:*}; n=${o#*:}; echo "delete firewall.hams_in_${p}_$n"; echo "delete firewall.hams_rf_in_${p}_$n"; done
 	for zone in ham hamrf; do
 		if [ $zone = ham ]; then list=$ifaces sec=hams_zone; else list=$rfs sec=hams_rf_zone; fi
@@ -100,6 +100,10 @@ render() {
 		echo "set firewall.hams_drop_${zone}_lan.src=$zone"; echo "set firewall.hams_drop_${zone}_lan.dest=lan"; echo "set firewall.hams_drop_${zone}_lan.target=DROP"
 		if [ $zone = ham ]; then
 			echo "set firewall.hams_fwd_lan_ham=forwarding"; echo "set firewall.hams_fwd_lan_ham.src=lan"; echo "set firewall.hams_fwd_lan_ham.dest=ham"
+		fi
+		if [ $zone = hamrf ]; then # IPsec AH (integrity only) authenticates the RF BGP/gossip sessions (hams-node-bird ah); it hides nothing
+			echo "set firewall.hams_rf_in_ah=rule"; echo "set firewall.hams_rf_in_ah.name=hams-rf-ah"; echo "set firewall.hams_rf_in_ah.src=hamrf"
+			echo "set firewall.hams_rf_in_ah.proto=ah"; echo "set firewall.hams_rf_in_ah.target=ACCEPT"
 		fi
 		for o in $opens; do
 			p=${o%%:*}; n=${o#*:}

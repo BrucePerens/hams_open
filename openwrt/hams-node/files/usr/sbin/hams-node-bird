@@ -6,15 +6,20 @@
 # other members' /60../64 inside the /40. RF-first (ham_ipv6net/client/rf_policy.py node_import_filter): routes tagged with the RF large
 # community (4200000000, 1, 1) get local-pref 200, all others 100; the node tags its own routes only while rf_live is 1.
 # Nothing is written (exit 0) while multi-hop is not enabled or the /40 is unset. The BGP password is read from a root-only file.
-# Direct RF neighbours (list neighbor 'ASN,ADDRESS,INTERFACE[,PREFIX]'), configured statically so RF islands route among themselves
-# with the internet and the route servers gone: one eBGP session each over the radio link, local-pref 300 (a neighbour's route beats the
-# same prefix from a route server, 200/100); export is the node's own /60 plus routes learned from RF neighbours (tagged with the RF
-# community), so a chain of RF hops routes. BGP rather than Babel: BIRD and the /40 filters are already here, members are separate ASes,
-# and AREDN's Babel stays inside the AREDN mesh untouched. Part 97: RF sessions carry no password or authentication option (nothing
-# obscured on the air); the import filter limits them to the /40 (and to the neighbour's /60 when PREFIX is given).
+# Direct RF neighbours (list neighbor 'ASN,ADDRESS,INTERFACE,PREFIX60[,SIIT96]'), configured statically so RF islands route among
+# themselves with the internet and the route servers gone: one eBGP session each over the radio link, local-pref 300 (a neighbour's route
+# beats the same prefix from a route server, 200/100). BGP rather than Babel: BIRD and the /40 filters are already here, members are
+# separate ASes, and AREDN's Babel stays inside the AREDN mesh untouched. Part 97 bars encryption, not authentication: every RF session is
+# authenticated with IPsec AH (integrity only, nothing is hidden; RFC 4552 does the same for OSPFv3) between the two link-local addresses,
+# applied by `hams-node-bird ah apply|down|print`. TCP-MD5 and TCP-AO were tried first and are not available: the OpenWrt/AREDN 6.12 kernel
+# has neither ("Kernel does not support TCP MD5 signatures" from bird, checked in the QEMU image). The key is derived from the root-only file
+# DIR/ASN.secret (uci rf_secret_dir, default /etc/hams-node/rf.d; exchanged at enrolment, never sent over RF). A packet from the neighbour's
+# address without a valid AH is dropped by the kernel, so a rogue speaker cannot open a session. A neighbour may announce only its own /60
+# (and its SIIT /96 if it is a gateway) and we export only our own /60. A neighbour whose ASN or /60 is on the signed deprecation list
+# (HAMS_NODE_DEPRECATION_LIST, default /etc/hams-node/deprecation_list) is not configured. RF neighbour addresses must be link-local.
 set -u
-[ "${1:-}" = render ] || { echo "usage: hams-node-bird render [OUTFILE]" >&2; exit 2; }
-out=${2:-/etc/bird.conf}
+mode=${1:-}
+case $mode in render) out=${2:-/etc/bird.conf} ;; ah) action=${2:-} ;; *) echo "usage: hams-node-bird render [OUTFILE] | ah print|apply|down" >&2; exit 2 ;; esac
 get() { uci -q get "hams_node_bird.main.$1" 2>/dev/null; }
 
 [ "$(get enabled)" = 1 ] || exit 0
@@ -22,14 +27,58 @@ asn=$(get asn) prefix=$(get prefix) p60=$(get prefix60) serial=$(get serial) sec
 nbrs=$(get neighbor)
 [ -n "$prefix" ] && { [ -n "$servers" ] || [ -n "$nbrs" ]; } || exit 0
 for v in "$asn" "$serial"; do case $v in '' | *[!0-9]*) echo "hams-node-bird: asn and serial must be numbers" >&2; exit 1 ;; esac; done
+rfdir=$(get rf_secret_dir); : "${rfdir:=/etc/hams-node/rf.d}"
+deplist=${HAMS_NODE_DEPRECATION_LIST:-/etc/hams-node/deprecation_list}
+active=
 for n in $nbrs; do
 	oldifs=$IFS; IFS=,; set -- $n; IFS=$oldifs
-	[ $# -ge 3 ] && [ $# -le 4 ] || { echo "hams-node-bird: neighbor must be ASN,ADDRESS,INTERFACE[,PREFIX]" >&2; exit 1; }
+	[ $# -ge 4 ] && [ $# -le 5 ] || { echo "hams-node-bird: neighbor must be ASN,ADDRESS,INTERFACE,PREFIX60[,SIIT96]" >&2; exit 1; }
 	case $1 in '' | *[!0-9]*) echo "hams-node-bird: bad neighbor asn" >&2; exit 1 ;; esac
-	case $2${4:-} in *[!A-Fa-f0-9:./]*) echo "hams-node-bird: bad neighbor address or prefix" >&2; exit 1 ;; esac
+	case $2$4${5:-} in *[!A-Fa-f0-9:./]*) echo "hams-node-bird: bad neighbor address or prefix" >&2; exit 1 ;; esac
 	case $3 in '' | *[!A-Za-z0-9_-]*) echo "hams-node-bird: bad neighbor interface" >&2; exit 1 ;; esac
-	[ -n "$2" ] || { echo "hams-node-bird: bad neighbor address" >&2; exit 1; }
+	case $2 in fe80:*) ;; *) echo "hams-node-bird: an RF neighbor address must be link-local (fe80::...)" >&2; exit 1 ;; esac
+	case $4 in *::/60) ;; *) echo "hams-node-bird: a neighbor needs its own ::/60" >&2; exit 1 ;; esac
+	case ${5:-/96} in */96) ;; *) echo "hams-node-bird: the SIIT prefix must be a /96" >&2; exit 1 ;; esac
+	if [ -r "$deplist" ] && { grep -q "^$1 " "$deplist" || grep -q "^[^ ]* .*$4" "$deplist"; }; then
+		echo "hams-node-bird: neighbor AS$1 is on the deprecation list, not configured" >&2; continue
+	fi
+	[ -r "$rfdir/$1.secret" ] || { echo "hams-node-bird: no key for neighbor AS$1 ($rfdir/$1.secret)" >&2; exit 1; }
+	active="$active $n"
 done
+nbrs=$active
+[ -n "$servers" ] || [ -n "$nbrs" ] || exit 0
+if [ $mode = ah ]; then
+	case $action in print | apply | down) ;; *) echo "usage: hams-node-bird ah print|apply|down" >&2; exit 2 ;; esac
+	cmds=
+	for n in $nbrs; do
+		oldifs=$IFS; IFS=,; set -- $n; IFS=$oldifs
+		mine=$(ip -6 addr show dev "$3" 2>/dev/null | awk '/inet6 fe80/ {sub(/\/.*/, "", $2); print $2; exit}')
+		[ -n "$mine" ] || { echo "hams-node-bird: no link-local address on $3 for AS$1" >&2; exit 1; }
+		key=$(printf 'rf-ah-%s' "$(head -n 1 "$rfdir/$1.secret")" | sha256sum | cut -d' ' -f1)
+		for d in "$mine $2 $asn" "$2 $mine $1"; do
+			set -- $d
+			cmds="$cmds
+ip xfrm state delete src $1 dst $2 proto ah spi $3
+ip xfrm policy delete src $1/128 dst $2/128 proto tcp dir $([ "$1" = "$mine" ] && echo out || echo in)"
+			if [ $action != down ]; then
+				cmds="$cmds
+ip xfrm state add src $1 dst $2 proto ah spi $3 auth-trunc 'hmac(sha512)' 0x$key 256 mode transport
+ip xfrm policy add src $1/128 dst $2/128 proto tcp dir $([ "$1" = "$mine" ] && echo out || echo in) tmpl src $1 dst $2 proto ah mode transport"
+			fi
+		done
+		set -- $n
+	done
+	if [ $action = print ]; then echo "$cmds"; exit 0; fi
+	echo "$cmds" | while read -r line; do [ -n "$line" ] && eval "$line" 2>/dev/null; done
+	# the deprecation-list gossip (hams-node-status, tcp 5710, authenticated by the same AH policy) reaches the RF neighbours with no internet
+	gfile=${HAMS_NODE_STATE:-/etc/hams-node}/gossip_neighbours
+	if [ $action = apply ]; then
+		for n in $nbrs; do oldifs=$IFS; IFS=,; set -- $n; IFS=$oldifs; echo "$2%$3"; done > "$gfile.new" && mv "$gfile.new" "$gfile"
+	else
+		: > "$gfile"
+	fi
+	exit 0
+fi
 for v in "$prefix" "$p60" $servers; do case $v in '' | *[!A-Fa-f0-9:./]*) echo "hams-node-bird: bad address or prefix" >&2; exit 1 ;; esac; done
 secret=
 if [ -n "$servers" ]; then
@@ -57,15 +106,17 @@ tmp="$out.new"
 	printf 'filter hams_in {\n    if net ~ [%s{60,64}] && !(net ~ [%s{60,64}]) then {\n' "$prefix" "$p60"
 	printf '        if bgp_large_community ~ [(%s)] then bgp_local_pref = 200; else bgp_local_pref = 100;\n        accept;\n    }\n    reject;\n}\n' "$RF"
 	if [ -n "$nbrs" ]; then
-		printf 'filter hams_out_rf {\n    if net ~ [%s{60,64}] || bgp_large_community ~ [(%s)] then {\n        bgp_large_community.add((%s));\n        accept;\n    }\n    reject;\n}\n' "$p60" "$RF" "$RF"
+		printf 'filter hams_out_rf {\n    if net ~ [%s{60,64}] then {\n        bgp_large_community.add((%s));\n        accept;\n    }\n    reject;\n}\n' "$p60" "$RF"
 	fi
 	j=0
 	for n in $nbrs; do
 		j=$((j + 1))
 		oldifs=$IFS; IFS=,; set -- $n; IFS=$oldifs
-		range=$prefix; [ $# -eq 4 ] && range=$4
-		printf 'filter hams_in_rf%d {\n    if net ~ [%s{60,64}] && !(net ~ [%s{60,64}]) then {\n        bgp_local_pref = 300;\n        accept;\n    }\n    reject;\n}\n' "$j" "$range" "$p60"
-		printf 'protocol bgp hams_rf%d {\n    local as %d;\n    neighbor %s%%%s as %d;\n    hold time 90;\n    keepalive time 30;\n    ipv6 {\n        import filter hams_in_rf%d;\n        export filter hams_out_rf;\n    };\n}\n' "$j" "$asn" "$2" "$3" "$1" "$j"
+		siit=
+		[ $# -eq 5 ] && siit=" || net = $5"
+		printf 'filter hams_in_rf%d {\n    if net ~ [%s{60,64}]%s then {\n        bgp_local_pref = 300;\n        accept;\n    }\n    reject;\n}\n' "$j" "$4" "$siit"
+		printf 'protocol bgp hams_rf%d {\n    local as %d;\n    neighbor %s%%%s as %d;\n' "$j" "$asn" "$2" "$3" "$1"
+		printf '    hold time 90;\n    keepalive time 30;\n    connect retry time 15;\n    ipv6 {\n        import filter hams_in_rf%d;\n        export filter hams_out_rf;\n    };\n}\n' "$j"
 	done
 	i=0
 	for s in $servers; do

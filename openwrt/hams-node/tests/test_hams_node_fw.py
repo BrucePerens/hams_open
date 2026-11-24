@@ -61,6 +61,14 @@ class FwTests(unittest.TestCase):
         self.assertIn("set firewall.hams_in_tcp_8080.target=ACCEPT", lines)
         self.assertNotIn("set firewall.hams_zone.input=ACCEPT", lines)
 
+    def test_rf_zone_accepts_ipsec_ah_for_the_authenticated_bgp_sessions(self):
+        env = Env(self)
+        lines = env.run(SBIN / "hams-node-fw", "render").stdout.splitlines()
+        self.assertIn("set firewall.hams_rf_in_ah.proto=ah", lines)
+        self.assertIn("set firewall.hams_rf_in_ah.src=hamrf", lines)
+        self.assertIn("set firewall.hams_rf_in_ah.target=ACCEPT", lines)
+        self.assertFalse(any(ln.startswith("set firewall.hams_in_ah") for ln in lines))
+
     def test_no_open_ports_means_no_rules(self):
         lines = Env(self, open="").run(SBIN / "hams-node-fw", "render").stdout.splitlines()
         self.assertEqual([ln for ln in lines if "=rule" in ln and "hams_in_" in ln], [])
