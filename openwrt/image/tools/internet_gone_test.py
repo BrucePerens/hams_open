@@ -117,7 +117,7 @@ wg show wgt0 peers | grep -q "$good" && echo good=present || echo good=absent
 ROGUE = """
 /etc/init.d/hams-node-bird stop
 {auth}
-[ -f /tmp/rogue.pid ] && kill $(cat /tmp/rogue.pid)
+[ -s /tmp/rogue.pid ] && kill $(cat /tmp/rogue.pid)
 sleep 1
 cat > /tmp/rogue.conf <<'EOF'
 router id 9.9.9.9;
@@ -125,7 +125,7 @@ protocol device {{
 }}
 protocol static {{
     ipv6;
-    route 2001:db8:ab00:99::/60 unreachable;
+    route 2001:db8:ab00:90::/60 unreachable;
     route 2001:db8:ab00:20::/60 unreachable;
 }}
 protocol bgp rogue {{
@@ -142,7 +142,7 @@ bird -c /tmp/rogue.conf -s /tmp/rogue.ctl -P /tmp/rogue.pid
 """
 ROGUE_CHECK = """
 birdc -s /var/run/hams-node-bird.ctl show protocols hams_rf1 | grep hams_rf1
-echo "route99=$(ip -6 route show 2001:db8:ab00:99::/60 | wc -l)"
+echo "route90=$(ip -6 route show 2001:db8:ab00:90::/60 | wc -l)"
 echo "route20=$(ip -6 route show 2001:db8:ab00:20::/60 | wc -l)"
 """
 
@@ -228,13 +228,13 @@ def main():
         sh(cons["A"], "/etc/init.d/hams-node-bird restart", 30)  # drops the session B's real BIRD held, as its hold time would
         time.sleep(45)
         res = sh(cons["A"], ROGUE_CHECK, 30)
-        check("rogue speaker without the key: no session, no injected route", "Established" not in out(res) and "route99=0" in out(res) and "route20=0" in out(res), out(res))
+        check("rogue speaker without the key: no session, no injected route", "Established" not in out(res) and "route90=0" in out(res) and "route20=0" in out(res), out(res))
         rogue2 = sh(cons["B"], ROGUE.format(alink=ll["A"], auth="hams-node-bird ah apply") + "\nsleep 2\nbirdc -s /tmp/rogue.ctl show protocols\nip xfrm state | head -3", 30)
         sh(cons["A"], "/etc/init.d/hams-node-bird restart", 30)
         time.sleep(45)
         res = sh(cons["A"], ROGUE_CHECK, 30)
-        ok = "Established" in out(res) and "route99=0" in out(res) and "route20=1" in out(res)
-        check("speaker with the key is held to its own /60: 99::/60 is refused, its /60 accepted", ok, out(res))
+        ok = "Established" in out(res) and "route90=0" in out(res) and "route20=1" in out(res)
+        check("speaker with the key is held to its own /60: 90::/60 is refused, its /60 accepted", ok, out(res))
         if not ok:
             print("rogue2 on B:", out(rogue2))
         # .ham from the cached zone
