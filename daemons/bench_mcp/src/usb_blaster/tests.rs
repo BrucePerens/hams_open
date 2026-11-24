@@ -304,3 +304,15 @@ fn the_real_runner_reports_exit_codes_output_and_a_missing_program() {
     .unwrap_err();
     assert!(e.contains("Next:"), "{e}");
 }
+
+// Tests [@ANCHOR: bench_mcp_usb_blaster_call]
+#[test]
+fn the_production_entry_starts_the_configured_program_and_says_what_is_missing() {
+    let none: Vec<Instrument> = vec![];
+    assert!(call(&none, "bench_jtag_scan", &json!({}))
+        .unwrap_err()
+        .contains("no usb_blaster instrument"));
+    let b = bench(r#","program":"/nonexistent/openFPGALoader""#);
+    let e = call(&b, "bench_jtag_scan", &json!({})).unwrap_err();
+    assert!(e.contains("cannot start"), "{e}");
+}

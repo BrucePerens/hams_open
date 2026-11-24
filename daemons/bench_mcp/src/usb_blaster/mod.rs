@@ -442,6 +442,7 @@ pub fn flash_write(r: &dyn Runner, inst: &Instrument, args: &Value) -> Result<Va
 }
 
 pub fn call(insts: &[Instrument], name: &str, args: &Value) -> Result<Value, String> {
+    // [@ANCHOR: bench_mcp_usb_blaster_call]
     let inst = instrument(insts, args)?;
     let r = RealRunner {
         program: inst.usb_blaster.program.clone(),

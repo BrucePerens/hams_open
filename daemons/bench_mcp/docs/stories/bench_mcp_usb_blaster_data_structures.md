@@ -58,3 +58,7 @@ Runs `-c <cable> --detect` with a 20 s limit and parses it. Errors (time limit, 
 
 Runs one tool against a given `Runner`: unknown tool, instrument choice, tier check, then dispatch. `call` is the production entry that builds the `RealRunner`.
 
+### `call` [@ANCHOR: bench_mcp:bench_mcp_usb_blaster_call]
+
+The production entry of the module: finds the entry, builds a `RealRunner` from its `program` and runs `call_with`. Errors: no entry, or the program cannot start.
+
