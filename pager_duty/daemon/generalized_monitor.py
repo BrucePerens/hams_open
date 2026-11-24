@@ -290,10 +290,10 @@ def _dig_addresses(dig, domain, rtype):
     return status.group(1), addresses
 
 
-# [@ANCHOR: pager_duty:certbot_probe_name]
 CERTBOT_WILDCARD_LABEL = "hams-cert-check"
 
 
+# [@ANCHOR: pager_duty:certbot_probe_name]
 def certbot_probe_name(domain):
     """The host name to look up and connect to for a certificate target: a `*.example.com` wildcard has no host of its own,
     so it is probed as `hams-cert-check.example.com`, which the SNI router answers with the wildcard certificate."""
