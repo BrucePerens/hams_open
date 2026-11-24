@@ -25,3 +25,13 @@ then `ANDROID_SERIAL=emulator-5554 gradle :app:connectedDebugAndroidTest` (`Enro
 `.ham` request makes the WireGuard peer and the handshake arrives; other hosts are refused). The cargo build covers arm64-v8a and x86_64.
 
 Not done: passkey login (needs Google Play services or a real authenticator), RF links (refused by design), iOS.
+
+## RF node (USB-OTG or Bluetooth serial TNC)
+
+`core` holds the RF side: `Kiss` (KISS framing), `RfInterface` (unencrypted IP over KISS), `RfPolicy` (an RF link refuses WireGuard and every encrypting suite; `PeerTable` also refuses to be built on RF) and the station-ID reminder `enable()` returns, which the app shows when the interface is turned on. Every keying goes through the `TxGate`: it must allow only while this station owns TX and no demo lock is held. Tested against a virtual TNC (`RfInterfaceTest`).
+
+Bench step (needs a real TNC or radio, a licensed operator, a dummy load or a test frequency; agents never transmit):
+1. Implement `SerialPort` over `usb-serial-for-android` (USB-OTG TNC) or an RFCOMM socket (Bluetooth TNC such as a Mobilinkd), and a `TxGate` that returns true only while the operator has the TX-owner role and no demo lock is on.
+2. Put the TNC in KISS mode, connect it to the phone, enable the RF interface with your callsign; confirm the reminder is shown.
+3. Into a dummy load, send one packet; check the TNC keys and the KISS data frame matches `Kiss.encode`. Receive a frame from a second station and check it arrives.
+4. Confirm turning on WireGuard for that interface is refused.
