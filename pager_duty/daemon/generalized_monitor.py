@@ -290,6 +290,16 @@ def _dig_addresses(dig, domain, rtype):
     return status.group(1), addresses
 
 
+CERTBOT_WILDCARD_LABEL = "hams-cert-check"
+
+
+# [@ANCHOR: pager_duty:certbot_probe_name]
+def certbot_probe_name(domain):
+    """The host name to look up and connect to for a certificate target: a `*.example.com` wildcard has no host of its own,
+    so it is probed as `hams-cert-check.example.com`, which the SNI router answers with the wildcard certificate."""
+    return f"{CERTBOT_WILDCARD_LABEL}.{domain[2:]}" if domain.startswith("*.") else domain
+
+
 # [@ANCHOR: pager_duty:served_cert_problem]
 def served_cert_problem(domain, port=443, host="127.0.0.1"):  # burn-ignore-self-hosted-server: a host systemd daemon asking the web server on its own machine, not a service in another container
     """One line saying why the certificate this server serves for `domain` is not healthy (unreadable, or fewer than
@@ -1724,7 +1734,7 @@ def execute_check(check, client=None):
                 with urllib.request.urlopen(req, timeout=10) as ip_resp:
                     my_ip = ip_resp.read(256).decode("utf-8").strip()
 
-                domain_list = [d.strip() for d in domains.split(",") if d.strip()]
+                domain_list = [certbot_probe_name(d.strip()) for d in domains.split(",") if d.strip()]
                 problems = []
                 for d in domain_list:
                     problem = certbot_domain_problem(d, my_ip)
@@ -1742,14 +1752,14 @@ def execute_check(check, client=None):
             ) as e:  # audit-ignore-catch-all
                 logger.warning(f"Could not verify public IP for domain matching: {e}")
 
-        # With no domains (or "auto") there is nothing to check; a wildcard name has no host to ask for.
+        # With no domains (or "auto") there is nothing to check.
         if domains and domains != "auto":
             expiring = [
                 problem
                 for problem in (
-                    served_cert_problem(d.strip())
+                    served_cert_problem(certbot_probe_name(d.strip()))
                     for d in domains.split(",")
-                    if d.strip() and not d.strip().startswith("*.")
+                    if d.strip()
                 )
                 if problem
             ]
