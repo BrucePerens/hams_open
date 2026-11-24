@@ -48,3 +48,11 @@ hams.com signed whitelist (the file at `https://www.hams.com/ipv6/whitelist.json
 by normal TLS. The list file is re-read and verified (Ed25519 under the 64-hex-character raw public key in HEXFILE, not expired) for every connection; a missing,
 modified, unsigned or expired list permits only `.ham` names. `--gateway` refuses to start without a whitelist. Place it at a member or club with a routable /48,
 never at hams.com. Deployment files: `deploy/` (systemd service, whitelist refresh timer, env example); runbook `hams_com/docs/runbooks/SITE_GATEWAY_DEPLOYMENT.md`.
+
+## `.ham` lookups and never a private address (`--ham-resolver`, `--allow-private-upstream`)
+
+`--ham-resolver IP:PORT` looks `.ham` names up (AAAA, UDP) at the Hams.com Net resolver instead of the system resolver (`src/resolve.rs`). It exists for the
+AREDN gateway, where the node's dnsmasq drops AAAA answers and answers `.ham` A queries with the gateway itself. Every upstream connection, `.ham` or not,
+only goes to an address that is not loopback, unspecified, private (RFC 1918, 100.64/10), link-local, unique-local, multicast or IPv4-mapped, so no name
+(including a rebinding answer) leads the gateway to its operator's home LAN. `--allow-private-upstream` lifts that for a lab with a local site; it is for tests only.
+Tests: `tests/resolve.rs` (an IPv4 client loads a `.ham` page integrity-only, a non-whitelisted site is refused, a private answer is never connected).

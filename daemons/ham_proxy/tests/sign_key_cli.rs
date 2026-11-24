@@ -84,6 +84,7 @@ fn sign_key_adds_a_verifiable_integrity_header() {
         .port();
     let _proxy = Killed(
         Command::new(env!("CARGO_BIN_EXE_ham_proxy"))
+            .arg("--allow-private-upstream")
             .args([
                 "--listen",
                 &format!("127.0.0.1:{port}"),
