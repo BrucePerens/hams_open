@@ -26,7 +26,10 @@ endef
 define Package/hams-node-fw/install
 	$(INSTALL_DIR) $(1)/usr/sbin $(1)/etc/config
 	$(INSTALL_BIN) ./files/usr/sbin/hams-node-fw $(1)/usr/sbin/
+	$(INSTALL_BIN) ./files/usr/sbin/hams-node-rf $(1)/usr/sbin/
 	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_DIR) $(1)/etc/hotplug.d/iface
+	$(INSTALL_BIN) ./files/etc/hotplug.d/iface/90-hams-node-rf $(1)/etc/hotplug.d/iface/
 	$(INSTALL_BIN) ./files/etc/init.d/hams-node-fw $(1)/etc/init.d/
 	$(INSTALL_CONF) ./files/etc/config/hams_node_fw $(1)/etc/config/
 endef

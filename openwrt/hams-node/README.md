@@ -36,6 +36,14 @@ Adding a subpackage: create `pkg/<name>.mk` with its `define Package/<name>`, `/
 (copy `pkg/hams-node-report.mk`; the file name is the package name). Do not edit `Makefile`: it includes `pkg/*.mk` in sorted order
 and calls `BuildPackage` for each, so parallel subpackage changes never touch the same file.
 
+## RF detection (hams-node-rf)
+
+`hams-node-rf scan` runs at boot and on every interface up/down. An interface is RF when listed in `hams_node_fw.main.rf_iface` (the one
+setting) or when `iw dev` reports it as a mesh point or IBSS. It goes into zone `hamrf` (WireGuard and encrypted-service ports refused,
+Part 97), `hams_node_bird.main.rf_live` becomes 1 while one is up (routes carry the RF community), a station ID reminder is written to
+`/var/run/hams-node/station_id_reminder` and the system log, and the link-local neighbours seen on RF interfaces are listed in
+`/var/run/hams-node/rf_neighbours` (`hams-node-rf list`). `/etc/hams-node/gossip_neighbours` is left alone.
+
 ## Firewall: the home LAN is outbound-only (hams-node-fw)
 
 Safe by default: once the node is enrolled the zones are on (`option enabled '0'` in `/etc/config/hams_node_fw` switches them off). `hams-node-wg`
