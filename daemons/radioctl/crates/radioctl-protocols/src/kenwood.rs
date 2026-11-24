@@ -159,6 +159,9 @@ enum AntennaForm {
     One,
     /// `ANp1p2p3;`, p1 0 or 1.
     Three,
+    /// The TS-990S `AN0p1p2p3p4;`: p1 the band (0 main), p2 1 to 4 the connector, p3 and p4 the
+    /// receive antenna and drive out (9 on a set leaves them alone).
+    Four,
 }
 
 /// The Kenwood-style client engine for one rig.
@@ -251,12 +254,13 @@ impl KenwoodEngine {
     /// reference, `AN`, PDF p. 4), and so does the TS-2000 (ID 19; its instruction manual's PC
     /// control command table, `AN`, p. 116); the TS-590S (ID 21) takes `ANp1p2p3;` with p1 0 or 1 (its PC
     /// command reference, `AN`, PDF p. 4). Any other model, or a description with no port count,
-    /// is refused: no other Kenwood guide has been read.
+    /// is refused: no other Kenwood guide has been read. The TS-990S (ID 22) takes `AN0p1p2p3p4;` with four connectors (its PC command reference, `AN0`, PDF p. 4).
     fn antenna_form(&self) -> Result<AntennaForm, RigError> {
         let id = self.desc.kenwood.as_ref().map(|k| k.model_id);
         match (self.desc.levels.antenna_ports, id) {
             (2, Some(19 | 20)) => Ok(AntennaForm::One),
             (2, Some(21)) => Ok(AntennaForm::Three),
+            (4, Some(22)) => Ok(AntennaForm::Four),
             _ => Err(Self::unsupported("no antenna port list on this model")),
         }
     }
@@ -514,6 +518,11 @@ impl KenwoodEngine {
                     (AntennaForm::Three, [p @ (b'0' | b'1'), b'0' | b'1', b'0' | b'1']) => {
                         p - b'0' + 1
                     }
+                    // `AN0p1p2p3p4;`: the main band's answer only.
+                    (
+                        AntennaForm::Four,
+                        [b'0', b'0', p @ b'1'..=b'4', b'0' | b'1', b'0' | b'1'],
+                    ) => p - b'0',
                     _ => return None,
                 };
                 Some(Observation::Level(Level::Antenna, u16::from(port)))
@@ -576,6 +585,13 @@ impl KenwoodEngine {
     /// PDF page 45): the mode is `OM0;` and `OM0<m>;`; there is no `MD`, `FR`, `FT` or level
     /// form the engine can use (`KY` follows the description's `[kenwood.ky]` block). `None` where the classic form is also the TS-990S form.
     fn encode_ts990(&self, op: &Op) -> Option<Result<Request, RigError>> {
+        // The antenna connector (`AN0`, PDF p. 4) is the one level this dialect has.
+        if matches!(
+            op,
+            Op::GetLevel(Level::Antenna) | Op::SetLevel(Level::Antenna, _)
+        ) {
+            return None;
+        }
         Some(match op {
             Op::GetMode => Ok(Self::command(
                 "OM0;".into(),
@@ -922,9 +938,14 @@ impl ProtocolEngine for KenwoodEngine {
                 return Err(Self::unsupported("no such level on this rig"));
             }
             Op::GetLevel(Level::Antenna) => {
-                self.antenna_form()?;
+                let form = self.antenna_form()?;
                 Self::command(
-                    "AN;".into(),
+                    if form == AntennaForm::Four {
+                        "AN0;"
+                    } else {
+                        "AN;"
+                    }
+                    .into(),
                     ReplyKind::Observation(Field::Level(Level::Antenna)),
                 )
             }
@@ -934,6 +955,7 @@ impl ProtocolEngine for KenwoodEngine {
                     // P1 0 or 1, P2 and P3 9 (no change): the receive antenna and the drive
                     // output are left alone.
                     (AntennaForm::Three, 1 | 2) => format!("AN{}99;", port - 1),
+                    (AntennaForm::Four, 1..=4) => format!("AN00{port}99;"),
                     _ => return Err(Self::unsupported("no such antenna port on this model")),
                 };
                 Self::command(text, none)
@@ -1241,6 +1263,32 @@ mod tests {
         );
         assert!(matches!(
             ts590s.feed(b"AN2;", Duration::ZERO)[0],
+            Inbound::Unrecognised(_)
+        ));
+
+        // The TS-990S: `AN0p1p2p3p4;`, ANT1 to ANT4 on the main band (PDF p. 4).
+        let mut ts990 = KenwoodEngine::new(shipped("kenwood-ts-990s")).expect("ts990s");
+        assert_eq!(
+            ts990.encode(&Op::GetLevel(Level::Antenna)).unwrap().bytes,
+            b"AN0;"
+        );
+        assert_eq!(
+            ts990
+                .encode(&Op::SetLevel(Level::Antenna, 4))
+                .unwrap()
+                .bytes,
+            b"AN00499;"
+        );
+        assert!(ts990.encode(&Op::SetLevel(Level::Antenna, 5)).is_err());
+        assert!(ts990.encode(&Op::SetLevel(Level::Antenna, 0)).is_err());
+        assert!(ts990.encode(&Op::GetLevel(Level::AfGain)).is_err());
+        assert_eq!(
+            ts990.feed(b"AN00300;", Duration::ZERO),
+            vec![Inbound::Observation(Observation::Level(Level::Antenna, 3))]
+        );
+        // The sub band's answer is not the main band's reading.
+        assert!(matches!(
+            ts990.feed(b"AN01300;", Duration::ZERO)[0],
             Inbound::Unrecognised(_)
         ));
 

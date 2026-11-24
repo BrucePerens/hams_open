@@ -3,11 +3,11 @@
 # Dialect "ts990": it has the classic IF, FA, RT, XT, RC, RU/RD, SM0, AI2, TX and RX, but the mode is OM0 (read) and OM0<m> (set), there is no MD, FR or FT, and IF has no transmit state (P8 is always 0), so there is no read-ptt.
 # The TS-990S has Main and Sub receivers: FA is the main band and FB the sub band, which is a second receiver and not a VFO B, so no second-vfo or split is declared (SP starts a split-frequency setting, it is not a flag).
 # Receivers: CB (PDF p. 12) selects and reads the operating band, Main or Sub; no TX-band or dual-watch form exists in the reference, so those are refused. Unverified on hardware.
-# Not declared, and why: levels (AG and RG carry a band digit, MG is 000 to 255, PC 005 to 200, KS 004 to 060: the engine's forms and ranges differ, and RA and PA are read with a band digit); CW (KY not implemented for it).
+# Not declared, and why: levels other than the antenna connector (AG and RG carry a band digit, MG is 000 to 255, PC 005 to 200, KS 004 to 060: the engine's forms and ranges differ, and RA and PA are read with a band digit); CW (KY not implemented for it).
 # LAN: the TS-990S has a TCP/IP CAT stream (UTF-16) with ##CN and ##ID login (PDF pp. 1 and 62: account and password lengths 1 to 8, closed after 10 s without traffic). The session is radioctl-protocols kenwood_ts990_lan::Ts990LanFraming (library only, not yet a radioctld framing); the manual (PDF p. 1) gives UTF-16 but no byte order; little endian is used. Unverified.
 # Transmit: set-ptt (TX and RX) is declared; the rig actor's transmit gate stays closed by default and PTT is unverified on hardware.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "set-ptt", "read-signal", "transceive", "rit-xit", "identify", "send-cw", "receivers"]
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "set-ptt", "read-signal", "transceive", "rit-xit", "identify", "send-cw", "receivers", "levels"]
 
 [rig]
 id = "kenwood-ts-990s"
@@ -23,6 +23,13 @@ width = 24
 lowercase = true
 at_sign = true
 stop = "ky0"
+
+[levels]
+attenuator_db = []
+attenuator_any_up_to_db = 0
+preamp_steps = 0
+absent = ["af-gain", "rf-gain", "mic-gain", "monitor-level", "keyer-speed", "rf-power"]
+antenna_ports = 4
 
 [timing]
 timeout_ms = 200
@@ -72,6 +79,11 @@ code = "C"
 [[modes]]
 mode = "data"
 code = "D"
+
+[[facts]]
+key = "levels.*"
+provenance = { kind = "manual", reference = "Kenwood 'PC CONTROL COMMAND REFERENCE FOR THE TS-990S TRANSCEIVER', file TS-990S_PC_Control_Command_Reference.pdf (in /storage/manuals/kenwood/TS-990S), sha256 4d04e54fdcbf8f07e81da74105bfacf882e33aa5c01d1dd803c7876b548d829c: AN0 Antenna Selection, PDF p. 4: AN0p1p2p3p4; p1 0 main band, p2 1 to 4 = ANT1 to ANT4, p3 receive antenna, p4 drive out; 9 in p2 to p4 means no change on a set; read AN0;; no attenuator or preamp command was read for this model, so none is declared and the other levels are listed absent" }
+verified = { state = "manual-checked", reference = "TS-990S PC command reference, AN0, PDF p. 4" }
 
 [[facts]]
 key = "rig.*"
