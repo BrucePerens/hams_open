@@ -30,7 +30,7 @@ timeout = idle minutes, refreshed by every forwarded packet to `ham_prefix`) is 
 the daemon asks the members-only directory lookup (member certificate), checks the record is for that /60, and adds a WireGuard peer
 (`AllowedIPs` = the /60). A peer whose /60 has left the set (10 idle minutes) is removed. Unknown, suspended or stale answers create
 nothing and are not asked again for 60 s. At most `max_peers` (256) peers; the oldest idle one goes first. An `rf` link is refused.
-Not exercised on a real device or in the AREDN VM; the nft ruleset and `nft monitor` parsing are untested here.
+Run in the QEMU test image with real peers (`image/tools/ondemand_test.py`, see `image/README.md`). The set is polled once a second (`nft monitor` sends no event for an element a packet adds to a dynamic set), so a first packet waits at most a second for its peer. Memory limit: all `hams-node-ondemand` processes together stay under 8 MB RSS with 256 peers (measured about 2 MB).
 
 Adding a subpackage: create `pkg/<name>.mk` with its `define Package/<name>`, `/description`, `/conffiles` and `/install` blocks
 (copy `pkg/hams-node-report.mk`; the file name is the package name). Do not edit `Makefile`: it includes `pkg/*.mk` in sorted order
