@@ -12,7 +12,7 @@ from odoo.addons.user_websites.models.ham_gdpr_export_token import (
     TOKEN_EXPIRY_MINUTES,
     GdprExportTokenRejected,
 )
-from odoo.exceptions import AccessError
+from odoo.exceptions import AccessError, UserError
 from datetime import timedelta
 import json
 
@@ -159,6 +159,16 @@ class TestPrivacyGDPR(HamsHttpCase):
         self.assertTrue(record, "The minted token must exist as a real ham.gdpr.export.token row.")
         self.assertEqual(record.user_id, self.user_privacy)
         self.assertFalse(record.consumed)
+
+    def test_01a2_a_member_can_mint_only_a_few_export_tokens_an_hour(self):
+        # Tests [@ANCHOR: user_websites:COMM_create_for_current_user]
+        """Every click of the export link mints a row, and the member's own session can repeat it for ever: a cap per
+        member per hour keeps the table (and the daemon's Odoo calls) from being filled by one account."""
+        env_as_user = self.env(user=self.user_privacy)
+        for _ in range(token_model.MAX_TOKENS_PER_HOUR):
+            env_as_user["ham.gdpr.export.token"].create_for_current_user()
+        with self.assertRaises(UserError):
+            env_as_user["ham.gdpr.export.token"].create_for_current_user()
 
     def test_01b_export_token_is_single_use(self):
         # Tests [@ANCHOR: user_websites:COMM_gdpr_token_consume]
