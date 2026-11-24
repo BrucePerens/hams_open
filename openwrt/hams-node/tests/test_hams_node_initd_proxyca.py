@@ -76,7 +76,7 @@ class InitTests(unittest.TestCase):
         self.assertEqual(log, ["trigger hams_node_proxyca"])
 
     def test_only_a_private_lan_address_is_ever_listened_on(self):
-        for bad in ("0.0.0.0:8443", "[::]:8443", "8.8.8.8:8443", "203.0.113.5:8443", "192.168.1.1", "172.32.0.1:8443", ":8443", "127.0.0.1:8443"):
+        for bad in ("0.0.0.0:8443", "[::]:8443", "8.8.8.8:8443", "203.0.113.5:8443", "192.168.1.1", "172.32.0.1:8443", ":8443", "127.1.2.3:8443"):
             result, log = self.run_fn("start_service", proxy=bad)
             self.assertNotEqual(result.returncode, 0, bad)
             self.assertEqual(log, [], bad)
