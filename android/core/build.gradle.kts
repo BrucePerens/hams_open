@@ -33,6 +33,7 @@ sourceSets.main { kotlin.srcDir(generateBindings.map { bindingsDir }) }
 
 dependencies {
     implementation("org.json:json:20240303")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
     implementation("net.java.dev.jna:jna:5.14.0")
     testImplementation(kotlin("test"))
 }

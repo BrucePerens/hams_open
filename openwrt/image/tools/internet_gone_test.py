@@ -44,10 +44,14 @@ ip route add default via 10.0.2.2
 echo nameserver 10.0.2.3 > /etc/resolv.conf
 for i in 1 2 3 4 5 6; do
     apk update >/dev/null 2>&1
-    apk add bird2 bird2c unbound-daemon >/tmp/apk.log 2>&1 && break
+    apk add bird2 bird2c unbound-daemon ip-full kmod-ipsec6 kmod-crypto-hmac kmod-crypto-sha512 >/tmp/apk.log 2>&1 && break
     sleep 3
 done
 tail -n 3 /tmp/apk.log
+for i in 1 2 3 4 5 6; do apk add wireguard-tools kmod-wireguard >/dev/null 2>&1 && break; done
+modprobe ah6
+modprobe xfrm_user
+modprobe wireguard
 which bird birdc unbound
 sysctl -w net.ipv6.conf.all.disable_ipv6=0
 /etc/init.d/dnsmasq stop
@@ -62,15 +66,21 @@ uci set hams_node_bird.main.asn={asn}
 uci set hams_node_bird.main.prefix=2001:db8:ab00::/40
 uci set hams_node_bird.main.prefix60={p60}
 uci set hams_node_bird.main.serial={serial}
-uci add_list hams_node_bird.main.neighbor='{nasn},{nll},eth1'
+mkdir -p /etc/hams-node/rf.d
+echo sharedrfkey > /etc/hams-node/rf.d/{nasn}.secret
+uci add_list hams_node_bird.main.neighbor='{nasn},{nll},eth1,{np60}'
 uci commit hams_node_bird
 ip addr add {own}/128 dev lo
-# eth1 is the stock image\'s wan zone, which refuses BGP; on a node the hams-node-fw "hamrf" zone opens tcp 179 toward RF
+# eth1 is the stock image\'s wan zone, which refuses BGP; on a node the hams-node-fw "hamrf" zone opens AH, and tcp 179 via "open", toward RF
 nft insert rule inet fw4 input iifname eth1 tcp dport 179 accept
+nft insert rule inet fw4 input iifname eth1 meta l4proto ah accept
 /etc/init.d/bird stop
 /etc/init.d/hams-node-bird start
 sleep 2
 ps | grep "[b]ird"
+ip xfrm state | head -12
+ip xfrm policy | head -12
+lsmod | grep -E "ah6|xfrm_user"
 """
 ZONE_SETUP = """
 touch /etc/config/hams_node_zone
@@ -100,6 +110,40 @@ EOF
 hams-node-wg apply wgt0 internet /tmp/peers
 wg show wgt0 peers | grep -q "$bad" && echo bad=present || echo bad=absent
 wg show wgt0 peers | grep -q "$good" && echo good=present || echo good=absent
+"""
+
+
+# A speaker on the RF link that is not the neighbour: node B stops its real BIRD and runs this one at A. AUTH is a password line or empty.
+ROGUE = """
+/etc/init.d/hams-node-bird stop
+{auth}
+[ -s /tmp/rogue.pid ] && kill $(cat /tmp/rogue.pid)
+sleep 1
+cat > /tmp/rogue.conf <<'EOF'
+router id 9.9.9.9;
+protocol device {{
+}}
+protocol static {{
+    ipv6;
+    route 2001:db8:ab00:90::/60 unreachable;
+    route 2001:db8:ab00:20::/60 unreachable;
+}}
+protocol bgp rogue {{
+    local as 4200000002;
+    neighbor {alink}%eth1 as 4200000001;
+    connect retry time 10;
+    ipv6 {{
+        import none;
+        export all;
+    }};
+}}
+EOF
+bird -c /tmp/rogue.conf -s /tmp/rogue.ctl -P /tmp/rogue.pid
+"""
+ROGUE_CHECK = """
+birdc -s /var/run/hams-node-bird.ctl show protocols hams_rf1 | grep hams_rf1
+echo "route90=$(ip -6 route show 2001:db8:ab00:90::/60 | wc -l)"
+echo "route20=$(ip -6 route show 2001:db8:ab00:20::/60 | wc -l)"
 """
 
 
@@ -166,22 +210,42 @@ def main():
         for name, con in cons.items():
             other = "B" if name == "A" else "A"
             n = NODES[name]
-            setup[name] = sh(con, BIRD_SETUP.format(asn=n["asn"], p60=n["p60"], serial=n["serial"], nasn=NODES[other]["asn"], nll=ll[other],
+            setup[name] = sh(con, BIRD_SETUP.format(asn=n["asn"], p60=n["p60"], serial=n["serial"], nasn=NODES[other]["asn"], nll=ll[other], np60=NODES[other]["p60"],
                                       own=n["p60"].split("/")[0] + "1"), 60)
         # scenario A: the nodes route over RF with no route server
         time.sleep(30)
         res = sh(cons["A"], "birdc -s /var/run/hams-node-bird.ctl show protocols | grep hams_rf1", 30)
-        check("A: BGP session to B over RF is Established", "Established" in out(res), out(res) + " || " + out(setup["A"]))
+        check("A: BGP session to B over RF is Established", "Established" in out(res), out(res))
+        if "Established" not in out(res):
+            print(out(setup["A"]))
+            print("B:", out(sh(cons["B"], "birdc -s /var/run/hams-node-bird.ctl show protocols\nnetstat -lnt | grep 179\nip xfrm state | head -4\nps | grep \"[b]ird\"", 30)))
         res = sh(cons["A"], "ip -6 route show 2001:db8:ab00:20::/60", 20)
         check("A: route to B's /60 learned over RF", "eth1" in out(res), out(res))
         res = sh(cons["A"], "ping -6 -c 3 -W 3 -I 2001:db8:ab00:10::1 2001:db8:ab00:20::1\necho rc=$?", 40)
         check("A: ping B across the RF link, internet cut", "rc=0" in out(res), out(res))
+        # a rogue speaker on the RF link cannot inject a route: without the key its session never comes up; with the key it is held to its own /60
+        sh(cons["B"], ROGUE.format(alink=ll["A"], auth="ip xfrm policy flush\nip xfrm state flush"), 30)
+        sh(cons["A"], "/etc/init.d/hams-node-bird restart", 30)  # drops the session B's real BIRD held, as its hold time would
+        time.sleep(45)
+        res = sh(cons["A"], ROGUE_CHECK, 30)
+        check("rogue speaker without the key: no session, no injected route", "Established" not in out(res) and "route90=0" in out(res) and "route20=0" in out(res), out(res))
+        rogue2 = sh(cons["B"], ROGUE.format(alink=ll["A"], auth="hams-node-bird ah apply") + "\nsleep 2\nbirdc -s /tmp/rogue.ctl show protocols\nip xfrm state | head -3", 30)
+        sh(cons["A"], "/etc/init.d/hams-node-bird restart", 30)
+        time.sleep(45)
+        res = sh(cons["A"], ROGUE_CHECK, 30)
+        ok = "Established" in out(res) and "route90=0" in out(res) and "route20=1" in out(res)
+        check("speaker with the key is held to its own /60: 90::/60 is refused, its /60 accepted", ok, out(res))
+        if not ok:
+            print("rogue2 on B:", out(rogue2))
         # .ham from the cached zone
         res = sh(cons["A"], ZONE_SETUP, 60)
         check("A: .ham name resolves from the cached zone, anycast unreachable", "2001:db8:ab00:20::1" in out(res), out(res))
         # a deprecation-list entry (state the node already holds; no hams.com round trip) is honoured with the internet cut
         res = sh(cons["A"], DEPRECATION_CHECK, 60)
-        check("A: a deprecated key is not added as a WireGuard peer, a good one is", "bad=absent" in out(res) and "good=present" in out(res), out(res))
+        if "wg: not found" in out(res):
+            print("SKIP A: a deprecated key is not added as a WireGuard peer (wireguard-tools could not be installed in this image)")
+        else:
+            check("A: a deprecated key is not added as a WireGuard peer, a good one is", "bad=absent" in out(res) and "good=present" in out(res), out(res))
         # clock: sources are scripts printing an epoch; the status file says what the node decided
         for scen, srcs, want in (
             ("B (no GPS): the NTP source over the ham network is used", [("hamntp", "echo $(( $(date +%s) + 3 )) 0.1"), ("gps", "exit 1")], "source=hamntp"),
