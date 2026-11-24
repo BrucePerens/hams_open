@@ -912,7 +912,7 @@ class DaemonKeyRegistry(models.Model):
 
         if self.user_id.id == self.env.ref(
             "base.user_root"
-        ).id or self.user_id.has_group("base.group_system"):
+        ).id or self.user_id._has_group("base.group_system"):
             msg = _(
                 "Security Alert: The __system__ user ID cannot be used "
                 "to provision a key. This account is forbidden from "
