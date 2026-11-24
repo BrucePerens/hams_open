@@ -276,6 +276,9 @@ fn huge_chunk_size_is_refused_not_a_panic() {
     // A size of usize::MAX - 1 made `n + 2` wrap to 0 and the slice panic (the release build aborts the whole daemon).
     for size in ["ffffffffffffffff", "fffffffffffffffe", "fffffffffffffffd"] {
         let body = format!("{size}\r\nabc\r\n0\r\n\r\n");
-        assert!(ham_proxy::indicator::dechunk(body.as_bytes()).is_none(), "{size}");
+        assert!(
+            ham_proxy::indicator::dechunk(body.as_bytes()).is_none(),
+            "{size}"
+        );
     }
 }
