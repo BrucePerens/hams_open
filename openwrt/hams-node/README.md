@@ -347,3 +347,24 @@ Jool apks, `hams-node`, `hams-node-dns`, `hams-node-web`, `ham-proxy`; `hams_nod
 NULL-SHA256:@SECLEVEL=0`) a request for `gw.ham:8444` returned the page with the integrity banner, `example.org` got no reply (refused before any upstream
 connection), a client offering only encrypting suites got a handshake failure, and the station-ID log held `W1AW -> gw.ham NULL-SHA256`. The node's dnsmasq
 answered `foo.ham` with 10.0.2.15; AREDN's own services kept running.
+
+`ham-proxy` is the static binary: `openwrt/ham-proxy/Makefile` builds it with the host's cargo (`--features vendored`) for the node's musl Rust target using the
+SDK's cross compiler (`make package/ham-proxy/compile RUST_TARGET=x86_64-unknown-linux-musl`); the SDK has no rust, and mips needs a nightly `build-std`
+toolchain. The x86-64 musl build was measured earlier (6.1 MB, 4.5 MB RSS). The `ham-proxy` Makefile itself has not been run in an SDK yet; `ham_proxy`
+and the shell script are tested (`tests/test_hams_node_web.py`, `daemons/ham_proxy/tests/resolve.rs`).
+
+## IPv4 pool for AREDN clients (`hams-node-pool`, separate package)
+
+Beyond web pages: a small IPv4 pool on the AREDN side that maps chosen `.ham` names to pool addresses (`/etc/config/hams_node_pool`, off by default).
+`hams-node-pool add NAME.ham IP6` takes the next free address of `pool4` (a /24 to /30 of the node's private space) and records it in
+`/etc/hams-node/pool.map`; `apply` (the init script at boot) adds the address to `lo` (the node answers ARP for it), adds a Jool SIIT explicit address
+mapping to the SIIT instance (`jool_siit -i INSTANCE eamt add IP4 IP6`; the client's own source address maps through the domain's /96 as before), has
+dnsmasq answer the name with it (`address=/NAME/IP4`, a longer match than the web gateway's `address=/ham/`), and installs an nft table `inet hams_pool`:
+only TCP ports listed in `port` (default 80; unencrypted ports only, because the answers go onto RF, Part 97) from the configured AREDN-side interface
+reach a pool address, everything else to the pool is dropped and counted. Targets must start with `net_prefix` (the member /40), so the pool cannot lead to
+the member's LAN or the mesh; names must end in `.ham`. `clear` (init stop) removes mapping, addresses, table and dnsmasq line.
+
+Tested (`tests/test_hams_node_pool.py`: allocation, exhaustion, refusals, output with recording stand-ins) and run on the stock AREDN 4.26.10.0 x86-64 VM with the
+real Jool, nft and dnsmasq: `apply` showed the mapping in `jool_siit eamt display`, the `hams_pool` table, `gw.ham` answered with the pool address and other
+`.ham` names with the gateway's; `/etc/init.d/hams-node-pool stop` removed all of it. Not tested: packets through the pool (a client behind the node and a
+remote target over WireGuard were not available in the VM).
