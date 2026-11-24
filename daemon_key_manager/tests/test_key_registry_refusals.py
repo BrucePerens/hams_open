@@ -89,16 +89,29 @@ class TestKeyRegistryRefusals(RealTransactionCase):
         with self.assertRaisesRegex(UserError, "__system__ user ID cannot be used"):
             self.row.with_user(self.manager.id)._assert_account_may_hold_key()
 
-    def test_a_service_account_registers_its_own_daemon(self):
+    def test_a_non_internal_service_account_registers_its_own_daemon(self):
         # Tests [@ANCHOR: COMM_register_daemon_api]
         # Tests [@ANCHOR: COMM_rotation_safety_archived_user]
-        # A service account is not an internal user, and Odoo 18 refuses user.has_group() on another user for such a caller
-        # (the upgrade rehearsal's register_daemon via with_user(<reporter uid>) hit it), so the system-group check must not use it.
+        # Odoo 18 refuses user.has_group() on another user for a caller that is not an internal user (the upgrade rehearsal's
+        # register_daemon via with_user(<reporter uid>) hit it), so the system-group check must not use has_group().
         path = "/opt/hams/etc/keys/refusal_self.env"
-        self.addCleanup(lambda: os.path.lexists(path) and os.remove(path))
-        self.addCleanup(lambda: self.model.with_user(self.manager.id).search([("name", "=", "Refusal Self")]).unlink())
-        self.model.with_user(self.service.id).register_daemon("Refusal Self", self.service.login, path)
-        self.assertTrue(os.path.exists(path))
+        outsider = self.env["res.users"].create(
+            {
+                "name": "Refusal Outsider",
+                "login": "refusal_outsider",
+                "is_service_account": True,
+                "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])],
+            }
+        )
+        self.assertFalse(outsider._has_group("base.group_user"))
+        try:
+            self.model.with_user(outsider.id).register_daemon("Refusal Self", outsider.login, path)
+            self.assertTrue(os.path.exists(path))
+        finally:
+            self.model.with_user(self.manager.id).search([("name", "=", "Refusal Self")]).unlink()
+            outsider.unlink()
+            if os.path.lexists(path):
+                os.remove(path)
 
     def test_a_key_file_is_refused_outside_the_key_directory(self):
         # Tests [@ANCHOR: COMM_write_secure_env_file_logic]
