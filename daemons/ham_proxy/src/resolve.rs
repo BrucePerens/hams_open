@@ -91,7 +91,7 @@ pub fn parse_aaaa(p: &[u8]) -> Vec<Ipv6Addr> {
 }
 
 // [@ANCHOR: ham_proxy_address_allowed]
-/// Whether the gateway may connect to `ip`: not loopback, unspecified, private, link-local, unique-local, multicast or an IPv4-mapped address.
+/// Whether the gateway may connect to `ip`: not loopback, unspecified, private, link-local, unique-local, multicast, reserved, an IPv4-mapped address or one that carries such an IPv4 address (NAT64, 6to4, IPv4-compatible).
 pub fn address_allowed(ip: &IpAddr) -> bool {
     match ip {
         IpAddr::V4(a) => {
@@ -102,10 +102,26 @@ pub fn address_allowed(ip: &IpAddr) -> bool {
                 || a.is_multicast()
                 || a.is_broadcast()
                 || a.octets()[0] == 0
+                || a.octets()[0] >= 240
+                || (a.octets()[0] == 192 && a.octets()[1] == 0 && a.octets()[2] == 0)
+                || (a.octets()[0] == 198 && a.octets()[1] & 0xFE == 18)
                 || (a.octets()[0] == 100 && a.octets()[1] & 0xC0 == 64))
         }
         IpAddr::V6(a) => {
             let s = a.segments();
+            // An IPv4 address carried inside the IPv6 one (NAT64 64:ff9b::/96, 6to4 2002::/16, IPv4-compatible ::a.b.c.d) gets
+            // the IPv4 rules, so a name cannot reach a private host through a translator.
+            let embedded =
+                if s[..6] == [0x64, 0xff9b, 0, 0, 0, 0] || (s[..6] == [0; 6] && s[6] != 0) {
+                    Some([(s[6] >> 8) as u8, s[6] as u8, (s[7] >> 8) as u8, s[7] as u8])
+                } else if s[0] == 0x2002 {
+                    Some([(s[1] >> 8) as u8, s[1] as u8, (s[2] >> 8) as u8, s[2] as u8])
+                } else {
+                    None
+                };
+            if embedded.is_some_and(|o| !address_allowed(&IpAddr::V4(o.into()))) {
+                return false;
+            }
             !(a.is_loopback()
                 || a.is_unspecified()
                 || a.is_multicast()
