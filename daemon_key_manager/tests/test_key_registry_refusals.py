@@ -89,6 +89,20 @@ class TestKeyRegistryRefusals(RealTransactionCase):
         with self.assertRaisesRegex(UserError, "__system__ user ID cannot be used"):
             self.row.with_user(self.manager.id)._assert_account_may_hold_key()
 
+    def test_the_system_group_check_works_for_a_caller_that_is_not_an_internal_user(self):
+        # Tests [@ANCHOR: COMM_rotation_safety_archived_user]
+        # Odoo 18 refuses user.has_group() on another user for a non-internal caller (the upgrade rehearsal's
+        # register_daemon via with_user(<service uid>) hit it), so the check must not use has_group().
+        portal = self.env.ref("base.group_portal")
+        outsider = self.env["res.users"].create(
+            {"name": "Refusal Outsider", "login": "refusal_outsider", "group_ids": [(6, 0, [portal.id])]}
+        )
+        self.addCleanup(outsider.unlink)
+        self.row.with_user(outsider.id)._assert_account_may_hold_key()
+        self.service.group_ids = [(4, self.env.ref("base.group_system").id)]
+        with self.assertRaisesRegex(UserError, "__system__ user ID cannot be used"):
+            self.row.with_user(outsider.id)._assert_account_may_hold_key()
+
     def test_a_key_file_is_refused_outside_the_key_directory(self):
         # Tests [@ANCHOR: COMM_write_secure_env_file_logic]
         outside = "/opt/hams/etc/refusal_outside.env"
