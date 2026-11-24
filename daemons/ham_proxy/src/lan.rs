@@ -181,22 +181,27 @@ pub fn upstream_head(head: &str, t: &Target, path: &str) -> Vec<u8> {
     };
     let mut lines = vec![format!("{method} {path} HTTP/1.1"), format!("Host: {host}")];
     for l in head.split("\r\n").skip(1) {
-        let k = l.to_ascii_lowercase();
-        if [
-            "host:",
-            "connection:",
-            "proxy-",
-            "x-ham-",
-            "accept-encoding:",
-        ]
-        .iter()
-        .any(|p| k.starts_with(p))
+        // The name is what is left of the colon with blanks removed: `Host : x` is still a Host header to a lenient site.
+        let Some((name, _)) = l.split_once(':') else {
+            continue; // blank line, folded continuation or junk
+        };
+        let k = name.trim().to_ascii_lowercase();
+        // No body is forwarded, so a length or encoding header would only leave the site waiting for one.
+        if name != name.trim_start()
+            || [
+                "host",
+                "connection",
+                "accept-encoding",
+                "content-length",
+                "transfer-encoding",
+            ]
+            .contains(&k.as_str())
+            || k.starts_with("proxy-")
+            || k.starts_with("x-ham-")
         {
             continue;
         }
-        if !l.is_empty() {
-            lines.push(l.to_string());
-        }
+        lines.push(l.to_string());
     }
     lines.push("Connection: close".to_string());
     let mut out = lines.join("\r\n").into_bytes();
