@@ -185,6 +185,8 @@ class CloudflareTunnel(models.Model):
                 rule["hostname"] = route.hostname
             if route.path:
                 rule["path"] = route.path
+            if route.http_host_header:
+                rule["originRequest"] = {"httpHostHeader": route.http_host_header}
             ingress.append(rule)
 
         # Add SSH route. cloudflared runs on the same host as the SSH daemon and Odoo HTTP server it

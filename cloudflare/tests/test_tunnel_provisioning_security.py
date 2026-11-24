@@ -496,6 +496,27 @@ class TestTunnelProvisioningSecurity(HamsTransactionCase):
         tunnel.action_push_configuration()
         self.assertEqual(mock_push.call_args[0][3]["config"]["ingress"], planned)
 
+    def test_a_route_with_a_host_header_pushes_it_as_origin_request(self):
+        # Tests [@ANCHOR: cloudflare:COMM_tunnel_build_ingress]
+        tunnel = self._make_push_test_tunnel("Host Header", "https://host-header-test.example.com")
+        self.env["cloudflare.tunnel.route"].create(
+            {
+                "tunnel_id": tunnel.id,
+                "hostname": "origin.host-header-test.example.com",
+                "service_url": "http://localhost:8085",  # burn-ignore-cloudflared-ingress
+                "http_host_header": "host-header-test.example.com",
+                "sequence": 1,
+            }
+        )
+        self.assertIn(
+            {
+                "hostname": "origin.host-header-test.example.com",
+                "service": "http://localhost:8085",  # burn-ignore-cloudflared-ingress
+                "originRequest": {"httpHostHeader": "host-header-test.example.com"},
+            },
+            tunnel._build_ingress(),
+        )
+
     def test_a_push_is_refused_when_an_ingress_problem_is_reported(self):
         # Tests [@ANCHOR: cloudflare:COMM_tunnel_ingress_problems]
         tunnel = self._make_push_test_tunnel("Problems", "https://problems-test.example.com")
