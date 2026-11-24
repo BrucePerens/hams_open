@@ -251,7 +251,7 @@ certificate"), whose ECDSA P-256 key is `ssh -i hams-member-certificate.pem root
 signed router configuration lists the owner's active exported keys (`ssh_keys`); `hams-node-enroll` stores them in `STATE/ssh_keys` and
 `hams-node-ssh apply` keeps them in a marked block of `/etc/dropbear/authorized_keys` (other lines stay). A certificate on the signed deprecation
 list (`cert:ISSUER:SERIAL`) is left out at once (`hams-node-status` re-runs `hams-node-ssh apply`), an expired or revoked one drops out at the next
-configuration fetch, and with no key left password login is restored. The browser's own key is non-extractable and cannot be used.
+configuration fetch. When the last key goes, SSH refuses every login and password login STAYS off (recovery is a physical reset, then enrol again). The browser's own key is non-extractable and cannot be used.
 
 ## Key rotation (`hams-node-key`, in the hams-node-enroll package)
 
