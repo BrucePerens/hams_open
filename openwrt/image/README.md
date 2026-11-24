@@ -49,3 +49,10 @@ is refused; the first packets from the LAN client to a member /60 make the peer 
 (1 minute) removes the peer and new traffic makes it again; 256 more members fill the table, which stays at 256; the RSS of all daemon processes stays under 8 MB. About 10 minutes:
 
     agent_procs.py run owrt-ondemand --timeout 2400 --mem-max 4G -- python3 -I -u openwrt/image/tools/ondemand_test.py WORKDIR/stock-25.12.5.img
+
+`tools/siit_netns_test.py IMAGE` (stock image, QEMU, no root; the guest needs the host's internet once for `kmod-jool-netfilter`, `jool-tools-netfilter`, `ip-full`, `tcpdump`, `socat`, `ethtool`):
+the stateless SIIT round trip with real Jool. The real `hams-node-siit render` + `apply` load the instance from a registry export (`ham.ipv6.siit.domain._gateway_config()` format);
+namespace `six` is an IPv6 host inside the mesh /96, namespace `four` the AREDN host 10.1.2.3. Checks: ICMP echo, TCP (60 kB) and UDP both ways with identical payloads; tcpdump -vv
+on both hosts (offload off) shows every packet with a correct checksum; an address of another domain and 64:ff9b::/96 are not translated. About 3 minutes (passed 2026-11-24):
+
+    agent_procs.py run owrt-siit --timeout 1500 --mem-max 4G -- python3 -I -u openwrt/image/tools/siit_netns_test.py WORKDIR/stock-25.12.5.img
