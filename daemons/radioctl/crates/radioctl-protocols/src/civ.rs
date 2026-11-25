@@ -986,9 +986,11 @@ impl ProtocolEngine for CivEngine {
                 let bcd = self.freq_bytes(*hz)?;
                 self.command(0x05, &bcd, ack)
             }
-            Op::GetMode if self.has_data_modes() => {
-                self.command(0x26, &[self.mode_selector()], ReplyKind::Observation(Field::Mode))
-            }
+            Op::GetMode if self.has_data_modes() => self.command(
+                0x26,
+                &[self.mode_selector()],
+                ReplyKind::Observation(Field::Mode),
+            ),
             Op::GetMode => self.command(0x04, &[], ReplyKind::Observation(Field::Mode)),
             Op::SetMode(mode) => {
                 let code = self
@@ -1003,7 +1005,11 @@ impl ProtocolEngine for CivEngine {
                 if self.has_data_modes() {
                     let (_, data) = base_mode(*mode);
                     let selector = self.mode_selector();
-                    self.command(0x26, &[selector, code, u8::from(data), self.filter_number], ack)
+                    self.command(
+                        0x26,
+                        &[selector, code, u8::from(data), self.filter_number],
+                        ack,
+                    )
                 } else {
                     self.command(0x06, &[code], ack)
                 }
@@ -1128,11 +1134,12 @@ impl CivEngine {
             (0x01 | 0x04, [code, rest @ ..]) => {
                 self.decode_mode(*code, false, rest.first().copied())
             }
-            (0x26, [selector, code, rest @ ..]) if *selector == self.mode_selector() => self.decode_mode(
-                *code,
-                rest.first().is_some_and(|d| *d != 0),
-                rest.get(1).copied(),
-            ),
+            (0x26, [selector, code, rest @ ..]) if *selector == self.mode_selector() => self
+                .decode_mode(
+                    *code,
+                    rest.first().is_some_and(|d| *d != 0),
+                    rest.get(1).copied(),
+                ),
             (0x0F, [byte]) => {
                 let asked = self.asked_0f.take();
                 let is_shift = matches!(*byte, 0x10..=0x13);

@@ -49,9 +49,13 @@ fn mode_commands_follow_the_selected_band_on_the_ic_7760() {
     let mut engine = engine_for(&desc).expect("engine");
     let head = [0xFE, 0xFE, 0xB2, 0xE0];
     let frame = |body: &[u8]| [&head[..], body, &[0xFD]].concat();
-    let get = |e: &mut Box<dyn radioctl_core::engine::ProtocolEngine>| e.encode(&Op::GetMode).expect("get").bytes;
+    let get = |e: &mut Box<dyn radioctl_core::engine::ProtocolEngine>| {
+        e.encode(&Op::GetMode).expect("get").bytes
+    };
     assert_eq!(get(&mut engine), frame(&[0x26, 0x00]));
-    engine.encode(&Op::SelectReceiver(Receiver::Sub)).expect("select");
+    engine
+        .encode(&Op::SelectReceiver(Receiver::Sub))
+        .expect("select");
     assert_eq!(get(&mut engine), frame(&[0x26, 0x01]));
     assert_eq!(
         engine.encode(&Op::SetMode(Mode::Data)).expect("set").bytes,
@@ -68,6 +72,8 @@ fn mode_commands_follow_the_selected_band_on_the_ic_7760() {
         .feed(&other, Duration::from_secs(1))
         .iter()
         .any(|i| matches!(i, Inbound::Observation(Observation::Mode(_)))));
-    engine.encode(&Op::SelectReceiver(Receiver::Main)).expect("select");
+    engine
+        .encode(&Op::SelectReceiver(Receiver::Main))
+        .expect("select");
     assert_eq!(get(&mut engine), frame(&[0x26, 0x00]));
 }
