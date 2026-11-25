@@ -579,7 +579,9 @@ class ExceptionFingerprint(models.Model):
             }
         )
         record.ticket_id = ticket.id
-        if not quiet:
+        # A page needs somebody to page: a ticket nobody is on duty for (it stays unassigned) pages no one, so it must not
+        # open the quiet window and silence the next ticket, which may find an admin on duty.
+        if not quiet and ticket.user_id:
             record.notified_at = now
 
     # [@ANCHOR: hams_helpdesk:exc_announce_reopen]
