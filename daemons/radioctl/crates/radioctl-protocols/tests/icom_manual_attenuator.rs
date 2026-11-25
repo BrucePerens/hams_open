@@ -36,8 +36,6 @@ fn the_ic_7610_and_ic_7760_offer_every_3_db_step_to_45_db() {
             let bcd = (db / 10) << 4 | (db % 10);
             assert_eq!(request.bytes[4..], [0x11, bcd, 0xFD], "{id} {db} dB");
         }
-        assert!(engine
-            .encode(&Op::SetLevel(Level::Attenuator, 48))
-            .is_err());
+        assert!(engine.encode(&Op::SetLevel(Level::Attenuator, 48)).is_err());
     }
 }
