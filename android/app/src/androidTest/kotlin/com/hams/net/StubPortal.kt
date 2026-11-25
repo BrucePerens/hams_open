@@ -9,6 +9,8 @@ class StubPortal(private val peerPublicKey: String, private val peerEndpoint: St
     private val server = ServerSocket(0, 8, InetAddress.getByName("127.0.0.1"))
     val base get() = "http://127.0.0.1:${server.localPort}"
     val seen = java.util.concurrent.CopyOnWriteArrayList<String>()
+    /** Every request line and body received, so a test can prove a secret was never sent. */
+    val raw = java.util.concurrent.CopyOnWriteArrayList<String>()
     @Volatile var enrolledKey: String? = null
     private var polls = 0
 
@@ -32,6 +34,7 @@ class StubPortal(private val peerPublicKey: String, private val peerEndpoint: St
         val path = head.lines()[0].split(" ")[1]
         val length = Regex("(?i)content-length: (\\d+)").find(head)?.groupValues?.get(1)?.toInt() ?: 0
         val body = String(input.readNBytes(length))
+        raw += head.toString() + body
         seen += path + (JSONObject(body.ifEmpty { "{}" }).optJSONObject("params")?.optString("query")?.let { " " + it } ?: "")
         val params = JSONObject(body.ifEmpty { "{}" }).optJSONObject("params") ?: JSONObject()
         val result = when (path) {
