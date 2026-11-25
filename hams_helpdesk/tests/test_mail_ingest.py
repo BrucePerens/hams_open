@@ -576,6 +576,28 @@ class TestMailIngest(HamsTransactionCase):
         self.assertEqual(spoofed.subtype_id, self.env.ref("mail.mt_note"))
         self.assertIn("Held email reply", spoofed.body)
 
+    def test_17a_a_spoofed_new_ticket_is_not_filed_under_the_member(self):
+        # Tests [@ANCHOR: hams_helpdesk:COMM_helpdesk_message_new_spoofed_author]
+        member = self.env["res.users"].create({"name": "spoof_new", "login": "spoof_new", "email": "spoof_new@example.org"})
+        self._ingest(raw_message("support@hams.com", "Genuine new ticket", from_addr="spoof_new@example.org", html=False, headers=SES_PASS_HEADERS))
+        control = self.env["hams_helpdesk.ticket"].search([("name", "=", "Genuine new ticket")], order="id desc", limit=1)
+        self.assertEqual(control.partner_id, member.partner_id, "control: an authenticated mail files under the member")
+        self._ingest(
+            raw_message(
+                "support@hams.com",
+                "Forged new ticket",
+                from_addr="spoof_new@example.org",
+                html=False,
+                headers="Authentication-Results: amazonses.com; spf=fail smtp.mailfrom=evil.example.net; dkim=none; dmarc=none\r\n",
+            )
+        )
+        forged = self.env["hams_helpdesk.ticket"].search([("name", "=", "Forged new ticket")], order="id desc", limit=1)
+        self.assertTrue(forged, "kept for staff, never dropped")
+        self.assertFalse(forged.partner_id, "a failed authentication never files the ticket under the member")
+        first = forged.message_ids.filtered(lambda m: m.message_type == "email")
+        self.assertTrue(first)
+        self.assertFalse(first.mapped("author_id"), "nor posts the first message in the member's name")
+
     def test_17b_a_member_reply_reopens_a_resolved_ticket_without_a_status_mail(self):
         # Tests [@ANCHOR: hams_helpdesk:reopen_on_customer_reply]
         _member, ticket, original_id = self._member_ticket_and_original_id("reopen_member", "Reopen ticket")

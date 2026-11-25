@@ -24,7 +24,7 @@ from markupsafe import Markup
 
 from .exception_fingerprint import STALE_AFTER
 from .exception_scrub import scrub_text
-from .inbound_spam_filter import inbound_spam_reasons
+from .inbound_spam_filter import failed_sender_authentication, inbound_spam_reasons
 from .link_defang import DEFANG_WARNING_TEXT, defang_html
 from .mail_thread_untrusted import stash_for
 from . import untrusted_text as ut
@@ -1539,6 +1539,14 @@ class HelpdeskTicket(models.Model):
         # [@ANCHOR: COMM_helpdesk_message_new]
         values = dict(custom_values or {})
         author_id = msg_dict.get("author_id")
+        parked = stash_for(self.env).get(msg_dict.get("message_id") or "") or {}
+        if author_id and failed_sender_authentication(parked.get("mail_signals")):
+            # [@ANCHOR: hams_helpdesk:COMM_helpdesk_message_new_spoofed_author]
+            # The From line failed SES authentication: it may name a member who never wrote. Do not file the ticket under
+            # that member's partner (their /my/tickets, status mails) nor post its first message in their name; the
+            # address stays in email_from for staff. Same rule as a spoofed reply (_inbound_reply_hold_reason).
+            author_id = False
+            msg_dict["author_id"] = False  # the same dict is posted as the ticket's first message
         if author_id and not values.get("partner_id"):
             values["partner_id"] = author_id
 
@@ -1550,7 +1558,6 @@ class HelpdeskTicket(models.Model):
         # adapter: a flagged message still becomes a ticket (never a silent
         # drop), it just starts in the "spam" quarantine stage, which a
         # human can move back to "new" to recover a false positive.
-        parked = stash_for(self.env).get(msg_dict.get("message_id") or "") or {}
         parked["new_ticket"] = True  # the first message of a new ticket is not a reply (UntrustedMixin.message_post)
         spam_reasons = inbound_spam_reasons(
             subject=msg_dict.get("subject") or "",
