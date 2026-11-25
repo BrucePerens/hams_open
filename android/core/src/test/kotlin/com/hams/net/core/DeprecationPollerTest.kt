@@ -21,8 +21,12 @@ class DeprecationPollerTest {
         override fun onEnabled() { enabled++ }
     }
 
+    /** A status the scripted server signs when asked, echoing the nonce of that request. */
     private fun status(state: String, seq: Long, reason: String = "") =
-        signer.envelope(JSONObject().put("kind", "status").put("state", state).put("reason", reason).put("list_seq", seq))
+        ECHO + JSONObject().put("kind", "status").put("state", state).put("reason", reason).put("list_seq", seq)
+
+    private fun recorded(state: String, seq: Long, nonce: String?) =
+        signer.envelope(JSONObject().put("kind", "status").put("state", state).put("list_seq", seq).apply { if (nonce != null) put("nonce", nonce) })
 
     private fun entry(key: String) = JSONObject().put("key", key).put("prefixes", JSONArray().put("2001:db8:5::/60"))
 
@@ -32,11 +36,15 @@ class DeprecationPollerTest {
     private fun delta(from: Long, seq: Long, add: String) =
         signer.envelope(JSONObject().put("kind", "delta").put("from", from).put("seq", seq).put("add", JSONArray().put(entry(add))))
 
-    private class Server(val replies: Map<String, MutableList<String?>>) {
+    private inner class Server(val replies: Map<String, MutableList<String?>>) {
         val asked = mutableListOf<String>()
+        val nonces = mutableListOf<String>()
         fun post(path: String, body: String): String? {
-            asked += path + " " + JSONObject(body).getJSONObject("params").optLong("have_seq", -1)
-            return replies[path]?.removeFirstOrNull()
+            val params = JSONObject(body).getJSONObject("params")
+            asked += path + " " + params.optLong("have_seq", -1)
+            if (path == "/api/ipv6/status") nonces += params.optString("nonce")
+            val reply = replies[path]?.removeFirstOrNull() ?: return null
+            return if (reply.startsWith(ECHO)) signer.envelope(JSONObject(reply.removePrefix(ECHO)).put("nonce", params.optString("nonce"))) else reply
         }
     }
 
@@ -100,5 +108,26 @@ class DeprecationPollerTest {
         assertEquals(0, sink.enabled)
         p.poll()
         assertEquals(1, sink.enabled)
+    }
+
+    // A recorded signed status that echoes another request's nonce (or none) is no answer to this poll.
+    @Test
+    fun aRecordedSignedStatusForAnotherRequestIsIgnoredAndEachPollSendsAFreshNonce() {
+        val sink = Sink()
+        val server = Server(mapOf("/api/ipv6/status" to mutableListOf(
+            recorded("disabled", 4, "00000000000000000000000000000000"), recorded("disabled", 4, null), status("disabled", 4, "exploited"),
+        )))
+        val p = poller(server, sink)
+        assertFalse(p.poll())
+        assertFalse(p.poll())
+        assertTrue(sink.disabled.isEmpty())
+        assertTrue(p.poll())
+        assertEquals(listOf("exploited"), sink.disabled)
+        assertTrue(server.nonces.all { it.length == 32 })
+        assertEquals(3, server.nonces.toSet().size)
+    }
+
+    private companion object {
+        const val ECHO = "echo:"
     }
 }
