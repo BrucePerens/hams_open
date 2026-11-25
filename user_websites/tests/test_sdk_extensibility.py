@@ -211,7 +211,7 @@ class TestSDKExtensibility(RealTransactionCase):
         page = (
             self.env["website.page"]
             .with_user(self.user)
-            .create({"url": "/orphan", "name": "Orphan Page", "type": "qweb"})
+            .create({"url": f"/{self.user.website_slug}/orphan", "name": "Orphan Page", "type": "qweb"})
         )
         self.assertEqual(
             page.owner_user_id.id, self.user.id, "Ownership should be auto-assigned"
