@@ -155,6 +155,29 @@ class EnrollTests(unittest.TestCase):
         self.assertIn("enroll enroll", h.calls.read_text())
         self.assertEqual(h.status()["code"], "ABCD-EFGH")
 
+    def test_enroll_start_refused_while_enrolled(self):
+        h = Harness(self)
+        (h.state / "device_token").write_text(SECRET)
+        out = h.call("enroll_start")
+        self.assertEqual(json.loads(out.stdout)["started"], False)
+        self.assertNotIn("enroll enroll", h.calls.read_text() if h.calls.exists() else "")
+
+    def test_enroll_start_refused_while_one_is_running(self):
+        h = Harness(self)
+        pidfile = pathlib.Path(str(h.enroll_out) + ".pid")
+        pidfile.write_text("%d\n" % os.getpid())
+        h.enroll_out.write_text("keep me\n")
+        out = h.call("enroll_start")
+        self.assertEqual(json.loads(out.stdout)["started"], False)
+        self.assertNotIn("enroll enroll", h.calls.read_text() if h.calls.exists() else "")
+        self.assertEqual(h.enroll_out.read_text(), "keep me\n")
+
+    def test_stale_pidfile_does_not_block(self):
+        h = Harness(self)
+        pathlib.Path(str(h.enroll_out) + ".pid").write_text("999999999\n")
+        out = h.call("enroll_start")
+        self.assertEqual(json.loads(out.stdout)["started"], True)
+
     def test_code_hidden_once_enrolled(self):
         h = Harness(self)
         h.enroll_out.write_text("On hams.com open x and enter the code: ABCD-EFGH\n")
