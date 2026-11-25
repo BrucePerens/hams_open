@@ -54,9 +54,13 @@ pub enum Mode {
     SamL,
     /// Synchronous AM, upper sideband only (Hamlib SAH).
     SamU,
+    /// PSK (Icom code 12): the radio's own PSK mode, with its PSK decoder; the Icom HF models only.
+    Psk,
+    /// PSK, reverse sideband (Icom code 13).
+    PskR,
 }
 
-const MODE_NAMES: [(Mode, &str); 15] = [
+const MODE_NAMES: [(Mode, &str); 17] = [
     (Mode::Lsb, "lsb"),
     (Mode::Usb, "usb"),
     (Mode::Am, "am"),
@@ -72,6 +76,8 @@ const MODE_NAMES: [(Mode, &str); 15] = [
     (Mode::Sam, "sam"),
     (Mode::SamL, "sam-l"),
     (Mode::SamU, "sam-u"),
+    (Mode::Psk, "psk"),
+    (Mode::PskR, "psk-r"),
 ];
 
 impl Mode {
