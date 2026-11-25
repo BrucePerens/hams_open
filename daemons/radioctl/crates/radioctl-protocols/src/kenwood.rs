@@ -268,6 +268,15 @@ impl KenwoodEngine {
         }
     }
 
+    /// The largest `ML` value: 9 in the TS-590S, TS-480 and TS-2000 guides, 20 on the TS-590SG
+    /// (ID 23; TS-590S/SG guide, `ML`: 001 ~ 009 (TS-590S), 001 ~ 020 (TS-590SG)).
+    fn monitor_max(&self) -> u16 {
+        match self.desc.kenwood.as_ref().map(|k| k.model_id) {
+            Some(23) => 20,
+            _ => 9,
+        }
+    }
+
     // [@ANCHOR: radioctl_kenwood_engine_tone_chart]
     /// The tone chart of this model, or `None` where no Kenwood guide with a chart has been
     /// read: only the TS-590S (ID 21) has one.
@@ -538,7 +547,9 @@ impl KenwoodEngine {
                 .zip(parse_digits(digits))
                 .and_then(|(chart, n)| chart.get(usize::try_from(n).ok()?))
                 .map(|tenths| Observation::CtcssTone(*tenths)),
-            (Some(name), Some(digits)) => decode_level(name, digits, self.dialect),
+            (Some(name), Some(digits)) => {
+                decode_level(name, digits, self.dialect, self.monitor_max())
+            }
             _ => None,
         };
         vec![match observation {
@@ -809,7 +820,12 @@ fn level_wire(level: Level, dialect: KenwoodDialect) -> LevelWire {
 
 // [@ANCHOR: radioctl_kenwood_decode_level]
 /// A level answer: the command name and its digits (`AG0128` is name `AG`, digits `0128`).
-fn decode_level(name: &str, digits: &str, dialect: KenwoodDialect) -> Option<Observation> {
+fn decode_level(
+    name: &str,
+    digits: &str,
+    dialect: KenwoodDialect,
+    monitor_max: u16,
+) -> Option<Observation> {
     let level = [
         Level::AfGain,
         Level::RfGain,
@@ -820,7 +836,10 @@ fn decode_level(name: &str, digits: &str, dialect: KenwoodDialect) -> Option<Obs
     ]
     .into_iter()
     .find(|l| level_wire(*l, dialect).name == name)?;
-    let wire = level_wire(level, dialect);
+    let mut wire = level_wire(level, dialect);
+    if level == Level::MonitorLevel {
+        wire.max = monitor_max;
+    }
     let number = if wire.main_digit {
         digits.strip_prefix('0')?
     } else {
@@ -992,7 +1011,10 @@ impl ProtocolEngine for KenwoodEngine {
                 )
             }
             Op::SetLevel(level, value) => {
-                let wire = level_wire(*level, self.dialect);
+                let mut wire = level_wire(*level, self.dialect);
+                if *level == Level::MonitorLevel {
+                    wire.max = self.monitor_max();
+                }
                 if *value < wire.min || *value > wire.max {
                     return Err(Self::unsupported("level outside the range of the guides"));
                 }
@@ -1434,6 +1456,32 @@ mod tests {
             e590.feed(long.as_bytes(), T0).as_slice(),
             [Inbound::Unrecognised(_)]
         ));
+    }
+
+    // Tests [@ANCHOR: radioctl_kenwood_decode_level]
+    #[test]
+    fn the_ts_590sg_monitor_level_runs_to_20_the_ts_590s_to_9() {
+        let mut sg = KenwoodEngine::new(shipped("kenwood-ts-590sg")).expect("engine");
+        assert_eq!(
+            sg.encode(&Op::SetLevel(Level::MonitorLevel, 20))
+                .expect("encodes")
+                .bytes,
+            b"ML020;"
+        );
+        assert!(sg.encode(&Op::SetLevel(Level::MonitorLevel, 21)).is_err());
+        assert_eq!(
+            sg.feed(b"ML015;", T0),
+            vec![Inbound::Observation(Observation::Level(
+                Level::MonitorLevel,
+                15
+            ))]
+        );
+        assert!(matches!(
+            sg.feed(b"ML021;", T0).as_slice(),
+            [Inbound::Unrecognised(_)]
+        ));
+        let mut s = KenwoodEngine::new(shipped("kenwood-ts-590s")).expect("engine");
+        assert!(s.encode(&Op::SetLevel(Level::MonitorLevel, 10)).is_err());
     }
 
     // Tests [@ANCHOR: radioctl_kenwood_decode_level]
