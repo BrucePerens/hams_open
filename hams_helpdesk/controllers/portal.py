@@ -27,6 +27,9 @@ _PORTAL_EXCLUDED_TICKET_TYPES = {"csam_enticement_trafficking", "server_exceptio
 # The partner of a mandatory-report ticket is the REPORTED member (see _ncmec_assemble_report_packet): that member must never
 # see, open or close the ticket, so these pages treat it as not theirs. The portal ir.rule says the same for direct reads.
 _CSAM_TICKET_TYPE = "csam_enticement_trafficking"
+# A ticket in the spam stage came from mail the filter doubted: its sender may have forged this member's address, so the
+# member must not be shown the sender's text (or be able to act on it). Staff can still recover it.
+_SPAM_STAGE = "spam"
 # Longest title, description and callsign a portal form may store (a POST body is caller-controlled).
 _TICKET_NAME_MAX = 200
 _TICKET_DESCRIPTION_MAX = 20000
@@ -57,7 +60,7 @@ class HelpdeskPortal(CustomerPortal):
         if "ticket_count" in counters:
             utils = request.env["zero_sudo.security.utils"]
             svc_uid = utils._get_service_uid("hams_helpdesk.user_helpdesk_service")
-            domain = [("partner_id", "=", request.env.user.partner_id.id), ("ticket_type", "!=", _CSAM_TICKET_TYPE)]
+            domain = [("partner_id", "=", request.env.user.partner_id.id), ("ticket_type", "!=", _CSAM_TICKET_TYPE), ("stage", "!=", _SPAM_STAGE)]
             try:
                 req_website = request.website
             except (AttributeError,):
@@ -95,7 +98,7 @@ class HelpdeskPortal(CustomerPortal):
         company_id = req_website.company_id.id if req_website else request.env.company.id
         Ticket = request.env["hams_helpdesk.ticket"].with_user(svc_uid).with_company(company_id)
 
-        domain = [("partner_id", "=", request.env.user.partner_id.id), ("ticket_type", "!=", _CSAM_TICKET_TYPE)]
+        domain = [("partner_id", "=", request.env.user.partner_id.id), ("ticket_type", "!=", _CSAM_TICKET_TYPE), ("stage", "!=", _SPAM_STAGE)]
         if req_website:
             domain += [("website_id", "in", [False, req_website.id])]
 
@@ -134,6 +137,7 @@ class HelpdeskPortal(CustomerPortal):
             not ticket_sudo.exists()
             or ticket_sudo.partner_id != request.env.user.partner_id
             or ticket_sudo.ticket_type == _CSAM_TICKET_TYPE
+            or ticket_sudo.stage == _SPAM_STAGE
         ):
             return request.redirect("/my")
 
@@ -176,6 +180,7 @@ class HelpdeskPortal(CustomerPortal):
             not ticket_sudo.exists()
             or ticket_sudo.partner_id != request.env.user.partner_id
             or ticket_sudo.ticket_type == _CSAM_TICKET_TYPE
+            or ticket_sudo.stage == _SPAM_STAGE
         ):
             return request.redirect("/my")
 

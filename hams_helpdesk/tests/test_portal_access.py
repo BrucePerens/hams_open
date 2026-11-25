@@ -116,6 +116,24 @@ class TestPortalTicketAccess(HamsHttpCase):
         self.assertNotEqual(report.stage, "closed")
         self.assertFalse(report.with_user(self.member).search_count([("id", "=", report.id)]), "the portal rule hides it")
 
+    # Tests [@ANCHOR: hams_helpdesk:COMM_portal_ticket_detail]
+    # Tests [@ANCHOR: hams_helpdesk:COMM_portal_ticket_close]
+    # Tests [@ANCHOR: hams_helpdesk:portal_my_tickets]
+    def test_a_quarantined_spam_ticket_is_not_shown_to_the_member_it_names(self):
+        # Mail with a forged From line becomes a ticket of the member it names, in the spam stage: the sender's text must not
+        # appear on that member's own pages.
+        spam = self.env["hams_helpdesk.ticket"].create(
+            {"name": "Forged Phish Subject", "description": "<p>x</p>", "partner_id": self.member.partner_id.id, "stage": "spam"}
+        )
+        self.assertNotIn("Forged Phish Subject", self.url_open("/my/tickets").text)
+        detail = self.url_open("/my/ticket/%s" % spam.id, allow_redirects=False)
+        self.assertEqual(detail.status_code, 303)
+        self.assertNotIn("Forged Phish Subject", detail.text)
+        self._post("/my/ticket/%s/close" % spam.id)
+        spam.invalidate_recordset()
+        self.assertEqual(spam.stage, "spam")
+        self.assertFalse(spam.with_user(self.member).search_count([("id", "=", spam.id)]), "the portal rule hides it")
+
     # Tests [@ANCHOR: hams_helpdesk:portal_my_tickets]
     def test_tickets_created_together_page_without_repeats_or_gaps(self):
         # Tickets made in one transaction share a create_date: the page order must still be total (newest id first).
