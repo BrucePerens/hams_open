@@ -45,6 +45,28 @@ post() {
 	[ -s "$tmp" ] && [ "$(jsonfilter -i "$tmp" -e '@.result.status')" ]
 }
 field() { jsonfilter -i "$tmp" -e "@.result.$1"; }
+
+# PINNED KEYS (docs/proposals/IPV6_CONFIG_SIGNING.md in hams_com): the package ships a list of deprecation public keys (HAMS_NODE_PINNED_KEYS,
+# default /etc/hams-node/pinned_keys, filled at release time). With a key in it, a configuration is applied ONLY when it is signed by one of
+# them for this request's nonce (hams-node-verify); anything else keeps the previous configuration. Without a key the old behaviour stays.
+pinned() { grep -qE '^[A-Za-z0-9+/=]+$' "${HAMS_NODE_PINNED_KEYS:-/etc/hams-node/pinned_keys}" 2>/dev/null; }
+warn_unpinned() { echo "hams-node-enroll: no pinned key list: the configuration is trusted on TLS alone" >&2; }
+# get_signed_config TOKEN: ask for the configuration with a fresh nonce; 0 when $tmp now holds the verified signed payload and $vkey the pinned
+# key that signed it; 4 when hams.com did not answer; 1 when the answer is refused, unsigned or wrongly signed.
+get_signed_config() {
+	nonce=$(head -c 16 /dev/urandom 2>/dev/null | hexdump -v -e '1/1 "%02x"')
+	[ ${#nonce} -eq 32 ] || return 4
+	post config "{\"token\":\"$1\",\"nonce\":\"$nonce\"}" || return 4
+	[ "$(field status)" = success ] || return 1
+	verify_config "$nonce"
+}
+verify_config() { # NONCE: $tmp becomes the verified payload
+	hams-node-verify "$tmp" "$1" config "$state/config_payload.json" "$state/verified_key" || return 1
+	mv "$state/config_payload.json" "$tmp"
+	vkey=$(cat "$state/verified_key")
+	rm -f "$state/verified_key"
+}
+
 # Only the characters of a token or key may reach a request body.
 clean() { case $1 in '' | *[!A-Za-z0-9_=/+-]*) return 1 ;; esac; }
 
@@ -80,6 +102,10 @@ apply_config() { # the reply in $tmp -> the package's own settings
 	mv "$state/ssh_keys.new" "$state/ssh_keys"
 	[ -x /usr/sbin/hams-node-ssh ] && /usr/sbin/hams-node-ssh -s "$state" apply  # hams-node-ssh package: key-only SSH once a key exists
 	depkey=$(field deprecation_key)  # the key that signs switch-off and deprecation documents (hams-node-status package)
+	if [ -n "${vkey:-}" ]; then # pinned: the key the package carries, never the one in the reply
+		[ "$depkey" = "$vkey" ] || echo "hams-node-enroll: the deprecation_key in the reply differs from the pinned key; keeping the pinned key" >&2
+		depkey=$vkey
+	fi
 	case $depkey in '' | *[!A-Za-z0-9+/=]*) ;; *) printf '%s\n' "$depkey" > "$state/deprecation.pub" ;; esac
 	[ -x /usr/sbin/hams-node-status ] && /usr/sbin/hams-node-status -s "$state" start
 	[ -x /usr/sbin/hams-node-lan ] && /usr/sbin/hams-node-lan apply  # hams-node-lan package: the /60 to the LANs
@@ -116,6 +142,12 @@ do_enroll() {
 			clean "$token" || { status "bad reply"; exit 1; }
 			(umask 077; echo "$token" > "$tokenfile")
 			chmod 600 "$tokenfile" "$keyfile"
+			if pinned; then # the poll reply is unsigned: apply only a signed configuration fetched now
+				add_cron
+				get_signed_config "$token" || { status "enrolled, but the configuration is not signed by a pinned key; nothing applied"; exit 4; }
+			else
+				warn_unpinned
+			fi
 			apply_config || { status "enrolled but the reply had no /60"; exit 1; }
 			add_cron
 			status "enrolled $(field prefix60)"
@@ -133,6 +165,18 @@ do_fetch() {
 	[ -s "$tokenfile" ] || { echo "hams-node-enroll: not enrolled" >&2; exit 1; }
 	token=$(cat "$tokenfile")
 	clean "$token" || { status "bad token file"; exit 1; }
+	if pinned; then
+		get_signed_config "$token"
+		case $? in
+		0) ;;
+		4) status "hams.com unreachable"; exit 4 ;;
+		*) if [ "$(field status)" = error ] && [ "$(field message)" = refused ]; then drop_cron; rm -f "$tokenfile"; status revoked; exit 3; fi
+			status "the configuration is not signed by a pinned key; the previous one is kept"; exit 4 ;;
+		esac
+		apply_config && status "configuration renewed $(field prefix60)"
+		return
+	fi
+	warn_unpinned
 	post config "{\"token\":\"$token\"}" || { status "hams.com unreachable"; exit 4; }
 	case $(field status) in
 	success) apply_config && status "configuration renewed $(field prefix60)" ;;

@@ -10,6 +10,8 @@ import subprocess
 import tempfile
 import unittest
 
+from test_hams_node_status import USIGN, Signer
+
 HERE = pathlib.Path(__file__).resolve().parent
 PACKAGE = HERE.parent
 SCRIPT = PACKAGE / "files" / "usr" / "sbin" / "hams-node-enroll"
@@ -28,7 +30,22 @@ lines = open(queue).read().splitlines()
 if not lines:
     sys.exit(1)
 open(queue, "w").write("\\n".join(lines[1:]))
-open(args[args.index("-O") + 1], "w").write(lines[0])
+reply = lines[0]
+if reply.startswith("SIGN "):
+    # a reply the portal would sign for THIS request: "@request" in the body is the request's own nonce
+    import base64, hashlib, json
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    spec = json.loads(reply[5:])
+    body = dict(spec["body"])
+    if body.get("nonce") == "@request":
+        body["nonce"] = json.loads([a for a in args if a.startswith("--post-data=")][0].split("=", 1)[1])["params"].get("nonce", "none")
+    key = Ed25519PrivateKey.from_private_bytes(bytes.fromhex(spec["seed"]))
+    raw = key.public_key().public_bytes_raw()
+    payload = json.dumps(body, separators=(",", ":"), sort_keys=True).encode()
+    sig = base64.b64encode(b"Ed" + hashlib.sha256(raw).digest()[:8] + key.sign(payload)).decode()
+    result = dict(spec["plain"], signed={"payload": base64.b64encode(payload).decode(), "signature": sig})
+    reply = json.dumps({"jsonrpc": "2.0", "id": None, "result": result})
+open(args[args.index("-O") + 1], "w").write(reply)
 """
 
 
@@ -52,13 +69,25 @@ class EnrollTests(unittest.TestCase):
         bindir.mkdir()
         for name, body in {
             "uclient-fetch": FETCH,
+            "usign": USIGN,
             "wg": '#!/bin/sh\ncase $1 in genkey) echo "%s";; pubkey) echo "%s";; show) echo "peerA"; echo "peerB";; *) echo "wg $*" >> "$FAKE/wg";; esac\n' % (KEY, KEY),
             "ip": '#!/bin/sh\necho "ip $*" >> "$FAKE/ip"\n',
             "uci": '#!/bin/sh\ncase $* in *"get hams_node_enroll.main.url"*) cat "$FAKE/uci_url" 2>/dev/null; exit 0 ;; esac\necho "$*" >> "$FAKE/uci"\n',
         }.items():
             (bindir / name).write_text(body)
             (bindir / name).chmod(0o755)
-        self.env = dict(os.environ, FAKE=str(self.fake), PATH="%s:%s:%s" % (bindir, HERE, os.environ["PATH"]))
+        self.env = dict(os.environ, FAKE=str(self.fake), PATH="%s:%s:%s:%s" % (bindir, HERE, HERE.parent / "files" / "usr" / "sbin", os.environ["PATH"]),
+                        HAMS_NODE_PINNED_KEYS=str(self.root / "pinned_keys"))
+        self.signer = Signer()
+
+    def pin(self, *signers):
+        (self.root / "pinned_keys").write_text("# the package list\n" + "".join(s.public_line + "\n" for s in signers))
+
+    def signed(self, signer=None, kind="config", nonce="@request", **override):
+        """A queued config reply signed for the request; the flat fields are what an attacker could have changed."""
+        config = dict(CONFIG, **override)
+        body = dict(config, kind=kind, nonce=nonce, issued=1)
+        return "SIGN " + json.dumps({"plain": dict(config, status="success", prefix60="2001:db8:dead::/60"), "body": body, "seed": (signer or self.signer).seed})
 
     def queue(self, endpoint, *replies):
         (self.fake / endpoint).write_text("\n".join(replies))
@@ -256,6 +285,66 @@ class EnrollTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 1, result.stderr)
                 self.assertIn("refusing the configuration", result.stderr)
                 self.assertFalse((self.fake / "uci").exists(), "nothing reaches uci")
+
+    def enroll_pinned(self, config_reply):
+        self.pin(self.signer)
+        self.queue("start", reply(status="success", device_code="devcode123", user_code="ABCD-EFGH", expires_in=600, interval=5))
+        self.queue("poll", reply(status="success", token="tok_en-1", deprecation_key="AttackerKey+/0=", **dict(CONFIG, prefix60="2001:db8:dead::/60")))
+        self.queue("config", config_reply)
+        return self.run_script("enroll")
+
+    def test_without_a_pinned_key_list_the_old_behaviour_stays_and_a_warning_is_logged(self):
+        result = self.enroll()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("no pinned key", result.stderr)
+        self.assertEqual([c for c in self.calls() if "/config" in c], [], "no extra request, no nonce")
+
+    def test_with_a_pinned_key_enrolment_applies_only_the_signed_config_and_keeps_the_pinned_key(self):
+        result = self.enroll_pinned(self.signed())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        uci = (self.fake / "uci").read_text()
+        self.assertIn("hams_node.main.prefix60=2001:db8:ab00:10::/60", uci)
+        self.assertNotIn("dead", uci, "the unsigned poll reply is never applied")
+        self.assertEqual((self.state / "deprecation.pub").read_text().strip(), self.signer.public_line, "the key in the reply is not trusted")
+        self.assertRegex([c for c in self.calls() if "/config" in c][0], r'"token":"tok_en-1","nonce":"[0-9a-f]{32}"')
+        self.assertIn("hams-node-enroll fetch", self.cron.read_text())
+
+    def test_with_a_pinned_key_a_bad_config_is_not_applied(self):
+        other = Signer()
+        cases = {
+            "unsigned": reply(status="success", **CONFIG),
+            "wrong key": self.signed(other),
+            "replayed nonce": self.signed(nonce="0123456789abcdef0123456789abcdef"),
+            "a status passed off as a config": self.signed(kind="status"),
+        }
+        for name, answer in cases.items():
+            (self.fake / "uci").unlink(missing_ok=True)
+            result = self.enroll_pinned(answer)
+            self.assertEqual(result.returncode, 4, (name, result.stderr))
+            self.assertFalse((self.fake / "uci").exists(), name)
+            self.assertFalse((self.state / "deprecation.pub").exists(), name)
+
+    def test_with_a_pinned_key_fetch_keeps_the_previous_config_unless_the_new_one_is_signed(self):
+        self.assertEqual(self.enroll_pinned(self.signed()).returncode, 0)
+        (self.fake / "uci").unlink()
+        for answer in (reply(status="success", **dict(CONFIG, prefix60="2001:db8:dead::/60")), self.signed(Signer(), prefix60="2001:db8:dead::/60")):
+            self.queue("config", answer)
+            self.assertEqual(self.run_script("fetch").returncode, 4)
+            self.assertFalse((self.fake / "uci").exists())
+        self.queue("config", self.signed(prefix60="2001:db8:ab00:20::/60"))
+        self.assertEqual(self.run_script("fetch").returncode, 0)
+        self.assertIn("hams_node.main.prefix60=2001:db8:ab00:20::/60", (self.fake / "uci").read_text())
+
+    def test_with_a_pinned_key_the_explicit_refusal_still_ends_the_enrolment(self):
+        self.assertEqual(self.enroll_pinned(self.signed()).returncode, 0)
+        self.queue("config", reply(status="error", message="refused"))
+        self.assertEqual(self.run_script("fetch").returncode, 3)
+
+    def test_a_rotation_list_accepts_either_pinned_key(self):
+        later = Signer()
+        self.pin(later, self.signer)
+        self.assertEqual(self.enroll_pinned(self.signed()).returncode, 0)
+        self.assertEqual((self.state / "deprecation.pub").read_text().strip(), self.signer.public_line)
 
 
 if __name__ == "__main__":
