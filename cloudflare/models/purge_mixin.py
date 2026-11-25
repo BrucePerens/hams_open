@@ -42,9 +42,7 @@ class CloudflarePurgeMixin(models.AbstractModel):
         # a legitimate edit to global content.
         any_missing_website = any(not r.website_id for r in self)
         if any_missing_website:
-            all_website_ids = (
-                self.env["website"].with_user(svc_uid).search([], limit=1000).ids
-            )
+            all_website_ids = self._cloudflare_purgeable_website_ids(svc_uid)
 
         for rec in self:
             url = rec[url_field]
@@ -61,6 +59,15 @@ class CloudflarePurgeMixin(models.AbstractModel):
         if purge_map:
             QueueModel = self.env["cloudflare.purge.queue"].with_user(svc_uid)
             QueueModel.enqueue_urls_batch(purge_map)
+
+    # [@ANCHOR: cloudflare:purge_fanout_credentialed_websites]
+    # Verified by [@ANCHOR: cloudflare:test_fanout_skips_websites_without_credentials]
+    def _cloudflare_purgeable_website_ids(self, svc_uid):
+        """The websites a record with no website is purged on: those with a Cloudflare token and zone. A website
+        without them (a tenant site on another zone) cannot be purged; queueing it only made the queue drop the rows
+        and open a pager incident on every edit of shared content."""
+        websites = self.env["website"].with_user(svc_uid).search([], limit=1000)
+        return [w.id for w in websites if all(w._get_cloudflare_credentials())]
 
     # [@ANCHOR: COMM_language_variants]
     # Verified by [@ANCHOR: COMM_test_purge_covers_language_variants]
@@ -94,9 +101,7 @@ class CloudflarePurgeMixin(models.AbstractModel):
         # deliberately: narrowing it to `self.env.companies` would leave other
         # tenants' edge caches stale.
         if any(not m.website_id for m in self):
-            website_ids = (
-                self.env["website"].with_user(svc_uid).search([], limit=1000).ids
-            )
+            website_ids = self._cloudflare_purgeable_website_ids(svc_uid)
 
         QueueModel = self.env["cloudflare.purge.queue"].with_user(svc_uid)
         if website_ids:

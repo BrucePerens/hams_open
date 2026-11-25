@@ -180,6 +180,28 @@ class TestMultiWebsiteCloudflare(RealTransactionCase):
         self.assertIn(self.website_a, websites_in_queue)
         self.assertIn(self.website_b, websites_in_queue)
 
+    # [@ANCHOR: cloudflare:test_fanout_skips_websites_without_credentials]
+    def test_fanout_skips_websites_without_credentials(self):
+        # Tests [@ANCHOR: cloudflare:purge_fanout_credentialed_websites]
+        """A record with no website is purged on every website that CAN be purged; a website with no Cloudflare token
+        and zone (a tenant site on another zone, say) gets no row, so the queue never drops it with a pager incident."""
+        bare = self.Website.create({"name": "No credentials", "domain": "https://bare.example"})
+        view = self.env["ir.ui.view"].create(
+            {"name": "Fanout View", "type": "qweb", "arch_db": "<div>G</div>", "key": "test.page_fanout_view"}
+        )
+        page = self.env["website.page"].create(
+            {"is_published": True, "url": "/fanout", "website_id": False, "view_id": view.id}
+        )
+        self.PurgeQueue.search([], limit=10000).unlink()
+        page.write({"name": "Fanout Updated"})
+        rows = self.PurgeQueue.search([("website_id", "=", bare.id)], limit=100)
+        self.assertFalse(rows, "a website without credentials got purge rows")
+        self.assertIn(self.website_a, self.PurgeQueue.search([("target_item", "like", "%/fanout")], limit=100).website_id)
+        menu = self.env["website.menu"].create({"name": "Fanout menu", "url": "/fanout", "website_id": False})
+        self.PurgeQueue.search([], limit=10000).unlink()
+        menu.write({"name": "Fanout menu 2"})
+        self.assertFalse(self.PurgeQueue.search([("website_id", "=", bare.id)], limit=100))
+
     def test_waf_ban_multi_website(self):
         # [@ANCHOR: COMM_test_waf_ban_multi_website]
         """Verify IP banning respects the website context."""
