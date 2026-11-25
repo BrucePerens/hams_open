@@ -42,15 +42,15 @@ Status: **verified** = evidence captured; **detected** = device and driver prese
 | HDMI | detected | 3 DP connectors, 0 HDMI cable tested. |
 | Hot keys, Fn lock | detected | `Ideapad extra buttons`, `fn_lock` attribute. |
 | Power / platform profile | verified | ideapad `platform_profile` readable (low-power, balanced, performance), so TLP sets it. |
-| Battery charge limit | verified | Conservation mode (ideapad-laptop `conservation_mode`) is on by default through TLP (`STOP_CHARGE_THRESH_BAT0=1` in this package's TLP file); the firmware holds the charge at about 55-60%. There is no 80% or other percentage setting on this model (no `charge_control_*_threshold`). A write takes effect after about 3 s, so an immediate read-back shows the old value (checked 2026-11-25 on two machines, BIOS AUCN59WW). For a full charge: `sudo tlp setcharge 0 0 BAT0`; back on: `sudo tlp setcharge 0 1 BAT0`. |
+| Battery charge limit | verified | Conservation mode (ideapad-laptop `conservation_mode`) is on by default through TLP (`STOP_CHARGE_THRESH_BAT0=1` in this package's TLP file); the firmware holds the charge at about 55-60%. There is no 80% or other percentage setting on this model (no `charge_control_*_threshold`). A write takes effect after about 3 s, so an immediate read-back shows the old value (checked 2026-11-25 on two machines, BIOS AUCN59WW). Off until the next boot (full charge or calibration): `sudo tlp setcharge 0 0 BAT1`; the battery is BAT1, and naming BAT0 fails with "battery BAT0 not present". TLP applies the setting again at every boot, so a reboot turns it back on (checked on yoga2), or at once: `sudo tlp setcharge 0 1 BAT1`. |
 | Suspend / hibernate | detected, not tried | `mem_sleep` default `s2idle`, `deep` listed; not suspended (remote machine). |
 | SD reader, privacy shutter | not present | This model has neither. |
 
 Batteries (2026-11-25, yoga1 and yoga2): both machines have aftermarket packs whose gauges report generic values
 (manufacturer "Simplo", model "BASE-BAT", serials "25"/"1F", cycle_count 0) and a full capacity above design
 (64.3 and 65.6 Wh against 60 Wh). The percentage the firmware uses for conservation mode comes from that gauge, so the real
-stop level may differ from 55-60% until the gauge has learned the cells. One calibration cycle (conservation off, charge
-full, run down to the system's low-battery shutdown, recharge to full at once, conservation on) lets it learn. The earlier
+stop level may differ from 55-60% until the gauge has learned the cells. One calibration cycle (`sudo tlp setcharge 0 0 BAT1`, charge
+full, run down to the system's low-battery shutdown, recharge to full at once, then reboot to turn conservation back on) lets it learn. The earlier
 machine (bruce-yoga) reported 6.9 Wh against 60 Wh, the same kind of untrained gauge.
 
 ## Fingerprint
