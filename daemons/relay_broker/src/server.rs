@@ -161,8 +161,7 @@ fn launchd_listener() -> Option<UnixListener> {
     // that this process now owns. Exactly one is expected; the array is freed once and the descriptor adopted once. On any error
     // `fds` is not read.
     let fd = unsafe {
-        if launch_activate_socket(c"broker".as_ptr(), &mut fds, &mut count) != 0 || fds.is_null()
-        {
+        if launch_activate_socket(c"broker".as_ptr(), &mut fds, &mut count) != 0 || fds.is_null() {
             return None;
         }
         let first = if count == 1 { Some(*fds) } else { None };
