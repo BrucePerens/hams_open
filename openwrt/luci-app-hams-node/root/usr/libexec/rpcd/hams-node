@@ -41,11 +41,19 @@ do_status() {
 }
 
 do_enroll_start() {
+	# not while enrolled (the button is hidden, but the method is callable) and not twice at once (two runs would share one output file)
+	if [ -s "$state/device_token" ] && [ "$(head -n 1 "$state/status" 2>/dev/null)" != revoked ]; then
+		echo '{"started":false,"error":"already enrolled"}'; return
+	fi
+	pidfile=$enroll_out.pid
+	if pid=$(cat "$pidfile" 2>/dev/null) && [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+		echo '{"started":false,"error":"enrolment already running"}'; return
+	fi
 	: > "$enroll_out"
 	if [ -n "${HAMS_NO_BACKGROUND:-}" ]; then
 		hams-node-enroll enroll > "$enroll_out" 2>&1
 	else
-		hams-node-enroll enroll > "$enroll_out" 2>&1 < /dev/null &
+		sh -c 'echo $$ > "$1"; exec hams-node-enroll enroll > "$2" 2>&1 < /dev/null' sh "$pidfile" "$enroll_out" &
 	fi
 	echo '{"started":true}'
 }
