@@ -65,9 +65,12 @@ class ResUsersSiteEligibility(models.Model):
 
     # [@ANCHOR: user_websites:COMM_website_publicly_visible]
     def _website_publicly_visible(self):
-        """Whether visitors may see this member's site right now (not suspended, and eligible)."""
+        """Whether visitors may see this member's site right now (active, not suspended, and eligible).
+
+        A deactivated account (also an erased one) is never public, even when the background unpublish
+        that follows a deactivation failed or has not run yet."""
         self.ensure_one()
-        return not self.is_suspended_from_websites and self._hams_website_eligible()
+        return self.active and not self.is_suspended_from_websites and self._hams_website_eligible()
 
     @api.model
     # [@ANCHOR: user_websites:fn_eligibility_site_user_ids]

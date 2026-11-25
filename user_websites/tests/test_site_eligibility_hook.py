@@ -106,6 +106,17 @@ class TestSiteEligibilityHook(HamsHttpCase):
         self.assertEqual(self.url_open("/eligowner", allow_redirects=False).status_code, 200)
         self.assertTrue(self.env["user_websites.public_directory_view"].search([("user_id", "=", self.owner.id)]))
 
+    def test_02b_deactivated_member_is_404_even_if_content_is_still_published(self):
+        # Tests [@ANCHOR: user_websites:COMM_website_publicly_visible]
+        # The background unpublish after a deactivation can fail or lag; the public routes must not depend on it.
+        self.owner.active = False
+        self.env["website.page"].browse([self.home.id, self.about.id]).write({"website_published": True})
+        self.post.is_published = True
+        self.env.flush_all()
+        self.assertFalse(self.owner._website_publicly_visible())
+        for path in ("/eligowner", "/eligowner/about", "/eligowner/blog", "/eligowner/blog/" + self.env["ir.http"]._slug(self.post)):
+            self.assertEqual(self.url_open(path, allow_redirects=False).status_code, 404, path)
+
     def test_03_owner_is_told_what_is_missing_and_cannot_create(self):
         # Tests [@ANCHOR: user_websites:owner_site_ineligible]
         # Tests [@ANCHOR: user_websites:fn_answers_site_response]
