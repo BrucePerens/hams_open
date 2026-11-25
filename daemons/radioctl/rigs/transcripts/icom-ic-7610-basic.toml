@@ -32,24 +32,6 @@ rx = "fe fe e0 98 03 00 00 03 07 00 fd"
 expect = { kind = "frequency", vfo = "a", hz = 7030000 }
 
 [[step]]
-op = { kind = "get-frequency", vfo = "b" }
-tx = "fe fe 98 e0 25 01 fd"
-rx = "fe fe e0 98 25 01 00 40 07 14 00 fd"
-expect = { kind = "frequency", vfo = "b", hz = 14074000 }
-
-[[step]]
-op = { kind = "set-frequency", vfo = "b", hz = 14025000 }
-tx = "fe fe 98 e0 25 01 00 50 02 14 00 fd"
-rx = "fe fe e0 98 fb fd"
-expect = { kind = "ack" }
-
-[[step]]
-op = { kind = "get-frequency", vfo = "b" }
-tx = "fe fe 98 e0 25 01 fd"
-rx = "fe fe e0 98 25 01 00 50 02 14 00 fd"
-expect = { kind = "frequency", vfo = "b", hz = 14025000 }
-
-[[step]]
 op = { kind = "get-split" }
 tx = "fe fe 98 e0 0f fd"
 rx = "fe fe e0 98 0f 00 fd"

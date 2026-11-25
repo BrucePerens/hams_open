@@ -7,7 +7,7 @@
 # "CI-V Transceive" are set in the radio's own menu and must match what radioctl is told.
 # Hamlib modes with no entry in radioctl's mode vocabulary, not listed: PKTLSB PKTUSB FM-D AM-D PSK PSKR.
 schema = 1
-capabilities = ["read-frequency", "set-frequency", "second-vfo", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "split", "rit-xit", "filter", "levels", "identify", "read-meters", "repeater", "receivers"]
+capabilities = ["read-frequency", "set-frequency", "read-mode", "set-mode", "read-ptt", "set-ptt", "read-signal", "read-power", "send-cw", "split", "rit-xit", "filter", "levels", "identify", "read-meters", "repeater", "receivers"]
 
 [rig]
 id = "icom-ic-7760"
@@ -124,11 +124,6 @@ verified = { state = "unverified" }
 [[facts]]
 key = "capability.*"
 provenance = { kind = "program-output", reference = "rigctl -m 3092 --dump-caps (Hamlib 4.6.2): \"Can set/get PTT\", \"Can set Split VFO\", \"Can set RIT\", \"Can send Morse\", \"Targetable features\", \"Get level\" lines; rigs/icom/ic7760.c rig_caps", note = "No readable copy of Icom's CI-V reference for this model could be obtained (Icom's download endpoints are excluded by robots.txt and the archive.org copies found were image scans or other documents); this fact is Hamlib's. Facts only were read from Hamlib; no code or table was copied. A capability is claimed when Hamlib's capability list for the model includes it and the engine implements the command (CI-V 03/04/05/06, 0F, 11, 14, 15, 16, 17, 19, 1A 03, 1C 00, 21, 25); absence in Hamlib is taken as absence on the radio, which may be too cautious. `identify` (command 19 00) is claimed on every file regardless of Hamlib's list; an older radio may answer NG, which the volunteer self-test reports. Settings and CI-V menu items (address, baud rate, transceive) are set at the radio." }
-verified = { state = "unverified" }
-
-[[facts]]
-key = "capability.second-vfo"
-provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/ic7760.c rig_caps `.targetable_vfo` (RIG_TARGETABLE_FREQ) and priv caps `x25x26_always`; rigs/icom/icom.c icom_get_freq / icom_set_freq (command 25 selected/unselected VFO)", note = "No readable copy of Icom's CI-V reference for this model could be obtained (Icom's download endpoints are excluded by robots.txt and the archive.org copies found were image scans or other documents); this fact is Hamlib's. Facts only were read from Hamlib; no code or table was copied. Reading and setting the unselected VFO uses command 25, which Hamlib says only newer firmware of some models implements (x25x26_possibly); on older firmware it answers NG." }
 verified = { state = "unverified" }
 
 [[facts]]
