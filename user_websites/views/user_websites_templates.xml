@@ -74,6 +74,8 @@
             <!-- Not main_object.owner_user_id directly: that reads the owner's res.users row as
                  the visitor, a 403 for the public user and for other members. See
                  _user_websites_navbar_profile_user() on the owned mixin. -->
+            <!-- The layout computes no_index itself from main_object.website_indexed (res.users has none), so a page that must stay out of search results sets uw_noindex. -->
+            <meta t-if="uw_noindex" name="robots" content="noindex"/>
             <t t-set="profile_user" t-value="profile_user or (main_object._user_websites_navbar_profile_user() if main_object and 'owner_user_id' in main_object and 'user_websites_group_id' in main_object else False)"/>
             <t t-set="profile_group" t-value="profile_group or (main_object.user_websites_group_id if main_object and 'user_websites_group_id' in main_object else False)"/>
             <t t-set="resolved_slug" t-value="resolved_slug or (profile_user.website_slug if profile_user else (profile_group.website_slug if profile_group else False))"/>
@@ -656,10 +658,12 @@
     <template id="placeholder_page" name="Website Placeholder">
         <!-- Tested by [@ANCHOR: user_websites:test_tour_create_site] -->
         <t t-call="website.layout">
+            <t t-set="entity_name" t-value="profile_user.name if profile_user else profile_group.name"/>
             <t t-set="additional_title" t-value="('Welcome, %s' % entity_name)"/>
-            <t t-set="website_meta_description">Your home page exists but is not published, so visitors cannot see it yet. Use the button on this page to publish it, or to bring back a deleted home page.</t>
+            <t t-set="website_meta_description" t-value="('%s has not published a website on hams.com yet. Check back later, or browse the other member websites and blogs in the community directory.' % entity_name)[:160]"/>
+            <!-- A stand-in with nothing on it: not for search results. -->
+            <t t-set="uw_noindex" t-value="True"/>
             <div class="container mt-5 mb-5 text-center">
-                <t t-set="entity_name" t-value="profile_user.name if profile_user else profile_group.name"/>
                 <t t-set="entity_slug" t-value="resolved_slug"/>
 
                 <div class="card shadow-sm border-0 mx-auto" style="max-width: 600px;">

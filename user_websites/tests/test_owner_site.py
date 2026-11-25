@@ -354,6 +354,15 @@ class TestOwnerSite(HamsHttpCase):
         self.assertIn("uw-owner-toolbar", html)
         self.assertIn("Create Your", html)
 
+    def test_06b_placeholder_is_noindex_and_names_the_member(self):
+        # A member with no home page yet: a visitor gets a thin stand-in that search engines must not index,
+        # titled with the member's name (it used to say "Welcome, None").
+        self.authenticate(None, None)
+        html = self.url_open("/ownertwo").text
+        self.assertRegex(html, r'<meta[^>]*name="robots"[^>]*content="noindex"')
+        self.assertNotIn("Welcome, None", html)
+        self.assertNotIn("is not published, so visitors cannot see it", html)
+
     # --------------------------------------------------------------- dashboard
 
     def test_07_dashboard_access(self):
