@@ -5,6 +5,7 @@ from urllib.parse import urlsplit
 
 from werkzeug.serving import WSGIRequestHandler
 
+from odoo.addons.tenant_sites import utils
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from odoo.tools import config
 from odoo.tests import tagged
@@ -318,6 +319,27 @@ class TestTenantSitesHttp(HamsHttpCase):
         self.assertEqual(self.get("/sitemap.xml", TENANT).status_code, 200)
         self.assertEqual(self.get("/", TENANT).status_code, 200)
         self.assertEqual(self.get("/web/static/img/odoo-icon-ios.png", TENANT).status_code, 200)
+
+    # [@ANCHOR: tenant_sites:test_tenant_sitemap_lists_only_own_urls]
+    def test_tenant_sitemap_lists_only_own_urls(self):
+        # Tests [@ANCHOR: tenant_sites:tenant_sitemap_own_urls]
+        # Found 2026-11-25 on perens.com: its sitemap listed about 9,900 URLs of the main site (events, members, forum,
+        # repeaters...) that answer 404 on that host.
+        paths = self._sitemap_paths(TENANT)
+        self.assertIn("/tenant-only", paths)
+        self.assertNotIn("/main-only", paths)
+        self.assertNotIn("/shared-page", paths)
+        for path in paths:
+            if path != "/tenant-only":
+                self.assertTrue(utils.tenant_path_allowed(path), f"{path} is not served on a tenant host")
+        main_paths = self._sitemap_paths(MAIN)
+        self.assertIn("/shared-page", main_paths)
+        self.assertNotIn("/tenant-only", main_paths)
+
+    def _sitemap_paths(self, host):
+        response = self.get("/sitemap.xml", host)
+        self.assertEqual(response.status_code, 200, host)
+        return [urlsplit(loc).path for loc in re.findall(r"<loc>([^<]*)</loc>", response.text)]
 
     # [@ANCHOR: tenant_sites:COMM_test_classify]
     def test_forged_forwarded_host_is_rejected(self):
