@@ -94,6 +94,10 @@ Returns `None` for DATA on a mode with no data variant in radioctl's vocabulary 
 Says whether the description lists the `data` mode, which means the model is an Icom with USB plus DATA. `&self`. True when `mode_code(Mode::Data)` exists.
 Such a model takes command `26` for the mode, which carries the DATA flag that `04` and `06` lack, so the engine uses `26` for reading and setting the mode. Pure, no errors.
 
+### `fn mode_selector(&self) -> u8` [@ANCHOR: radioctl:radioctl_civ_engine_mode_selector]
+
+The selector byte of command `26`. `&self`. On a model with the full Main/Sub set (IC-7610, IC-7760) it is `00` for Main or `01` for Sub, whichever band `07 D0`/`D1` last selected or `07 D2` last reported (Main until then); on any other Icom it is `00`, the selected VFO. Pure, no errors.
+
 ### `fn decode_mode(&mut self, code: u8, data: bool, filter: Option<u8>) -> Option<Observation>` [@ANCHOR: radioctl:radioctl_civ_engine_decode_mode]
 
 Decodes a mode reply into an observation. `&mut self`; `code` is the radio's mode code byte from a `04`/`01` reply (`code filter`) or a `26 00` reply (`code data filter`); `data` is the DATA flag; `filter` is the filter number when the reply has one.

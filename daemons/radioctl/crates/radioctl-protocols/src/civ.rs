@@ -281,6 +281,9 @@ pub struct CivEngine {
     mode: Option<Mode>,
     /// The filter number (1 to 3) the rig last reported with its mode; resent with `26 00`.
     filter_number: u8,
+    /// The band the mode commands address on a model whose command `26` selector is Main or Sub
+    /// (see `mode_selector`): the last band selected by `07 D0`/`D1` or reported by `07 D2`.
+    band: Receiver,
     scope: Option<ScopeAssembler>,
     /// True between a PTT set and the next reply: some Xiegu radios answer it with `1C 00 <state>`
     /// instead of `FB` (Hamlib's `x108g_set_ptt` comment), which counts as the acknowledgement.
@@ -317,6 +320,7 @@ impl CivEngine {
             parser: FrameParser::default(),
             mode: None,
             filter_number: DEFAULT_FILTER_NUMBER,
+            band: Receiver::Main,
             scope,
             awaiting_ptt_ack: false,
             tone_flags: [None; 3],
@@ -674,6 +678,14 @@ impl CivEngine {
         self.desc.mode_code(Mode::Data).is_some()
     }
 
+    // [@ANCHOR: radioctl_civ_engine_mode_selector]
+    /// The selector byte of command `26`: on the models with the full Main/Sub set (IC-7610,
+    /// IC-7760) it is `00` Main or `01` Sub, the band last selected; on the others it is `00`, the
+    /// selected VFO.
+    fn mode_selector(&self) -> u8 {
+        u8::from(self.params.main_sub == CivMainSub::Full && self.band == Receiver::Sub)
+    }
+
     // [@ANCHOR: radioctl_civ_engine_decode_mode]
     /// The mode of a `04`/`01` reply (`code filter`) or a `26 00` reply (`code data filter`):
     /// the code's plain mode, or its data variant when the DATA byte is set. The filter number
@@ -745,12 +757,13 @@ impl CivEngine {
     /// IC-7800, IC-7760; IC-9700 and IC-7851 are `select-read`). Anything else, the transmit band
     /// included, is refused as unsupported. Facts: IC-7610 CI-V guide and IC-9100 manual
     /// command tables (see the description facts). Unverified on a radio.
-    fn encode_main_sub(&self, op: &Op) -> Option<Result<Request, RigError>> {
+    fn encode_main_sub(&mut self, op: &Op) -> Option<Result<Request, RigError>> {
         let level = self.params.main_sub;
         let full = level == CivMainSub::Full;
         let readable = full || level == CivMainSub::SelectRead;
         Some(match op {
             Op::SelectReceiver(rx) if level != CivMainSub::None => {
+                self.band = *rx;
                 Ok(self.set(0x07, &[if *rx == Receiver::Sub { 0xD1 } else { 0xD0 }]))
             }
             Op::GetReceiver if readable => Ok(self.get(0x07, &[0xD2], Field::Receiver)),
@@ -973,9 +986,11 @@ impl ProtocolEngine for CivEngine {
                 let bcd = self.freq_bytes(*hz)?;
                 self.command(0x05, &bcd, ack)
             }
-            Op::GetMode if self.has_data_modes() => {
-                self.command(0x26, &[0x00], ReplyKind::Observation(Field::Mode))
-            }
+            Op::GetMode if self.has_data_modes() => self.command(
+                0x26,
+                &[self.mode_selector()],
+                ReplyKind::Observation(Field::Mode),
+            ),
             Op::GetMode => self.command(0x04, &[], ReplyKind::Observation(Field::Mode)),
             Op::SetMode(mode) => {
                 let code = self
@@ -989,7 +1004,12 @@ impl ProtocolEngine for CivEngine {
                 self.mode = Some(*mode);
                 if self.has_data_modes() {
                     let (_, data) = base_mode(*mode);
-                    self.command(0x26, &[0x00, code, u8::from(data), self.filter_number], ack)
+                    let selector = self.mode_selector();
+                    self.command(
+                        0x26,
+                        &[selector, code, u8::from(data), self.filter_number],
+                        ack,
+                    )
                 } else {
                     self.command(0x06, &[code], ack)
                 }
@@ -1114,11 +1134,12 @@ impl CivEngine {
             (0x01 | 0x04, [code, rest @ ..]) => {
                 self.decode_mode(*code, false, rest.first().copied())
             }
-            (0x26, [0x00, code, rest @ ..]) => self.decode_mode(
-                *code,
-                rest.first().is_some_and(|d| *d != 0),
-                rest.get(1).copied(),
-            ),
+            (0x26, [selector, code, rest @ ..]) if *selector == self.mode_selector() => self
+                .decode_mode(
+                    *code,
+                    rest.first().is_some_and(|d| *d != 0),
+                    rest.get(1).copied(),
+                ),
             (0x0F, [byte]) => {
                 let asked = self.asked_0f.take();
                 let is_shift = matches!(*byte, 0x10..=0x13);
@@ -1143,11 +1164,14 @@ impl CivEngine {
             (0x16, [sub @ (0x42 | 0x43 | 0x4B), state]) => {
                 return self.decode_tone_flag(*sub, *state)
             }
-            (0x07, [0xD2, band]) => Some(Observation::Receiver(if *band == 0 {
-                Receiver::Main
-            } else {
-                Receiver::Sub
-            })),
+            (0x07, [0xD2, band]) => {
+                self.band = if *band == 0 {
+                    Receiver::Main
+                } else {
+                    Receiver::Sub
+                };
+                Some(Observation::Receiver(self.band))
+            }
             (0x07, [0xC2, state]) => Some(Observation::DualWatch(*state != 0)),
             (0x21, [0x00, rest @ ..]) => decode_rit_offset(rest).map(Observation::RitOffset),
             (0x21, [0x01, state]) => Some(Observation::Rit(*state != 0)),
