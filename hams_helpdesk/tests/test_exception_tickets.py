@@ -591,6 +591,21 @@ class TestExceptionPaging(ExceptionTicketCase):
         self.assertIn("2 other server exception tickets", messages.body)
         self.assertEqual(len(self.toasts), 2)
 
+    def test_an_unassigned_ticket_pages_nobody_and_does_not_open_the_quiet_window(self):
+        on_duty = self.on_duty
+        holder = {"user": False}
+        self.safe_patch_object(
+            type(self.env["calendar.event"]), "get_current_on_duty_admin", lambda self: holder["user"], create=True
+        )
+        first = self.open_ticket(0)
+        self.assertFalse(first.user_id)
+        self.assertFalse(self.Fingerprint.search([("ticket_id", "=", first.id)]).notified_at)
+        holder["user"] = on_duty
+        second = self.open_ticket(1)
+        self.assertEqual(second.user_id, on_duty)
+        self.assertEqual(len(self.assignment_messages(second)), 1)
+        self.assertTrue(self.Fingerprint.search([("ticket_id", "=", second.id)]).notified_at)
+
     def test_a_ticket_that_stays_quiet_does_not_move_the_window(self):
         self.open_ticket(0)
         first_page = self.Fingerprint.search([("notified_at", "!=", False)]).notified_at
