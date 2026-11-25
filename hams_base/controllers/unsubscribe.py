@@ -6,7 +6,7 @@ from odoo.http import request
 # [@ANCHOR: hams_base_unsubscribe_unsubscribe_controller]
 class UnsubscribeController(http.Controller):
     # [@ANCHOR: hams_base:COMM_unsubscribe_page_route]
-    @http.route('/unsubscribe', type='http', auth='public', website=True)
+    @http.route('/unsubscribe', type='http', auth='public', website=True, sitemap=False)
     def unsubscribe_page(self, **kw):
         is_public_user = request.env.user.id == request.env.ref('base.public_user').id
         return request.render('hams_base.unsubscribe_page_template', {'is_public_user': is_public_user})

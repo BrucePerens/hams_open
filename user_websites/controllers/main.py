@@ -1318,13 +1318,13 @@ class UserWebsitesController(http.Controller):
         # the erasure happened. Land on the public, static confirmation page.
         return request.redirect("/privacy/erased")
 
-    @http.route("/privacy/erasing", type="http", auth="public", website=True)
+    @http.route("/privacy/erasing", type="http", auth="public", website=True, sitemap=False)
     # [@ANCHOR: user_websites:COMM_privacy_erasing]
     def privacy_erasing(self, **kwargs):
         # Public like /privacy/erased: tells the member the erasure continues in the background.
         return request.render("user_websites.privacy_erased", {"continues": True})
 
-    @http.route("/privacy/erased", type="http", auth="public", website=True)
+    @http.route("/privacy/erased", type="http", auth="public", website=True, sitemap=False)
     # [@ANCHOR: user_websites:COMM_privacy_erased]
     def privacy_erased(self, **kwargs):
         # # Tested by [@ANCHOR: user_websites:test_privacy_erased_public_page]

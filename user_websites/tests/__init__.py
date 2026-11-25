@@ -10,6 +10,7 @@ from . import test_blog_name_unique
 from . import test_blog_post_no_website_request
 from . import test_cache_coherence
 from . import test_config_settings
+from . import test_sitemap_erasure_pages
 from . import test_controllers
 from . import test_documentation
 from . import test_domains_api
