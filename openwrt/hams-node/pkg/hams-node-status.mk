@@ -15,6 +15,12 @@ define Package/hams-node-status/description
   from them, so a warning spreads with hams.com unreachable. Also keeps the signed deprecation list (rogue routers) and blocks what it names.
 endef
 
+define Package/hams-node-status/prerm
+#!/bin/sh
+[ -n "$$IPKG_INSTROOT" ] || /usr/sbin/hams-node-status stop
+exit 0
+endef
+
 define Package/hams-node-status/install
 	$(INSTALL_DIR) $(1)/usr/sbin $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/usr/sbin/hams-node-status $(1)/usr/sbin/

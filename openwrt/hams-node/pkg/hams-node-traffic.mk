@@ -13,6 +13,12 @@ define Package/hams-node-traffic/description
   busy member pairs can move to radio links. `hams-node-traffic optout` stops it.
 endef
 
+define Package/hams-node-traffic/prerm
+#!/bin/sh
+[ -n "$$IPKG_INSTROOT" ] || /usr/sbin/hams-node-traffic stop
+exit 0
+endef
+
 define Package/hams-node-traffic/install
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) ./files/usr/sbin/hams-node-traffic $(1)/usr/sbin/

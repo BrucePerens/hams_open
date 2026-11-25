@@ -13,6 +13,12 @@ define Package/hams-node-report/description
   device token, so they are published as .ham names.
 endef
 
+define Package/hams-node-report/prerm
+#!/bin/sh
+[ -n "$$IPKG_INSTROOT" ] || /usr/sbin/hams-node-report stop
+exit 0
+endef
+
 define Package/hams-node-report/install
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) ./files/usr/sbin/hams-node-report $(1)/usr/sbin/
