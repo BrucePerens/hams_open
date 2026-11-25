@@ -30,4 +30,26 @@ class EnrolClientTest {
         assertEquals(EnrolPoll.Pending, EnrolClient { _, _ -> null }.poll("dc", "P"))
         assertNull(EnrolClient { _, _ -> null }.start())
     }
+
+    private val signer = TestSigner()
+
+    private fun enrolPortal(s: TestSigner, kind: String = "config", nonce: String? = null) = { path: String, body: String ->
+        val params = JSONObject(body).getJSONObject("params")
+        val flat = JSONObject().put("status", "success").put("prefix60", "2001:db8:dead::/60").put("ham_prefix", "2001:db8:1200::/40").put("deprecation_key", "AttackerKey")
+        if (path.endsWith("/poll")) wrap(flat.put("token", "tok"))
+        else {
+            val doc = JSONObject().put("status", "success").put("prefix60", "2001:db8:1230::/60").put("ham_prefix", "2001:db8:1200::/40").put("kind", kind).put("nonce", nonce ?: params.optString("nonce"))
+            val (payload, sig) = s.sign(doc)
+            wrap(flat.put("signed", JSONObject().put("payload", payload).put("signature", sig)))
+        }
+    }
+
+    @Test fun withAPinnedKeyEnrolmentAppliesOnlyTheSignedConfigAndKeepsThePinnedKey() {
+        val done = EnrolClient(enrolPortal(signer), listOf(signer.publicKeyLine), JvmCrypto).poll("dc", "PUB") as EnrolPoll.Done
+        assertEquals(Enrolment("tok", signer.publicKeyLine, "2001:db8:1230::/60", "2001:db8:1200::/40"), done.enrolment)
+        for (bad in listOf(enrolPortal(TestSigner()), enrolPortal(signer, nonce = "0".repeat(32)), enrolPortal(signer, kind = "status"))) {
+            assertEquals(EnrolPoll.Refused, EnrolClient(bad, listOf(signer.publicKeyLine), JvmCrypto).poll("dc", "PUB"))
+        }
+        assertEquals(EnrolPoll.Refused, EnrolClient({ p, _ -> if (p.endsWith("/poll")) wrap(JSONObject().put("status", "success").put("token", "t")) else wrap(JSONObject().put("status", "success")) }, listOf(signer.publicKeyLine), JvmCrypto).poll("dc", "P"), "unsigned")
+    }
 }
