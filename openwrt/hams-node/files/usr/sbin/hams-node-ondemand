@@ -31,7 +31,7 @@ touch "$peers" "$refused" "$checked"
 recheck=300
 # Keys and prefixes of rogue routers (hams-node-status keeps this list): never a new tunnel to one.
 deplist=${HAMS_NODE_DEPRECATION_LIST:-/etc/hams-node/deprecation_list}
-deprecated() { [ -r "$deplist" ] && grep -q "^$1 " "$deplist"; }
+deprecated() { [ -r "$deplist" ] && awk -v k="$1" '$1 == k { found = 1 } END { exit !found }' "$deplist"; }
 
 # The first 60 bits of an IPv6 address (15 hex digits), so equal values mean "same /60". AWKKEY defines key(); used by key60, active and unseen.
 AWKKEY='function key(a, n, p, l, r, L, R, s, i, v) {

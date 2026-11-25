@@ -53,6 +53,13 @@ class WgTests(unittest.TestCase):
         result, calls = self.run_script("internet", peers, action="down", deplist="%s 2001:db8:ab01::/48\n" % KEY)
         self.assertIn("set wg-hams peer %s remove" % KEY, calls, "down still removes it")
 
+    def test_the_deprecation_list_is_matched_as_text_not_as_a_pattern(self):
+        listed = "A" * 20 + "x" + "A" * 22 + "="
+        dotted = "A" * 20 + "." + "A" * 22 + "="  # a "." in a pattern would match the listed "x"
+        peers = "%s 192.0.2.7:51820 2001:db8:ab01::/48\n" % dotted
+        result, calls = self.run_script("internet", peers, deplist="%s 2001:db8:ab09::/48\n" % listed)
+        self.assertEqual([c for c in calls if c.startswith("set ")], ["set wg-hams peer %s endpoint 192.0.2.7:51820 allowed-ips 2001:db8:ab01::/48" % dotted])
+
     def test_policy_rules_below_priority_100_are_added_per_prefix(self):
         peers = "%s 192.0.2.7:51820 2001:db8:ab01::/48,10.1.0.0/16\n" % KEY
         result, calls = self.run_script("internet", peers)
