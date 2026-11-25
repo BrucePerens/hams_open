@@ -51,20 +51,20 @@ expect = { kind = "split", on = true }
 
 [[step]]
 op = { kind = "get-mode" }
-tx = "fe fe 98 e0 04 fd"
-rx = "fe fe e0 98 04 01 01 fd"
+tx = "fe fe 98 e0 26 00 fd"
+rx = "fe fe e0 98 26 00 01 00 01 fd"
 expect = { kind = "mode", mode = "usb" }
 
 [[step]]
 op = { kind = "set-mode", mode = "cw" }
-tx = "fe fe 98 e0 06 03 fd"
+tx = "fe fe 98 e0 26 00 03 00 01 fd"
 rx = "fe fe e0 98 fb fd"
 expect = { kind = "ack" }
 
 [[step]]
 op = { kind = "get-mode" }
-tx = "fe fe 98 e0 04 fd"
-rx = "fe fe e0 98 04 03 01 fd"
+tx = "fe fe 98 e0 26 00 fd"
+rx = "fe fe e0 98 26 00 03 00 01 fd"
 expect = { kind = "mode", mode = "cw" }
 
 [[step]]
