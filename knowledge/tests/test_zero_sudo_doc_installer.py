@@ -342,3 +342,29 @@ class TestZeroSudoDocInstaller(common.HamsTransactionCase):
         Module._install_single_doc(utils, Article, "zero_sudo", doc_info)
         self.assertFalse(article.is_published, "Dropping the manifest flag unpublishes the article.")
         self.assertEqual(article.internal_permission, "none")
+
+    def test_a_manual_no_longer_in_any_manifest_leaves_the_help_pages(self):
+        # Tests [@ANCHOR: zero_sudo:retire_orphan_docs]
+        # Renaming a manual in its manifest (or dropping it, or uninstalling its module) installed a new article
+        # and left the old one published and in the Help index: a stale duplicate for readers.
+        Module = self.env["ir.module.module"]
+        utils = self.env["zero_sudo.security.utils"]
+        Article = self.env["knowledge.article"]
+
+        name = "Renamed Away Manual Test Doc"
+        article_id_key = f"zero_sudo.doc_article_id_zero_sudo_{name.replace(' ', '_')}"
+        doc_info = {"name": name, "path": "data/documentation.html", "public": True, "help_topic": "Community"}
+        Module._install_single_doc(utils, Article, "zero_sudo", doc_info)
+        article = Article.browse(int(utils._get_kv(article_id_key)))
+        self.assertTrue(article.is_published)
+
+        Module._bootstrap_knowledge_docs()
+        self.assertFalse(article.is_published, "No manifest lists it any more: it must leave the Help pages.")
+        self.assertEqual(article.audience, "internal")
+        self.assertEqual(article.internal_permission, "none")
+        self.assertFalse(article.help_topic)
+
+        # Listed again (module reinstalled, name restored): the same article comes back.
+        Module._install_single_doc(utils, Article, "zero_sudo", doc_info)
+        self.assertTrue(article.is_published)
+        self.assertEqual(article.audience, "member")
