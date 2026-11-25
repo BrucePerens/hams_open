@@ -1013,7 +1013,7 @@ fn check_timing(timing: &TimingSection) -> Result<Timing, RigError> {
 }
 
 /// Most attenuator steps a model may list.
-const MAX_ATTENUATOR_STEPS: usize = 9;
+const MAX_ATTENUATOR_STEPS: usize = 15;
 /// Most preamplifier steps a model may declare (the original FUNcube Dongle has six LNA codes).
 const MAX_PREAMP_STEPS: u8 = 6;
 const MAX_ANTENNA_PORTS: u8 = 8;
@@ -2244,7 +2244,7 @@ verified = { state = "unverified" }
             "attenuator_db = [12]\nattenuator_any_up_to_db = 31",
             "attenuator_db = [12, 6]",
             "attenuator_db = [0, 6]",
-            "attenuator_db = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]",
+            "attenuator_db = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]",
             "preamp_steps = 7",
         ] {
             let line = if bad.starts_with("preamp") {

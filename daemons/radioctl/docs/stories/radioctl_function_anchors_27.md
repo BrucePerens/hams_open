@@ -37,7 +37,7 @@ The limits exist because the timing applies to every command, including an unkey
 ### `fn build_levels(section: Option<&LevelsSection>) -> Result<LevelParams, RigError>` [@ANCHOR: radioctl:radioctl_core_rigfile_build_levels]
 
 Validates the optional `[levels]` block and builds `LevelParams`. `section` is borrowed; an absent block gives the default (no attenuator steps, no preamp or antenna choices, nothing absent).
-Rules: `attenuator_db` must be strictly ascending, positive and at most 9 values, or instead `attenuator_any_up_to_db` gives a whole-decibel maximum (the two are alternatives, not both); `preamp_steps` at most 6; `antenna_ports` at most 8; `absent` may name only plain levels (af-gain, rf-gain, mic-gain, monitor-level, keyer-speed, rf-power) and duplicates are merged, while attenuator, preamp and antenna cannot be listed absent. Violations return a `Malformed` `RigError`. Pure, no I/O.
+Rules: `attenuator_db` must be strictly ascending, positive and at most 15 values, or instead `attenuator_any_up_to_db` gives a whole-decibel maximum (the two are alternatives, not both); `preamp_steps` at most 6; `antenna_ports` at most 8; `absent` may name only plain levels (af-gain, rf-gain, mic-gain, monitor-level, keyer-speed, rf-power) and duplicates are merged, while attenuator, preamp and antenna cannot be listed absent. Violations return a `Malformed` `RigError`. Pure, no I/O.
 
 ### `fn build_scope(section: Option<&ScopeSection>, family: Family) -> Result<Option<ScopeParams>, RigError>` [@ANCHOR: radioctl:radioctl_core_rigfile_build_scope]
 
