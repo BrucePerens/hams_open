@@ -75,6 +75,10 @@ class EnrolAndTunnelTest {
         // 4. A request for a member's .ham name: directory lookup, peer made, handshake initiation on the wire to the member's endpoint.
         Thread { runCatching { proxyAsk("CONNECT n1abc.ham:80 HTTP/1.1\r\n\r\n") } }.start()
         val first = DatagramPacket(ByteArray(2048), 2048).also { peerSocket.receive(it) }
+        // The private key never went to the portal, in any request (standard or URL-safe base64, or hex).
+        val priv = KeyVault.privateKey(context)
+        val forms = listOf(java.util.Base64.getEncoder().encodeToString(priv), java.util.Base64.getUrlEncoder().encodeToString(priv), priv.joinToString("") { "%02x".format(it) })
+        for (r in portal.raw) for (f in forms) assertTrue(f !in r, "private key sent to the portal")
         assertEquals(148, first.length)
         assertEquals(1, first.data[0].toInt())
         assertTrue("/api/ipv6/directory/lookup n1abc.ham" in portal.seen, portal.seen.toString())
