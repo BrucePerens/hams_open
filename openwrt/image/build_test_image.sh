@@ -1,20 +1,22 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-2.0-or-later
 # Reproducible x86-64 test image: official OpenWrt Image Builder + our signed feed (../feed) with a throwaway key.
-# Usage: build_test_image.sh -a APK_DIR -w WORKDIR [-n NEWER_APK_DIR] [-t TESTFILES_DIR]     (APK_DIR holds the hams-node, hams-node-bird, -dns, -fw and luci-app-hams-node .apk files)
+# Usage: build_test_image.sh -a APK_DIR -w WORKDIR [-n NEWER_APK_DIR] [-t TESTFILES_DIR] [-d ECC_DROPBEAR_DIR]     (APK_DIR holds the hams-node, hams-node-bird, -dns, -fw and luci-app-hams-node .apk files)
+# -d DIR: the dropbear apk with ECDSA from build_ecc_dropbear.sh; it goes into the feed and wins over the stock dropbear (higher release), so the image's dropbear accepts ECDSA P-256 member-certificate keys.
 # Result: WORKDIR/hams-test.img (raw, boots with QEMU; see tools/smoke_test.py). No root needed. Nothing is published.
 # The official feeds have no jool-tools-siit / kmod-jool-siit, which hams-node depends on; empty stand-ins are
 # built into the same test feed so the apk dependency check passes (the SIIT step itself is not exercised).
 set -eu
 VERSION=${OPENWRT_VERSION:-25.12.5}
 here=$(cd "$(dirname "$0")" && pwd -P)
-apkdir= work= newer= testfiles=
-while getopts a:w:n:t: opt; do
+apkdir= work= newer= testfiles= eccdir=
+while getopts a:w:n:t:d: opt; do
 	case $opt in
 	a) apkdir=$OPTARG ;;
 	w) work=$OPTARG ;;
 	n) newer=$OPTARG ;;
 	t) testfiles=$OPTARG ;;
+	d) eccdir=$OPTARG ;;
 	*) exit 2 ;;
 	esac
 done
@@ -46,7 +48,7 @@ for n in jool-tools-siit kmod-jool-siit; do
 	"$APK" mkpkg --info "name:$n" --info "version:0-r1" --info "arch:x86_64" --info "description:test stand-in" \
 		--info "license:GPL-2.0-or-later" --files "$work/stubsrc" --output "$work/stubs/$n-0-r1.apk"
 done
-sh "$here/../feed/build_feed.sh" -k "$work/test-feed-private.pem" -o "$work/feed" "$apkdir" "$work/stubs"
+sh "$here/../feed/build_feed.sh" -k "$work/test-feed-private.pem" -o "$work/feed" "$apkdir" "$work/stubs" ${eccdir:+"$eccdir"}
 
 # trust the key and use the feed, both while building and in the image
 cp "$work/feed/hams-feed-public.pem" "$work/ib/keys/"
@@ -72,7 +74,7 @@ fi
 mkdir -p "$work/files/root"
 cp -r "$here/tools/enroll-stub" "$work/files/root/enroll-stub"
 
-PACKAGES="hams-node hams-node-update hams-node-enroll hams-node-report hams-node-bird hams-node-dns hams-node-fw bird2 luci-app-hams-node luci wireguard-tools kmod-wireguard jsonfilter uclient-fetch${MTLS_PKGS:+ $MTLS_PKGS}"
+PACKAGES=${HAMS_IMAGE_PACKAGES:-"hams-node hams-node-update hams-node-enroll hams-node-report hams-node-bird hams-node-dns hams-node-fw bird2 luci-app-hams-node luci wireguard-tools kmod-wireguard jsonfilter uclient-fetch${MTLS_PKGS:+ $MTLS_PKGS}"}   # HAMS_IMAGE_PACKAGES replaces the list (a smaller image for a single test, e.g. "dropbear" for ssh_test.py)
 make -C "$work/ib" image PROFILE=generic PACKAGES="$PACKAGES" FILES="$work/files" ROOTFS_PARTSIZE=256 EXTRA_IMAGE_NAME=hams
 gz=$(ls "$work"/ib/bin/targets/x86/64/*-ext4-combined.img.gz 2>/dev/null || ls "$work"/ib/bin/targets/x86/64/*combined*.img.gz | head -1)
 gunzip -c "$gz" > "$work/hams-test.img" || true   # gzip warns about trailing garbage in combined images
