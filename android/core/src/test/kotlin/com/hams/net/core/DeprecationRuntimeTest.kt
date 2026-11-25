@@ -28,8 +28,9 @@ class DeprecationRuntimeTest {
     @Test fun pollEvictsTheListedPeer() {
         table.onPacket("2001:db8:1230::5")
         val (payload, signature) = fullList(1)
-        val post = { path: String, _: String ->
-            if (path == "/api/ipv6/status") signer.envelope(JSONObject().put("kind", "status").put("state", "ok").put("list_seq", 1))
+        val post = { path: String, body: String ->
+            if (path == "/api/ipv6/status") signer.envelope(JSONObject().put("kind", "status").put("state", "ok").put("list_seq", 1)
+                .put("nonce", JSONObject(body).getJSONObject("params").getString("nonce")))
             else JSONObject().put("result", JSONObject().put("payload", payload).put("signature", signature)).toString()
         }
         DeprecationRuntime(enrolment, JvmCrypto, post, table, blocklist, null).runOnce()

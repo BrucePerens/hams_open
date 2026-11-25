@@ -2,6 +2,7 @@ package com.hams.net.core
 
 import org.json.JSONException
 import org.json.JSONObject
+import java.security.SecureRandom
 import uniffi.hams_net_ffi.DeprecationList
 import uniffi.hams_net_ffi.ListChange
 import uniffi.hams_net_ffi.PlatformCrypto
@@ -33,8 +34,10 @@ class DeprecationPoller(
 
     /** One poll. True when the node is currently disabled. */
     fun poll(): Boolean {
-        val status = fetch("/api/ipv6/status", JSONObject().put("token", token))?.first ?: return disabled
-        if (status.optString("kind") != "status") return disabled
+        // A fresh nonce per poll that the signed status must carry back: a recorded status (or one made for another router) is no answer.
+        val nonce = ByteArray(16).also { SecureRandom().nextBytes(it) }.joinToString("") { "%02x".format(it) }
+        val status = fetch("/api/ipv6/status", JSONObject().put("token", token).put("nonce", nonce))?.first ?: return disabled
+        if (status.optString("kind") != "status" || status.optString("nonce") != nonce) return disabled
         val listSeq = status.optLong("list_seq", -1)
         if (listSeq < statusSeq) return disabled // an older status is a replay
         statusSeq = listSeq
