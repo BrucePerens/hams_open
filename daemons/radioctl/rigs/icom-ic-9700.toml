@@ -86,6 +86,16 @@ code = 0x07
 mode = "rtty-r"
 code = 0x08
 
+# Data modes are a sideband code plus the DATA flag of command 26 (USB-D, LSB-D); listed after the plain modes
+# so that a code read back without the flag is the plain mode. See the "mode.data" fact.
+[[modes]]
+mode = "data"
+code = 0x01
+
+[[modes]]
+mode = "data-r"
+code = 0x00
+
 [[facts]]
 key = "rig.*"
 provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py and docs of this repository; Hamlib 4.6.2 model name", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 3081 --dump-caps`." }
@@ -150,6 +160,11 @@ verified = { state = "unverified" }
 key = "capability.rit-xit"
 provenance = { kind = "program-output", reference = "rigctl -m 3081 --dump-caps (Hamlib 4.6.2): functions list RIT but not XIT", note = "Hamlib lists no XIT for the IC-9700, so XIT commands may be refused by the radio; RIT is the usable half." }
 verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.data"
+provenance = { kind = "manual", reference = "IC-9700 CI-V Reference Guide (IC-9700_ENG_CI-V_4.pdf), command 26 format (mode, DATA flag, filter)", note = "Command 26 sets and reads the selected VFO mode as 26 00 <mode> <data> <filter> (00 selected VFO, data 00 off / 01 on, filter 01 to 03); the engine reads the mode with 26 00 and sets it with 26 00 <code> <data> <filter>, as on the IC-7300. `data` is USB with DATA on, `data-r` LSB with DATA on. AM-D and FM-D are not in radioctl's mode vocabulary." }
+verified = { state = "manual-checked", reference = "IC-9700_ENG_CI-V_4.pdf command 26, PDF page 25" }
 
 [[facts]]
 key = "mode.*"
