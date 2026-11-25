@@ -279,6 +279,16 @@ class TestMailIngestIncident(HamsTransactionCase):
         incident = self.env["pager.incident"].search([("name", "=", "Plain question")], limit=1)
         self.assertEqual(self.env["hams_helpdesk.ticket"].browse(incident.helpdesk_ticket_id).stage, "spam")
 
+    def test_info_mail_from_a_spoofed_member_is_judged_as_a_stranger(self):
+        # Tests [@ANCHOR: pager_incident_message_new]
+        # The same bulk mail that a real member's address exempts (test above) is not exempt when SES says the From is forged.
+        self.env["res.users"].create({"name": "Spoofed Member", "login": "spoofed_member", "email": "spoofed-member@example.org"})
+        subject = REAL_MISSED_SPAM_NAMES[4]
+        forged = "Authentication-Results: amazonses.com; spf=fail smtp.mailfrom=evil.example.net; dkim=none; dmarc=none\r\n"
+        self._ingest_raw(raw_message("info@hams.com", subject, from_addr="spoofed-member@example.org", headers=BULK_HEADERS + forged))
+        incident = self.env["pager.incident"].search([("name", "=", subject)], limit=1)
+        self.assertEqual(self.env["hams_helpdesk.ticket"].browse(incident.helpdesk_ticket_id).stage, "spam")
+
     def test_monitoring_incidents_are_never_run_through_the_mail_filter(self):
         # Tests [@ANCHOR: pd_helpdesk_adapter]
         # "DX Spot Feed Freshness" and the other monitoring names must stay in "new" whatever their description looks like:
