@@ -758,6 +758,19 @@ mod tests {
         let mut d = YaesuEngine::new(shipped("yaesu-ft-450d")).expect("engine");
         assert_eq!(b(&mut d, Op::SetLevel(Level::MicGain, 171)), b"MG171;");
         assert!(d.encode(&Op::SetLevel(Level::RfPower, 4)).is_err());
+        // FTDX101MP: PC is 005-200 (the FTDX101D's is 005-100), CAT book PDF p. 19.
+        let mut mp = YaesuEngine::new(shipped("yaesu-ftdx-101mp")).expect("engine");
+        assert_eq!(b(&mut mp, Op::SetLevel(Level::RfPower, 200)), b"PC200;");
+        assert!(mp.encode(&Op::SetLevel(Level::RfPower, 201)).is_err());
+        assert_eq!(
+            mp.feed(b"PC150;", Duration::ZERO),
+            vec![Inbound::Observation(Observation::Level(
+                Level::RfPower,
+                150
+            ))]
+        );
+        let mut d101 = YaesuEngine::new(shipped("yaesu-ftdx101d")).expect("engine");
+        assert!(d101.encode(&Op::SetLevel(Level::RfPower, 101)).is_err());
         // A model without a stated range keeps the default.
         assert_eq!(
             level_range(&shipped("yaesu-ft-991a"), Level::MicGain),

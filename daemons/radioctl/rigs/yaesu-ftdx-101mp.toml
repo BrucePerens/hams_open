@@ -15,6 +15,7 @@ family = "yaesu-newcat"
 [yaesu]
 model_id = 682
 split = "st"
+levels = { rf-power = [5, 200] }
 
 [levels]
 attenuator_db = [6, 12, 18]
@@ -83,6 +84,11 @@ verified = { state = "unverified" }
 [[facts]]
 key = "yaesu.model_id"
 provenance = { kind = "manual", reference = "Yaesu 'FTDX101MP/101D CAT Operation Reference Manual' (2308-L), file FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, https://www.yaesu.com/Files/4CB893D7-1018-01AF-FA97E9E9AD48B50C/FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, sha256 4f54e60adcb444671547770f90fb06dbf420b695ba1aec9b7d0a973ed81e8bc5: ID, PDF p. 15; Same description as the FTDX101D except the ID (0682). FT selects the MAIN or SUB transmitter; split is the ST command.", note = "Hamlib's NC_RIGID table in newcat.c agrees or is recorded in the file header as a disagreement." }
+verified = { state = "unverified" }
+
+[[facts]]
+key = "yaesu.levels"
+provenance = { kind = "manual", reference = "Yaesu 'FTDX101MP/101D CAT Operation Reference Manual' (2308-L), file FTDX101MP_D_CAT_OM_ENG_2308-L.pdf, sha256 4f54e60adcb444671547770f90fb06dbf420b695ba1aec9b7d0a973ed81e8bc5: PC, PDF p. 19", note = "PC is 005-100 on the FTDX101D and 005-200 on the FTDX101MP (a 200 W radio); the engine's default 005-100 would have refused every power above 100 W and discarded the radio's answers above it. Other levels keep the engine's defaults." }
 verified = { state = "unverified" }
 
 [[facts]]
