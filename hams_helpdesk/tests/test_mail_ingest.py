@@ -576,6 +576,27 @@ class TestMailIngest(HamsTransactionCase):
         self.assertEqual(spoofed.subtype_id, self.env.ref("mail.mt_note"))
         self.assertIn("Held email reply", spoofed.body)
 
+    def test_17b_a_member_reply_reopens_a_resolved_ticket_without_a_status_mail(self):
+        # Tests [@ANCHOR: hams_helpdesk:reopen_on_customer_reply]
+        _member, ticket, original_id = self._member_ticket_and_original_id("reopen_member", "Reopen ticket")
+        ticket.write({"stage": "resolved"})
+        mails_before = ticket.message_ids.filtered(lambda m: "Your issue has been updated" in (m.body or ""))
+        reply = self._reply_message(ticket, "reopen_member@example.org", original_id, SES_PASS_HEADERS)
+        self.assertEqual(reply.subtype_id, self.env.ref("mail.mt_comment"))
+        self.assertEqual(ticket.stage, "new", "the customer wrote again: the ticket is open again")
+        mails_after = ticket.message_ids.filtered(lambda m: "Your issue has been updated" in (m.body or ""))
+        self.assertEqual(mails_after, mails_before, "the member just wrote; no 'status updated' mail goes back")
+
+    def test_17c_a_held_reply_and_a_closed_ticket_do_not_reopen(self):
+        # Tests [@ANCHOR: hams_helpdesk:reopen_on_customer_reply]
+        _member, ticket, original_id = self._member_ticket_and_original_id("reopen_held", "Reopen held ticket")
+        ticket.write({"stage": "resolved"})
+        self._reply_message(ticket, "nobody@elsewhere.example.net", original_id, SES_PASS_HEADERS)
+        self.assertEqual(ticket.stage, "resolved", "a note held for staff is not the customer writing")
+        ticket.write({"stage": "closed"})
+        self._reply_message(ticket, "reopen_held@example.org", original_id, SES_PASS_HEADERS)
+        self.assertEqual(ticket.stage, "closed", "only a resolved ticket reopens")
+
     def test_18_a_reply_from_a_stranger_lands_as_a_note(self):
         _member, ticket, original_id = self._member_ticket_and_original_id("stranger_target", "Stranger ticket")
         reply = self._reply_message(ticket, "nobody@elsewhere.example.net", original_id, SES_PASS_HEADERS)
