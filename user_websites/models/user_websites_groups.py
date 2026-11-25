@@ -535,7 +535,8 @@ class UserWebsitesGroup(models.Model):
             )
             group.with_user(mail_svc).message_post(
                 body=_(
-                    "✅ **MODERATION ACTION:** You pardoned this group. The system lifted their suspension and reset their strike count to 0. (Note: Previously unpublished content remains unpublished until manually restored)."
+                    "✅ **MODERATION ACTION:** %s pardoned this group. The system lifted their suspension and reset their strike count to 0. (Note: Previously unpublished content remains unpublished until manually restored).",
+                    self.env.user.name,
                 ),
                 subtype_xmlid="mail.mt_note",
             )

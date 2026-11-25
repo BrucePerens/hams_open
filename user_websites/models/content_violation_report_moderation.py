@@ -158,9 +158,10 @@ class ContentViolationReportModeration(models.Model):
             )
             self.with_user(mail_svc).message_post(
                 body=_(
-                    "You applied a strike to the owner. Current strike count: %s"
-                )
-                % owner.violation_strike_count,
+                    "%(moderator)s applied a strike to the owner. Current strike count: %(count)s",
+                    moderator=self.env.user.name,
+                    count=owner.violation_strike_count,
+                ),
                 subtype_xmlid="mail.mt_note",
             )
         elif self.content_group_id:
@@ -183,9 +184,10 @@ class ContentViolationReportModeration(models.Model):
             )
             self.with_user(mail_svc).message_post(
                 body=_(
-                    "You applied a strike to the group. Current strike count: %s"
-                )
-                % group.violation_strike_count,
+                    "%(moderator)s applied a strike to the group. Current strike count: %(count)s",
+                    moderator=self.env.user.name,
+                    count=group.violation_strike_count,
+                ),
                 subtype_xmlid="mail.mt_note",
             )
         else:

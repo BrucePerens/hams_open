@@ -134,7 +134,8 @@ class ResUsersModeration(models.Model):
             )
             user.partner_id.with_user(mail_svc).message_post(
                 body=_(
-                    "✅ **MODERATION ACTION:** You pardoned this user. The system lifted their suspension and reset their strike count to 0. (Note: Previously unpublished content remains unpublished until manually restored)."
+                    "✅ **MODERATION ACTION:** %s pardoned this user. The system lifted their suspension and reset their strike count to 0. (Note: Previously unpublished content remains unpublished until manually restored).",
+                    self.env.user.name,
                 ),
                 subtype_xmlid="mail.mt_note",
             )
