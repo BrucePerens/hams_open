@@ -158,6 +158,10 @@ Builds the quoted argument of `cwx send`: spaces are replaced by byte 0x7f (as t
 
 Returns the tone chart of the engine's model: the 43-entry chart of the TS-590S (model id 21 in the description's `[kenwood]` block), in tenths of a hertz by the tone number `TN` takes (00 is 67.0 Hz, 41 is 254.1 Hz, 42 is 1750 Hz). `&self`; it reads the description only. Returns `None` for every other model, because no other Kenwood guide with a chart has been read; the tone ops and the `TN` answer are then refused or unrecognised. Pure, no I/O, no errors.
 
+### `fn monitor_max(&self) -> u16` [@ANCHOR: radioctl:radioctl_kenwood_engine_monitor_max]
+
+Returns the largest value of the `ML` (transmit monitor level) command for the engine's model: 20 for the TS-590SG (model id 23 in the description's `[kenwood]` block; TS-590S/SG PC command guide, `ML`: 001 ~ 020 for the SG), 9 for every other model (the TS-590S, TS-480 and TS-2000 guides give 001 ~ 009). `&self`; it reads the description only. The set path refuses a value above it and the `ML` answer path treats a value above it as unrecognised. Pure, no I/O, no errors.
+
 ### `fn encode_repeater(&mut self, op: &Op) -> Option<Result<Request, RigError>>` [@ANCHOR: radioctl:radioctl_kenwood_engine_encode_repeater]
 
 Encodes the repeater and tone ops for the Kenwood engine; `op` is the operation by reference and `&mut self` because a tone-mode read clears the collected flags. Returns `None` for any other operation so the normal encoder runs. On a model without a chart it refuses every repeater op with an `Unsupported` `RigError`. On the TS-590S the tone mode is two flags: a set sends `TO` and `CT` together (`TO1;CT0;` for `Tone`, `TO0;CT1;` for `Tsql`, both 0 for `Off`) with no reply expected, and a read sends `TO;CT;`. The tone is `TN` (encode) and `CN` (squelch, number 41 at most) set together, and `TN` read. A tone outside the chart, DCS, the repeater shift and the offset are refused as `Unsupported`; the guide has no command for them. Builds a request only.

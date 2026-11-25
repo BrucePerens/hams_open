@@ -268,6 +268,7 @@ impl KenwoodEngine {
         }
     }
 
+    // [@ANCHOR: radioctl_kenwood_engine_monitor_max]
     /// The largest `ML` value: 9 in the TS-590S, TS-480 and TS-2000 guides, 20 on the TS-590SG
     /// (ID 23; TS-590S/SG guide, `ML`: 001 ~ 009 (TS-590S), 001 ~ 020 (TS-590SG)).
     fn monitor_max(&self) -> u16 {
@@ -1459,6 +1460,7 @@ mod tests {
     }
 
     // Tests [@ANCHOR: radioctl_kenwood_decode_level]
+    // Tests [@ANCHOR: radioctl_kenwood_engine_monitor_max]
     #[test]
     fn the_ts_590sg_monitor_level_runs_to_20_the_ts_590s_to_9() {
         let mut sg = KenwoodEngine::new(shipped("kenwood-ts-590sg")).expect("engine");
