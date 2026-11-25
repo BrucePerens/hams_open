@@ -28,6 +28,11 @@ The "Systemd Failed Services Tracker" check (type systemd, target `*`) and the `
     the unit share one ticket per unit with one occurrence count, and the incident points at it instead of the adapter opening
     another. Only a paging severity joins; low and medium stay tracked and are not ticketed, and only the stock
     `hams_helpdesk.ticket` model carries the per-unit tickets. [@ANCHOR: pager_duty:unit_ticket_join]
+6.  **A repeat does not count again.** A check that keeps failing reports every pass, but once its incident is open a repeat
+    only counts on the incident: the units are reported to their tickets again only when no ticket carries the incident, that
+    ticket was closed or resolved meanwhile (the reopen), or the incident is due for a re-page. A unit that stays failed adds
+    one occurrence to its ticket, not one per check run. [@ANCHOR: pager_duty:unit_report_once]
+    [@ANCHOR: pager_duty:unit_report_due]
 
 ## A check that has never run says so
 
