@@ -208,6 +208,12 @@ class TestUserBlogUrls(HamsHttpCase):
         self.assertNotIn(self.draft.website_url, locs)
         self.assertFalse([loc for loc in locs if f"/blog/{self.blog_slug}" in loc])
 
+    def test_10b_sitemap_lists_each_address_once(self):
+        # Tests [@ANCHOR: user_websites:website_enumerate_user_blogs]
+        website = self.env["website"].search([], limit=1)
+        locs = [page["loc"] for page in website._enumerate_pages()]
+        self.assertEqual(len(locs), len(set(locs)))
+
     def test_11_a_new_blog_is_named_without_a_possessive(self):
         # Tests [@ANCHOR: user_websites:fn_main_new_blog_name]
         self.authenticate("burlother", "burlother")

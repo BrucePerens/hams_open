@@ -33,8 +33,12 @@ class Website(models.Model):
         def is_stock_address(loc):
             return any(loc == prefix or loc.startswith(prefix + "/") for prefix in stock_prefixes)
 
+        # Odoo lists a published website.page and a controller route at the same address twice (/terms, /email-policy,
+        # /silent-key-policy): each address is offered once.
+        seen = set()
         for page in super()._enumerate_pages(query_string=query_string, force=force):
-            if not is_stock_address(page["loc"]):
+            if not is_stock_address(page["loc"]) and page["loc"] not in seen:
+                seen.add(page["loc"])
                 yield page
         if query_string or not owned_blogs:
             return
