@@ -337,9 +337,21 @@ class CloudflareConfigManager(models.AbstractModel):
         if refusal:
             return False, refusal
 
+        state, existing_ruleset = get_zone_ruleset_checked(
+            "http_request_firewall_custom", token, zone_id
+        )
+        if state == "error":
+            return False, f"REFUSED: the Cloudflare ruleset for {website.name} could not be read ({existing_ruleset}); nothing was pushed."
+
         odoo_rules = self.env["cloudflare.waf.rule"].search(
             [("website_id", "=", website.id)], limit=1000
         )
+        if not odoo_rules and state == "absent":
+            # The default rules are seeded only by the install hook, which skips a website that has no credentials
+            # yet; without this the zone could stay without any WAF rule (live: /xmlrpc and /web/database/ open).
+            odoo_rules = self.env["cloudflare.waf.rule"].create(
+                [dict(vals, website_id=website.id) for vals in DEFAULT_WAF_RULES]
+            )
 
         cf_rules_payload = []
         for r in odoo_rules:
@@ -359,11 +371,6 @@ class CloudflareConfigManager(models.AbstractModel):
             "rules": cf_rules_payload,
         }
 
-        state, existing_ruleset = get_zone_ruleset_checked(
-            "http_request_firewall_custom", token, zone_id
-        )
-        if state == "error":
-            return False, f"REFUSED: the Cloudflare ruleset for {website.name} could not be read ({existing_ruleset}); nothing was pushed."
         if existing_ruleset and "id" in existing_ruleset:
             return update_zone_ruleset(
                 existing_ruleset["id"], ruleset_payload, token, zone_id

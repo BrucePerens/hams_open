@@ -254,6 +254,23 @@ class TestWafManagement(HamsTransactionCase):
         payload = mock_update.call_args[0][1]
         self.assertEqual(payload["rules"][0]["action"], "managed_challenge")
 
+    def test_04c_push_seeds_the_default_rules_when_zone_and_odoo_have_none(self):
+        """The install hook skips a website without credentials; a later push must still deploy the defaults."""
+        # Tests [@ANCHOR: cf_action_push_waf_rules]
+        self.env["cloudflare.waf.rule"].search([("website_id", "=", self.website.id)]).unlink()
+        base = "odoo.addons.cloudflare.models.config_manager."
+        self.safe_patch(base + "get_zone_ruleset_checked").return_value = ("absent", None)
+        create = self.safe_patch(base + "create_zone_ruleset")
+        create.return_value = (True, "Created")
+        pushed, _msg = (
+            self.env["cloudflare.config.manager"]
+            .with_user(self.svc_uid)
+            .action_push_waf_rules(website_id=self.website.id)
+        )
+        self.assertTrue(pushed)
+        expressions = [r["expression"] for r in create.call_args[0][0]["rules"]]
+        self.assertEqual(expressions, [r["expression"] for r in DEFAULT_WAF_RULES])
+
     def test_04b_pull_and_push_leave_a_ruleset_that_could_not_be_read_alone(self):
         """An outage or a token that cannot read the zone is not an empty ruleset: nothing is deleted or overwritten."""
         # Tests [@ANCHOR: cf_action_pull_waf_rules]
