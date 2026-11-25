@@ -976,3 +976,10 @@ fn the_clock_is_stepped_only_when_enabled_and_inside_the_ceilings() {
         "{log}"
     );
 }
+
+// Tests [@ANCHOR: relay_broker_launchd_listener]
+#[test]
+fn a_process_not_started_by_a_service_manager_has_no_activated_listener() {
+    // Under cargo test neither systemd's LISTEN_* variables nor a launchd job are present (on macOS this calls launch_activate_socket).
+    assert!(relay_broker::server::activated_listener().is_none());
+}

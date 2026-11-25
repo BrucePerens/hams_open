@@ -5,7 +5,7 @@ The relay's privileged broker from `hams_com/docs/proposals/RELAY_ZERO_PRIVILEGE
 is wired into the relay or installed by any package**; the integration path is at the end.
 
 A small separate process (about 2,000 lines of source without tests; no web, no async runtime,
-no FFI, no shell, two commented `unsafe` blocks that adopt kernel-provided descriptors) that
+no shell, three commented `unsafe` uses that adopt kernel- or launchd-provided descriptors (one is the macOS-only `launch_activate_socket` call)) that
 answers a fixed set of typed requests from authenticated local peers over a Unix domain socket:
 
 | Action | What it does | Privilege it needs |
@@ -822,6 +822,14 @@ and decoders with the latency measurement gate; (6) per-worker systemd restricti
 **Signature.** `pub fn activated_listener() -> Option<UnixListener>`
 
 **Arguments.** None; reads the environment variables `LISTEN_PID` and `LISTEN_FDS`. **Returns.** `Some(listener)` set to blocking mode, or `None` when the variables are missing, malformed, name another pid, or `LISTEN_FDS` is not 1. **Errors.** None; every failure is `None`. **Side effects.** Takes ownership of fd 3, so call it at most once per process. **Tests.** `the_accept_loop_serves_a_real_listener_filters_protected_devices_and_exits_when_idle` (tests/broker.rs) runs the loop on a listener the test made itself; whether it also exercises the environment-variable path is unknown (to-do: add a direct test of `activated_listener` with `LISTEN_PID`/`LISTEN_FDS` set).
+
+### `launchd_listener` (server.rs) [@ANCHOR: relay_broker:relay_broker_launchd_listener]
+
+**Purpose.** macOS only (private; `activated_listener` tries it first there): the listener launchd holds for the `broker` entry of the plist's `Sockets` dictionary. launchd sets no environment variable and uses no fixed descriptor number, so `launch_activate_socket` (libSystem) is the only way to get the socket; without it a launchd-started broker exits 2 with "no activated socket". The foreign call, reading its descriptor array and adopting the descriptor are the crate's third `unsafe` use, each with a `SAFETY` comment.
+
+**Signature.** `fn launchd_listener() -> Option<UnixListener>` (`#[cfg(target_os = "macos")]`, `#[allow(unsafe_code)]`)
+
+**Arguments.** None. **Returns.** `Some(listener)` in blocking mode when launchd returns exactly one descriptor; `None` when the process was not started by launchd, the call fails, or the count is not 1. **Errors.** None; every failure is `None`. **Side effects.** Takes ownership of the descriptor and frees launchd's array; call it at most once per process. **Tests.** `a_process_not_started_by_a_service_manager_has_no_activated_listener` (tests/broker.rs); the real launchd path is run by hams_com `packaging/macos/test_broker_launchd.sh` on a Mac.
 
 ### `set_timeouts` (transport.rs) [@ANCHOR: relay_broker:relay_broker_set_timeouts]
 

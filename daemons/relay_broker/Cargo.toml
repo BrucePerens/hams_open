@@ -18,9 +18,9 @@ path = "src/main.rs"
 
 [lints.rust]
 # nix wraps every OS call this crate needs (SO_PEERCRED, sendmsg/recvmsg with SCM_RIGHTS, open with
-# O_NOFOLLOW, fstat). Two commented unsafe blocks adopt descriptors the kernel handed us:
-# one received over SCM_RIGHTS (transport::adopt_received_fd) and systemd's activated socket
-# (server::activated_listener). Nothing else may add unsafe.
+# O_NOFOLLOW, fstat). The commented unsafe blocks adopt descriptors the kernel or the service manager handed us:
+# one received over SCM_RIGHTS (transport::adopt_received_fd), systemd's activated socket
+# (server::activated_listener) and, on macOS, launchd's (server::launchd_listener). Nothing else may add unsafe.
 unsafe_code = "deny"
 missing_docs = "warn"
 
