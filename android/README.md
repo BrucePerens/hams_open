@@ -35,3 +35,5 @@ Bench step (needs a real TNC or radio, a licensed operator, a dummy load or a te
 2. Put the TNC in KISS mode, connect it to the phone, enable the RF interface with your callsign; confirm the reminder is shown.
 3. Into a dummy load, send one packet; check the TNC keys and the KISS data frame matches `Kiss.encode`. Receive a frame from a second station and check it arrives.
 4. Confirm turning on WireGuard for that interface is refused.
+
+Pinned signing keys: the enrolment config and directory lookups are signed by hams.com with the deprecation key and echo the request nonce (`docs/proposals/IPV6_CONFIG_SIGNING.md` in hams_com). `core/src/main/resources/hams_pinned_keys.txt` ships the acceptable public keys (usign lines, filled at release time; see `docs/runbooks/IPV6_NET_LAUNCH.md`). While it is empty the app keeps the old behaviour and prints a warning; once it holds a key, `EnrolClient` and `DirectoryClient` (`SignedReply`) refuse an unsigned, wrongly signed, replayed or wrong-kind reply, and the deprecation key kept is the pinned one that verified the config.
