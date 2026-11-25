@@ -22,7 +22,7 @@ echo = false
 main_sub = "full"
 
 [levels]
-attenuator_db = [6, 12, 18]
+attenuator_db = [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36, 39, 42, 45]
 attenuator_any_up_to_db = 0
 preamp_steps = 2
 
@@ -108,7 +108,7 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "levels.*"
-provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/ic7760.c rig_caps `.attenuator` and `.preamp`; rigs/icom/icom.c icom_set_level and icom_get_level (RIG_LEVEL_ATT: command 0x11, BCD decibels; RIG_LEVEL_PREAMP: command 0x16 sub-command 0x02); rigs/icom/icom_defs.h (C_CTL_ATT 0x11, C_CTL_FUNC 0x16, S_FUNC_PAMP 0x02)", note = "Facts only, no code or table copied. The lists are Hamlib's count of steps; the radio may offer more (Hamlib marks some of these lists as guesses). A preamplifier step is a P.AMP number, not a gain in dB." }
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/ic7760.c rig_caps `.attenuator` and `.preamp`; rigs/icom/icom.c icom_set_level and icom_get_level (RIG_LEVEL_ATT: command 0x11, BCD decibels; RIG_LEVEL_PREAMP: command 0x16 sub-command 0x02); rigs/icom/icom_defs.h (C_CTL_ATT 0x11, C_CTL_FUNC 0x16, S_FUNC_PAMP 0x02)", note = "Facts only, no code or table copied. The attenuator list (3 dB steps, 3 to 45 dB) is from the IC-7760 CI-V reference guide (IC-7760_ENG_CI-V_2.pdf), command 11; Hamlib lists only 6, 12, 18. A preamplifier step is a P.AMP number, not a gain in dB." }
 verified = { state = "unverified" }
 
 [[facts]]
