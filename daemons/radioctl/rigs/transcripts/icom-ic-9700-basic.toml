@@ -20,16 +20,16 @@ rx = "fe fe e0 a2 03 00 40 17 44 01 fd"
 expect = { kind = "frequency", vfo = "a", hz = 144174000 }
 
 [[step]]
-op = { kind = "set-frequency", vfo = "a", hz = 7030000 }
-tx = "fe fe a2 e0 05 00 00 03 07 00 fd"
+op = { kind = "set-frequency", vfo = "a", hz = 144300000 }
+tx = "fe fe a2 e0 05 00 00 30 44 01 fd"
 rx = "fe fe e0 a2 fb fd"
 expect = { kind = "ack" }
 
 [[step]]
 op = { kind = "get-frequency", vfo = "a" }
 tx = "fe fe a2 e0 03 fd"
-rx = "fe fe e0 a2 03 00 00 03 07 00 fd"
-expect = { kind = "frequency", vfo = "a", hz = 7030000 }
+rx = "fe fe e0 a2 03 00 00 30 44 01 fd"
+expect = { kind = "frequency", vfo = "a", hz = 144300000 }
 
 [[step]]
 op = { kind = "get-frequency", vfo = "b" }
@@ -38,16 +38,16 @@ rx = "fe fe e0 a2 25 01 00 40 17 44 01 fd"
 expect = { kind = "frequency", vfo = "b", hz = 144174000 }
 
 [[step]]
-op = { kind = "set-frequency", vfo = "b", hz = 14025000 }
-tx = "fe fe a2 e0 25 01 00 50 02 14 00 fd"
+op = { kind = "set-frequency", vfo = "b", hz = 145500000 }
+tx = "fe fe a2 e0 25 01 00 00 50 45 01 fd"
 rx = "fe fe e0 a2 fb fd"
 expect = { kind = "ack" }
 
 [[step]]
 op = { kind = "get-frequency", vfo = "b" }
 tx = "fe fe a2 e0 25 01 fd"
-rx = "fe fe e0 a2 25 01 00 50 02 14 00 fd"
-expect = { kind = "frequency", vfo = "b", hz = 14025000 }
+rx = "fe fe e0 a2 25 01 00 00 50 45 01 fd"
+expect = { kind = "frequency", vfo = "b", hz = 145500000 }
 
 [[step]]
 op = { kind = "get-split" }

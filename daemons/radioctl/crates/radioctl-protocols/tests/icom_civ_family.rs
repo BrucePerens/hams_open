@@ -198,14 +198,17 @@ fn every_icom_file_round_trips_what_it_claims_and_refuses_the_rest() {
             );
         }
         if has(Capability::SecondVfo) {
-            write(
-                engine.as_mut(),
-                &mut rig,
-                &Op::SetFrequency(Vfo::B, Hz(14_025_000)),
-            );
+            // 14.025 MHz, or 25 kHz above the first whole megahertz of a model that does not cover it.
+            let (low, high) = desc.frequency_limits();
+            let other = if (low..=high).contains(&Hz(14_025_000)) {
+                Hz(14_025_000)
+            } else {
+                Hz(low.0.div_ceil(1_000_000) * 1_000_000 + 25_000)
+            };
+            write(engine.as_mut(), &mut rig, &Op::SetFrequency(Vfo::B, other));
             assert_eq!(
                 read(engine.as_mut(), &mut rig, &Op::GetFrequency(Vfo::B)),
-                Observation::Frequency(Vfo::B, Hz(14_025_000)),
+                Observation::Frequency(Vfo::B, other),
                 "{id}"
             );
         }
