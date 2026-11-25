@@ -156,9 +156,6 @@ class Module(models.Model):
                     all_doc_infos.append((mod.name, doc_info))
             last_id = batch[-1].id
 
-        if not all_doc_infos:
-            return
-
         hash_keys = []
         article_id_keys = []
         for mod_name, doc_info in all_doc_infos:
@@ -186,6 +183,39 @@ class Module(models.Model):
             self._install_single_doc(
                 utils, Article, mod_name, doc_info, existing_hashes, existing_article_ids
             )
+        self._retire_orphan_docs(utils, Article, env_svc, set(article_id_keys))
+
+    @api.model
+    # [@ANCHOR: zero_sudo:retire_orphan_docs]
+    def _retire_orphan_docs(self, utils, Article, env_svc, current_article_id_keys):
+        """Take manuals that no installed manifest lists any more out of the Help pages.
+
+        A manifest entry that is renamed or dropped, or a module that is uninstalled, leaves the
+        article the loader made for it published. Such an article becomes internal (as the
+        knowledge 1.3 migration does for old ones) and its stored hash is cleared, so listing it
+        again installs it afresh into the same article.
+        """
+        prefix = "zero_sudo.doc_article_id_"
+        rows = env_svc["zero_sudo.kv"].search([("key", "=like", prefix + "%")])
+        for row in rows:
+            if row.key in current_article_id_keys or not row.key.startswith(prefix):
+                continue
+            try:
+                article = Article.browse(int(row.value))
+            except (TypeError, ValueError):
+                continue
+            if not article.exists():
+                continue
+            if "audience" in Article._fields and article.audience == AUDIENCE_INTERNAL and not article.is_published:
+                continue
+            vals = {"is_published": False, "internal_permission": "none"}
+            if "audience" in Article._fields:
+                vals["audience"] = AUDIENCE_INTERNAL
+            if "help_topic" in Article._fields:
+                vals["help_topic"] = False
+            article.write(vals)
+            utils._set_kv("zero_sudo.doc_hash_" + row.key[len(prefix):], "")
+            _logger.info("Retired knowledge documentation %s: no manifest lists it.", article.name)
 
     # [@ANCHOR: zero_sudo:ir_module_markdown_doc_to_html]
     @api.model

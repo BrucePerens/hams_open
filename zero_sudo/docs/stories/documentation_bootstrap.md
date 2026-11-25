@@ -46,7 +46,11 @@ account) and collects each manifest's `knowledge_docs` list; a value that is not
 the stored content hashes and article ids from `zero_sudo.kv` with one query, then calls `_install_single_doc` for each. Side
 effects: writes `knowledge.article` rows and `zero_sudo.kv` rows (with `mail_notrack`); nothing is sent. Idempotent: an unchanged
 document costs one hash comparison. No explicit locking; concurrent loads on different workers can race, but each write sets
-the same final content.
+the same final content. After the installs it calls `_retire_orphan_docs`, also when no manifest lists a document.
+
+### `ir.module.module._retire_orphan_docs(utils, Article, env_svc, current_article_id_keys)` `[@ANCHOR: zero_sudo:retire_orphan_docs]`
+
+`@api.model`, returns nothing. Argument `current_article_id_keys`: the set of `zero_sudo.doc_article_id_<module>_<name>` keys the installed manifests list now. Every other such row in `zero_sudo.kv` belongs to a manual whose manifest entry was renamed or dropped, or whose module was uninstalled. Its article (when it still exists) is set unpublished, audience internal (when the field exists), permission none and no help topic, so Help no longer lists, searches or opens it; the stored content hash is cleared so listing the manual again reinstalls it into the same article. An article already unpublished and internal is left alone. Deletes nothing. Tests: `knowledge/tests/test_zero_sudo_doc_installer.py`.
 
 ### `ir.module.module._install_single_doc(utils, Article, module_name, doc_info, existing_hashes=None, existing_article_ids=None)` `[@ANCHOR: zero_sudo:install_single_doc]`
 
