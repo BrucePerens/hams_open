@@ -913,7 +913,7 @@ class HelpdeskTicket(models.Model):
         # (a mail-back confirms a live, reading inbox) or a real customer
         # whose address was spoofed (who would be told their ticket is
         # phishing). Moving it back out of "spam" still mails as usual.
-        if "stage" in vals and vals["stage"] != "spam":
+        if "stage" in vals and vals["stage"] != "spam" and not self.env.context.get("hams_no_stage_mailback"):
             for ticket in self:
                 # Never for a mandatory-report ticket: its partner is the REPORTED member, who must not be told.
                 if ticket.partner_id and ticket.ticket_type != _CSAM_TICKET_TYPE:
@@ -932,6 +932,19 @@ class HelpdeskTicket(models.Model):
                         mail_headers={"Auto-Submitted": "auto-generated", "X-Auto-Response-Suppress": "All"},
                     )
         return res
+
+    # [@ANCHOR: hams_helpdesk:reopen_on_customer_reply]
+    @public_rpc
+    def message_post(self, **kwargs):
+        """A visible message from the ticket's own customer on a Resolved ticket reopens it (stage New). A reply held as an
+        internal note (failed sender check, stranger) is not the customer and does not; a Closed ticket stays closed. The
+        stage change sends no "status updated" mail: the customer has just written."""
+        message = super().message_post(**kwargs)
+        if len(self) == 1 and self.stage == "resolved" and self.partner_id and message.subtype_id and not message.subtype_id.internal \
+                and message.message_type in ("email", "comment") and message.author_id == self.partner_id:
+            hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
+            self.with_env(hd_env).with_context(hams_no_stage_mailback=True).write({"stage": "new"})
+        return message
 
     @public_rpc
     def action_shift_handoff(self):

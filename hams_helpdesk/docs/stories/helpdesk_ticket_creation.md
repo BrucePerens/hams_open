@@ -194,6 +194,13 @@ authentication or its sender is neither a user nor a participant (the ticket's c
 before). Decision: the support@ alias accepts any sender, so a stranger who knows a Message-ID cannot post a customer-visible message.
 Verified by `test_17_a_spoofed_reply_lands_as_a_note_not_in_the_members_name`.
 
+### `reopen_on_customer_reply` [@ANCHOR: hams_helpdesk:reopen_on_customer_reply]
+
+`hams_helpdesk.ticket.message_post` moves a Resolved ticket back to New when the post is a visible (non-internal) email or comment
+whose author is the ticket's own customer. A held reply (internal note, no author) does not, and a Closed ticket stays closed.
+The stage change sends no "status updated" mail (context `hams_no_stage_mailback`), because the customer has just written.
+Verified by `test_17b_a_member_reply_reopens_a_resolved_ticket_without_a_status_mail` and `test_17c_a_held_reply_and_a_closed_ticket_do_not_reopen`.
+
 ### `inbound_create_rate_reasons` [@ANCHOR: hams_helpdesk:inbound_create_rate_reasons]
 
 `hams_helpdesk.ticket._inbound_create_rate_reasons(email_from)` (model method), called by `message_new()` for a sender who is not a member.
