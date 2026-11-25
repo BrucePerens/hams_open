@@ -29,6 +29,8 @@ mTLS management test: `build_test_image.sh -a APK_DIR -w WORKDIR -t FIXTURES/ove
 openssl-util to the image), where `tools/mtls_test.py fixtures FIXTURES` makes a TEST CA, the owner/other/revoked/rogue client certificates
 and the overlay; `tools/mtls_test.py run IMAGE FIXTURES` boots it and checks the HTTPS port with `openssl s_client` in the guest.
 
+`tools/ssh_test.py IMAGE` (stock image, QEMU, no root; ssh from the host through a forwarded port): `hams-node-ssh` against the real dropbear: password login works before `apply`; after it only the owner's key logs in and the password is refused; `off` gives the password back and keeps the owner's own key. Verified on OpenWrt 25.12.5 x86-64. Finding: stock dropbear has no ECDSA, so the member-certificate ECDSA keys cannot log in yet (to-do router-ssh-ecdsa-member-key).
+
 `tools/endpoint_test.py IMAGE` (stock image, QEMU with a second NIC for `apk add openssl-util`): copies `hams-node-endpoint` in, runs it with a
 stand-in `uclient-fetch` that keeps the request body, and checks on the host that the body's MAC equals the portal's formula and that the
 private key is not in it. Verified on OpenWrt 25.12.5 x86-64 (busybox ash, `openssl base64`, `hexdump`; the image has no `base64` or `od`).
