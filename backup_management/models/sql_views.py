@@ -28,6 +28,9 @@ class BackupLatestSnapshotView(models.Model):
                     SELECT DISTINCT ON (config_id) 'SQL View'::varchar as name,
                         id, config_id, website_id, company_id, snapshot_id, start_time, size_bytes, status
                     FROM backup_snapshot
+                    -- A partial snapshot (kopia reported failed files) is not a success: the board's "last snapshot" and
+                    -- its stale test must not be freshened by one, as cron_sync_all_backups' own stale alert is not.
+                    WHERE status IS DISTINCT FROM 'partial'
                     ORDER BY config_id, start_time DESC, id DESC
                 )
             """
