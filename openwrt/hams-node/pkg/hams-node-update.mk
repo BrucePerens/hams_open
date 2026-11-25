@@ -17,6 +17,12 @@ define Package/hams-node-update/conffiles
 /etc/config/hams_node_update
 endef
 
+define Package/hams-node-update/prerm
+#!/bin/sh
+[ -n "$$IPKG_INSTROOT" ] || /usr/sbin/hams-node-update unschedule
+exit 0
+endef
+
 define Package/hams-node-update/install
 	$(INSTALL_DIR) $(1)/usr/sbin $(1)/etc/config
 	$(INSTALL_BIN) ./files/usr/sbin/hams-node-update $(1)/usr/sbin/

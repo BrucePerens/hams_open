@@ -17,6 +17,12 @@ define Package/hams-node-enroll/conffiles
 /etc/config/hams_node_enroll
 endef
 
+define Package/hams-node-enroll/prerm
+#!/bin/sh
+[ -n "$$IPKG_INSTROOT" ] || [ ! -f /etc/crontabs/root ] || { grep -vF /usr/sbin/hams-node-enroll /etc/crontabs/root > /etc/crontabs/root.new; mv /etc/crontabs/root.new /etc/crontabs/root; }
+exit 0
+endef
+
 define Package/hams-node-enroll/install
 	$(INSTALL_DIR) $(1)/usr/sbin $(1)/etc/config
 	$(INSTALL_BIN) ./files/usr/sbin/hams-node-enroll $(1)/usr/sbin/
