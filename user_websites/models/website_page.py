@@ -588,6 +588,10 @@ class WebsitePage(models.Model):
         # which grants create=1, via implied_ids).
         self.check_access("create")
         self._check_proxy_ownership_create(vals_list)
+        for vals in vals_list:
+            self._check_member_page_url(
+                vals.get("url"), vals.get("owner_user_id"), vals.get("user_websites_group_id")
+            )
 
         # 0. Sanitize arch to prevent Stored XSS
         if not (
@@ -816,6 +820,27 @@ class WebsitePage(models.Model):
         records._invalidate_cloudflare_cache()
         return records
 
+    def _check_member_page_url(self, url, owner_user_id, group_id):
+        """A member (not an administrator or service account) may only put a page at /<own slug> or
+        under /<own slug>/. The site editor already builds such addresses; this stops a direct ORM or
+        RPC create/write from claiming /privacy, /shop-news or another member's /<slug>."""
+        # Verified by [@ANCHOR: test_member_page_url_stays_in_own_namespace]
+        env = self.env
+        if (
+            env.su
+            or env.user.has_group("base.group_system")
+            or env.user.has_group("user_websites.group_user_websites_administrator")
+            or env.user.has_group("user_websites.group_user_websites_service_account")
+            or env.user.has_group("user_websites.group_user_websites_ownership_bypass")
+            or not url
+        ):
+            return
+        svc = env["zero_sudo.security.utils"]._get_service_env("user_websites.user_websites_service_account")
+        owner = svc["res.users"].browse(owner_user_id) if owner_user_id else svc["user.websites.group"].browse(group_id or 0)
+        slug = owner.website_slug if owner else False
+        if not slug or not (url == f"/{slug}" or url.startswith(f"/{slug}/")) or ".." in url.split("/"):
+            raise AccessError(_("A page address must be your own site address or below it."))
+
     # [@ANCHOR: website_page_check_access]
     def check_access(self, operation):
         # # Verified by [@ANCHOR: test_acl_overhead_loop_elimination]
@@ -868,6 +893,11 @@ class WebsitePage(models.Model):
         # # Verified by [@ANCHOR: test_tenant_view_isolation]
         self.check_access("write")
         self._check_proxy_ownership_write(vals)
+        if "url" in vals:
+            for page in self:
+                self._check_member_page_url(
+                    vals["url"], page.owner_user_id.id, page.user_websites_group_id.id
+                )
 
         if not (
             self.env.su

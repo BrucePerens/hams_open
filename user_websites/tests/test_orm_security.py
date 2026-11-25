@@ -258,6 +258,22 @@ class TestORMSecurity(RealTransactionCase):
 
         self.assertEqual(post_name, "Public Post")
 
+    def test_05b_member_page_url_stays_in_own_namespace(self):
+        # [@ANCHOR: test_member_page_url_stays_in_own_namespace]
+        # Tests [@ANCHOR: website_page_create]
+        # Tests [@ANCHOR: website_page_write]
+        """A member may not create or move a page to an address outside /<own slug>, over the ORM."""
+        Page = self.env["website.page"].with_user(self.user_a)
+        slug = self.user_a.website_slug
+        for url in ("/privacy-update", f"/{self.user_b.website_slug}", f"/{slug}x", f"/{slug}/../x"):
+            with self.subTest(url=url), self.assertRaises(AccessError):
+                Page.create({"url": url, "name": "Squat", "type": "qweb", "owner_user_id": self.user_a.id})
+        own = Page.create({"url": f"/{slug}/mine", "name": "Mine", "type": "qweb", "owner_user_id": self.user_a.id})
+        with self.assertRaises(AccessError):
+            own.with_user(self.user_a).write({"url": "/privacy-update"})
+        own.with_user(self.user_a).write({"url": f"/{slug}/moved"})
+        self.assertEqual(own.url, f"/{slug}/moved")
+
     def test_06_prevent_ownership_transfer(self):
         """
         Verify that a user cannot give away their own page to another user

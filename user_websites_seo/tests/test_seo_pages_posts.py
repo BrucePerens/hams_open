@@ -16,6 +16,7 @@ class TestSEOPagesPosts(RealTransactionCase):
             {
                 "name": "Page Owner",
                 "login": "page_owner",
+                "website_slug": "page-owner",
                 "group_ids": [
                     (6, 0, [cls.env.ref("user_websites.group_user_websites_user").id])
                 ],
@@ -28,7 +29,7 @@ class TestSEOPagesPosts(RealTransactionCase):
             .create(
                 {
                     "name": "Test Page",
-                    "url": "/test-page-seo",
+                    "url": "/page-owner/test-page-seo",
                     "type": "qweb",
                     "arch_base": "<div>Test</div>",
                     "owner_user_id": cls.regular_user.id,
