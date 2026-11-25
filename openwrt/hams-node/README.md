@@ -258,6 +258,15 @@ signed router configuration lists the owner's active exported keys (`ssh_keys`);
 list (`cert:ISSUER:SERIAL`) is left out at once (`hams-node-status` re-runs `hams-node-ssh apply`), an expired or revoked one drops out at the next
 configuration fetch. When the last key goes, SSH refuses every login and password login STAYS off (recovery is a physical reset, then enrol again). The browser's own key is non-extractable and cannot be used.
 
+Dropbear must be built with ECDSA for the member-certificate keys to log in. Stock OpenWrt (25.12.5, checked) builds it without ECDSA, so those
+lines are skipped silently there; the owner's own ed25519/RSA keys work either way. There is no ECC dropbear package in the OpenWrt feeds (only
+the much larger `openssh-server`). Our route: `openwrt/image/build_ecc_dropbear.sh -s SDK -o DIR` rebuilds OpenWrt's own dropbear package with
+`CONFIG_DROPBEAR_ECDSA=y` and `CONFIG_DROPBEAR_ECC_256=y` at the stock release plus 1000. Put that `dropbear-*.apk` in the hams feed (per target:
+one build per SDK/architecture); `apk upgrade` or `apk add dropbear` from the hams feed then prefers it over the stock package. Our own images
+(`build_test_image.sh -d`) carry it. A router without it (a stock image, or a target we have no build for) keeps working with the owner's own key; the
+fallback for member-certificate logins there is the LuCI key entry for the owner's exported public key as an ed25519/RSA key, or `apk add openssh-server`.
+QEMU check: `tools/ssh_test.py` logs in with a real ECDSA P-256 member-certificate key after `apply`.
+
 ## Key rotation (`hams-node-key`, in the hams-node-enroll package)
 
 `hams-node-key rotate` makes a new WireGuard key on the device (`wg genkey` into `wg.key.new`, mode 0600), sends only the new public key with the device
