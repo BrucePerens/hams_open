@@ -80,3 +80,7 @@ A test helper in `tests/website_credentials.py`, called from `setUp` of the purg
 ### `_cloudflare_language_variants(website_id, url)` [@ANCHOR: COMM_language_variants]
 
 Called by `_enqueue_cloudflare_purge` for each path it queues. Returns the path plus the same path under each non-default language prefix of the website (`/fr/page`), because the edge caches a public page once per language address and purging only `/page` left an unpublished or erased page served in the other languages for up to a day. Absolute URLs and records with no website are returned unchanged. Verified by `COMM_test_purge_covers_language_variants` in `tests/test_purge_language_variants.py`.
+
+### Shared content purges only websites that can be purged
+
+[@ANCHOR: cloudflare:purge_fanout_credentialed_websites] A record with no website (a shared page or menu) is queued for every website that has a Cloudflare token and zone. A website without them, such as a tenant site on another zone, gets no row: before, the queue dropped its rows and opened a pager incident on every edit of shared content. A record that belongs to one website with no credentials still raises the incident. Test: `test_fanout_skips_websites_without_credentials` in `tests/test_multi_website.py`.

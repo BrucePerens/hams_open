@@ -28,6 +28,9 @@ class TestBridgeAndMisc(RealTransactionCase):
         self.PurgeQueue = self.env["cloudflare.purge.queue"]
         self.website = self.env["website"].get_current_website()
         restore_credentials_after_test(self, self.website)
+        # Shared content is purged only on websites that have a token and zone (purge_mixin._cloudflare_purgeable_website_ids).
+        os.environ.setdefault("HAMS_CRYPTO_KEY", Fernet.generate_key().decode("utf-8"))
+        self.website.write({"cloudflare_api_token": "tok", "cloudflare_zone_id": "zone"})
         self.PurgeQueue.search([], limit=10000).unlink()
 
     # Tests [@ANCHOR: cloudflare_purge_queue_cloudflare_purge_queue]
