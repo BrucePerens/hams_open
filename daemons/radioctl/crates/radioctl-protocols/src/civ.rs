@@ -1524,9 +1524,9 @@ mod tests {
     // Tests [@ANCHOR: radioctl_civ_level_sub]
     #[test]
     fn the_extended_commands_encode_as_read_from_the_facts() {
-        let mut e = CivEngine::new(shipped("icom-ic-7610")).expect("engine");
+        let mut e = CivEngine::new(shipped("icom-ic-7300")).expect("engine");
         let b = |e: &mut CivEngine, op: Op| e.encode(&op).expect("encodes").bytes;
-        let head = [0xFE, 0xFE, 0x98, 0xE0];
+        let head = [0xFE, 0xFE, 0x94, 0xE0];
         let with = |body: &[u8]| [&head[..], body, &[0xFD]].concat();
         assert_eq!(b(&mut e, Op::GetFrequency(Vfo::B)), with(&[0x25, 0x01]));
         assert_eq!(
