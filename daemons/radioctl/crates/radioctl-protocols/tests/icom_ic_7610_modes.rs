@@ -23,7 +23,12 @@ fn the_ic_7610_has_psk_and_reads_data_modes() {
     let frame = |body: &[u8]| [&head[..], body, &[0xFD]].concat();
     assert_eq!(
         engine.encode(&Op::GetMode).expect("get").bytes,
-        frame(&[0x26, 0x00])
+        [
+            frame(&[0x07, 0xD2]),
+            frame(&[0x26, 0x00]),
+            frame(&[0x26, 0x01])
+        ]
+        .concat()
     );
     assert_eq!(
         engine.encode(&Op::SetMode(Mode::Data)).expect("set").bytes,

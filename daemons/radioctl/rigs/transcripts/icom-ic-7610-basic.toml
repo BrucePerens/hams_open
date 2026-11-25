@@ -51,9 +51,10 @@ expect = { kind = "split", on = true }
 
 [[step]]
 op = { kind = "get-mode" }
-tx = "fe fe 98 e0 26 00 fd"
-rx = "fe fe e0 98 26 00 01 00 01 fd"
-expect = { kind = "mode", mode = "usb" }
+tx = "fe fe 98 e0 07 d2 fd fe fe 98 e0 26 00 fd fe fe 98 e0 26 01 fd"
+rx = "fe fe e0 98 07 d2 00 fd fe fe e0 98 26 00 01 00 01 fd fe fe e0 98 26 01 01 00 01 fd"
+expect = { kind = "receiver", band = "main" }
+expect_more = [{ kind = "mode", mode = "usb" }]
 
 [[step]]
 op = { kind = "set-mode", mode = "cw" }
@@ -63,9 +64,10 @@ expect = { kind = "ack" }
 
 [[step]]
 op = { kind = "get-mode" }
-tx = "fe fe 98 e0 26 00 fd"
-rx = "fe fe e0 98 26 00 03 00 01 fd"
-expect = { kind = "mode", mode = "cw" }
+tx = "fe fe 98 e0 07 d2 fd fe fe 98 e0 26 00 fd fe fe 98 e0 26 01 fd"
+rx = "fe fe e0 98 07 d2 00 fd fe fe e0 98 26 00 03 00 01 fd fe fe e0 98 26 01 03 00 01 fd"
+expect = { kind = "receiver", band = "main" }
+expect_more = [{ kind = "mode", mode = "cw" }]
 
 [[step]]
 op = { kind = "get-filter-width" }

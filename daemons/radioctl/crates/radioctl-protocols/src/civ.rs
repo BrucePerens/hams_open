@@ -282,7 +282,8 @@ pub struct CivEngine {
     /// The filter number (1 to 3) the rig last reported with its mode; resent with `26 00`.
     filter_number: u8,
     /// The band the mode commands address on a model whose command `26` selector is Main or Sub
-    /// (see `mode_selector`): the last band selected by `07 D0`/`D1` or reported by `07 D2`.
+    /// (see `mode_selector`): the last band selected by `07 D0`/`D1` or reported by `07 D2`, which
+    /// every mode read asks for.
     band: Receiver,
     scope: Option<ScopeAssembler>,
     /// True between a PTT set and the next reply: some Xiegu radios answer it with `1C 00 <state>`
@@ -986,6 +987,19 @@ impl ProtocolEngine for CivEngine {
                 let bcd = self.freq_bytes(*hz)?;
                 self.command(0x05, &bcd, ack)
             }
+            Op::GetMode if self.has_data_modes() && self.params.main_sub == CivMainSub::Full => {
+                // The operator may have changed bands on the front panel, which sends nothing:
+                // ask which band is selected (`07 D2`, the reply moves `band`), then read the
+                // mode of both bands; the reply of the band not selected is ignored.
+                let mut bytes = self.command(0x07, &[0xD2], ReplyKind::None).bytes;
+                for selector in [0x00, 0x01] {
+                    bytes.extend(self.command(0x26, &[selector], ReplyKind::None).bytes);
+                }
+                Request {
+                    bytes,
+                    reply: ReplyKind::Observation(Field::Mode),
+                }
+            }
             Op::GetMode if self.has_data_modes() => self.command(
                 0x26,
                 &[self.mode_selector()],
@@ -1140,6 +1154,8 @@ impl CivEngine {
                     rest.first().is_some_and(|d| *d != 0),
                     rest.get(1).copied(),
                 ),
+            // The mode of the band not selected, answered to the two-band read: not an error.
+            (0x26, [_, _, ..]) if self.params.main_sub == CivMainSub::Full => return None,
             (0x0F, [byte]) => {
                 let asked = self.asked_0f.take();
                 let is_shift = matches!(*byte, 0x10..=0x13);

@@ -49,14 +49,21 @@ fn mode_commands_follow_the_selected_band_on_the_ic_7760() {
     let mut engine = engine_for(&desc).expect("engine");
     let head = [0xFE, 0xFE, 0xB2, 0xE0];
     let frame = |body: &[u8]| [&head[..], body, &[0xFD]].concat();
+    // A mode read asks `07 D2`, then reads Main and Sub; the band addressed shows in the set.
     let get = |e: &mut Box<dyn radioctl_core::engine::ProtocolEngine>| {
         e.encode(&Op::GetMode).expect("get").bytes
     };
-    assert_eq!(get(&mut engine), frame(&[0x26, 0x00]));
+    let read = [
+        frame(&[0x07, 0xD2]),
+        frame(&[0x26, 0x00]),
+        frame(&[0x26, 0x01]),
+    ]
+    .concat();
+    assert_eq!(get(&mut engine), read);
     engine
         .encode(&Op::SelectReceiver(Receiver::Sub))
         .expect("select");
-    assert_eq!(get(&mut engine), frame(&[0x26, 0x01]));
+    assert_eq!(get(&mut engine), read);
     assert_eq!(
         engine.encode(&Op::SetMode(Mode::Data)).expect("set").bytes,
         frame(&[0x26, 0x01, 0x01, 0x01, 0x01])
@@ -75,5 +82,66 @@ fn mode_commands_follow_the_selected_band_on_the_ic_7760() {
     engine
         .encode(&Op::SelectReceiver(Receiver::Main))
         .expect("select");
-    assert_eq!(get(&mut engine), frame(&[0x26, 0x00]));
+    assert_eq!(get(&mut engine), read);
+}
+
+// Tests [@ANCHOR: radioctl_civ_engine_mode_selector]
+// The operator can switch bands on the front panel, which sends nothing. A mode read therefore
+// asks `07 D2` first and then reads both bands' modes, so the engine follows the radio: after a
+// panel switch to Sub the poll moves the engine to Sub, and the mode set that follows addresses
+// Sub. Frequency (`03`/`05`) names no band and always acts on the selected one, so it needs no
+// such step.
+#[test]
+fn a_mode_read_follows_a_band_switch_made_on_the_front_panel() {
+    use radioctl_core::engine::Inbound;
+    use radioctl_core::op::Observation;
+    use radioctl_core::units::{Mode, Receiver};
+    use std::time::Duration;
+    for id in ["icom-ic-7610", "icom-ic-7760"] {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../rigs")
+            .join(format!("{id}.toml"));
+        let desc = rigfile::parse(&std::fs::read_to_string(path).expect("read"))
+            .expect("loads")
+            .description;
+        let mut engine = engine_for(&desc).expect("engine");
+        let addr = desc.civ.as_ref().expect("civ").address;
+        let head = [0xFE, 0xFE, addr, 0xE0];
+        let frame = |body: &[u8]| [&head[..], body, &[0xFD]].concat();
+        let from_rig = |body: &[u8]| [&[0xFE, 0xFE, 0xE0, addr][..], body, &[0xFD]].concat();
+        let t = Duration::from_secs(1);
+        let read = engine.encode(&Op::GetMode).expect("get").bytes;
+        assert_eq!(
+            read,
+            [
+                frame(&[0x07, 0xD2]),
+                frame(&[0x26, 0x00]),
+                frame(&[0x26, 0x01])
+            ]
+            .concat(),
+            "{id}"
+        );
+        // The operator has switched to Sub on the panel.
+        let mut seen = engine.feed(&from_rig(&[0x07, 0xD2, 0x01]), t);
+        seen.extend(engine.feed(&from_rig(&[0x26, 0x00, 0x01, 0x00, 0x01]), t));
+        seen.extend(engine.feed(&from_rig(&[0x26, 0x01, 0x03, 0x00, 0x01]), t));
+        assert!(
+            seen.contains(&Inbound::Observation(Observation::Receiver(Receiver::Sub))),
+            "{id}"
+        );
+        let modes: Vec<_> = seen
+            .iter()
+            .filter(|i| matches!(i, Inbound::Observation(Observation::Mode(_))))
+            .collect();
+        assert_eq!(
+            modes,
+            vec![&Inbound::Observation(Observation::Mode(Mode::Cw))],
+            "{id}"
+        );
+        assert_eq!(
+            engine.encode(&Op::SetMode(Mode::Data)).expect("set").bytes,
+            frame(&[0x26, 0x01, 0x01, 0x01, 0x01]),
+            "{id}"
+        );
+    }
 }

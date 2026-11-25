@@ -7,7 +7,7 @@ use serde::Deserialize;
 
 use crate::error::{ErrorKind, RigError};
 use crate::op::{Observation, Op};
-use crate::units::{Hz, Level, Meter, Mode, Vfo};
+use crate::units::{Hz, Level, Meter, Mode, Receiver, Vfo};
 
 // [@ANCHOR: radioctl_core_transcript_expect]
 /// What the engine must report for the rig's answer.
@@ -140,6 +140,7 @@ enum OpSpec {
 enum ExpectSpec {
     Frequency { vfo: String, hz: u64 },
     Mode { mode: String },
+    Receiver { band: String },
     Ptt { on: bool },
     Signal { value: u16 },
     Power { value: u16 },
@@ -257,6 +258,13 @@ fn build_expect(spec: ExpectSpec) -> Result<Expect, RigError> {
             Expect::Observation(Observation::Frequency(vfo(&v)?, Hz(hz)))
         }
         ExpectSpec::Mode { mode: m } => Expect::Observation(Observation::Mode(mode(&m)?)),
+        ExpectSpec::Receiver { band } => {
+            Expect::Observation(Observation::Receiver(match band.as_str() {
+                "main" => Receiver::Main,
+                "sub" => Receiver::Sub,
+                other => return Err(bad(format!("unknown receiver {other:?}"))),
+            }))
+        }
         ExpectSpec::Ptt { on } => Expect::Observation(Observation::Ptt(on)),
         ExpectSpec::Signal { value } => Expect::Observation(Observation::Signal(value)),
         ExpectSpec::Power { value } => Expect::Observation(Observation::Power(value)),

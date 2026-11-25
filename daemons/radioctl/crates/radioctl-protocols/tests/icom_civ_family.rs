@@ -131,7 +131,14 @@ fn exchange(engine: &mut dyn ProtocolEngine, rig: &mut VirtualRig, op: &Op) -> V
 }
 
 fn read(engine: &mut dyn ProtocolEngine, rig: &mut VirtualRig, op: &Op) -> Observation {
-    match exchange(engine, rig, op).as_slice() {
+    // A mode read on a Main/Sub model also reports the selected band (`07 D2`).
+    let seen: Vec<Inbound> = exchange(engine, rig, op)
+        .into_iter()
+        .filter(|i| {
+            *op == Op::GetReceiver || !matches!(i, Inbound::Observation(Observation::Receiver(_)))
+        })
+        .collect();
+    match seen.as_slice() {
         [Inbound::Observation(observation)] => *observation,
         other => panic!("{op:?}: expected one observation, got {other:?}"),
     }
