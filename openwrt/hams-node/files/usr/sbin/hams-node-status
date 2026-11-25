@@ -4,7 +4,8 @@
 # Every 2 minutes (cron) it asks hams.com for a tiny signed status. Only a correctly signed "disabled" for this device turns the node
 # off: WireGuard interface down, Hams.com Net routes removed, bird/on-demand/report/traffic stopped; the configuration is kept and the
 # reason is saved for LuCI. A later signed "ok" turns it back on. FAIL OPEN: no network, DNS or TLS failure, a bad or missing signature,
-# any other reply = "no information", and nothing changes.
+# any other reply = "no information", and nothing changes. Each poll sends a fresh random nonce that the signed status must carry back, so a
+# recorded signed status (or one made for another router) cannot be replayed, even one with the same list number.
 # The status also names the sequence number of the signed deprecation list (rogue routers' keys and prefixes). When it is ahead of the
 # list held here, the delta since the held number is fetched (the full list when the delta does not line up); documents are ordered by
 # sequence number only, never by clock. Each listed peer is evicted and each listed prefix gets an unreachable route.
@@ -204,8 +205,10 @@ do_run() {
 	[ -s "$tokenfile" ] || exit 4
 	token=$(cat "$tokenfile")
 	case $token in '' | *[!A-Za-z0-9_=/+-]*) exit 4 ;; esac
-	fetch status "{\"token\":\"$token\"}" || exit 4
-	[ "$(field kind)" = status ] || exit 4
+	nonce=$(head -c 16 /dev/urandom 2>/dev/null | hexdump -v -e '1/1 "%02x"')
+	[ ${#nonce} -eq 32 ] || exit 4
+	fetch status "{\"token\":\"$token\",\"nonce\":\"$nonce\"}" || exit 4
+	[ "$(field kind)" = status ] && [ "$(field nonce)" = "$nonce" ] || exit 4 # not the answer to this request: a replay
 	listseq=$(number "$(field list_seq)")
 	[ "$listseq" -ge "$(number "$(cat "$statusseq" 2>/dev/null)")" ] || exit 4 # an older status is a replay
 	echo "$listseq" > "$statusseq"

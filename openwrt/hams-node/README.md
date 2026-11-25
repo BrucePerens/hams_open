@@ -270,10 +270,10 @@ one from the directory on their next lookup.
 
 A compromised router cannot be trusted to switch itself off, so staff cut it on hams.com first (emergency disable); this package is the
 second layer. `hams-node-status start` (run by enrolment) adds a cron line every 2 minutes that runs `hams-node-status run`: it posts the
-device token to `/api/ipv6/status` and verifies the signed reply with `usign` against `/etc/hams-node/deprecation.pub` (the key hams.com
+device token and a fresh random nonce to `/api/ipv6/status` and verifies the signed reply with `usign` against `/etc/hams-node/deprecation.pub` (the key hams.com
 sends at enrolment). Only a correctly signed `disabled` turns the node off: WireGuard interface down, its routes flushed, bird, on-demand,
 report and traffic stopped, configuration kept, the reason saved in `/etc/hams-node/disabled` (LuCI shows it). A later signed `ok` turns
-it back on. Fail open: no network, DNS or TLS failure, a missing or bad signature or any other reply changes nothing.
+it back on. The signed status must echo the nonce of that request, so a recorded status is never replayed. Fail open: no network, DNS or TLS failure, a missing or bad signature or any other reply changes nothing.
 
 The status also carries the sequence number of the signed deprecation list (keys and prefixes of rogue routers). When it is ahead of the
 held list (`deprecation_seq`, `deprecation_list`) the router asks for the delta since the held number, additions and removals, or for the

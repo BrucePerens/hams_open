@@ -30,7 +30,23 @@ if not lines:
 open(queue, "w").write("\\n".join(lines[1:]) + ("\\n" if lines[1:] else ""))
 if lines[0] == "FAIL":
     sys.exit(1)
-open(args[args.index("-O") + 1], "w").write(lines[0])
+reply = lines[0]
+if reply.startswith("SIGN "):
+    # a status the portal would sign for THIS request: its nonce is echoed from the request unless the test names another one
+    import base64, hashlib, json
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    spec = json.loads(reply[5:])
+    body = spec["body"]
+    if body.get("nonce") == "@request":
+        body["nonce"] = json.loads(post.split("=", 1)[1])["params"]["nonce"]
+    key = Ed25519PrivateKey.from_private_bytes(bytes.fromhex(open(os.environ["FAKE"] + "/seed").read()))
+    raw = key.public_key().public_bytes_raw()
+    payload = json.dumps(body, separators=(",", ":"), sort_keys=True).encode()
+    sig = base64.b64encode(b"Ed" + hashlib.sha256(raw).digest()[:8] + key.sign(payload)).decode()
+    if spec.get("tamper"):
+        payload = payload.replace(*[x.encode() for x in spec["tamper"]])
+    reply = json.dumps({"jsonrpc": "2.0", "id": None, "result": {"status": "success", "payload": base64.b64encode(payload).decode(), "signature": sig}})
+open(args[args.index("-O") + 1], "w").write(reply)
 """
 # usign -V -m MESSAGE -p PUBFILE -x SIGFILE with usign's layout: line 2 of each file is base64("Ed" + keynum + key or signature)
 USIGN = """#!/usr/bin/env python3
@@ -67,6 +83,7 @@ ENTRY_B = {"id": 4, "key": "KEYBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=", "pref
 class Signer:
     def __init__(self):
         self.key = Ed25519PrivateKey.generate()
+        self.seed = self.key.private_bytes(serialization.Encoding.Raw, serialization.PrivateFormat.Raw, serialization.NoEncryption()).hex()
         self.raw = self.key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
         self.keynum = hashlib.sha256(self.raw).digest()[:8]
         self.public_line = base64.b64encode(b"Ed" + self.keynum + self.raw).decode()
@@ -87,6 +104,7 @@ class StatusTests(unittest.TestCase):
         self.state = self.root / "state"
         self.state.mkdir()
         self.signer = Signer()
+        (self.fake / "seed").write_text(self.signer.seed)
         (self.state / "device_token").write_text("tok_en-1\n")
         (self.state / "wg.key").write_text("private\n")
         (self.state / "deprecation.pub").write_text(self.signer.public_line + "\n")
@@ -107,8 +125,14 @@ class StatusTests(unittest.TestCase):
     def queue(self, *replies):
         (self.fake / "replies").write_text("\n".join(replies) + "\n")
 
-    def status(self, state="ok", list_seq=1, reason="", signer=None):
-        return (signer or self.signer).reply({"kind": "status", "state": state, "reason": reason, "list_seq": list_seq, "list_updated": "2026-11-23T00:00:00Z"})
+    def status(self, state="ok", list_seq=1, reason="", signer=None, nonce="@request", tamper=None):
+        """A signed status the portal would send; `nonce` "@request" echoes the one in the request (what a live portal does)."""
+        body = {"kind": "status", "state": state, "reason": reason, "list_seq": list_seq, "list_updated": "2026-11-23T00:00:00Z"}
+        if nonce is not None:
+            body["nonce"] = nonce
+        if signer is not None:
+            return signer.reply(body)
+        return "SIGN " + json.dumps({"body": body, "tamper": tamper})
 
     def run_script(self, command="run"):
         return subprocess.run(["sh", str(SCRIPT), "-u", "https://portal.example", "-s", str(self.state), "-c", str(self.cron), "-i", "wgtest", "-d", str(self.initdir), command],
@@ -133,7 +157,7 @@ class StatusTests(unittest.TestCase):
         self.assertTrue((self.state / "device_token").exists(), "configuration kept")
         self.assertTrue((self.state / "wg.key").exists(), "configuration kept")
         self.assertEqual(self.calls()[0][0], "https://portal.example/api/ipv6/status")
-        self.assertEqual(self.calls()[0][1], {"token": "tok_en-1"})
+        self.assertEqual(self.calls()[0][1]["token"], "tok_en-1")
         self.queue(self.status("disabled", reason="botnet traffic"))
         before = len(self.actions())
         self.assertEqual(self.run_script().returncode, 0)
@@ -150,9 +174,7 @@ class StatusTests(unittest.TestCase):
             self.assertEqual(result.returncode, 4, (replies, result.stderr))
             self.assertEqual(self.actions(), [], "unreachable, unsigned, refused or wrongly signed: the router stays as it is")
             self.assertFalse((self.state / "disabled").exists())
-        reply = json.loads(self.status("disabled", reason="x"))
-        reply["result"]["payload"] = base64.b64encode(base64.b64decode(reply["result"]["payload"]).replace(b"disabled", b"disablex")).decode()
-        self.queue(json.dumps(reply))
+        self.queue(self.status("disabled", reason="x", tamper=["disabled", "disablex"]))
         self.assertEqual(self.run_script().returncode, 4, "a tampered payload")
         self.assertEqual(self.actions(), [])
         (self.state / "deprecation.pub").unlink()
@@ -188,6 +210,30 @@ class StatusTests(unittest.TestCase):
 
     def listed(self):
         return sorted((self.state / "deprecation_list").read_text().split("\n")[:-1]) if (self.state / "deprecation_list").exists() else []
+
+    def test_a_recorded_signed_status_is_never_replayed_even_at_the_same_list_number(self):
+        self.queue(self.status("ok", list_seq=0))
+        self.assertEqual(self.run_script().returncode, 0)
+        nonce = self.calls()[0][1]["nonce"]
+        self.assertRegex(nonce, "^[0-9a-f]{32}$")
+        recorded = self.status("ok", list_seq=0, nonce=nonce)  # signed by hams.com for that earlier request
+        for stale in (recorded, self.status("disabled", reason="r", list_seq=0, nonce=None), self.status("disabled", reason="other router", list_seq=0, nonce="f" * 32)):
+            self.queue(stale)
+            self.assertEqual(self.run_script().returncode, 4, "a signed status that does not echo this request's nonce is no information")
+            self.assertFalse((self.state / "disabled").exists())
+            self.assertEqual([a for a in self.actions() if a.startswith("ifdown")], [])
+        self.queue(self.status("disabled", reason="r", list_seq=0))
+        self.assertEqual(self.run_script().returncode, 0)
+        self.queue(recorded)  # the recorded "ok" must not switch a router back on that hams.com disabled
+        self.assertEqual(self.run_script().returncode, 4)
+        self.assertTrue((self.state / "disabled").exists())
+        self.assertNotIn("ifup wgtest", self.actions())
+        nonces = set()
+        for _i in range(3):
+            self.queue("FAIL")
+            self.run_script()
+        nonces = {call[1]["nonce"] for call in self.calls()}
+        self.assertEqual(len(nonces), len(self.calls()), "a fresh nonce on every request")
 
     def test_deprecation_full_then_delta_with_removal_and_local_enforcement(self):
         self.queue(self.status(list_seq=2), self.full(2, ENTRY_A))
