@@ -119,6 +119,10 @@ pub fn run(
 /// Adopting descriptor 3 (SD_LISTEN_FDS_START) is the crate's second and last `unsafe` block.
 #[allow(unsafe_code)]
 pub fn activated_listener() -> Option<UnixListener> {
+    #[cfg(target_os = "macos")]
+    if let Some(listener) = launchd_listener() {
+        return Some(listener);
+    }
     let pid: u32 = std::env::var("LISTEN_PID").ok()?.parse().ok()?;
     let n: u32 = std::env::var("LISTEN_FDS").ok()?.parse().ok()?;
     if pid != std::process::id() || n != 1 {
@@ -130,6 +134,43 @@ pub fn activated_listener() -> Option<UnixListener> {
     // first). Ownership is taken exactly once.
     let owned = unsafe { OwnedFd::from_raw_fd(3) };
     let listener = UnixListener::from(owned);
+    listener.set_nonblocking(false).ok()?;
+    Some(listener)
+}
+
+// [@ANCHOR: relay_broker_launchd_listener]
+/// The listener launchd holds for the plist's `Sockets` entry named `broker` (`launch_activate_socket`, libSystem), if this
+/// process was started by launchd with one. launchd gives no environment variable and no fixed descriptor number: the call is the
+/// only way to get the socket. It is the crate's third `unsafe` use (the foreign call, reading its descriptor array, adopting
+/// the descriptor), macOS only.
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+fn launchd_listener() -> Option<UnixListener> {
+    use std::ffi::{c_char, c_int, c_void};
+    extern "C" {
+        fn launch_activate_socket(
+            name: *const c_char,
+            fds: *mut *mut c_int,
+            count: *mut usize,
+        ) -> c_int;
+        fn free(ptr: *mut c_void);
+    }
+    let mut fds: *mut c_int = std::ptr::null_mut();
+    let mut count: usize = 0;
+    // SAFETY: the name is a NUL-terminated literal; on success (0) launchd fills `fds` with a malloc'd array of `count` descriptors
+    // that this process now owns. Exactly one is expected; the array is freed once and the descriptor adopted once. On any error
+    // `fds` is not read.
+    let fd = unsafe {
+        if launch_activate_socket(c"broker".as_ptr(), &mut fds, &mut count) != 0 || fds.is_null()
+        {
+            return None;
+        }
+        let first = if count == 1 { Some(*fds) } else { None };
+        free(fds.cast());
+        first?
+    };
+    // SAFETY: `fd` came from launchd as an open listening socket owned by this process (above).
+    let listener = UnixListener::from(unsafe { OwnedFd::from_raw_fd(fd) });
     listener.set_nonblocking(false).ok()?;
     Some(listener)
 }
