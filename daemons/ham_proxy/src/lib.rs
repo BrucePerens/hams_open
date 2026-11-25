@@ -429,6 +429,11 @@ pub fn serve_one_policed(
         if !policy.is_some_and(|p| p.permits(&host, &path)) {
             return Err(ProxyError::NotWhitelisted(host));
         }
+        // Only HTTPS on 443 (a lab with `--allow-private-upstream` may use others): a whitelisted name must not become a
+        // way to open arbitrary TCP ports on its host or on any `.ham` server.
+        if port != "443" && !resolve::private_upstream_allowed() {
+            return Err(ProxyError::NotWhitelisted(format!("{host}:{port}")));
+        }
         addr = format!("{host}:{port}");
         name = host;
     } else if let Some(p) = policy {

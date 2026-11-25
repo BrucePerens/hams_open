@@ -18,6 +18,11 @@ pub fn allow_private_upstream() {
     ALLOW_PRIVATE.store(true, Ordering::Relaxed);
 }
 
+/// Whether [`allow_private_upstream`] was called (lab mode).
+pub fn private_upstream_allowed() -> bool {
+    ALLOW_PRIVATE.load(Ordering::Relaxed)
+}
+
 // [@ANCHOR: ham_proxy_set_ham_resolver]
 /// Use `resolver` (`ip:port`, UDP) for `.ham` names from now on; the first call wins.
 pub fn set_ham_resolver(resolver: &str) {
