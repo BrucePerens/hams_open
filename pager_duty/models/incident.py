@@ -437,6 +437,20 @@ class PagerIncident(models.Model):
         )
         return target == "hams_helpdesk.ticket"
 
+    # [@ANCHOR: pager_duty:unit_report_due]
+    def _unit_report_due(self):
+        """True when a repeat report of this open incident should reach its units' exception tickets again: no ticket
+        carries it, that ticket is closed or resolved (the unit failed again after someone closed it), or the incident
+        is due for a re-page. Otherwise the repeat only counts on the incident."""
+        self.ensure_one()
+        if not self.helpdesk_ticket_id or self.helpdesk_ticket_model != "hams_helpdesk.ticket":
+            return True
+        ticket_svc = self.env["zero_sudo.security.utils"]._get_service_uid("hams_helpdesk.user_helpdesk_service")
+        ticket = self.env["hams_helpdesk.ticket"].with_user(ticket_svc).browse(self.helpdesk_ticket_id).exists()
+        if not ticket or ticket.stage in ("closed", "resolved"):
+            return True
+        return not self.last_paged or (fields.Datetime.now() - self.last_paged).total_seconds() >= REPAGE_HOURS * 3600
+
     # [@ANCHOR: pager_duty:note_unit_tickets]
     def _note_unit_tickets(self, incident, unit_tickets):
         """Says on the incident which per-unit ticket(s) carry it."""
@@ -505,10 +519,6 @@ class PagerIncident(models.Model):
         # joins (low/medium stay tracked, not ticketed, as before).
         units = vals.pop("units", None)
         unit_tickets = {}
-        if units and vals.get("severity") not in TREND_TRACKED_SEVERITIES and self._joins_unit_tickets():
-            unit_tickets = self.env[
-                "hams_helpdesk.exception.fingerprint"
-            ]._report_unit_failures(units, source, vals.get("description", ""))
 
         # A no-change UPDATE of one shared row makes two simultaneous first reports of one source take turns: the later one
         # fails to serialize (its snapshot cannot see the earlier incident) and Odoo runs the request again, when it finds
@@ -520,6 +530,18 @@ class PagerIncident(models.Model):
         if not existing:
             self.env.cr.execute("UPDATE res_company SET id = id WHERE id = %s", [self.env.ref("base.main_company").id])
             existing = IncidentModel.search(search_domain, limit=1)
+        # [@ANCHOR: pager_duty:unit_report_once]
+        # A repeat of an OPEN incident does not report its units again every cycle: a unit that stays failed would add an
+        # occurrence to its exception ticket on every check run (23 in under two hours for one daily oneshot, 2026-11-24).
+        # It reports when the incident is new, when its ticket was closed meanwhile (the reopen), when no ticket carries it,
+        # and again when the incident is due for a re-page.
+        if units and vals.get("severity") not in TREND_TRACKED_SEVERITIES and self._joins_unit_tickets() and (
+            not existing or existing._unit_report_due()
+        ):
+            unit_tickets = self.env[
+                "hams_helpdesk.exception.fingerprint"
+            ]._report_unit_failures(units, source, vals.get("description", ""))
+
         if existing:
             # [@ANCHOR: pager_trend_window_update]
             now = fields.Datetime.now()

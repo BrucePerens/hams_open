@@ -135,20 +135,25 @@ class TestUnitTicketDedup(HamsTransactionCase):
         self.assertEqual(row.occurrence_count, 3)
         self.assertEqual(len(self.Ticket.search([("name", "ilike", FCC)])), 1)
 
-    def test_a_repeat_of_the_same_check_counts_but_makes_no_second_ticket(self):
-        self.pager_report(TRACKER, [FCC])
-        self.make_repeat_due()
-        self.pager_report(TRACKER, [FCC])
-        self.make_repeat_due()
-        self.pager_report(TRACKER, [FCC])
+    def test_a_repeat_of_an_open_incident_does_not_count_again_on_the_unit_ticket(self):
+        # Tests [@ANCHOR: pager_duty:unit_report_once]
+        # A daily oneshot stays failed; the check reports it every few minutes. One occurrence, not one per run.
+        first = self.pager_report(TRACKER, [FCC])
+        for _ in range(5):
+            self.make_repeat_due()
+            self.assertEqual(self.pager_report(TRACKER, [FCC]), first)
         row = self.row_for(FCC)
-        self.assertEqual(row.occurrence_count, 3)
-        self.assertEqual(row._reporters(), [TRACKER])
+        self.assertEqual(row.occurrence_count, 1)
+        self.assertEqual(first.occurrence_count, 6)
         self.assertEqual(len(self.Ticket.search([("name", "ilike", FCC)])), 1)
-        # Same minute: counted for later, not written (the exception gate).
+
+    def test_a_repeat_counts_on_the_unit_ticket_again_when_the_incident_is_due_for_a_repage(self):
+        # Tests [@ANCHOR: pager_duty:unit_report_due]
+        first = self.pager_report(TRACKER, [FCC])
+        first.write({"last_paged": fields.Datetime.now() - timedelta(hours=100)})
+        self.make_repeat_due()
         self.pager_report(TRACKER, [FCC])
-        self.assertEqual(self.row_for(FCC).occurrence_count, 3)
-        self.assertEqual(sum(entry[1] for entry in reporter._GATE.values()), 1)
+        self.assertEqual(self.row_for(FCC).occurrence_count, 2)
 
     def test_every_unit_gets_exactly_one_ticket_mixed_scenario(self):
         """Three units, different mixes of reporters, plus one check that names two units."""
