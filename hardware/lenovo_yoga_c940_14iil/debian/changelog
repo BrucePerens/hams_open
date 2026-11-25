@@ -1,3 +1,12 @@
+lenovo-yoga-c940-14iil (1.1.2) unstable; urgency=medium
+
+  * support: battery conservation mode on by default (TLP
+    STOP_CHARGE_THRESH_BAT0/BAT1=1 for the ideapad battery plugin); holds the
+    charge at about 55-60%. The earlier "does not keep it" finding was an
+    immediate read-back: the firmware applies the write after about 3 s.
+
+ -- Bruce Perens <bruce@perens.com>  Wed, 25 Nov 2026 10:00:00 -0800
+
 lenovo-yoga-c940-14iil (1.1.1) unstable; urgency=medium
 
   * windows-vm: no longer Depends on util-linux (Essential; lintian
