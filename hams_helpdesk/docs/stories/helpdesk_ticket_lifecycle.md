@@ -45,6 +45,9 @@ outright rather than closing it, because there was no button-shaped way to do so
 ordinary staff agent (not a manager) has no delete access on this model at all -- the statusbar
 click was their only way to close a ticket before this button existed.
 
+### A forged From line never files a ticket under a member [@ANCHOR: hams_helpdesk:COMM_helpdesk_message_new_spoofed_author]
+When SES recorded a DMARC failure, or an SPF failure with no passing DKIM, for a new email, `message_new()` does not link the ticket to the member the From address names and its first message is not posted in that member's name; the mail is kept (and judged by the spam filter as from a stranger). This matches how a spoofed reply is held.
+
 ### Spam / Phishing Quarantine [@ANCHOR: hams_helpdesk:COMM_helpdesk_message_new_spam_filter]
 Mail sent straight to admin@ or support@ becomes a ticket through `message_new()`, not through
 pager_duty's Helpdesk Adapter, so the same mail-ingestion spam filter runs there too. A flagged
