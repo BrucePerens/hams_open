@@ -1,0 +1,3 @@
+# The deprecation public keys (usign public key lines, one per line) that sign hams.com's enrolment config and directory replies.
+# Filled at release time (docs/runbooks/IPV6_NET_LAUNCH.md in hams_com). While this list holds no key, the node keeps the old behaviour
+# (trusts TLS alone) and logs a warning; once it holds a key, an unsigned or wrongly signed config or directory reply is refused.

@@ -266,6 +266,10 @@ token to `/api/ipv6/enroll/rekey`, and only after hams.com accepts it replaces `
 signed with the new key. A refusal or an unreachable hams.com keeps the old key (exit 1 or 4). Peers that hold the old public key learn the new
 one from the directory on their next lookup.
 
+## Pinned signing keys (`hams-node-verify`, base package)
+
+The enrolment configuration and the directory lookups are signed by hams.com with the deprecation key and echo the node's request nonce (`docs/proposals/IPV6_CONFIG_SIGNING.md` in hams_com). The package ships `/etc/hams-node/pinned_keys` (usign public key lines, one per line; filled at release time, see `docs/runbooks/IPV6_NET_LAUNCH.md`). While it holds no key the node keeps the old behaviour (trusts TLS alone) and logs a warning. Once it holds a key, `hams-node-enroll` applies a configuration, and `hams-node-ondemand` uses a directory record, only when `hams-node-verify` finds it signed by a pinned key with the right `kind` and the request's nonce; otherwise the previous configuration is kept (an unsigned directory answer counts as no information). The `deprecation_key` inside a reply is not trusted: the pinned key that verified the reply is the one written to `deprecation.pub`. A list of two keys supports rotation.
+
 ## Remote switch-off and rogue-router warnings (`hams-node-status`, separate package)
 
 A compromised router cannot be trusted to switch itself off, so staff cut it on hams.com first (emergency disable); this package is the

@@ -8,6 +8,8 @@ import subprocess
 import tempfile
 import unittest
 
+from test_hams_node_status import USIGN, Signer
+
 HERE = pathlib.Path(__file__).resolve().parent
 SCRIPT = HERE.parent / "files" / "usr" / "sbin" / "hams-node-ondemand"
 KEY_A = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
@@ -30,6 +32,7 @@ class Harness:
         self.log = self.root / "calls"
         self.state = self.root / "state"
         self.now = 1000
+        (self.bin / "hams-node-verify").symlink_to(SCRIPT.parent / "hams-node-verify")
         self.stub("wg", 'echo "wg $*" >> "%s"' % self.log)
         self.stub("date", 'echo "$HAMS_NOW"')
         self.replies = {}
@@ -58,6 +61,7 @@ class Harness:
         if max_peers:
             cmd += ["-m", str(max_peers)]
         env = dict(os.environ, PATH="%s:%s:%s" % (self.bin, HERE, os.environ["PATH"]), HAMS_NOW=str(self.now),
+                   HAMS_NODE_PINNED_KEYS=str(self.root / "pinned_keys"),
                    HAMS_NODE_DEPRECATION_LIST=str(self.root / "deprecation_list"))
         return subprocess.run(cmd + list(args), env=env, capture_output=True, text=True)
 
@@ -66,6 +70,86 @@ class Harness:
 
     def lookups(self):
         return [c for c in (self.log.read_text().splitlines() if self.log.exists() else []) if c.startswith("lookup ")]
+
+
+SIGNING_FETCH = """#!/usr/bin/env python3
+import base64, hashlib, json, os, sys
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+a = sys.argv[1:]
+post = [x for x in a if x.startswith("--post-data")]
+req = json.loads(a[a.index("--post-data") + 1])["params"]
+mode = open(os.environ["MODE"]).read().strip()
+body = {"status": "success", "kind": "directory", "nonce": req.get("nonce", ""), "prefix60": "2001:db8:1:20::/60", "public_key": "%s", "endpoint": "[2001:db8::9]:51820"}
+result = dict(body)
+if mode == "replay":
+    body["nonce"] = "0" * 32
+if mode == "notfound":
+    body = {"status": "error", "message": "not found", "kind": "directory", "nonce": req["nonce"]}
+    result = {"status": "error", "message": "not found"}
+key = Ed25519PrivateKey.from_private_bytes(bytes.fromhex(open(os.environ["SEED"]).read()))
+raw = key.public_key().public_bytes_raw()
+payload = json.dumps(body, separators=(",", ":"), sort_keys=True).encode()
+sig = base64.b64encode(b"Ed" + hashlib.sha256(raw).digest()[:8] + key.sign(payload)).decode()
+if mode != "unsigned":
+    result["signed"] = {"payload": base64.b64encode(payload).decode(), "signature": sig}
+if mode == "forged":
+    result["public_key"] = "%s"
+print(json.dumps({"result": result}))
+""" % (KEY_A, KEY_B)
+
+
+class PinnedLookupTests(unittest.TestCase):
+    """With a pinned key list the directory reply must be signed for the request's nonce (docs/proposals/IPV6_CONFIG_SIGNING.md in hams_com)."""
+
+    def setUp(self):
+        self.h = Harness(self)
+        self.signer = Signer()
+        (self.h.bin / "usign").write_text(USIGN)
+        (self.h.bin / "usign").chmod(0o755)
+        (self.h.root / "seed").write_text(self.signer.seed)
+        (self.h.root / "mode").write_text("ok")
+        (self.h.bin / "uclient-fetch").write_text(SIGNING_FETCH)
+        (self.h.bin / "uclient-fetch").chmod(0o755)
+        self.env = {"SEED": str(self.h.root / "seed"), "MODE": str(self.h.root / "mode")}
+        os.environ.update(self.env)
+        self.addCleanup(lambda: [os.environ.pop(k) for k in self.env])
+
+    def pin(self, *signers):
+        (self.h.root / "pinned_keys").write_text("# list\n" + "".join(x.public_line + "\n" for x in signers))
+
+    def packet(self, mode):
+        (self.h.root / "mode").write_text(mode)
+        result = self.h.run("packet", "2001:db8:1:20::5")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result
+
+    def test_a_signed_reply_makes_the_peer(self):
+        self.pin(self.signer)
+        self.packet("ok")
+        self.assertEqual(self.h.wg_calls(), ["set wg-hams peer %s endpoint [2001:db8::9]:51820 allowed-ips 2001:db8:1:20::/60" % KEY_A])
+
+    def test_an_unsigned_wrongly_signed_replayed_or_forged_reply_makes_nothing(self):
+        for mode in ("unsigned", "replay", "forged"):
+            self.pin(self.signer)
+            self.packet(mode)
+            self.assertEqual(self.h.wg_calls(), [], mode)
+        self.pin(Signer())  # a list that does not hold the signer
+        self.packet("ok")
+        self.assertEqual(self.h.wg_calls(), [])
+
+    def test_a_signed_not_found_drops_the_cached_record(self):
+        self.pin(self.signer)
+        self.h.state.mkdir(parents=True, exist_ok=True)
+        (self.h.state / "directory.cache").write_text("20010db80001002 %s [2001:db8::9]:51820 2001:db8:1:20::/60\n" % KEY_A)
+        self.packet("notfound")
+        self.assertEqual((self.h.state / "directory.cache").read_text(), "")
+        self.assertEqual(self.h.wg_calls(), [])
+
+    def test_without_a_pinned_list_the_old_behaviour_stays_and_warns(self):
+        (self.h.root / "mode").write_text("unsigned")
+        result = self.h.run("packet", "2001:db8:1:20::5")
+        self.assertIn("no pinned key", result.stderr)
+        self.assertEqual(len(self.h.wg_calls()), 1)
 
 
 class OnDemandTests(unittest.TestCase):

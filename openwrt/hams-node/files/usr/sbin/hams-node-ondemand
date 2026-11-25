@@ -77,8 +77,26 @@ lookup() {
 	qaddr=$1
 	set -- -q -O -
 	[ -n "$cert" ] && set -- "$@" --certificate "$cert" --private-key "$key"
-	reply=$(uclient-fetch "$@" --header 'Content-Type: application/json' --post-data "{\"jsonrpc\":\"2.0\",\"params\":{\"query\":\"$qaddr\"}}" "$url" 2>/dev/null)
+	# With a pinned key list (hams-node-verify, docs/proposals/IPV6_CONFIG_SIGNING.md in hams_com) the reply must be signed for this request's
+	# nonce; anything else counts as "no information" (like an unreachable portal). Without a key list the old behaviour stays and a warning is logged.
+	nonce='' extra=''
+	if grep -qE '^[A-Za-z0-9+/=]+$' "${HAMS_NODE_PINNED_KEYS:-/etc/hams-node/pinned_keys}" 2>/dev/null; then
+		nonce=$(head -c 16 /dev/urandom 2>/dev/null | hexdump -v -e '1/1 "%02x"')
+		[ ${#nonce} -eq 32 ] || { rst=''; rpk=''; return 0; }
+		extra=",\"nonce\":\"$nonce\""
+	else
+		echo "hams-node-ondemand: no pinned key list: the directory reply is trusted on TLS alone" >&2
+	fi
+	reply=$(uclient-fetch "$@" --header 'Content-Type: application/json' --post-data "{\"jsonrpc\":\"2.0\",\"params\":{\"query\":\"$qaddr\"$extra}}" "$url" 2>/dev/null)
 	echo "$reply" > "$state/reply.json"
+	if [ -n "$nonce" ]; then
+		if hams-node-verify "$state/reply.json" "$nonce" directory "$state/reply.verified" "$state/reply.key"; then
+			mv "$state/reply.verified" "$state/reply.json"
+		else
+			echo '{}' > "$state/reply.json"
+		fi
+		rm -f "$state/reply.key" "$state/reply.verified"
+	fi
 	rst=$(jsonfilter -i "$state/reply.json" -e '@.result.status' 2>/dev/null)
 	rpk=$(jsonfilter -i "$state/reply.json" -e '@.result.public_key') && rep=$(jsonfilter -i "$state/reply.json" -e '@.result.endpoint') \
 		&& rpfx=$(jsonfilter -i "$state/reply.json" -e '@.result.prefix60')

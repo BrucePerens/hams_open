@@ -1,0 +1,30 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-or-later
+# hams-node-verify REPLY_JSON NONCE KIND PAYLOAD_OUT KEY_OUT: check a signed enrolment config or directory reply against the PINNED key list
+# (docs/proposals/IPV6_CONFIG_SIGNING.md in hams_com). The list ships in the package (/etc/hams-node/pinned_keys, usign public key lines,
+# filled at release time; HAMS_NODE_PINNED_KEYS overrides the path). The reply must carry result.signed {payload, signature}; the payload
+# must be signed by a pinned key, have kind KIND and echo NONCE. A key inside the reply is never trusted.
+# Exit: 0 verified (payload JSON in PAYLOAD_OUT, the pinned key that verified it in KEY_OUT); 1 refused (unsigned, wrongly signed, wrong kind or nonce);
+# 3 no pinned key list yet (the caller keeps today's behaviour and says so).
+set -u
+[ $# -eq 5 ] || { echo "usage: hams-node-verify REPLY_JSON NONCE KIND PAYLOAD_OUT KEY_OUT" >&2; exit 2; }
+reply=$1 nonce=$2 kind=$3 out=$4 keyout=$5
+pins=${HAMS_NODE_PINNED_KEYS:-/etc/hams-node/pinned_keys}
+list=$(grep -E '^[A-Za-z0-9+/=]+$' "$pins" 2>/dev/null)
+[ -n "$list" ] || exit 3
+umask 077
+work=$(mktemp -d) || exit 1
+trap 'rm -rf "$work"' EXIT
+body=$(jsonfilter -i "$reply" -e '@.result.signed.payload') && sig=$(jsonfilter -i "$reply" -e '@.result.signed.signature') || exit 1
+case $body$sig in '' | *[!A-Za-z0-9+/=]*) exit 1 ;; esac
+printf '%s' "$body" | base64 -d > "$work/payload" 2>/dev/null || exit 1
+printf 'untrusted comment: hams.com\n%s\n' "$sig" > "$work/sig"
+for pin in $list; do
+	printf 'untrusted comment: hams.com\n%s\n' "$pin" > "$work/pub"
+	usign -V -m "$work/payload" -p "$work/pub" -x "$work/sig" > /dev/null 2>&1 || continue
+	printf '{"result":%s}' "$(cat "$work/payload")" > "$work/wrapped.json"
+	[ "$(jsonfilter -i "$work/wrapped.json" -e '@.result.kind')" = "$kind" ] && [ "$(jsonfilter -i "$work/wrapped.json" -e '@.result.nonce')" = "$nonce" ] || exit 1
+	cp "$work/wrapped.json" "$out" && printf '%s\n' "$pin" > "$keyout"
+	exit 0
+done
+exit 1
