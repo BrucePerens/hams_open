@@ -124,11 +124,12 @@ def run_all(con, cmds, timeout=60):
 
 
 class Console:
-    def __init__(self, image, hostfwd=None, extra=()):
+    def __init__(self, image, hostfwd=None, extra=(), sshfwd=None):
         accel = ["-enable-kvm", "-cpu", "host"] if os.access("/dev/kvm", os.W_OK) else ["-cpu", "max"]
         cmd = ["qemu-system-x86_64", *accel, "-m", "512", "-smp", "2", "-display", "none", "-monitor", "none",
                "-serial", "stdio", "-drive", "file=%s,format=raw,if=virtio,snapshot=on" % image,
-               "-netdev", "user,id=n0" + (",hostfwd=tcp:127.0.0.1:%d-:80" % hostfwd if hostfwd else ""), "-device", "virtio-net-pci,netdev=n0", *extra]
+               "-netdev", "user,id=n0" + (",hostfwd=tcp:127.0.0.1:%d-:80" % hostfwd if hostfwd else "")
+               + (",hostfwd=tcp:127.0.0.1:%d-:22" % sshfwd if sshfwd else ""), "-device", "virtio-net-pci,netdev=n0", *extra]
         self.proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         self.buf = ""
         self.q = queue.Queue()
