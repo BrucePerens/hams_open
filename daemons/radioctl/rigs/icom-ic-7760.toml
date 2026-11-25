@@ -76,6 +76,14 @@ code = 0x01
 mode = "data-r"
 code = 0x00
 
+[[modes]]
+mode = "psk"
+code = 0x12
+
+[[modes]]
+mode = "psk-r"
+code = 0x13
+
 [[facts]]
 key = "rig.*"
 provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py and docs of this repository; Hamlib 4.6.2 model name", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 3092 --dump-caps`." }
@@ -138,13 +146,18 @@ verified = { state = "unverified" }
 
 [[facts]]
 key = "mode.*"
-provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/icom_defs.h S_LSB..S_RTTYR (00 LSB, 01 USB, 02 AM, 03 CW, 04 RTTY, 05 FM, 06 WFM, 07 CW-R, 08 RTTY-R); `rigctl -m 3092 --dump-caps` Mode list", note = "No readable copy of Icom's CI-V reference for this model could be obtained (Icom's download endpoints are excluded by robots.txt and the archive.org copies found were image scans or other documents); this fact is Hamlib's. Facts only were read from Hamlib; no code or table was copied. Modes with no entry in radioctl's vocabulary are not listed (PKTLSB PKTUSB FM-D AM-D PSK PSKR). Data modes (PKTUSB, PKTLSB) are not listed unless command 26 is certain for the model; Hamlib uses other forms (1A 06) on some models and the engine does not send those." }
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/icom_defs.h S_LSB..S_RTTYR (00 LSB, 01 USB, 02 AM, 03 CW, 04 RTTY, 05 FM, 06 WFM, 07 CW-R, 08 RTTY-R); `rigctl -m 3092 --dump-caps` Mode list", note = "No readable copy of Icom's CI-V reference for this model could be obtained (Icom's download endpoints are excluded by robots.txt and the archive.org copies found were image scans or other documents); this fact is Hamlib's. Facts only were read from Hamlib; no code or table was copied. Modes with no entry in radioctl's vocabulary are not listed (PKTLSB PKTUSB FM-D AM-D). Data modes (PKTUSB, PKTLSB) are not listed unless command 26 is certain for the model; Hamlib uses other forms (1A 06) on some models and the engine does not send those." }
 verified = { state = "unverified" }
 
 [[facts]]
 key = "mode.data"
 provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/icom_defs.h C_SEND_SEL_MODE 0x26; rigs/icom/icom.c icom_set_mode_x26 and icom_get_mode_x26; rigs/icom/ic7760.c priv caps `x25x26_always = 1` and `targetable_vfo` RIG_TARGETABLE_MODE", note = "Facts only, no code copied. `data` is USB (01) with DATA set, `data-r` LSB (00) with DATA set; the engine reads the mode with 26 00 and sets it with 26 00 <code> <data> <filter> on this model, as Hamlib does. AM-D and FM-D are not in radioctl's mode vocabulary." }
 verified = { state = "unverified" }
+
+[[facts]]
+key = "mode.psk"
+provenance = { kind = "manual", reference = "IC-7760 CI-V Reference Guide (IC-7760_ENG_CI-V_2.pdf), command 26 format, PDF page 23", note = "Command 26 is `26 <00 Main|01 Sub> <mode> <data> <filter>`: mode 12 PSK and 13 PSK-R are listed as psk and psk-r; the data byte is 00 off or 01 to 03 for data mode 1 to 3, and a data mode of 2 or 3 reads back as `data` or `data-r` (radioctl has one data mode). The band is the one last selected with 07 D0/D1 (Main until then)." }
+verified = { state = "manual-checked", reference = "IC-7760_ENG_CI-V_2.pdf command 26, PDF page 23" }
 
 [[facts]]
 key = "capability.repeater"
