@@ -7,7 +7,11 @@ from odoo import models, fields, api, _
 from odoo.exceptions import AccessError
 from odoo.addons.distributed_redis_cache.redis_pool import redis, redis_pool
 from odoo.addons.hams_helpdesk.models import untrusted_text as ut
-from odoo.addons.hams_helpdesk.models.inbound_spam_filter import HAMS_INBOUND_SPAM_REASONS_CONTEXT_KEY, inbound_spam_reasons
+from odoo.addons.hams_helpdesk.models.inbound_spam_filter import (
+    HAMS_INBOUND_SPAM_REASONS_CONTEXT_KEY,
+    failed_sender_authentication,
+    inbound_spam_reasons,
+)
 from odoo.addons.hams_helpdesk.models.mail_thread_untrusted import stash_for
 from odoo.addons.zero_sudo import public_rpc
 
@@ -635,12 +639,16 @@ class PagerIncident(models.Model):
         # refresh. The reasons travel to the helpdesk adapter in the context key HAMS_INBOUND_SPAM_REASONS_CONTEXT_KEY (an empty
         # list means "judged, clean"). The parked findings are read here and popped further down.
         parked_mail = stash_for(self.env).get(msg_dict.get("message_id") or "") or {}
+        # A From line that failed SES authentication may name a member who never wrote: judge it as a stranger's.
+        author_id = msg_dict.get("author_id")
+        if author_id and failed_sender_authentication(parked_mail.get("mail_signals")):
+            author_id = False
         spam_reasons = inbound_spam_reasons(
             subject=data["name"],
             body_html=data["description"],
             signals=parked_mail.get("mail_signals"),
             verdicts=parked_mail.get("ses_verdicts"),
-            trusted_sender=self.env["hams_helpdesk.ticket"]._inbound_sender_is_member(msg_dict.get("author_id")),
+            trusted_sender=self.env["hams_helpdesk.ticket"]._inbound_sender_is_member(author_id),
         )
         if spam_reasons:
             data["status"] = "resolved"
