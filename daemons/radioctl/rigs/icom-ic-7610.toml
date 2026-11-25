@@ -77,6 +77,23 @@ code = 0x07
 mode = "rtty-r"
 code = 0x08
 
+# Data modes are a sideband code plus the DATA flag of command 26 (USB-D, LSB-D); see the "mode.data" fact.
+[[modes]]
+mode = "data"
+code = 0x01
+
+[[modes]]
+mode = "data-r"
+code = 0x00
+
+[[modes]]
+mode = "psk"
+code = 0x12
+
+[[modes]]
+mode = "psk-r"
+code = 0x13
+
 [[facts]]
 key = "rig.*"
 provenance = { kind = "repo-code", reference = "daemons/hams_local_relay/tools/rig_simulator.py and docs of this repository; Hamlib 4.6.2 model name", note = "Identity and family are our own labelling; the model name is as in `rigctl -m 3078 --dump-caps`." }
@@ -143,8 +160,13 @@ provenance = { kind = "program-output", reference = "rigctl -m 3078 --dump-caps 
 verified = { state = "unverified" }
 
 [[facts]]
+key = "mode.data"
+provenance = { kind = "manual", reference = "IC-7610 CI-V Reference Guide (IC-7610_ENG_CI-V_4.pdf), command 26 format, PDF page 13", note = "Command 26 is `26 <00 Main|01 Sub> <mode> <data> <filter>` (data 00 off, 01 to 03 data mode 1 to 3, filter 01 to 03); modes 12 PSK and 13 PSK-R are psk and psk-r. The engine reads the mode with 26 and sets it with 26 <band> <code> <data> <filter>, the band being the one last selected with 07 D0/D1 (Main until then). `data` is USB with D1, `data-r` LSB with D1; D2 and D3 read back as the same (radioctl has one data mode). The IC-7610's 04 and 06 act on the selected band only." }
+verified = { state = "manual-checked", reference = "IC-7610_ENG_CI-V_4.pdf command 26, PDF page 13" }
+
+[[facts]]
 key = "mode.*"
-provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/icom_defs.h S_LSB..S_RTTYR (00 LSB, 01 USB, 02 AM, 03 CW, 04 RTTY, 05 FM, 07 CW-R, 08 RTTY-R)", note = "Icom's own CI-V reference guide was not used: icomjapan.com's download terms forbid reuse of the manuals' data, and radioctl skips such sources. Facts only were read from Hamlib; no code or table was copied. Modes with no entry in radioctl's mode vocabulary (D-STAR 17, DD 22, PSK 12 and 13) are not listed. The model's own mode list is in `rigctl -m 3078 --dump-caps`." }
+provenance = { kind = "hamlib-source", reference = "Hamlib 4.6.2 (released source tarball, sha256 b2ac73f44dd1161e95fdee6c95276144757647bf92d7fdb369ee2fe41ed47ae8): rigs/icom/icom_defs.h S_LSB..S_RTTYR (00 LSB, 01 USB, 02 AM, 03 CW, 04 RTTY, 05 FM, 07 CW-R, 08 RTTY-R)", note = "Icom's own CI-V reference guide was not used: icomjapan.com's download terms forbid reuse of the manuals' data, and radioctl skips such sources. Facts only were read from Hamlib; no code or table was copied. Modes with no entry in radioctl's mode vocabulary (D-STAR 17, DD 22) are not listed. The model's own mode list is in `rigctl -m 3078 --dump-caps`." }
 verified = { state = "unverified" }
 
 [[facts]]
