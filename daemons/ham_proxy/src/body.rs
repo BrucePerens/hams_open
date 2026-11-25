@@ -14,6 +14,14 @@ pub(crate) fn read_request<R: Read>(r: &mut R) -> Result<(Vec<u8>, Vec<u8>), Pro
     loop {
         if let Some(i) = all.windows(4).position(|w| w == b"\r\n\r\n") {
             let rest = all.split_off(i + 4);
+            // A bare CR or LF inside the head: a lenient site would read it as a line end, so a header the X-Ham-* filter never saw
+            // (`X-Ham-Callsign`) could ride inside another header's value.
+            if String::from_utf8_lossy(&all)
+                .replace("\r\n", "")
+                .contains(['\r', '\n'])
+            {
+                return Err(ProxyError::BadRequest);
+            }
             return Ok((all, rest));
         }
         let n = r.read(&mut buf)?;
