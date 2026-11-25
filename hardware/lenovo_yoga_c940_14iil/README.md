@@ -46,8 +46,12 @@ Status: **verified** = evidence captured; **detected** = device and driver prese
 | Suspend / hibernate | detected, not tried | `mem_sleep` default `s2idle`, `deep` listed; not suspended (remote machine). |
 | SD reader, privacy shutter | not present | This model has neither. |
 
-Observation: the battery reports `energy_full` 6.9 Wh against 60 Wh design (capacity 99%); either a firmware unit quirk or
-a worn pack. Not investigated.
+Batteries (2026-11-25, yoga1 and yoga2): both machines have aftermarket packs whose gauges report generic values
+(manufacturer "Simplo", model "BASE-BAT", serials "25"/"1F", cycle_count 0) and a full capacity above design
+(64.3 and 65.6 Wh against 60 Wh). The percentage the firmware uses for conservation mode comes from that gauge, so the real
+stop level may differ from 55-60% until the gauge has learned the cells. One calibration cycle (conservation off, charge
+full, run down to the system's low-battery shutdown, recharge to full at once, conservation on) lets it learn. The earlier
+machine (bruce-yoga) reported 6.9 Wh against 60 Wh, the same kind of untrained gauge.
 
 ## Fingerprint
 
