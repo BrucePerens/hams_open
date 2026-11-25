@@ -33,7 +33,7 @@ while read -r key endpoint allowed extra; do
 		echo "hams-node-wg: bad line, skipped" >&2; status=1; continue
 	fi
 	case $key$endpoint$allowed in *[!]A-Za-z0-9+/=.:,_[-]*) echo "hams-node-wg: bad characters, skipped" >&2; status=1; continue ;; esac
-	if [ "$action" = apply ] && [ -r "$deplist" ] && grep -q "^$key " "$deplist"; then
+	if [ "$action" = apply ] && [ -r "$deplist" ] && awk -v k="$key" '$1 == k { found = 1 } END { exit !found }' "$deplist"; then
 		echo "hams-node-wg: $key is on the deprecation list, skipped" >&2; continue
 	fi
 	for prefix in $(echo "$allowed" | tr , ' '); do

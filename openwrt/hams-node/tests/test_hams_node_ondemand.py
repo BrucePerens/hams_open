@@ -169,6 +169,14 @@ class OnDemandTests(unittest.TestCase):
         h.run("expire")
         self.assertEqual(h.wg_calls()[1:], ["set wg-hams peer %s remove" % KEY_A])
 
+    def test_the_deprecation_list_is_matched_as_text_not_as_a_pattern(self):
+        h = Harness(self)
+        dotted = "A" * 20 + "." + "A" * 22 + "="  # a "." in a pattern would match the listed "x"
+        h.set_lookup({"2001:db8:1:20::5": record("2001:db8:1:20::/60", dotted)})
+        (h.root / "deprecation_list").write_text("%s 2001:db8:1:20::/60\n" % ("A" * 20 + "x" + "A" * 22 + "="))
+        h.run("packet", "2001:db8:1:20::5")
+        self.assertEqual(h.wg_calls(), ["set wg-hams peer %s endpoint [2001:db8::9]:51820 allowed-ips 2001:db8:1:20::/60" % dotted])
+
     def test_record_with_characters_outside_key_endpoint_and_prefix_makes_no_peer(self):
         for field, value in (("endpoint", "1.2.3.4:51820 allowed-ips ::/0"), ("endpoint", "[2001:db8::9]:51820;x"), ("public_key", KEY_A + "x y")):
             with self.subTest(field, value=value):
