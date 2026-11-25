@@ -47,7 +47,9 @@ fn through_proxy(req: &[u8]) -> String {
     let s2 = seen.clone();
     thread::spawn(move || {
         let Ok((s, _)) = sl.accept() else { return };
-        let Ok(mut t) = site_acc.accept(s) else { return };
+        let Ok(mut t) = site_acc.accept(s) else {
+            return;
+        };
         let mut buf = [0u8; 4096];
         let n = t.read(&mut buf).unwrap_or(0);
         *s2.lock().unwrap() = String::from_utf8_lossy(&buf[..n]).to_string();
