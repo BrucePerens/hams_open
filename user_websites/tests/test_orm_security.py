@@ -260,6 +260,7 @@ class TestORMSecurity(RealTransactionCase):
 
     def test_05b_member_page_url_stays_in_own_namespace(self):
         # [@ANCHOR: test_member_page_url_stays_in_own_namespace]
+        # Tests [@ANCHOR: user_websites:fn_check_member_page_url]
         # Tests [@ANCHOR: website_page_create]
         # Tests [@ANCHOR: website_page_write]
         """A member may not create or move a page to an address outside /<own slug>, over the ORM."""

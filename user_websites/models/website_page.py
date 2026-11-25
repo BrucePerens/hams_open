@@ -820,6 +820,7 @@ class WebsitePage(models.Model):
         records._invalidate_cloudflare_cache()
         return records
 
+    # [@ANCHOR: user_websites:fn_check_member_page_url]
     def _check_member_page_url(self, url, owner_user_id, group_id):
         """A member (not an administrator or service account) may only put a page at /<own slug> or
         under /<own slug>/. The site editor already builds such addresses; this stops a direct ORM or
