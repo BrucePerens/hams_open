@@ -27,8 +27,9 @@ use crate::error::{StationError, StationErrorKind};
 /// How to trust a Home Assistant over TLS. Exactly one of the two fields is set.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HaTls {
-    /// The PEM text of the owner's certificate authority (or of the server's own self-signed
-    /// certificate).
+    /// The PEM text of the owner's certificate authority. A server certificate itself is accepted
+    /// here only if it is a leaf (CA:FALSE); a self-signed certificate marked CA:TRUE is refused
+    /// (`CaUsedAsEndEntity`), so for such a certificate use `pin_sha256` instead.
     pub ca_pem: Option<String>,
     /// The SHA-256 fingerprint of the server certificate, 64 hex digits (colons and spaces are
     /// ignored).

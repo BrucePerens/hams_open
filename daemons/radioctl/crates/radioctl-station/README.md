@@ -128,7 +128,7 @@ in `RELAY_EXTERNAL_SWITCHES_AND_POWER_CONTROL.md` 4.3a:
   the bearer header and the WebSocket auth message. Not in config, errors, the audit log or logs.
 - **Private IP literals only** (default port 8123). The link is plain HTTP and WebSocket unless
   `HaConfig::tls` is set: then HTTPS and `wss`, trusting only the owner's CA (PEM: Privacy-Enhanced Mail text encoding for keys and certificates; the address must
-  be an IP entry of the certificate) or one pinned SHA-256 certificate fingerprint (`tls.rs`).
+  be an IP entry of the certificate; a certificate marked CA:TRUE, such as the default of `openssl req -x509`, is refused as a server certificate, so pin it instead) or one pinned SHA-256 certificate fingerprint (`tls.rs`).
   Verification is never off and the system's public roots are not used. Tested against a fake
   Home Assistant with a CA-signed certificate; not run against a real Home Assistant.
 - **Audit.** Every service call, session start, authentication result, loss and discovery goes to
