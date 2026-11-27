@@ -2267,7 +2267,7 @@
 
 | Field | Type | Meaning |
 |---|---|---|
-| `ca_pem` | `Option<String>` | The PEM text of the owner's certificate authority (or of the server's own self-signed certificate). |
+| `ca_pem` | `Option<String>` | The PEM text of the owner's certificate authority. A server certificate itself works here only if it is a leaf (CA:FALSE); a self-signed certificate marked CA:TRUE is refused, so pin it with `pin_sha256` instead. |
 | `pin_sha256` | `Option<String>` | The SHA-256 fingerprint of the server certificate, 64 hex digits (colons and spaces are ignored). |
 
 **Invariants, ownership and concurrency.** Plain data: no locks, atomics or handles inside, so it is copied or moved by value as its derives allow. No invariant beyond the field types is stated in the source (unknown whether callers must keep any relation between fields).
