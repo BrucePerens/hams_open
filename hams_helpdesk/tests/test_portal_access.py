@@ -163,3 +163,12 @@ class TestPortalTicketAccess(HamsHttpCase):
         # a member may still follow their own ticket
         mine.message_subscribe(partner_ids=[self.member.partner_id.id])
         self.assertIn(self.member.partner_id, self.mine.message_partner_ids)
+    # [@ANCHOR: hams_helpdesk:test_a_member_cannot_read_the_staff_only_ticket_fields]
+    # Tests [@ANCHOR: hams_helpdesk:portal_staff_fields_unreadable]
+    def test_a_member_cannot_read_the_staff_only_ticket_fields(self):
+        mine = self.mine.with_user(self.member)
+        self.assertEqual(mine.read(["name", "stage"])[0]["name"], "Access Mine")
+        for field in ("triage_reasons", "suspicion_score", "notify_state", "ncmec_report_state"):
+            with self.assertRaises(AccessError, msg=field):
+                mine.read([field])
+        self.assertFalse({"triage_reasons", "suspicion_score", "ncmec_report_packet"} & set(mine.read()[0]))
