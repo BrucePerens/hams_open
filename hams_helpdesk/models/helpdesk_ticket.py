@@ -1245,9 +1245,10 @@ class HelpdeskTicket(models.Model):
         clickable links. An empty or new (unsaved) record is False. Reads two fields; no side effects."""
         if len(self) != 1:
             return False
-        # Elevated read: the mail render path runs as the portal recipient, who may not read staff fields (#3466).
+        # Read as the helpdesk service account: the mail render path runs as the portal recipient, who may not read staff fields (#3466).
         # Only this yes/no decision leaves; the field values do not.
-        ticket = self.sudo()
+        hd_env = self.env["zero_sudo.security.utils"]._get_service_env("hams_helpdesk.user_helpdesk_service")
+        ticket = self.with_env(hd_env)
         return ticket.triage_verdict == "phishing" and not ticket.triage_overridden
 
     @api.depends("triage_verdict", "triage_overridden")

@@ -6,6 +6,7 @@ the chatter and the notification email show links as plain text; tickets with an
 stored text and the shared text filter are unchanged; a changed verdict or a person's override shows the right form at once."""
 from markupsafe import Markup
 
+from odoo.exceptions import AccessError
 from odoo.tests.common import tagged
 from odoo.addons.mail.tools.discuss import Store
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
@@ -223,7 +224,6 @@ class TestPhishingLinkDefangTickets(HamsTransactionCase):
     def test_06b_a_portal_user_gets_the_decision_but_cannot_read_the_verdict(self):
         # Tests [@ANCHOR: hams_helpdesk:triage_links_defanged]
         # The mail render path runs as the portal recipient; the staff-field guard must stay and the decision must still work.
-        from odoo.exceptions import AccessError
         portal = self.env["res.users"].with_user(self.env.ref("base.user_admin")).create(
             {"name": "Portal D", "login": "portal_d_defang", "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])]}
         )
