@@ -45,6 +45,8 @@ QWeb template `hams_helpdesk.portal_ticket_new`, rendered by `GET /my/tickets/ne
 
 A double-click or a browser retry posts the form twice ([@ANCHOR: hams_helpdesk:portal_submit_idempotent]): the same member's ticket with the same subject within 10 minutes goes to the existing ticket and opens no second one. Test: `test_a_double_submit_opens_one_ticket`.
 
+A member who reads their own ticket over RPC cannot read the staff-only fields (filter score, triage verdict and reasons, notification hold, every ncmec_* field) ([@ANCHOR: hams_helpdesk:portal_staff_fields_unreadable]). Test: `test_a_member_cannot_read_the_staff_only_ticket_fields`.
+
 ## Amazon SES scan verdicts count as spam signals [@ANCHOR: hams_helpdesk:ses_verdicts]
 
 Mail to the support addresses passes through Amazon SES (Amazon Simple Email Service), whose receipt rule has scanning on, so each stored message carries
