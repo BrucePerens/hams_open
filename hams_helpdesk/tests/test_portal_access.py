@@ -7,6 +7,7 @@ forged POST body cannot make a ticket of a type the portal withholds."""
 import re
 
 from odoo.addons.hams_helpdesk.controllers import portal as portal_controller
+from odoo.exceptions import AccessError
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from odoo.tests.common import tagged
 
@@ -148,3 +149,17 @@ class TestPortalTicketAccess(HamsHttpCase):
             seen += re.findall(r"Tie Order (\d\d)", self.url_open(path).text)
         expected = ["%02d" % n for n in sorted(range(45), reverse=True)]
         self.assertEqual(seen, expected, "every ticket exactly once, in id order within the shared create_date")
+
+    # [@ANCHOR: hams_helpdesk:test_a_member_cannot_subscribe_other_partners_to_their_ticket]
+    # Tests [@ANCHOR: hams_helpdesk:portal_no_subscribing_others]
+    def test_a_member_cannot_subscribe_other_partners_to_their_ticket(self):
+        mine = self.mine.with_user(self.member)
+        stranger = self.other.partner_id
+        with self.assertRaises(AccessError):
+            mine.message_subscribe(partner_ids=[stranger.id])
+        with self.assertRaises(AccessError):
+            mine.write({"message_follower_ids": [(0, 0, {"partner_id": stranger.id, "res_model": mine._name, "res_id": mine.id})]})
+        self.assertNotIn(stranger, self.mine.message_partner_ids)
+        # a member may still follow their own ticket
+        mine.message_subscribe(partner_ids=[self.member.partner_id.id])
+        self.assertIn(self.member.partner_id, self.mine.message_partner_ids)

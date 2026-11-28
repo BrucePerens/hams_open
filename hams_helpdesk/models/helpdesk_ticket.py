@@ -798,6 +798,19 @@ class HelpdeskTicket(models.Model):
                     partner_ids=[ticket_service.partner_id.id]
                 )
 
+    # [@ANCHOR: hams_helpdesk:portal_no_subscribing_others]
+    # Verified by [@ANCHOR: hams_helpdesk:test_a_member_cannot_subscribe_other_partners_to_their_ticket]
+    # A member may write their own ticket, and message_subscribe() only needs write access to subscribe ANY partner: every later
+    # staff reply would then be emailed to a stranger the member picked. A member may follow their own ticket and nobody else.
+    def message_subscribe(self, partner_ids=None, subtype_ids=None):
+        if (
+            not self.env.su
+            and set(partner_ids or []) - {self.env.user.partner_id.id}
+            and self.env.user.has_group("base.group_portal")
+        ):
+            raise AccessError(_("You can only follow a ticket yourself."))
+        return super().message_subscribe(partner_ids=partner_ids, subtype_ids=subtype_ids)
+
     def write(self, vals):
         # [@ANCHOR: COMM_helpdesk_micro_privilege]
         # Micro-Privilege Security Audit: Prevent portal users from modifying restricted fields.
