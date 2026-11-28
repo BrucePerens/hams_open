@@ -69,6 +69,12 @@ class FwTests(unittest.TestCase):
         self.assertIn("set firewall.hams_rf_in_ah.target=ACCEPT", lines)
         self.assertFalse(any(ln.startswith("set firewall.hams_in_ah") for ln in lines))
 
+    def test_rf_zone_accepts_bgp_tcp_179_after_ah_or_the_rf_sessions_never_open(self):
+        lines = Env(self).run(SBIN / "hams-node-fw", "render").stdout.splitlines()
+        for want in ("set firewall.hams_rf_in_bgp.src=hamrf", "set firewall.hams_rf_in_bgp.proto=tcp", "set firewall.hams_rf_in_bgp.dest_port=179", "set firewall.hams_rf_in_bgp.target=ACCEPT"):
+            self.assertIn(want, lines)
+        self.assertFalse(any(ln.startswith("set firewall.hams_in_bgp") for ln in lines), "never toward the tunnel zone")
+
     def test_no_open_ports_means_no_rules(self):
         lines = Env(self, open="").run(SBIN / "hams-node-fw", "render").stdout.splitlines()
         self.assertEqual([ln for ln in lines if "=rule" in ln and "hams_in_" in ln], [])
