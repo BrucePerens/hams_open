@@ -202,6 +202,57 @@ class BirdTests(unittest.TestCase):
             parsed = subprocess.run([bird, "-p", "-c", str(out)], capture_output=True, text=True)
             self.assertEqual(parsed.returncode, 0, parsed.stdout + parsed.stderr)
 
+    # What the route server (ham_ipv6net/client/route_server.py member_session, with a /40 on its tunnel interface) runs for this node.
+    RS_CONF = """router id 192.0.2.1;
+protocol device {
+}
+protocol bgp m1 {
+    local 2001:db8:ab00::1 as 4200000000;
+    neighbor 2001:db8:ab00:10::1 as 4200000001;
+    rs client;
+    passive;
+    ipv6 {
+        import filter { if net ~ [2001:db8:ab00:10::/60{60,64}] && bgp_path.len = 1 && bgp_path.first = 4200000001 then accept; reject; };
+        export all;
+    };
+}
+"""
+    SESSION = """set -e
+unshare -n sleep 40 & P=$!
+sleep 1
+ip link add vn type veth peer name vr; ip link set vr netns $P
+ip link set lo up; ip link set vn up
+ip -6 addr add 2001:db8:ab00:10::1/128 dev vn nodad
+ip -6 route add 2001:db8:ab00::/40 dev vn
+NS="nsenter -t $P -n"
+$NS ip link set lo up; $NS ip link set vr up
+$NS ip -6 addr add 2001:db8:ab00::1/40 dev vr nodad
+$NS timeout 30 {bird} -f -c rs.conf -s rs.ctl 2>rs.log &
+timeout 30 {bird} -f -c node.conf -s n.ctl 2>n.log &
+for i in $(seq 40); do
+    {birdc} -s n.ctl show protocols hams_rs1 2>/dev/null | grep -q Established && break
+    sleep 1
+done
+{birdc} -s n.ctl show protocols hams_rs1
+{birdc} -s n.ctl show route
+$NS {birdc} -s rs.ctl show route
+"""
+
+    @unittest.skipUnless(shutil.which("bird") or os.path.exists("/usr/sbin/bird"), "bird is not installed")
+    def test_the_node_establishes_a_session_with_a_route_server_and_announces_its_prefix(self):
+        """Two BIRDs in two network namespaces joined by a veth (inside `unshare -Urn`): the node's rendered file against a route server."""
+        bird = shutil.which("bird") or "/usr/sbin/bird"
+        birdc = os.path.join(os.path.dirname(bird), "birdc")
+        result, conf, out = self.render(server="2001:db8:ab00::1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        work = out.parent
+        (work / "node.conf").write_text(conf)
+        (work / "rs.conf").write_text(self.RS_CONF)
+        (work / "run.sh").write_text(self.SESSION.format(bird=bird, birdc=birdc))
+        done = subprocess.run(["unshare", "-Urn", "sh", "run.sh"], cwd=work, capture_output=True, text=True, timeout=120)
+        self.assertIn("Established", done.stdout, done.stdout + done.stderr + (work / "n.log").read_text())
+        self.assertEqual(done.stdout.count("2001:db8:ab00:10::/60"), 2, done.stdout)  # the node's own, and the one the server learned
+
 
 if __name__ == "__main__":
     unittest.main()
