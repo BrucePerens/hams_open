@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright © HAMS project. AGPL-3.0-or-later.
+import logging
 from datetime import timedelta
 
 from odoo import models, fields, api, _
@@ -7,6 +8,8 @@ from odoo.exceptions import ConcurrencyError, UserError
 from psycopg2 import IntegrityError
 from ..utils.cloudflare_api import ban_ip, unban_ip
 from odoo.addons.zero_sudo import public_rpc
+
+_logger = logging.getLogger(__name__)
 
 
 # [@ANCHOR: cloudflare_ip_ban_cloudflare_ipban]
@@ -203,6 +206,14 @@ class CloudflareIPBan(models.Model):
                         rec._action_lift_ban_sync()
                     else:
                         rec.state = "lifted"
-            except UserError:
+            except UserError as exc:
                 # Cloudflare refused or was unreachable: stays active and is retried on the next run.
-                continue
+                # exc_info: hams_helpdesk's cron hook opens a ticket from a logged exception, so a ban that
+                # cannot be lifted on every run no longer stays active unnoticed.
+                _logger.error(
+                    "Could not lift expired Cloudflare ban %s (%s): %s",
+                    rec.id,
+                    rec.ip_address,
+                    exc,
+                    exc_info=True,
+                )
