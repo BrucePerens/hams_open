@@ -74,6 +74,9 @@ retry_strategy = IdempotencyAwareRetry(
     # Honour Retry-After when Cloudflare sends one; this is urllib3's default
     # and is named explicitly because the 429-on-POST path depends on it.
     respect_retry_after_header=True,
+    # Without a backoff the retries of a 5xx or a connection error ran back to back, hammering an API that
+    # is already struggling: 0.5 s, 1 s between the three attempts (a Retry-After header still wins).
+    backoff_factor=0.5,
 )
 adapter = HTTPAdapter(max_retries=retry_strategy)
 session.mount("https://", adapter)
