@@ -134,7 +134,9 @@
 
 **Invariants, ownership and concurrency.** Odoo runs each request in one database transaction; rows are created, read and changed through the ORM with the caller's access rights, and nothing here is shared between threads except through the database. Constraints and defaults are those in the field list above; no other invariant is stated in the class docstring.
 
-**Methods.** `message_route`.
+**Methods.** `message_route`, `message_subscribe`, `message_post`.
+
+A member (portal or public user) can follow a record or post on it naming only themselves: `message_subscribe` and `message_post` refuse another partner in `partner_ids`, which would make the system email a stranger on the member's behalf ([@ANCHOR: hams_base:member_no_notifying_others]). Staff, service accounts and superuser code are not limited. Test: `test_a_member_cannot_subscribe_or_notify_other_partners`.
 
 **See also:** test `test_vacation_reply_dropped (tests/test_mail_thread.py)`.
 

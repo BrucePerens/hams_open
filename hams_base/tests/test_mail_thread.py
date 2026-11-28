@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from email.message import EmailMessage
 
+from odoo.exceptions import AccessError
 from odoo.tests import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 
@@ -195,3 +196,26 @@ class TestMailThread(HamsTransactionCase):
                 'Dropping', call.args[0],
                 "dmarc-reports@ is not special-cased in message_route and must never be dropped.",
             )
+
+
+    # [@ANCHOR: hams_base:test_a_member_cannot_subscribe_or_notify_other_partners]
+    # Tests [@ANCHOR: hams_base:member_no_notifying_others]
+    def test_a_member_cannot_subscribe_or_notify_other_partners(self):
+        portal = self.env.ref("base.group_portal")
+        member = self.env["res.users"].create(
+            {"name": "Notify Member", "login": "notify_member", "group_ids": [(6, 0, [portal.id])]}
+        )
+        stranger = self.env["res.partner"].create({"name": "Notify Stranger", "email": "stranger@example.com"})
+        base_record = member.partner_id
+        record = base_record.with_user(member)
+        with self.assertRaises(AccessError):
+            record.message_subscribe(partner_ids=[stranger.id])
+        with self.assertRaises(AccessError):
+            record.message_post(body="hello", partner_ids=[member.partner_id.id, stranger.id])
+        self.assertNotIn(stranger, base_record.message_partner_ids)
+        self.assertFalse(base_record.message_ids.filtered(lambda m: m.body and "hello" in m.body))
+        # a member may still name themselves, and staff may name anyone
+        record.message_subscribe(partner_ids=[member.partner_id.id])
+        self.assertIn(member.partner_id, base_record.message_partner_ids)
+        base_record.with_user(self.env.ref("base.user_admin")).message_subscribe(partner_ids=[stranger.id])
+        self.assertIn(stranger, base_record.message_partner_ids)

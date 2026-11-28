@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-from odoo import models, api
+from odoo import _, models, api
+from odoo.exceptions import AccessError
 import email.utils
 import logging
 from odoo.addons.zero_sudo import public_rpc
@@ -10,6 +11,27 @@ _logger = logging.getLogger(__name__)
 # [@ANCHOR: hams_base_mail_thread_mail_thread]
 class MailThread(models.AbstractModel):
     _inherit = 'mail.thread'
+
+    # [@ANCHOR: hams_base:member_no_notifying_others]
+    # Verified by [@ANCHOR: hams_base:test_a_member_cannot_subscribe_or_notify_other_partners]
+    # A member who can write or read a record may call message_subscribe() and message_post() on it, and Odoo only checks that
+    # access, not WHO is named: any partner the member picks would be emailed their text, and every later reply. A member may
+    # follow or write to a record themselves and name nobody else. Staff, service accounts and code running as superuser are
+    # not limited. The helpdesk ticket carries the same rule on message_subscribe alone (#3468).
+    def _hams_member_names_only_self(self, partner_ids):
+        user = self.env.user
+        if self.env.su or user._is_internal() or user.is_service_account:
+            return
+        if set(partner_ids or []) - {user.partner_id.id}:
+            raise AccessError(_("You can only name yourself as a follower or recipient."))
+
+    def message_subscribe(self, partner_ids=None, subtype_ids=None):
+        self._hams_member_names_only_self(partner_ids)
+        return super().message_subscribe(partner_ids=partner_ids, subtype_ids=subtype_ids)
+
+    def message_post(self, **kwargs):
+        self._hams_member_names_only_self(kwargs.get("partner_ids"))
+        return super().message_post(**kwargs)
 
     # [@ANCHOR: hams_base:COMM_message_route]
     @public_rpc
