@@ -200,6 +200,8 @@ class TestMailThread(HamsTransactionCase):
 
     # [@ANCHOR: hams_base:test_a_member_cannot_subscribe_or_notify_other_partners]
     # Tests [@ANCHOR: hams_base:member_no_notifying_others]
+    # Tests [@ANCHOR: hams_base:member_message_subscribe]
+    # Tests [@ANCHOR: hams_base:member_message_post]
     def test_a_member_cannot_subscribe_or_notify_other_partners(self):
         portal = self.env.ref("base.group_portal")
         member = self.env["res.users"].create(

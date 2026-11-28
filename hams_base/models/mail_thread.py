@@ -25,10 +25,14 @@ class MailThread(models.AbstractModel):
         if set(partner_ids or []) - {user.partner_id.id}:
             raise AccessError(_("You can only name yourself as a follower or recipient."))
 
+    # [@ANCHOR: hams_base:member_message_subscribe]
+    # Verified by [@ANCHOR: hams_base:test_a_member_cannot_subscribe_or_notify_other_partners]
     def message_subscribe(self, partner_ids=None, subtype_ids=None):
         self._hams_member_names_only_self(partner_ids)
         return super().message_subscribe(partner_ids=partner_ids, subtype_ids=subtype_ids)
 
+    # [@ANCHOR: hams_base:member_message_post]
+    # Verified by [@ANCHOR: hams_base:test_a_member_cannot_subscribe_or_notify_other_partners]
     def message_post(self, **kwargs):
         self._hams_member_names_only_self(kwargs.get("partner_ids"))
         return super().message_post(**kwargs)
