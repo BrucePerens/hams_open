@@ -36,6 +36,12 @@ class BirdTests(unittest.TestCase):
         result = subprocess.run(["sh", str(SCRIPT), "render", str(out)], env=env, capture_output=True, text=True)
         return result, (out.read_text() if out.exists() else None), out
 
+    def test_every_session_has_an_import_limit_that_restarts_it(self):
+        result, conf, out = self.render(neighbor="4200000007,fe80::7,rf0,2001:db8:ab00:70::/60")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(conf.count("import limit 20000 action restart;"), 2)  # the two route servers
+        self.assertEqual(conf.count("import limit 64 action restart;"), 1)  # the RF neighbour: one /60 (31 prefixes) and a /96
+
     def test_sessions_and_filters_match_the_router_config_format(self):
         result, conf, out = self.render()
         self.assertEqual(result.returncode, 0, result.stderr)
