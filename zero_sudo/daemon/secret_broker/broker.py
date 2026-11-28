@@ -426,13 +426,19 @@ class Broker:
         if os.path.lexists(path):
             os.unlink(path)
         server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        # Bind under a temporary name and rename once listening, so the socket path never exists before it
+        # accepts connections (a client that sees the path must not get ECONNREFUSED).
+        staging = f"{path}.{os.getpid()}.new"
+        if os.path.lexists(staging):
+            os.unlink(staging)
         old_umask = os.umask(0o117)
         try:
-            server.bind(path)
+            server.bind(staging)
         finally:
             os.umask(old_umask)
-        os.chmod(path, 0o660)
+        os.chmod(staging, 0o660)
         server.listen(64)
+        os.rename(staging, path)
         server.settimeout(0.5)
         free = threading.BoundedSemaphore(MAX_CONCURRENT)
 
