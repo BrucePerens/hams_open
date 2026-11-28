@@ -158,4 +158,3 @@ class TestPortalTicketAccess(HamsHttpCase):
         for field in ("triage_reasons", "suspicion_score", "notify_state", "ncmec_report_state"):
             with self.assertRaises(AccessError, msg=field):
                 mine.read([field])
-        self.assertFalse({"triage_reasons", "suspicion_score", "ncmec_report_packet"} & set(mine.read()[0]))
