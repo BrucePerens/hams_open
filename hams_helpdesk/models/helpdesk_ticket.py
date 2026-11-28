@@ -135,7 +135,15 @@ _NCMEC_PARAM_FALLBACK_EMAIL = "hams_helpdesk.ncmec_fallback_report_email"
 # whether /finish is required even with zero uploaded files is unconfirmed.
 
 
+# Staff-only ticket fields a portal user is never allowed to read (plus every ncmec_* field).
+_PORTAL_HIDDEN_FIELDS = frozenset({
+    "suspicion_score", "suspicious", "suspicion_removed", "suspicion_log_ids", "triage_verdict", "triage_verdict_source",
+    "triage_reasons", "triage_verdict_at", "triage_overridden", "triage_overridden_at", "triage_delay_seconds",
+    "triage_stalled_at", "notify_state", "notify_release_at", "github_source_url",
+})
+
 # [@ANCHOR: hams_helpdesk_helpdesk_ticket_helpdesk_ticket]
+
 class HelpdeskTicket(models.Model):
     _name = "hams_helpdesk.ticket"
     _description = "Helpdesk Ticket"
@@ -797,6 +805,20 @@ class HelpdeskTicket(models.Model):
                 ticket_service.message_subscribe(
                     partner_ids=[ticket_service.partner_id.id]
                 )
+
+    # [@ANCHOR: hams_helpdesk:portal_staff_fields_unreadable]
+    # Verified by [@ANCHOR: hams_helpdesk:test_a_member_cannot_read_the_staff_only_ticket_fields]
+    # A member may read their own ticket over plain RPC, and these fields carry no groups= (the service accounts that read them
+    # are not all in one staff group). The filter's score and the triage reasons would tell a sender what to change to get past it.
+    def _has_field_access(self, field, operation):
+        if (
+            operation == "read"
+            and not self.env.su
+            and (field.name in _PORTAL_HIDDEN_FIELDS or field.name.startswith("ncmec_"))
+            and self.env.user.has_group("base.group_portal")
+        ):
+            return False
+        return super()._has_field_access(field, operation)
 
     def write(self, vals):
         # [@ANCHOR: COMM_helpdesk_micro_privilege]
