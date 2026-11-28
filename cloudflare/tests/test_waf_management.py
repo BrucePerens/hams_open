@@ -114,8 +114,11 @@ class TestWafManagement(HamsTransactionCase):
                 "expires_at": fields.Datetime.now() - timedelta(seconds=5),
             }
         )
-        self.env["cloudflare.ip.ban"]._cron_lift_expired_bans()
+        with self.assertLogs("odoo.addons.cloudflare.models.ip_ban", level="ERROR") as logs:
+            self.env["cloudflare.ip.ban"]._cron_lift_expired_bans()
         self.assertEqual(ban.state, "active")
+        self.assertIn("Edge Offline", logs.output[0])
+        self.assertIsNotNone(logs.records[0].exc_info, "exc_info lets the helpdesk cron hook open a ticket")
 
     def test_02_cf_action_lift_ban(self):
         # Tests [@ANCHOR: cloudflare:COMM_action_lift_ban_sync]
