@@ -587,6 +587,7 @@ class TestCloudflareRetryIdempotency(HamsTransactionCase):
         self.assertNotIn("POST", retry_strategy.allowed_methods)
         self.assertNotIn("PATCH", retry_strategy.allowed_methods)
         self.assertTrue(retry_strategy.respect_retry_after_header)
+        self.assertGreater(retry_strategy.backoff_factor, 0, "retries must back off, not fire back to back")
 
         for method in ("GET", "HEAD", "OPTIONS", "PUT", "DELETE"):
             for status in (429, 500, 502, 503, 504):
