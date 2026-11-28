@@ -14,6 +14,7 @@ from odoo.tools import mute_logger
 from odoo.tests.common import tagged
 from odoo.addons.zero_sudo.tests.common import HamsTransactionCase
 from odoo.addons.cloudflare.utils.cloudflare_api import (
+    _handle_api_error,
     purge_urls,
     purge_tags,
     retry_strategy,
@@ -454,6 +455,16 @@ class TestCloudflareAPIs(HamsTransactionCase):
 
         with mute_logger("odoo.addons.cloudflare.utils.cloudflare_api"):
             self.assertFalse(purge_urls(["https://a.com"], "tok1", "zone1"))
+
+    def test_06b_error_log_keeps_the_zone_id_out(self):
+        # Tests [@ANCHOR: cloudflare:COMM_handle_api_error]
+        error = requests.exceptions.HTTPError(
+            "403 Client Error: Forbidden for url: https://api.cloudflare.com/client/v4/zones/0123abcd/purge_cache"
+        )
+        with self.assertLogs("odoo.addons.cloudflare.utils.cloudflare_api", level="ERROR") as logs:
+            _handle_api_error("purge failed", error)
+        self.assertNotIn("0123abcd", logs.output[0])
+        self.assertIn("/zones/<zone>/purge_cache", logs.output[0])
 
     def test_07_purge_tags(self):
         # Tests [@ANCHOR: cloudflare:COMM_purge_tags]

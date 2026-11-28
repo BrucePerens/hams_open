@@ -13,9 +13,14 @@ from . import dns_plan
 _logger = logging.getLogger(__name__)
 
 
+ZONE_PATH = re.compile(r"/zones/[^/\s?'\"]+")
+
+
 # [@ANCHOR: cloudflare:COMM_handle_api_error]
 def _handle_api_error(context_msg, exception):
-    if "External requests verboten" in str(exception):
+    # requests puts the full URL, with the zone id in it, in the text of an HTTP error: keep the id out of the log.
+    exception = ZONE_PATH.sub("/zones/<zone>", str(exception))
+    if "External requests verboten" in exception:
         _logger.info("%s (Disabled in tests): %s", context_msg, exception)
     else:
         _logger.error("%s: %s", context_msg, exception)
