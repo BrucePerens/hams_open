@@ -220,6 +220,20 @@ class TestPhishingLinkDefangTickets(HamsTransactionCase):
         self.assertIn('href="%s"' % PHISH_URL, restored)
         self.assertNotIn("hxxps://login", restored)
 
+    def test_06b_a_portal_user_gets_the_decision_but_cannot_read_the_verdict(self):
+        # Tests [@ANCHOR: hams_helpdesk:triage_links_defanged]
+        # The mail render path runs as the portal recipient; the staff-field guard must stay and the decision must still work.
+        from odoo.exceptions import AccessError
+        portal = self.env["res.users"].with_user(self.env.ref("base.user_admin")).create(
+            {"name": "Portal D", "login": "portal_d_defang", "group_ids": [(6, 0, [self.env.ref("base.group_portal").id])]}
+        )
+        ticket = self._phishing_ticket()
+        ticket.partner_id = portal.partner_id
+        as_portal = ticket.with_user(portal)
+        self.assertTrue(as_portal._triage_links_defanged())
+        with self.assertRaises(AccessError):
+            as_portal.triage_verdict
+
     def test_07_a_phishing_ticket_that_is_not_quarantined_still_defangs(self):
         # Tests [@ANCHOR: hams_helpdesk:triage_links_defanged]
         utils_model = type(self.env["zero_sudo.security.utils"])
