@@ -7,6 +7,7 @@ forged POST body cannot make a ticket of a type the portal withholds."""
 import re
 
 from odoo.addons.hams_helpdesk.controllers import portal as portal_controller
+from odoo.exceptions import AccessError
 from odoo.addons.zero_sudo.tests.common import HamsHttpCase
 from odoo.tests.common import tagged
 
@@ -148,3 +149,13 @@ class TestPortalTicketAccess(HamsHttpCase):
             seen += re.findall(r"Tie Order (\d\d)", self.url_open(path).text)
         expected = ["%02d" % n for n in sorted(range(45), reverse=True)]
         self.assertEqual(seen, expected, "every ticket exactly once, in id order within the shared create_date")
+
+    # [@ANCHOR: hams_helpdesk:test_a_member_cannot_read_the_staff_only_ticket_fields]
+    # Tests [@ANCHOR: hams_helpdesk:portal_staff_fields_unreadable]
+    def test_a_member_cannot_read_the_staff_only_ticket_fields(self):
+        mine = self.mine.with_user(self.member)
+        self.assertEqual(mine.read(["name", "stage"])[0]["name"], "Access Mine")
+        for field in ("triage_reasons", "suspicion_score", "notify_state", "ncmec_report_state"):
+            with self.assertRaises(AccessError, msg=field):
+                mine.read([field])
+        self.assertFalse({"triage_reasons", "suspicion_score", "ncmec_report_packet"} & set(mine.read()[0]))
