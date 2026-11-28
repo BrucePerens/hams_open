@@ -87,7 +87,7 @@ render() {
 	fi
 	remove_batch | grep -E 'firewall\.hams_hl_|network\.hamlan'
 	echo "delete firewall.hams_zone"; echo "delete firewall.hams_rf_zone"; echo "delete firewall.hams_fwd_lan_ham"
-	echo "delete firewall.hams_drop_ham_lan"; echo "delete firewall.hams_drop_hamrf_lan"; echo "delete firewall.hams_rf_in_ah"
+	echo "delete firewall.hams_drop_ham_lan"; echo "delete firewall.hams_drop_hamrf_lan"; echo "delete firewall.hams_rf_in_ah"; echo "delete firewall.hams_rf_in_bgp"
 	for o in $opens; do p=${o%%:*}; n=${o#*:}; echo "delete firewall.hams_in_${p}_$n"; echo "delete firewall.hams_rf_in_${p}_$n"; done
 	for zone in ham hamrf; do
 		if [ $zone = ham ]; then list=$ifaces sec=hams_zone; else list=$rfs sec=hams_rf_zone; fi
@@ -104,6 +104,10 @@ render() {
 		if [ $zone = hamrf ]; then # IPsec AH (integrity only) authenticates the RF BGP/gossip sessions (hams-node-bird ah); it hides nothing
 			echo "set firewall.hams_rf_in_ah=rule"; echo "set firewall.hams_rf_in_ah.name=hams-rf-ah"; echo "set firewall.hams_rf_in_ah.src=hamrf"
 			echo "set firewall.hams_rf_in_ah.proto=ah"; echo "set firewall.hams_rf_in_ah.target=ACCEPT"
+			# the BGP session itself (tcp 179): AH only gets the packet to the kernel's IPsec policy, the decapsulated TCP then meets this zone's input DROP;
+			# the xfrm policy drops tcp from a neighbour's address without a valid AH, and bird accepts only the configured neighbours
+			echo "set firewall.hams_rf_in_bgp=rule"; echo "set firewall.hams_rf_in_bgp.name=hams-rf-bgp"; echo "set firewall.hams_rf_in_bgp.src=hamrf"
+			echo "set firewall.hams_rf_in_bgp.proto=tcp"; echo "set firewall.hams_rf_in_bgp.dest_port=179"; echo "set firewall.hams_rf_in_bgp.target=ACCEPT"
 		fi
 		for o in $opens; do
 			p=${o%%:*}; n=${o#*:}
