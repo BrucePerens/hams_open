@@ -621,7 +621,8 @@ class TestBrokerConnections(_Case):
         worker, path = self._serving(broker, stop)
         self.assertEqual(json.loads(self._exchange(path, self.request()))["ok"], True)
         self.assertEqual(oct(os.stat(path).st_mode & 0o777), "0o660")
-        self.assertEqual(chmods, [(path, 0o660)])
+        # the mode is set on the staging name, before the rename publishes the socket
+        self.assertEqual(chmods, [(f"{path}.{os.getpid()}.new", 0o660)])
         stop.set()
         worker.join(5)
         self.assertFalse(worker.is_alive())  # the 0.5 s accept timeout lets it notice
